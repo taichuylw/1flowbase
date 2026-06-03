@@ -74,25 +74,8 @@ pub(super) fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Ve
             Ok(selectors)
         }
         "data_model_query" => extract_data_model_query_selector_paths(raw_value),
-        "condition_group" => {
-            let conditions = raw_value
-                .get("conditions")
-                .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("condition_group value must include conditions"))?;
-            let mut selectors = Vec::new();
-
-            for condition in conditions {
-                selectors.push(selector_path(
-                    condition.get("left").unwrap_or(&Value::Null),
-                )?);
-
-                if let Some(right) = condition.get("right").filter(|value| value.is_array()) {
-                    selectors.push(selector_path(right)?);
-                }
-            }
-
-            Ok(selectors)
-        }
+        "condition_group" => extract_condition_group_selector_paths(raw_value),
+        "if_else_branches" => extract_if_else_branch_selector_paths(raw_value),
         "state_write" => {
             let entries = raw_value
                 .as_array()
@@ -109,6 +92,66 @@ pub(super) fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Ve
         }
         other => bail!("unsupported binding kind: {other}"),
     }
+}
+
+fn extract_if_else_branch_selector_paths(raw_value: &Value) -> Result<Vec<Vec<String>>> {
+    let branches = raw_value
+        .get("branches")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("if_else_branches value must include branches"))?;
+    let mut selectors = Vec::new();
+
+    for branch in branches {
+        if let Some(condition) = branch.get("condition") {
+            selectors.extend(extract_condition_group_selector_paths(condition)?);
+        }
+    }
+
+    Ok(selectors)
+}
+
+fn extract_condition_group_selector_paths(raw_value: &Value) -> Result<Vec<Vec<String>>> {
+    let conditions = raw_value
+        .get("conditions")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("condition_group value must include conditions"))?;
+    let mut selectors = Vec::new();
+
+    for condition in conditions {
+        if condition
+            .get("conditions")
+            .and_then(Value::as_array)
+            .is_some()
+        {
+            selectors.extend(extract_condition_group_selector_paths(condition)?);
+            continue;
+        }
+
+        selectors.push(selector_path(
+            condition.get("left").unwrap_or(&Value::Null),
+        )?);
+
+        if let Some(right) = condition.get("right") {
+            push_condition_value_selector(right, &mut selectors)?;
+        }
+    }
+
+    Ok(selectors)
+}
+
+fn push_condition_value_selector(value: &Value, selectors: &mut Vec<Vec<String>>) -> Result<()> {
+    if value.is_array() {
+        selectors.push(selector_path(value)?);
+        return Ok(());
+    }
+
+    if value.get("kind").and_then(Value::as_str) == Some("selector") {
+        selectors.push(selector_path(
+            value.get("selector").unwrap_or(&Value::Null),
+        )?);
+    }
+
+    Ok(())
 }
 
 fn extract_data_model_query_selector_paths(raw_value: &Value) -> Result<Vec<Vec<String>>> {

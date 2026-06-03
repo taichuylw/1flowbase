@@ -6,9 +6,9 @@ use serde_json::Value;
 use crate::answer_presentation::validate_answer_presentation;
 use crate::compiled_plan::{
     CodeExecutorCapability, CodeIsolationProfile, CompileIssue, CompileIssueCode, CompiledBinding,
-    CompiledCodeDependency, CompiledCodeRuntime, CompiledLlmRouteTarget, CompiledLlmRouting,
-    CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
-    LlmRoutingMode,
+    CompiledCodeDependency, CompiledCodeRuntime, CompiledEdge, CompiledLlmRouteTarget,
+    CompiledLlmRouting, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+    CompiledPluginRuntime, LlmRoutingMode,
 };
 use crate::output_schema::{history_messages_schema, output_schema_is_llm_context_messages};
 use crate::payload_builder::PublicOutputContract;
@@ -82,6 +82,7 @@ pub struct FlowCompileNodeContribution {
 
 type NodeTopologyBuild = (
     BTreeMap<String, CompiledNode>,
+    Vec<CompiledEdge>,
     Vec<String>,
     Vec<CompileIssue>,
 );
@@ -103,7 +104,7 @@ impl FlowCompiler {
         if schema_version != FLOW_SCHEMA_VERSION {
             bail!("unsupported flow schemaVersion: {schema_version}");
         }
-        let (nodes, topological_order, mut compile_issues) =
+        let (nodes, edges, topological_order, mut compile_issues) =
             build_nodes_and_topology(document, context)?;
 
         let mut plan = CompiledPlan {
@@ -111,6 +112,7 @@ impl FlowCompiler {
             source_draft_id: draft_id.to_string(),
             schema_version,
             topological_order,
+            edges,
             nodes,
             compile_issues: Vec::new(),
         };
@@ -154,11 +156,14 @@ fn build_nodes_and_topology(
 
     let mut adjacency = BTreeMap::<String, Vec<String>>::new();
     let mut indegree = BTreeMap::<String, usize>::new();
+    let mut compiled_edges = Vec::with_capacity(edge_values.len());
 
     for node_id in &node_order {
         adjacency.insert(node_id.clone(), Vec::new());
         indegree.insert(node_id.clone(), 0);
     }
+
+    let if_else_source_handles = collect_if_else_branch_source_handles(&nodes)?;
 
     for edge in edge_values {
         let edge_id = edge
@@ -181,6 +186,24 @@ fn build_nodes_and_topology(
         if !nodes.contains_key(target) {
             bail!("edge {edge_id} references unknown target node: {target}");
         }
+
+        let source_handle = edge_handle(edge, "sourceHandle", "source_handle")?;
+        let target_handle = edge_handle(edge, "targetHandle", "target_handle")?;
+        validate_edge_source_handle(
+            edge_id,
+            nodes
+                .get(source)
+                .expect("validated source node must exist before edge compilation"),
+            source_handle.as_deref(),
+            &if_else_source_handles,
+        )?;
+        compiled_edges.push(CompiledEdge {
+            edge_id: edge_id.to_string(),
+            source: source.to_string(),
+            target: target.to_string(),
+            source_handle,
+            target_handle,
+        });
 
         let dependency_node_ids = &mut nodes
             .get_mut(target)
@@ -255,7 +278,178 @@ fn build_nodes_and_topology(
 
     compile_issues.extend(validate_llm_context_policies(&nodes));
 
-    Ok((nodes, topological_order, compile_issues))
+    Ok((nodes, compiled_edges, topological_order, compile_issues))
+}
+
+fn edge_handle(edge: &Value, camel_key: &str, snake_key: &str) -> Result<Option<String>> {
+    let value = edge.get(camel_key).or_else(|| edge.get(snake_key));
+
+    match value {
+        Some(Value::String(handle)) if !handle.trim().is_empty() => Ok(Some(handle.to_string())),
+        Some(Value::String(_)) | Some(Value::Null) | None => Ok(None),
+        Some(_) => bail!("edge handle {camel_key} must be a string or null"),
+    }
+}
+
+fn validate_edge_source_handle(
+    edge_id: &str,
+    source_node: &CompiledNode,
+    source_handle: Option<&str>,
+    if_else_source_handles: &BTreeMap<String, BTreeSet<String>>,
+) -> Result<()> {
+    if source_node.node_type != "if_else" {
+        return Ok(());
+    }
+
+    let Some(source_handle) = source_handle else {
+        bail!(
+            "edge {edge_id} from if_else node {} missing sourceHandle",
+            source_node.node_id
+        );
+    };
+    let source_handles = if_else_source_handles
+        .get(&source_node.node_id)
+        .ok_or_else(|| {
+            anyhow!(
+                "if_else node {} missing branch contract",
+                source_node.node_id
+            )
+        })?;
+
+    if !source_handles.contains(source_handle) {
+        bail!(
+            "edge {edge_id} references unknown if_else sourceHandle {source_handle} for node {}",
+            source_node.node_id
+        );
+    }
+
+    Ok(())
+}
+
+fn collect_if_else_branch_source_handles(
+    nodes: &BTreeMap<String, CompiledNode>,
+) -> Result<BTreeMap<String, BTreeSet<String>>> {
+    let mut source_handles = BTreeMap::new();
+
+    for node in nodes.values().filter(|node| node.node_type == "if_else") {
+        source_handles.insert(node.node_id.clone(), if_else_branch_source_handles(node)?);
+    }
+
+    Ok(source_handles)
+}
+
+fn if_else_branch_source_handles(node: &CompiledNode) -> Result<BTreeSet<String>> {
+    let binding = node
+        .bindings
+        .get("branches")
+        .ok_or_else(|| anyhow!("if_else node {} missing branches binding", node.node_id))?;
+    if binding.kind != "if_else_branches" {
+        bail!(
+            "if_else node {} branches binding must be if_else_branches",
+            node.node_id
+        );
+    }
+
+    let branches = binding
+        .raw_value
+        .get("branches")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("if_else node {} branches must be an array", node.node_id))?;
+    let mut source_handles = BTreeSet::new();
+    let mut else_branch_count = 0;
+    for branch in branches {
+        let source_handle = branch
+            .get("sourceHandle")
+            .or_else(|| branch.get("source_handle"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|handle| !handle.is_empty())
+            .ok_or_else(|| anyhow!("if_else node {} branch missing sourceHandle", node.node_id))?;
+        if branch.get("kind").and_then(Value::as_str) == Some("else") {
+            else_branch_count += 1;
+        } else if !condition_group_has_complete_rules(
+            branch.get("condition").unwrap_or(&Value::Null),
+        ) {
+            bail!(
+                "if_else node {} branch {source_handle} must include a complete condition",
+                node.node_id
+            );
+        }
+
+        if !source_handles.insert(source_handle.to_string()) {
+            bail!(
+                "if_else node {} duplicate branch sourceHandle {source_handle}",
+                node.node_id
+            );
+        }
+    }
+
+    if else_branch_count == 0 {
+        bail!("if_else node {} must include an else branch", node.node_id);
+    }
+
+    if else_branch_count > 1 {
+        bail!(
+            "if_else node {} must include only one else branch",
+            node.node_id
+        );
+    }
+
+    Ok(source_handles)
+}
+
+fn condition_group_has_complete_rules(group: &Value) -> bool {
+    let Some(conditions) = group.get("conditions").and_then(Value::as_array) else {
+        return false;
+    };
+
+    !conditions.is_empty()
+        && conditions
+            .iter()
+            .all(condition_expression_has_required_input)
+}
+
+fn condition_expression_has_required_input(condition: &Value) -> bool {
+    if condition
+        .get("conditions")
+        .and_then(Value::as_array)
+        .is_some()
+    {
+        return condition_group_has_complete_rules(condition);
+    }
+
+    condition_rule_has_required_input(condition)
+}
+
+fn condition_rule_has_required_input(rule: &Value) -> bool {
+    if !selector_has_required_input(rule.get("left").unwrap_or(&Value::Null)) {
+        return false;
+    }
+
+    if matches!(
+        rule.get("comparator").and_then(Value::as_str),
+        Some("exists" | "empty")
+    ) {
+        return true;
+    }
+
+    let Some(right) = rule.get("right") else {
+        return false;
+    };
+
+    right.get("kind").and_then(Value::as_str) != Some("selector")
+        || selector_has_required_input(right.get("selector").unwrap_or(&Value::Null))
+}
+
+fn selector_has_required_input(selector: &Value) -> bool {
+    selector.as_array().is_some_and(|segments| {
+        segments.len() >= 2
+            && segments.iter().all(|segment| {
+                segment
+                    .as_str()
+                    .is_some_and(|value| !value.trim().is_empty())
+            })
+    })
 }
 
 fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<CompileIssue> {

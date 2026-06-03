@@ -188,6 +188,26 @@ export function createInitialStateWithLoopNode() {
   };
 }
 
+export function createInitialStateWithIfElseNode() {
+  const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+  document.graph.nodes.push(
+    createNodeDocument('if_else', 'node-if-else', 720, 240)
+  );
+
+  return {
+    flow_id: 'flow-1',
+    draft: {
+      id: 'draft-1',
+      flow_id: 'flow-1',
+      updated_at: '2026-04-16T10:00:00Z',
+      document
+    },
+    autosave_interval_seconds: 30,
+    versions: []
+  };
+}
+
 export function createInitialStateWithDataModelNode(
   nodeType: BuiltinFlowNodeType = 'data_model_list'
 ) {
@@ -330,118 +350,117 @@ export async function selectDataModelOption(value: string) {
 
 
 export async function setupNodeInspectorTest() {
-window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
-await appI18n.changeLanguage('zh_Hans');
-fetchModelProviderOptionsSpy.mockReset();
-fetchModelProviderOptionsSpy.mockResolvedValue({
-  locale_meta: {
-    requested_locale: 'zh_Hans',
-    resolved_locale: 'zh_Hans',
-    fallback_locale: 'en_US',
-    supported_locales: ['zh_Hans', 'en_US']
-  },
-  i18n_catalog: {},
-  providers: []
-});
-fetchDataModelOptionsSpy.mockReset();
-fetchDataModelOptionsSpy.mockResolvedValue([
-  {
-    value: 'orders',
-    label: 'Orders',
-    state: 'enabled',
-    disabled: false,
-    disabledReason: null,
-    modelId: 'model-orders',
-    modelCode: 'orders',
-    fields: [
-      {
-        code: 'name',
-        title: 'Name',
-        valueType: 'string',
-        required: true,
-        writable: true
-      },
-      {
-        code: 'amount',
-        title: 'Amount',
-        valueType: 'number',
-        required: false,
-        writable: true
-      },
-      {
-        code: 'status',
-        title: 'Status',
-        valueType: 'enum',
-        required: false,
-        writable: true
-      },
-      {
-        code: 'customer',
-        title: 'Customer',
-        valueType: 'many_to_one',
-        required: false,
-        writable: true
-      },
-      {
-        code: 'lines',
-        title: 'Lines',
-        valueType: 'one_to_many',
-        required: false,
-        writable: true
-      },
-      {
-        code: 'approved',
-        title: 'Approved',
-        valueType: 'boolean',
-        required: false,
-        writable: true
-      }
-    ]
-  },
-  {
-    value: 'empty_orders',
-    label: 'Empty Orders',
-    state: 'enabled',
-    disabled: false,
-    disabledReason: null,
-    modelId: 'model-empty-orders',
-    modelCode: 'empty_orders',
-    fields: []
-  },
-  {
-    value: 'draft_orders',
-    label: 'Draft Orders',
-    state: 'unpublished',
-    disabled: true,
-    disabledReason: 'Data Model is not published',
-    modelId: 'model-draft-orders',
-    modelCode: 'draft_orders',
-    fields: []
-  },
-  {
-    value: 'disabled_orders',
-    label: 'Disabled Orders',
-    state: 'disabled',
-    disabled: true,
-    disabledReason: 'Data Model is disabled',
-    modelId: 'model-disabled-orders',
-    modelCode: 'disabled_orders',
-    fields: []
-  },
-  {
-    value: 'broken_orders',
-    label: 'Broken Orders',
-    state: 'broken',
-    disabled: true,
-    disabledReason: 'Data Model is broken',
-    modelId: 'model-broken-orders',
-    modelCode: 'broken_orders',
-    fields: []
-  }
-]);
-resolveAgentFlowNodeSchemaSpy.mockClear();
-createAgentFlowNodeSchemaAdapterSpy.mockClear();
-
+  window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
+  await appI18n.changeLanguage('zh_Hans');
+  fetchModelProviderOptionsSpy.mockReset();
+  fetchModelProviderOptionsSpy.mockResolvedValue({
+    locale_meta: {
+      requested_locale: 'zh_Hans',
+      resolved_locale: 'zh_Hans',
+      fallback_locale: 'en_US',
+      supported_locales: ['zh_Hans', 'en_US']
+    },
+    i18n_catalog: {},
+    providers: []
+  });
+  fetchDataModelOptionsSpy.mockReset();
+  fetchDataModelOptionsSpy.mockResolvedValue([
+    {
+      value: 'orders',
+      label: 'Orders',
+      state: 'enabled',
+      disabled: false,
+      disabledReason: null,
+      modelId: 'model-orders',
+      modelCode: 'orders',
+      fields: [
+        {
+          code: 'name',
+          title: 'Name',
+          valueType: 'string',
+          required: true,
+          writable: true
+        },
+        {
+          code: 'amount',
+          title: 'Amount',
+          valueType: 'number',
+          required: false,
+          writable: true
+        },
+        {
+          code: 'status',
+          title: 'Status',
+          valueType: 'enum',
+          required: false,
+          writable: true
+        },
+        {
+          code: 'customer',
+          title: 'Customer',
+          valueType: 'many_to_one',
+          required: false,
+          writable: true
+        },
+        {
+          code: 'lines',
+          title: 'Lines',
+          valueType: 'one_to_many',
+          required: false,
+          writable: true
+        },
+        {
+          code: 'approved',
+          title: 'Approved',
+          valueType: 'boolean',
+          required: false,
+          writable: true
+        }
+      ]
+    },
+    {
+      value: 'empty_orders',
+      label: 'Empty Orders',
+      state: 'enabled',
+      disabled: false,
+      disabledReason: null,
+      modelId: 'model-empty-orders',
+      modelCode: 'empty_orders',
+      fields: []
+    },
+    {
+      value: 'draft_orders',
+      label: 'Draft Orders',
+      state: 'unpublished',
+      disabled: true,
+      disabledReason: 'Data Model is not published',
+      modelId: 'model-draft-orders',
+      modelCode: 'draft_orders',
+      fields: []
+    },
+    {
+      value: 'disabled_orders',
+      label: 'Disabled Orders',
+      state: 'disabled',
+      disabled: true,
+      disabledReason: 'Data Model is disabled',
+      modelId: 'model-disabled-orders',
+      modelCode: 'disabled_orders',
+      fields: []
+    },
+    {
+      value: 'broken_orders',
+      label: 'Broken Orders',
+      state: 'broken',
+      disabled: true,
+      disabledReason: 'Data Model is broken',
+      modelId: 'model-broken-orders',
+      modelCode: 'broken_orders',
+      fields: []
+    }
+  ]);
+  resolveAgentFlowNodeSchemaSpy.mockClear();
+  createAgentFlowNodeSchemaAdapterSpy.mockClear();
 }
 
 export { fireEvent, readFileSync, screen, waitFor, within };

@@ -2,6 +2,9 @@
 
 FROM rust:1-slim-bookworm AS builder
 
+ARG TARGETARCH
+ARG TARGETOS
+
 WORKDIR /workspace/api
 
 RUN apt-get update \
@@ -14,7 +17,7 @@ COPY api/crates ./crates
 
 RUN --mount=type=cache,id=1flowbase-cargo-registry,sharing=locked,target=/usr/local/cargo/registry \
     --mount=type=cache,id=1flowbase-cargo-git,sharing=locked,target=/usr/local/cargo/git \
-    --mount=type=cache,id=1flowbase-rust-target,sharing=locked,target=/workspace/api/target-cache \
+    --mount=type=cache,id=1flowbase-rust-target-${TARGETOS}-${TARGETARCH},sharing=locked,target=/workspace/api/target-cache \
     CARGO_TARGET_DIR=/workspace/api/target-cache \
       cargo build --release -p api-server --bin api-server \
     && cp /workspace/api/target-cache/release/api-server /workspace/api/api-server

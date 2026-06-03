@@ -1,0 +1,127 @@
+name: QA / 回归
+description: 记录验收、回归、质量门禁或测试治理问题。
+title: "[讨论]"
+labels:
+  - "type:qa"
+  - "phase:discussion"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        QA issue 必须基于可复查证据。没有直接证据时，只能记录为待验证风险，不能下通过或失败结论。
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 验收 / 回归场景
+      description: 说明这次 QA 覆盖的用户流、命令、质量门禁或风险点。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据
+      description: 粘贴命令、退出码、关键日志、截图、artifact 或 tmp/test-governance 路径。
+      placeholder: |
+        - 命令：
+        - 结果：
+        - 证据路径：
+    validations:
+      required: true
+  - type: textarea
+    id: finding
+    attributes:
+      label: 发现 / 风险
+      description: 写清实际发现、影响范围和剩余风险。
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要影响面
+      multiple: true
+      options:
+        - area:frontend
+        - area:backend
+        - area:api
+        - area:schema-ui
+        - area:runtime
+        - area:workflow
+        - area:settings
+        - area:infra
+        - area:docs
+        - area:test
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Issue 层级
+      options:
+        - level:l3 - 单个 QA / 修复任务
+        - level:l2 - QA workstream，需要继续拆 L3
+        - level:l1 - 质量策略或决策
+        - level:l0 - 总验收 / umbrella
+    validations:
+      required: true
+  - type: dropdown
+    id: grade
+    attributes:
+      label: 风险分级
+      options:
+        - grade:g2 - 单子系统 QA / 回归
+        - grade:g1 - 局部验证或文档治理
+        - grade:g3 - 跨前后端或多模块回归
+        - grade:g4 - 数据、contract、migration 或用户内容风险
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      options:
+        - priority:p2
+        - priority:p1
+        - priority:p0
+        - priority:p3
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: 风险
+      options:
+        - risk:medium
+        - risk:low
+        - risk:high
+    validations:
+      required: true
+  - type: dropdown
+    id: size
+    attributes:
+      label: 规模
+      options:
+        - size:s
+        - size:xs
+        - size:m
+        - size:l
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Parent issue / PR
+      description: 验收关联对象，格式为 #123；没有 parent 时写 N/A。
+      placeholder: "#123 或 N/A"
+    validations:
+      required: true
+  - type: textarea
+    id: close-condition
+    attributes:
+      label: 关闭条件
+      description: 写清什么证据足以关闭这个 QA / 回归 issue。
+      placeholder: |
+        - 修复 PR：
+        - 需要通过的验证：
+        - 用户验收要求：
+    validations:
+      required: true

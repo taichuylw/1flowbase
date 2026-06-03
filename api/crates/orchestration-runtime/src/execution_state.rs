@@ -28,6 +28,7 @@ pub enum ExecutionStopReason {
 pub struct CheckpointSnapshot {
     pub next_node_index: usize,
     pub variable_pool: Map<String, Value>,
+    pub active_node_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -52,6 +52,191 @@ async fn failed_llm_public_text_is_available_to_downstream_answer_contract() {
 }
 
 #[tokio::test]
+async fn failed_llm_with_compiled_edges_activates_terminal_answer() {
+    let mut plan = llm_answer_plan();
+    plan.edges = vec![
+        CompiledEdge {
+            edge_id: "edge-start-llm".to_string(),
+            source: "node-start".to_string(),
+            target: "node-llm".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-answer".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-answer".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+    ];
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &StubProviderInvoker {
+            fail: true,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: String::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                outcome.variable_pool["node-answer"]["answer"],
+                failure.error_payload["message"]
+            );
+        }
+        other => panic!("expected failed stop reason after terminal answer, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn failed_llm_with_inactive_later_branch_activates_terminal_answer() {
+    let mut plan = llm_answer_plan();
+    plan.topological_order = vec![
+        "node-start".to_string(),
+        "node-if".to_string(),
+        "node-llm".to_string(),
+        "node-answer".to_string(),
+        "node-plugin".to_string(),
+    ];
+    plan.edges = vec![
+        CompiledEdge {
+            edge_id: "edge-start-if".to_string(),
+            source: "node-start".to_string(),
+            target: "node-if".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-if-llm".to_string(),
+            source: "node-if".to_string(),
+            target: "node-llm".to_string(),
+            source_handle: Some("if".to_string()),
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-else-plugin".to_string(),
+            source: "node-if".to_string(),
+            target: "node-plugin".to_string(),
+            source_handle: Some("else".to_string()),
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-answer".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-answer".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+    ];
+    let start = plan
+        .nodes
+        .get_mut("node-start")
+        .expect("start node should exist");
+    start.downstream_node_ids = vec!["node-if".to_string()];
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.dependency_node_ids = vec!["node-if".to_string()];
+    llm.downstream_node_ids = vec!["node-answer".to_string()];
+    plan.nodes.insert(
+        "node-if".to_string(),
+        CompiledNode {
+            node_id: "node-if".to_string(),
+            node_type: "if_else".to_string(),
+            alias: "If / Else".to_string(),
+            container_id: None,
+            dependency_node_ids: vec!["node-start".to_string()],
+            downstream_node_ids: vec!["node-llm".to_string(), "node-plugin".to_string()],
+            bindings: BTreeMap::from([(
+                "branches".to_string(),
+                CompiledBinding {
+                    kind: "if_else_branches".to_string(),
+                    selector_paths: vec![vec!["node-start".to_string(), "query".to_string()]],
+                    raw_value: json!({
+                        "branches": [
+                            {
+                                "id": "if",
+                                "kind": "if",
+                                "title": "If",
+                                "sourceHandle": "if",
+                                "condition": {
+                                    "operator": "and",
+                                    "conditions": [{
+                                        "kind": "rule",
+                                        "left": ["node-start", "query"],
+                                        "comparator": "exists"
+                                    }]
+                                }
+                            },
+                            {
+                                "id": "else",
+                                "kind": "else",
+                                "title": "Else",
+                                "sourceHandle": "else"
+                            }
+                        ]
+                    }),
+                },
+            )]),
+            outputs: Vec::new(),
+            config: json!({}),
+            plugin_runtime: None,
+            llm_runtime: None,
+            code_runtime: None,
+        },
+    );
+    plan.nodes.insert(
+        "node-plugin".to_string(),
+        CompiledNode {
+            node_id: "node-plugin".to_string(),
+            node_type: "plugin_node".to_string(),
+            alias: "Inactive Plugin".to_string(),
+            container_id: None,
+            dependency_node_ids: vec!["node-if".to_string()],
+            downstream_node_ids: Vec::new(),
+            bindings: BTreeMap::new(),
+            outputs: Vec::new(),
+            config: json!({}),
+            plugin_runtime: None,
+            llm_runtime: None,
+            code_runtime: None,
+        },
+    );
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &StubProviderInvoker {
+            fail: true,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: String::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                outcome.variable_pool["node-answer"]["answer"],
+                failure.error_payload["message"]
+            );
+            assert!(!outcome.variable_pool.contains_key("node-plugin"));
+        }
+        other => panic!("expected failed stop reason after active terminal answer, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn answer_node_keeps_partial_output_when_template_selector_is_unresolved() {
     let mut plan = llm_answer_plan();
     let answer = plan

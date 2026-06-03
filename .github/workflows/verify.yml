@@ -162,6 +162,7 @@ jobs:
           scope: ${{ matrix.scope }}
           report_type: ci
           publish_issue: "false"
+          start_postgres: ${{ matrix.scope == 'coverage-backend-storage-postgres' || matrix.scope == 'coverage-backend-api-server' }}
       - uses: actions/upload-artifact@v6
         if: always()
         with:

@@ -8,12 +8,14 @@ import { getContainerPathForNode } from '../../lib/document/transforms/container
 import { duplicateNodeSubgraph } from '../../lib/document/transforms/duplicate';
 import {
   removeEdge,
+  connectNodeFromSource,
   insertNodeOnEdge,
   reconnectEdge,
   validateConnection
 } from '../../lib/document/transforms/edge';
 import {
   moveNodes,
+  insertNodeAfter,
   removeNodeSubgraph,
   replaceNodeWithOption,
   updateNodeField
@@ -524,6 +526,209 @@ describe('agent flow document transforms', () => {
       })
     );
     expect(next.graph.edges).toEqual(document.graph.edges);
+  });
+
+  test('inserts a node after one If / Else branch without rewriting sibling branch edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else', 640, 240);
+    const ifTarget = createNodeDocument('answer', 'node-if-target', 920, 180);
+    const elseTarget = createNodeDocument(
+      'answer',
+      'node-else-target',
+      920,
+      320
+    );
+    const insertedNode = createNodeDocument('code', 'node-code', 0, 0);
+
+    document.graph.nodes.push(ifElseNode, ifTarget, elseTarget);
+    document.graph.edges.push(
+      createEdgeDocument({
+        id: 'edge-if-else-if-target',
+        source: 'node-if-else',
+        target: 'node-if-target',
+        sourceHandle: 'if'
+      }),
+      createEdgeDocument({
+        id: 'edge-if-else-else-target',
+        source: 'node-if-else',
+        target: 'node-else-target',
+        sourceHandle: 'else'
+      })
+    );
+
+    const next = insertNodeAfter(
+      document,
+      'node-if-else',
+      insertedNode,
+      'if'
+    );
+
+    expect(next.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-if-else',
+          target: 'node-code',
+          sourceHandle: 'if'
+        }),
+        expect.objectContaining({
+          source: 'node-code',
+          target: 'node-if-target',
+          sourceHandle: null
+        }),
+        expect.objectContaining({
+          id: 'edge-if-else-else-target',
+          source: 'node-if-else',
+          target: 'node-else-target',
+          sourceHandle: 'else'
+        })
+      ])
+    );
+    expect(next.graph.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-if-else-if-target',
+          source: 'node-if-else',
+          target: 'node-if-target'
+        })
+      ])
+    );
+  });
+
+  test('defaults If / Else insert-after connections to the if branch when no handle is provided', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else', 640, 240);
+    const insertedNode = createNodeDocument('code', 'node-code', 0, 0);
+
+    document.graph.nodes.push(ifElseNode);
+
+    const next = insertNodeAfter(document, 'node-if-else', insertedNode);
+
+    expect(next.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-if-else',
+          target: 'node-code',
+          sourceHandle: 'if'
+        })
+      ])
+    );
+  });
+
+  test('defaults If / Else drag-created connections to the if branch when no handle is provided', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else', 640, 240);
+    const insertedNode = createNodeDocument('code', 'node-code', 920, 240);
+
+    document.graph.nodes.push(ifElseNode);
+
+    const next = connectNodeFromSource(document, {
+      sourceNodeId: 'node-if-else',
+      node: insertedNode
+    });
+
+    expect(next.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-if-else',
+          target: 'node-code',
+          sourceHandle: 'if'
+        })
+      ])
+    );
+  });
+
+  test('removes outgoing edges for deleted If / Else branch handles', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else', 640, 240);
+
+    ifElseNode.bindings.branches = {
+      kind: 'if_else_branches',
+      value: {
+        branches: [
+          {
+            id: 'if',
+            kind: 'if',
+            title: 'If',
+            sourceHandle: 'if',
+            condition: { operator: 'and', conditions: [] }
+          },
+          {
+            id: 'else-if-1',
+            kind: 'else_if',
+            title: 'Else If 1',
+            sourceHandle: 'else-if-1',
+            condition: { operator: 'and', conditions: [] }
+          },
+          {
+            id: 'else',
+            kind: 'else',
+            title: 'Else',
+            sourceHandle: 'else'
+          }
+        ]
+      }
+    };
+    document.graph.nodes.push(
+      ifElseNode,
+      createNodeDocument('answer', 'node-if-target'),
+      createNodeDocument('answer', 'node-else-if-target'),
+      createNodeDocument('answer', 'node-else-target')
+    );
+    document.graph.edges.push(
+      createEdgeDocument({
+        id: 'edge-if',
+        source: 'node-if-else',
+        target: 'node-if-target',
+        sourceHandle: 'if'
+      }),
+      createEdgeDocument({
+        id: 'edge-else-if',
+        source: 'node-if-else',
+        target: 'node-else-if-target',
+        sourceHandle: 'else-if-1'
+      }),
+      createEdgeDocument({
+        id: 'edge-else',
+        source: 'node-if-else',
+        target: 'node-else-target',
+        sourceHandle: 'else'
+      })
+    );
+
+    const next = updateNodeField(document, {
+      nodeId: 'node-if-else',
+      fieldKey: 'bindings.branches',
+      value: {
+        kind: 'if_else_branches',
+        value: {
+          branches: [
+            {
+              id: 'if',
+              kind: 'if',
+              title: 'If',
+              sourceHandle: 'if',
+              condition: { operator: 'and', conditions: [] }
+            },
+            {
+              id: 'else',
+              kind: 'else',
+              title: 'Else',
+              sourceHandle: 'else'
+            }
+          ]
+        }
+      }
+    });
+
+    expect(next.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'edge-if' }),
+        expect.objectContaining({ id: 'edge-else' })
+      ])
+    );
+    expect(next.graph.edges).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'edge-else-if' })])
+    );
   });
 
   test('removes nested container children when deleting a container node', () => {

@@ -1,7 +1,7 @@
 import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Empty, Tag, Tooltip, Typography } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { App, Button, Tooltip } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AgentFlowDebugConsole } from '../../../agent-flow/components/debug-console/AgentFlowDebugConsole';
 import type {
@@ -31,13 +31,6 @@ import { i18nText } from '../../../../shared/i18n/text';
 
 const ACTIVE_CONVERSATION_REFETCH_INTERVAL_MS = 1_000;
 const RUN_CONVERSATION_PAGE_LIMIT = 5;
-const RESUME_EVENT_TYPES = new Set([
-  'public_run_resume_requested',
-  'public_run_resume_succeeded',
-  'public_run_resume_failed',
-  'public_run_resume_cancelled',
-  'flow_run_resumed'
-]);
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
@@ -107,18 +100,18 @@ function RunIdSubtitle({ runId }: { runId: string }) {
   async function handleCopyRunId() {
     try {
       await copy(runId);
-      message.success(i18nText("applications", "auto.id_copied"));
+      message.success(i18nText('applications', 'auto.id_copied'));
     } catch {
-      message.error(i18nText("applications", "auto.copy_failed"));
+      message.error(i18nText('applications', 'auto.copy_failed'));
     }
   }
 
   return (
     <span className="application-run-detail__run-id">
       <span className="application-run-detail__run-id-value">{runId}</span>
-      <Tooltip title={i18nText("applications", "auto.copy_id")}>
+      <Tooltip title={i18nText('applications', 'auto.copy_id')}>
         <Button
-          aria-label={i18nText("applications", "auto.copy_run_id")}
+          aria-label={i18nText('applications', 'auto.copy_run_id')}
           className="application-run-detail__run-id-copy"
           icon={copied ? <CheckOutlined /> : <CopyOutlined />}
           onClick={handleCopyRunId}
@@ -143,7 +136,7 @@ function buildConversationLogMessage(
 ): AgentFlowDebugMessage {
   const assistantContent =
     extractAssistantOutputText(detail) ||
-    i18nText("applications", "auto.no_output_yet");
+    i18nText('applications', 'auto.no_output_yet');
   const rawOutput =
     Object.keys(detail.flow_run.output_payload).length > 0
       ? detail.flow_run.output_payload
@@ -287,170 +280,63 @@ function conversationItemKey(item: ApplicationRunConversationMessage) {
   ].join('::');
 }
 
-interface ResumeTimelineItem {
-  key: string;
-  occurredAt: string;
-  title: string;
-  status: string;
-  color: string;
-  description: string | null;
-}
-
-function eventStatusColor(eventType: string) {
-  if (eventType.endsWith('_failed')) {
-    return 'red';
+function mergeConversationPages({
+  initialPage,
+  previousPages
+}: {
+  initialPage: ApplicationRunConversationMessagesPage | null;
+  previousPages: ApplicationRunConversationMessagesPage[];
+}): ApplicationRunConversationMessagesPage | null {
+  if (!initialPage) {
+    return null;
   }
-  if (eventType.endsWith('_succeeded') || eventType === 'flow_run_resumed') {
-    return 'green';
+
+  const items: ApplicationRunConversationMessage[] = [];
+  const existingIds = new Set<string>();
+  for (const page of [...previousPages, initialPage]) {
+    for (const item of page.items) {
+      const key = conversationItemKey(item);
+      if (existingIds.has(key)) {
+        continue;
+      }
+      existingIds.add(key);
+      items.push(item);
+    }
   }
-  return 'default';
-}
 
-function resumeEventLabel(eventType: string) {
-  switch (eventType) {
-    case 'public_run_resume_requested':
-      return i18nText("applications", "auto.resume_event_requested");
-    case 'public_run_resume_succeeded':
-      return i18nText("applications", "auto.resume_event_succeeded");
-    case 'public_run_resume_failed':
-      return i18nText("applications", "auto.resume_event_failed");
-    case 'public_run_resume_cancelled':
-      return i18nText("applications", "auto.resume_event_cancelled");
-    case 'flow_run_resumed':
-      return i18nText("applications", "auto.resume_event_resumed");
-    default:
-      return eventType;
-  }
-}
+  const firstPage = previousPages[0] ?? initialPage;
 
-function callbackStatusColor(status: string) {
-  switch (status) {
-    case 'pending':
-      return 'gold';
-    case 'completed':
-      return 'green';
-    case 'cancelled':
-      return 'default';
-    default:
-      return 'blue';
-  }
-}
-
-function callbackStatusLabel(status: string) {
-  switch (status) {
-    case 'pending':
-      return i18nText("applications", "auto.callback_status_pending");
-    case 'completed':
-      return i18nText("applications", "auto.callback_status_completed");
-    case 'cancelled':
-      return i18nText("applications", "auto.callback_status_cancelled");
-    default:
-      return status;
-  }
-}
-
-function callbackKindLabel(callbackKind: string) {
-  switch (callbackKind) {
-    case 'llm_tool_calls':
-      return i18nText("applications", "auto.callback_kind_llm_tool_calls");
-    case 'external_callback':
-      return i18nText("applications", "auto.callback_kind_external_callback");
-    case 'data_model_side_effect_confirmation':
-      return i18nText("applications", "auto.callback_kind_data_model_side_effect_confirmation");
-    default:
-      return callbackKind;
-  }
-}
-
-function payloadString(payload: Record<string, unknown>, key: string) {
-  const value = payload[key];
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
-}
-
-function buildResumeTimeline(detail: ApplicationRunDetail): ResumeTimelineItem[] {
-  const eventItems = detail.events
-    .filter((event) => RESUME_EVENT_TYPES.has(event.event_type))
-    .map((event) => ({
-      key: `event-${event.id}`,
-      occurredAt: event.created_at,
-      title: resumeEventLabel(event.event_type),
-      status: i18nText("applications", "auto.resume_timeline_event"),
-      color: eventStatusColor(event.event_type),
-      description:
-        payloadString(event.payload, 'resume_request_id') ??
-        payloadString(event.payload, 'callback_task_id')
-    }));
-  const callbackItems = detail.callback_tasks.map((task) => ({
-    key: `callback-${task.id}-${task.status}`,
-    occurredAt: task.completed_at ?? task.created_at,
-    title: callbackKindLabel(task.callback_kind),
-    status: callbackStatusLabel(task.status),
-    color: callbackStatusColor(task.status),
-    description: task.id
-  }));
-
-  return [...eventItems, ...callbackItems].sort((left, right) =>
-    left.occurredAt.localeCompare(right.occurredAt)
-  );
-}
-
-function ResumeTimeline({ detail }: { detail: ApplicationRunDetail | null }) {
-  const items = detail ? buildResumeTimeline(detail) : [];
-
-  return (
-    <section className="application-run-detail__timeline">
-      <div className="application-run-detail__timeline-header">
-        <Typography.Text strong style={{ fontSize: 13 }}>
-          {i18nText("applications", "auto.resume_timeline")}</Typography.Text>
-        {detail ? <Tag>{detail.flow_run.status}</Tag> : null}
-      </div>
-      {items.length > 0 ? (
-        <div className="application-run-detail__timeline-list">
-          {items.map((item) => (
-            <div className="application-run-detail__timeline-item" key={item.key}>
-              <div className="application-run-detail__timeline-main">
-                <Typography.Text style={{ fontSize: 12 }}>
-                  {item.title}
-                </Typography.Text>
-                <Tag color={item.color} style={{ marginInlineEnd: 0 }}>
-                  {item.status}
-                </Tag>
-              </div>
-              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                {new Date(item.occurredAt).toLocaleString()}
-              </Typography.Text>
-              {item.description ? (
-                <Typography.Text code style={{ fontSize: 11 }}>
-                  {item.description.slice(0, 32)}
-                </Typography.Text>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Empty
-          description={i18nText("applications", "auto.no_resume_events")}
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-        />
-      )}
-    </section>
-  );
+  return {
+    items,
+    page: {
+      has_before: firstPage.page.has_before,
+      has_after:
+        initialPage.page.has_after ||
+        previousPages.some((page) => page.page.has_after),
+      before_cursor: firstPage.page.before_cursor,
+      after_cursor: initialPage.page.after_cursor
+    }
+  };
 }
 
 function RunConversation({
   applicationId,
   onClose,
   onOpenMessageLog,
+  onOpenResumeTimeline,
   runId
 }: {
   applicationId: string;
   onClose: () => void;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   runId: string;
 }) {
   const queryClient = useQueryClient();
-  const [conversationPage, setConversationPage] =
-    useState<ApplicationRunConversationMessagesPage | null>(null);
+  const [previousConversationPages, setPreviousConversationPages] = useState<
+    ApplicationRunConversationMessagesPage[]
+  >([]);
+  const loadingPreviousConversationRef = useRef(false);
   const initialConversationQuery = useQuery({
     queryKey: applicationRunConversationMessagesQueryKey(applicationId, runId, {
       limit: RUN_CONVERSATION_PAGE_LIMIT
@@ -461,56 +347,18 @@ function RunConversation({
       })
   });
   const refetchInitialConversation = initialConversationQuery.refetch;
-  const loadPreviousConversationMutation = useMutation({
-    mutationFn: async () => {
-      const before = conversationPage?.page.before_cursor;
-
-      if (!conversationPage || !conversationPage.page.has_before || !before) {
-        throw new Error('missing previous conversation cursor');
-      }
-
-      return fetchApplicationRunConversationMessages(applicationId, runId, {
-        before,
-        limit: RUN_CONVERSATION_PAGE_LIMIT
-      });
-    },
-    onSuccess: (page) => {
-      setConversationPage((current) => {
-        if (!current) {
-          return page;
-        }
-
-        const existingIds = new Set(current.items.map(conversationItemKey));
-        const newItems = page.items.filter(
-          (item) => !existingIds.has(conversationItemKey(item))
-        );
-
-        return {
-          items: [...newItems, ...current.items],
-          page: {
-            has_before: page.page.has_before,
-            has_after: current.page.has_after || page.page.has_after,
-            before_cursor: page.page.before_cursor,
-            after_cursor: current.page.after_cursor
-          }
-        };
-      });
-    }
-  });
+  const conversationPage = useMemo(
+    () =>
+      mergeConversationPages({
+        initialPage: initialConversationQuery.data ?? null,
+        previousPages: previousConversationPages
+      }),
+    [initialConversationQuery.data, previousConversationPages]
+  );
   const messages = useMemo(
     () => buildConversationPageMessages(conversationPage),
     [conversationPage]
   );
-
-  useEffect(() => {
-    setConversationPage(null);
-  }, [runId]);
-
-  useEffect(() => {
-    if (initialConversationQuery.data) {
-      setConversationPage(initialConversationQuery.data);
-    }
-  }, [initialConversationQuery.data]);
 
   useEffect(() => {
     if (!hasActiveConversationItem(conversationPage)) {
@@ -541,11 +389,39 @@ function RunConversation({
     onOpenMessageLog?.(buildConversationLogMessage(detail));
   }
 
+  async function loadPreviousConversationPage() {
+    const before = conversationPage?.page.before_cursor;
+
+    if (
+      loadingPreviousConversationRef.current ||
+      !conversationPage ||
+      !conversationPage.page.has_before ||
+      !before
+    ) {
+      return;
+    }
+
+    loadingPreviousConversationRef.current = true;
+    try {
+      const page = await fetchApplicationRunConversationMessages(
+        applicationId,
+        runId,
+        {
+          before,
+          limit: RUN_CONVERSATION_PAGE_LIMIT
+        }
+      );
+      setPreviousConversationPages((current) => [page, ...current]);
+    } finally {
+      loadingPreviousConversationRef.current = false;
+    }
+  }
+
   return (
     <div className="application-run-detail__conversation-pane">
       <AgentFlowDebugConsole
-        ariaLabel={i18nText("applications", "auto.run_details_preview")}
-        closeLabel={i18nText("applications", "auto.close_run_details")}
+        ariaLabel={i18nText('applications', 'auto.run_details_preview')}
+        closeLabel={i18nText('applications', 'auto.close_run_details')}
         composerUiOnly
         messages={messages}
         runContext={runConversationContext}
@@ -554,21 +430,16 @@ function RunConversation({
         status={conversationSessionStatus(conversationPage)}
         stopping={false}
         subtitle={<RunIdSubtitle runId={runId} />}
-        title={i18nText("applications", "auto.run_details")}
+        title={i18nText('applications', 'auto.run_details')}
         onChangeRunContextValue={() => {}}
         onClearSession={() => {}}
         onClose={onClose}
         onOpenMessageLog={(message) => {
           void handleOpenMessageLog(message);
         }}
+        onOpenResumeTimeline={onOpenResumeTimeline}
         onReachConversationTop={() => {
-          if (
-            conversationPage &&
-            conversationPage.page.has_before &&
-            !loadPreviousConversationMutation.isPending
-          ) {
-            loadPreviousConversationMutation.mutate();
-          }
+          void loadPreviousConversationPage();
         }}
         onStopRun={() => {}}
         onSubmitPrompt={() => {}}
@@ -577,67 +448,39 @@ function RunConversation({
   );
 }
 
-function renderDetail({
-  applicationId,
-  detail,
-  onClose,
-  onOpenMessageLog,
-  runId
-}: {
-  applicationId: string;
-  detail: ApplicationRunDetail | null;
-  onClose: () => void;
-  onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
-  runId: string;
-}) {
-  return (
-    <div className="application-run-detail__content">
-      <RunConversation
-        applicationId={applicationId}
-        onClose={onClose}
-        onOpenMessageLog={onOpenMessageLog}
-        runId={runId}
-      />
-      <ResumeTimeline detail={detail} />
-    </div>
-  );
-}
-
 export function ApplicationRunDetailPanel({
   applicationId,
   onClose,
   onOpenMessageLog,
+  onOpenResumeTimeline,
   runId
 }: {
   applicationId: string;
   onClose: () => void;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   runId: string | null;
 }) {
-  const detailQuery = useQuery({
-    queryKey: applicationRunDetailQueryKey(applicationId, runId ?? ''),
-    queryFn: () => fetchApplicationRunDetail(applicationId, runId ?? ''),
-    enabled: Boolean(runId),
-    refetchInterval: 1000
-  });
-
   if (!runId) {
     return null;
   }
 
   return (
     <aside
-      aria-label={i18nText("applications", "auto.run_details")}
+      aria-label={i18nText('applications', 'auto.run_details')}
       className="application-run-detail application-run-detail--loaded"
     >
       <div className="application-run-detail__body">
-        {renderDetail({
-          applicationId,
-          detail: detailQuery.data ?? null,
-          onClose,
-          onOpenMessageLog,
-          runId
-        })}
+        <div className="application-run-detail__content">
+          <RunConversation
+            key={runId}
+            applicationId={applicationId}
+            onClose={onClose}
+            onOpenMessageLog={onOpenMessageLog}
+            onOpenResumeTimeline={onOpenResumeTimeline}
+            runId={runId}
+          />
+        </div>
       </div>
     </aside>
   );

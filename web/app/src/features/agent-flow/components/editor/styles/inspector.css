@@ -561,6 +561,20 @@
   justify-content: center;
 }
 
+.agent-flow-condition-group__nested {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e4eadf;
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.agent-flow-condition-group__right-kind {
+  min-width: 112px;
+}
+
 .agent-flow-binding-list {
   display: grid;
   gap: 8px;
@@ -568,11 +582,27 @@
 
 .agent-flow-binding-row {
   display: grid;
-  grid-template-columns: minmax(96px, 0.8fr) minmax(132px, 1.4fr) 28px;
+  grid-template-columns:
+    minmax(112px, 1fr) minmax(112px, 0.8fr) minmax(112px, 0.8fr)
+    minmax(132px, 1fr) 28px;
   align-items: center;
   gap: 8px;
   width: 100%;
   min-width: 0;
+}
+
+.agent-flow-condition-group__rule {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.agent-flow-condition-group__rule > :not(.agent-flow-binding-row__delete) {
+  flex: 1 1 136px;
+  min-width: 0;
+}
+
+.agent-flow-condition-group__rule > .agent-flow-binding-row__delete {
+  flex: 0 0 28px;
 }
 
 .agent-flow-binding-row__name,
@@ -583,12 +613,49 @@
 .agent-flow-binding-row__name .ant-input,
 .agent-flow-binding-row__name .ant-select,
 .agent-flow-binding-row__selector .ant-cascader,
-.agent-flow-binding-row__selector .ant-select {
+.agent-flow-binding-row__selector .ant-select,
+.agent-flow-binding-row .ant-input,
+.agent-flow-binding-row .ant-select,
+.agent-flow-binding-row .ant-cascader {
   width: 100%;
 }
 
 .agent-flow-binding-row__delete {
   justify-self: end;
+}
+
+.agent-flow-if-else-branches {
+  display: grid;
+  gap: 10px;
+}
+
+.agent-flow-if-else-branches__entry {
+  display: grid;
+  gap: 10px;
+}
+
+.agent-flow-if-else-branches__item {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e4eadf;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.agent-flow-if-else-branches__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-flow-if-else-branches__title.ant-input[disabled] {
+  border-color: transparent;
+  background: transparent;
+  color: #1f3326;
+  cursor: default;
+  font-weight: 650;
 }
 
 .agent-flow-templated-binding-list {

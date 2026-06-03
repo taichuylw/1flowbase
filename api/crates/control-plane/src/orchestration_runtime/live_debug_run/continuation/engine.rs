@@ -89,6 +89,8 @@ where
             &compiled_plan,
             &variable_pool,
         );
+    let mut active_node_ids =
+        orchestration_runtime::execution_engine::branching::initial_active_node_ids(&compiled_plan);
     let mut last_output_payload = json!({});
     let mut pending_failure: Option<Value> = None;
     let flow_span = append_host_span(
@@ -118,6 +120,9 @@ where
             .nodes
             .get(node_id)
             .ok_or_else(|| anyhow!("compiled node missing: {node_id}"))?;
+        if !active_node_ids.contains(node_id) {
+            continue;
+        }
         let resolved_inputs =
             orchestration_runtime::binding_runtime::resolve_node_inputs(node, &variable_pool)?;
         let rendered_templates = orchestration_runtime::binding_runtime::render_templated_bindings(
@@ -170,6 +175,8 @@ where
         )
         .await?;
 
+        let mut selected_source_handle: Option<String> = None;
+
         match node.node_type.as_str() {
             "start" => {
                 last_output_payload = variable_pool
@@ -199,6 +206,29 @@ where
                     &last_output_payload,
                 )
                 .await;
+            }
+            "if_else" => {
+                selected_source_handle =
+                    orchestration_runtime::execution_engine::branching::select_if_else_source_handle(
+                        node,
+                        &variable_pool,
+                    )?;
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
+                        node_run_id: node_run.id,
+                        status: domain::NodeRunStatus::Succeeded,
+                        output_payload: json!({}),
+                        error_payload: None,
+                        metrics_payload: json!({ "preview_mode": true }),
+                        debug_payload: json!({
+                            "selected_source_handle": selected_source_handle.clone(),
+                        }),
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    },
+                )
+                .await?;
             }
             "llm" => {
                 let persist_text_run_events = service.runtime_event_stream.is_none();
@@ -280,7 +310,19 @@ where
                         &public_output_payload,
                     )
                     .await;
-                    if can_continue_to_terminal_template_nodes(&compiled_plan, node_index) {
+                    let mut next_active_node_ids = active_node_ids.clone();
+                    orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
+                        &compiled_plan,
+                        &mut next_active_node_ids,
+                        node,
+                        selected_source_handle.as_deref(),
+                    );
+                    if can_continue_to_terminal_template_nodes(
+                        &compiled_plan,
+                        node_index,
+                        &next_active_node_ids,
+                    ) {
+                        active_node_ids = next_active_node_ids;
                         pending_failure = Some(error_payload.clone());
                         continue;
                     }
@@ -355,10 +397,14 @@ where
                             node_run_id: Some(node_run.id),
                             status: "waiting_callback".to_string(),
                             reason: "等待 LLM 工具回调".to_string(),
-                            locator_payload: json!({
-                                "node_id": node.node_id,
-                                "next_node_index": node_index,
-                            }),
+                            locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                                &node.node_id,
+                                node_index,
+                                orchestration_runtime::execution_engine::branching::checkpoint_active_node_ids(
+                                    &active_node_ids,
+                                ),
+                            )
+                            .into_json(),
                             variable_snapshot: Value::Object(wait.checkpoint_variable_pool),
                             external_ref_payload: Some(wait.request_payload.clone()),
                         })
@@ -614,6 +660,13 @@ where
                         "expires_at": confirmation.expires_at,
                         "request_payload": confirmation.request_payload,
                     });
+                    let next_index = next_node_index(&compiled_plan, node_id)?;
+                    orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
+                        &compiled_plan,
+                        &mut active_node_ids,
+                        node,
+                        None,
+                    );
                     service
                         .repository
                         .create_checkpoint(&CreateCheckpointInput {
@@ -621,10 +674,14 @@ where
                             node_run_id: Some(node_run.id),
                             status: "waiting_data_model_side_effect_confirmation".to_string(),
                             reason: "等待 Data Model 写入确认".to_string(),
-                            locator_payload: json!({
-                                "node_id": node.node_id,
-                                "next_node_index": next_node_index(&compiled_plan, node_id)?,
-                            }),
+                            locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                                &node.node_id,
+                                next_index,
+                                orchestration_runtime::execution_engine::branching::checkpoint_active_node_ids(
+                                    &active_node_ids,
+                                ),
+                            )
+                            .into_json(),
                             variable_snapshot: Value::Object(variable_pool.clone()),
                             external_ref_payload: Some(confirmation_payload.clone()),
                         })
@@ -818,6 +875,13 @@ where
                 )
                 .await?
                 .unwrap_or_else(|| json!({}));
+                let next_index = next_node_index(&compiled_plan, node_id)?;
+                orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
+                    &compiled_plan,
+                    &mut active_node_ids,
+                    node,
+                    None,
+                );
                 service
                     .repository
                     .create_checkpoint(&CreateCheckpointInput {
@@ -825,10 +889,14 @@ where
                         node_run_id: Some(node_run.id),
                         status: "waiting_human".to_string(),
                         reason: "等待人工输入".to_string(),
-                        locator_payload: json!({
-                            "node_id": node.node_id,
-                            "next_node_index": next_node_index(&compiled_plan, node_id)?,
-                        }),
+                        locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                            &node.node_id,
+                            next_index,
+                            orchestration_runtime::execution_engine::branching::checkpoint_active_node_ids(
+                                &active_node_ids,
+                            ),
+                        )
+                        .into_json(),
                         variable_snapshot: Value::Object(variable_pool.clone()),
                         external_ref_payload: Some(json!({ "prompt": prompt })),
                     })
@@ -899,6 +967,13 @@ where
                 )
                 .await?
                 .unwrap_or_else(|| json!({}));
+                let next_index = next_node_index(&compiled_plan, node_id)?;
+                orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
+                    &compiled_plan,
+                    &mut active_node_ids,
+                    node,
+                    None,
+                );
                 service
                     .repository
                     .create_checkpoint(&CreateCheckpointInput {
@@ -906,10 +981,14 @@ where
                         node_run_id: Some(node_run.id),
                         status: "waiting_callback".to_string(),
                         reason: "等待 callback 回填".to_string(),
-                        locator_payload: json!({
-                            "node_id": node.node_id,
-                            "next_node_index": next_node_index(&compiled_plan, node_id)?,
-                        }),
+                        locator_payload: CheckpointLocatorPayload::from_runtime_position(
+                            &node.node_id,
+                            next_index,
+                            orchestration_runtime::execution_engine::branching::checkpoint_active_node_ids(
+                                &active_node_ids,
+                            ),
+                        )
+                        .into_json(),
                         variable_snapshot: Value::Object(variable_pool.clone()),
                         external_ref_payload: Some(request_payload.clone()),
                     })
@@ -1063,6 +1142,12 @@ where
                 return Err(anyhow!("{}", error_payload));
             }
         }
+        orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
+            &compiled_plan,
+            &mut active_node_ids,
+            node,
+            selected_source_handle.as_deref(),
+        );
     }
 
     if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {

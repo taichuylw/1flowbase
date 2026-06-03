@@ -1,10 +1,14 @@
 import type {
   FlowAuthoringDocument,
   FlowBinding,
+  FlowConditionExpressionDocument,
+  FlowConditionGroupDocument,
+  FlowConditionRuleDocument,
   FlowNodeDocument
 } from '@1flowbase/flow-schema';
 
 import { getNodeById } from '../selectors';
+import { isConditionGroup, isConditionRule } from '../../if-else-branches';
 import { remapTemplateSelectorTokens } from '../../template-binding';
 import { remapDataModelQueryBinding } from '../../data-model-query-binding';
 import { remapNamedBindingEntry } from '../../named-binding-expressions';
@@ -71,6 +75,45 @@ function remapSelector(
   return [idMap.get(selector[0])!, ...selector.slice(1)];
 }
 
+function remapConditionRule(
+  rule: FlowConditionRuleDocument,
+  idMap: Map<string, string>
+): FlowConditionRuleDocument {
+  return {
+    ...rule,
+    left: remapSelector(rule.left, idMap),
+    right:
+      rule.right?.kind === 'selector'
+        ? { ...rule.right, selector: remapSelector(rule.right.selector, idMap) }
+        : rule.right
+  };
+}
+
+function remapConditionExpression(
+  condition: FlowConditionExpressionDocument,
+  idMap: Map<string, string>
+): FlowConditionExpressionDocument {
+  if (isConditionGroup(condition)) {
+    return remapConditionGroup(condition, idMap);
+  }
+
+  return isConditionRule(condition)
+    ? remapConditionRule(condition, idMap)
+    : condition;
+}
+
+function remapConditionGroup(
+  group: FlowConditionGroupDocument,
+  idMap: Map<string, string>
+): FlowConditionGroupDocument {
+  return {
+    ...group,
+    conditions: group.conditions.map((condition) =>
+      remapConditionExpression(condition, idMap)
+    )
+  };
+}
+
 function remapBinding(
   binding: FlowBinding,
   idMap: Map<string, string>
@@ -112,14 +155,17 @@ function remapBinding(
     case 'condition_group':
       return {
         ...binding,
+        value: remapConditionGroup(binding.value, idMap)
+      };
+    case 'if_else_branches':
+      return {
+        ...binding,
         value: {
-          ...binding.value,
-          conditions: binding.value.conditions.map((condition) => ({
-            ...condition,
-            left: remapSelector(condition.left, idMap),
-            right: Array.isArray(condition.right)
-              ? remapSelector(condition.right, idMap)
-              : condition.right
+          branches: binding.value.branches.map((branch) => ({
+            ...branch,
+            condition: branch.condition
+              ? remapConditionGroup(branch.condition, idMap)
+              : undefined
           }))
         }
       };

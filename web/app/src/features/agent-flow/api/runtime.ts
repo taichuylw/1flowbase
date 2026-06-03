@@ -36,6 +36,10 @@ import {
   getStartInputFields
 } from '../lib/variables/start-node-variables';
 import { extractNamedBindingSelectors } from '../lib/named-binding-expressions';
+import {
+  collectConditionSelectors,
+  collectIfElseBranchSelectors
+} from '../lib/if-else-branches';
 import { parseTemplateSelectorTokens } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
 
@@ -417,8 +421,12 @@ function extractSelectors(binding: FlowBinding): string[][] {
     case 'named_bindings':
       return extractNamedBindingSelectors(binding.value);
     case 'condition_group':
-      return binding.value.conditions
-        .map((condition) => normalizeSelectorPath(condition.left))
+      return collectConditionSelectors(binding.value)
+        .map((condition) => normalizeSelectorPath(condition))
+        .filter((value): value is string[] => value !== null);
+    case 'if_else_branches':
+      return collectIfElseBranchSelectors(binding.value.branches)
+        .map((condition) => normalizeSelectorPath(condition))
         .filter((value): value is string[] => value !== null);
     case 'state_write':
       return binding.value

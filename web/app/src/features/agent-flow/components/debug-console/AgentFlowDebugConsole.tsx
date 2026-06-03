@@ -24,12 +24,13 @@ export function AgentFlowDebugConsole({
   status,
   stopping,
   subtitle,
-  title = i18nText("agentFlow", "auto.preview"),
+  title = i18nText('agentFlow', 'auto.preview'),
   onChangeRunContextValue,
   onClearSession,
   onClose,
   onLoadArtifact,
   onOpenMessageLog,
+  onOpenResumeTimeline,
   onReachConversationTop,
   onStopRun,
   onSubmitPrompt
@@ -54,6 +55,7 @@ export function AgentFlowDebugConsole({
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
+  onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   onReachConversationTop?: () => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
@@ -81,7 +83,7 @@ export function AgentFlowDebugConsole({
         actions={
           showClearAction ? (
             <Button
-              aria-label={i18nText("agentFlow", "auto.clear_preview")}
+              aria-label={i18nText('agentFlow', 'auto.clear_preview')}
               disabled={messages.length === 0}
               icon={<ReloadOutlined />}
               size="small"
@@ -96,7 +98,9 @@ export function AgentFlowDebugConsole({
         ariaLabel={ariaLabel}
         bodyClassName="agent-flow-editor__debug-console-body"
         className="agent-flow-editor__debug-console"
-        closeLabel={closeLabel ?? i18nText("agentFlow", "auto.close", { value1: title })}
+        closeLabel={
+          closeLabel ?? i18nText('agentFlow', 'auto.close', { value1: title })
+        }
         subtitle={subtitle}
         title={title}
         onClose={onClose}
@@ -108,6 +112,7 @@ export function AgentFlowDebugConsole({
           status={status}
           stopping={stopping}
           onLoadArtifact={onLoadArtifact}
+          onOpenResumeTimeline={onOpenResumeTimeline}
           onReachTop={onReachConversationTop}
           onOpenMessageLog={(message) => {
             if (onOpenMessageLog) {

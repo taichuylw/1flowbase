@@ -15,9 +15,9 @@ export const ifElseNodeDefinition: NodeDefinition = {
       title: 'Inputs',
       fields: [
         {
-          key: 'bindings.condition_group',
-          label: i18nText("agentFlow", "auto.condition_group"),
-          editor: 'condition_group',
+          key: 'bindings.branches',
+          label: i18nText("agentFlow", "auto.branches"),
+          editor: 'if_else_branches',
           required: true
         }
       ]

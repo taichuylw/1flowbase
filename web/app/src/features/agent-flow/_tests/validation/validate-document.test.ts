@@ -620,6 +620,188 @@ describe('validateDocument', () => {
     ).toBe(false);
   });
 
+  test('flags If / Else branches whose non-else conditions are empty', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    document.graph.nodes.push(createNodeDocument('if_else', 'node-if-else'));
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-if-else',
+          fieldKey: 'bindings.branches'
+        })
+      ])
+    );
+  });
+
+  test('flags If / Else branch rules whose left selector is empty', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else');
+
+    ifElseNode.bindings.branches = {
+      kind: 'if_else_branches',
+      value: {
+        branches: [
+          {
+            id: 'if',
+            kind: 'if',
+            title: 'If',
+            sourceHandle: 'if',
+            condition: {
+              operator: 'and',
+              conditions: [
+                { kind: 'rule', left: [], comparator: 'exists' }
+              ]
+            }
+          },
+          {
+            id: 'else',
+            kind: 'else',
+            title: 'Else',
+            sourceHandle: 'else'
+          }
+        ]
+      }
+    };
+    document.graph.nodes.push(ifElseNode);
+    document.graph.edges.push({
+      id: 'edge-start-if-else',
+      source: 'node-start',
+      target: 'node-if-else',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-if-else',
+          fieldKey: 'bindings.branches'
+        })
+      ])
+    );
+  });
+
+  test('flags If / Else branch rules whose right selector is empty', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else');
+
+    ifElseNode.bindings.branches = {
+      kind: 'if_else_branches',
+      value: {
+        branches: [
+          {
+            id: 'if',
+            kind: 'if',
+            title: 'If',
+            sourceHandle: 'if',
+            condition: {
+              operator: 'and',
+              conditions: [
+                {
+                  kind: 'rule',
+                  left: ['node-start', 'query'],
+                  comparator: 'equals',
+                  right: { kind: 'selector', selector: [] }
+                }
+              ]
+            }
+          },
+          {
+            id: 'else',
+            kind: 'else',
+            title: 'Else',
+            sourceHandle: 'else'
+          }
+        ]
+      }
+    };
+    document.graph.nodes.push(ifElseNode);
+    document.graph.edges.push({
+      id: 'edge-start-if-else',
+      source: 'node-start',
+      target: 'node-if-else',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-if-else',
+          fieldKey: 'bindings.branches'
+        })
+      ])
+    );
+  });
+
+  test('flags If / Else branch groups that mix complete and incomplete rules', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else');
+
+    ifElseNode.bindings.branches = {
+      kind: 'if_else_branches',
+      value: {
+        branches: [
+          {
+            id: 'if',
+            kind: 'if',
+            title: 'If',
+            sourceHandle: 'if',
+            condition: {
+              operator: 'and',
+              conditions: [
+                {
+                  kind: 'rule',
+                  left: ['node-start', 'query'],
+                  comparator: 'exists'
+                },
+                { kind: 'rule', left: [], comparator: 'exists' }
+              ]
+            }
+          },
+          {
+            id: 'else',
+            kind: 'else',
+            title: 'Else',
+            sourceHandle: 'else'
+          }
+        ]
+      }
+    };
+    document.graph.nodes.push(ifElseNode);
+    document.graph.edges.push({
+      id: 'edge-start-if-else',
+      source: 'node-start',
+      target: 'node-if-else',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    const issues = validateDocument(document);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-if-else',
+          fieldKey: 'bindings.branches'
+        })
+      ])
+    );
+  });
+
   test('flags duplicate code output keys in the editable output contract', () => {
     const document = createCodeDocumentWithOutputs([
       { key: 'result', title: '结果', valueType: 'string' },

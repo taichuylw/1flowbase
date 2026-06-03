@@ -153,6 +153,126 @@ function Prompt-OfficialPluginGithubProxyUrl() {
   }
 }
 
+function Normalize-DockerArchitecture([string]$Architecture) {
+  switch ($Architecture.ToLowerInvariant()) {
+    "amd64" { return "amd64" }
+    "x86_64" { return "amd64" }
+    "arm64" { return "arm64" }
+    "aarch64" { return "arm64" }
+    "arm64/v8" { return "arm64" }
+    default { return $Architecture.ToLowerInvariant() }
+  }
+}
+
+function Normalize-DockerPlatform([string]$Platform) {
+  $Parts = $Platform -split "/", 2
+  if ($Parts.Count -eq 2) {
+    $OsName = $Parts[0].ToLowerInvariant()
+    $ArchName = Normalize-DockerArchitecture $Parts[1]
+  } else {
+    $OsName = "linux"
+    $ArchName = Normalize-DockerArchitecture $Platform
+  }
+
+  return "$OsName/$ArchName"
+}
+
+function Get-EffectiveDockerPlatform() {
+  if ($env:DOCKER_DEFAULT_PLATFORM) {
+    return Normalize-DockerPlatform $env:DOCKER_DEFAULT_PLATFORM
+  }
+
+  $RawPlatform = docker info --format "{{.OSType}}/{{.Architecture}}" 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $RawPlatform) {
+    Fail "Could not detect Docker server platform."
+  }
+
+  return Normalize-DockerPlatform $RawPlatform
+}
+
+function Get-EnvOrFileValue([string]$Key, [string]$Path, [string]$DefaultValue) {
+  $EnvValue = [Environment]::GetEnvironmentVariable($Key)
+  if ($EnvValue) {
+    return $EnvValue
+  }
+
+  $FileValue = Read-EnvValue $Key $Path
+  if ($FileValue) {
+    return $FileValue
+  }
+
+  return $DefaultValue
+}
+
+function Get-FlowbaseImageRefs([string]$Path) {
+  $WebVersion = Get-EnvOrFileValue "FLOWBASE_WEB_VERSION" $Path "latest"
+  $ApiVersion = Get-EnvOrFileValue "FLOWBASE_API_SERVER_VERSION" $Path "latest"
+  $PluginRunnerVersion = Get-EnvOrFileValue "FLOWBASE_PLUGIN_RUNNER_VERSION" $Path "latest"
+
+  return @(
+    "ghcr.io/taichuy/1flowbase-web:$WebVersion",
+    "ghcr.io/taichuy/1flowbase-api-server:$ApiVersion",
+    "ghcr.io/taichuy/1flowbase-plugin-runner:$PluginRunnerVersion"
+  )
+}
+
+function Test-FlowbaseUsesLatestImageTags([string]$Path) {
+  return (
+    (Get-EnvOrFileValue "FLOWBASE_WEB_VERSION" $Path "latest") -eq "latest" -and
+    (Get-EnvOrFileValue "FLOWBASE_API_SERVER_VERSION" $Path "latest") -eq "latest" -and
+    (Get-EnvOrFileValue "FLOWBASE_PLUGIN_RUNNER_VERSION" $Path "latest") -eq "latest"
+  )
+}
+
+function Test-LocalLatestFlowbaseImages([string]$Path) {
+  if (-not (Test-FlowbaseUsesLatestImageTags $Path)) {
+    return $false
+  }
+
+  foreach ($Image in Get-FlowbaseImageRefs $Path) {
+    if (-not (Invoke-NativeQuiet { docker image inspect $Image })) {
+      return $false
+    }
+  }
+
+  return $true
+}
+
+function Test-ImageManifestPlatform([string]$Image, [string]$Platform) {
+  $ManifestLines = docker manifest inspect $Image 2>$null
+  if ($LASTEXITCODE -ne 0 -or -not $ManifestLines) {
+    return $null
+  }
+
+  $Manifest = $ManifestLines -join "`n"
+  $Parts = $Platform -split "/", 2
+  $OsName = [regex]::Escape($Parts[0])
+  $ArchName = [regex]::Escape($Parts[1])
+
+  return (
+    $Manifest -match "`"os`"\s*:\s*`"$OsName`"" -and
+    $Manifest -match "`"architecture`"\s*:\s*`"$ArchName`""
+  )
+}
+
+function Assert-FlowbaseImagePlatformSupport() {
+  $Platform = Get-EffectiveDockerPlatform
+  Write-Host "Detected Docker platform: $Platform"
+
+  if ($Platform -ne "linux/amd64" -and $Platform -ne "linux/arm64") {
+    Fail "This 1flowbase Docker package supports linux/amd64 and linux/arm64. Detected Docker platform: $Platform."
+  }
+
+  foreach ($Image in Get-FlowbaseImageRefs ".\.env") {
+    $SupportsPlatform = Test-ImageManifestPlatform $Image $Platform
+    if ($null -eq $SupportsPlatform) {
+      Write-Host "Could not verify Docker image platform support for $Image; continuing to Docker pull."
+    } elseif (-not $SupportsPlatform) {
+      Fail "Docker image $Image does not publish $Platform. Rebuild/publish the 1flowbase multi-platform images, or set DOCKER_DEFAULT_PLATFORM=linux/amd64 as a temporary workaround on ARM machines."
+    }
+  }
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Fail "Docker is required. Install Docker Desktop or Docker Engine first."
 }
@@ -183,11 +303,23 @@ if (Test-Path ".\docker") {
   Write-Host "Downloaded ./docker."
 }
 
+$PromptConfigValues = $false
 if (-not (Test-Path ".\docker\.env")) {
   Copy-Item ".\docker\.env.example" ".\docker\.env"
   Write-Host "Created docker/.env from docker/.env.example."
+  $PromptConfigValues = $true
 } else {
   Write-Host "Using existing docker/.env."
+  if ($ShouldPrompt) {
+    $OverwriteEnv = Prompt-YesNo "Overwrite current docker/.env from docker/.env.example?" $false
+    if ($OverwriteEnv) {
+      Copy-Item ".\docker\.env.example" ".\docker\.env" -Force
+      Write-Host "Overwrote docker/.env from docker/.env.example."
+      $PromptConfigValues = $true
+    } else {
+      Write-Host "Keeping existing docker/.env."
+    }
+  }
 }
 
 if ($DbPassword) {
@@ -215,7 +347,7 @@ if ($PluginGithubProxyUrl) {
   Write-Host "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
 }
 
-if ($ShouldPrompt) {
+if ($ShouldPrompt -and $PromptConfigValues) {
   Write-Host "Configure docker/.env. Press Enter to keep the value shown in brackets."
   Prompt-EnvValue "POSTGRES_PASSWORD" "Database password"
   Prompt-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" "Root account"
@@ -227,7 +359,11 @@ if ($ShouldPrompt) {
 
 if ($null -eq $PullImages) {
   if ($ShouldPrompt) {
-    $PullImages = Prompt-YesNo "Pull Docker images?" $false
+    if (Test-LocalLatestFlowbaseImages ".\docker\.env") {
+      $PullImages = Prompt-YesNo "Local latest Docker images were found. Update Docker images?" $false
+    } else {
+      $PullImages = Prompt-YesNo "Pull Docker images?" $false
+    }
   } else {
     $PullImages = $false
   }
@@ -253,6 +389,8 @@ if (-not (Invoke-NativeQuiet { docker info })) {
 }
 
 Set-Location ".\docker"
+Assert-FlowbaseImagePlatformSupport
+
 if ($PullImages) {
   if ($UseDockerComposePlugin) {
     docker compose pull

@@ -198,7 +198,7 @@ fn resolve_binding(binding: &CompiledBinding, variable_pool: &Map<String, Value>
             Ok(Value::Array(messages))
         }
         "data_model_query" => resolve_data_model_query(binding, variable_pool),
-        "condition_group" | "state_write" => Ok(binding.raw_value.clone()),
+        "condition_group" | "if_else_branches" | "state_write" => Ok(binding.raw_value.clone()),
         other => bail!("unsupported binding kind: {other}"),
     }
 }

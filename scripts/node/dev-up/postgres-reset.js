@@ -168,7 +168,7 @@ function runServicePrestartCommands(
       const result = runCommandImpl(prestartCommand.command, prestartCommand.args, {
         cwd: prestartCommand.cwd,
         env: prestartCommand.env,
-        captureOutput: true,
+        captureOutput: prestartCommand.captureOutput !== false,
       });
 
       if (!result.error && result.status === 0) {

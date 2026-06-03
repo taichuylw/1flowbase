@@ -1,0 +1,143 @@
+name: 缺陷 / Bug
+description: 报告可复现的错误、回归或异常行为。
+title: "[讨论]"
+labels:
+  - "type:bug"
+  - "phase:discussion"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        标题保持 `[讨论]简短标题` 格式。提交后请按正文选择补齐 `area:*`、`level:*`、`grade:*`、`priority:*`、`risk:*`、`size:*` 等标签。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 现象
+      description: 说明用户看到的问题、错误信息或异常行为。
+      placeholder: 例如：工作流调试继续执行后，分支节点没有恢复到预期状态。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 写清最短可复现路径。
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 观察到 ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 说明正确结果。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 说明实际结果、错误码、日志或截图路径。
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要影响面
+      multiple: true
+      options:
+        - area:frontend
+        - area:backend
+        - area:api
+        - area:schema-ui
+        - area:runtime
+        - area:workflow
+        - area:settings
+        - area:infra
+        - area:docs
+        - area:test
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Issue 层级
+      options:
+        - level:l3 - 单个可执行修复任务
+        - level:l2 - 子系统 workstream，需要继续拆 L3
+        - level:l1 - 决策 / ADR
+        - level:l0 - 总问题 / umbrella
+    validations:
+      required: true
+  - type: dropdown
+    id: grade
+    attributes:
+      label: 风险分级
+      options:
+        - grade:g1 - 局部缺陷，无 contract / migration 风险
+        - grade:g2 - 单子系统行为变化，需要测试
+        - grade:g3 - 跨前后端、状态入口或多模块影响
+        - grade:g4 - 架构、数据、migration 或用户内容风险
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      options:
+        - priority:p2
+        - priority:p0
+        - priority:p1
+        - priority:p3
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: 风险
+      options:
+        - risk:medium
+        - risk:low
+        - risk:high
+    validations:
+      required: true
+  - type: dropdown
+    id: size
+    attributes:
+      label: 规模
+      options:
+        - size:s
+        - size:xs
+        - size:m
+        - size:l
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Parent issue
+      description: 子 issue 必填，格式为 #123；没有 parent 时写 N/A。
+      placeholder: "#123 或 N/A"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收证据
+      description: 写清修复后需要看到的命令、截图、日志或 QA 产物。
+      placeholder: |
+        - 复现路径不再触发错误
+        - 定向测试通过：
+        - 证据文件：
+    validations:
+      required: true
+  - type: textarea
+    id: stop-conditions
+    attributes:
+      label: 停止条件
+      description: 出现哪些情况必须停止并回到需求确认或决策。
+      placeholder: 例如：发现需要修改后端 DTO 字段、migration 或跨模块状态入口。
+    validations:
+      required: true

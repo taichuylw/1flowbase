@@ -18,9 +18,9 @@ use uuid::Uuid;
 
 use crate::{
     compiled_plan::{
-        CompiledBinding, CompiledCodeRuntime, CompiledLlmRouteTarget, CompiledLlmRouting,
-        CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan, CompiledPluginRuntime,
-        LlmRoutingMode,
+        CompiledBinding, CompiledCodeRuntime, CompiledEdge, CompiledLlmRouteTarget,
+        CompiledLlmRouting, CompiledLlmRuntime, CompiledNode, CompiledOutput, CompiledPlan,
+        CompiledPluginRuntime, LlmRoutingMode,
     },
     execution_engine::{
         resume_flow_debug_run, start_flow_debug_run, CapabilityInvocationOutput, CapabilityInvoker,
@@ -742,6 +742,7 @@ fn base_plan() -> CompiledPlan {
             "node-human".to_string(),
             "node-answer".to_string(),
         ],
+        edges: Vec::new(),
         nodes,
         compile_issues: Vec::new(),
     }
@@ -905,6 +906,7 @@ fn sequential_tool_invoker(
 }
 
 mod answer_and_failover;
+mod branches;
 mod failures_and_parameters;
 mod human_and_tool_resume;
 mod llm_context;

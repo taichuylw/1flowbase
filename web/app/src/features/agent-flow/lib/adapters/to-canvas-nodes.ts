@@ -6,6 +6,7 @@ import type {
 } from '../../components/canvas/node-types';
 import type { NodePickerOption } from '../plugin-node-definitions';
 import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
+import { getIfElseBranchesFromBindings } from '../if-else-branches';
 
 const CANVAS_NODE_WIDTH = 196;
 const CANVAS_NODE_HEIGHT = 96;
@@ -30,6 +31,7 @@ export function toCanvasNodes(
   activeContainerId: string | null,
   selectedNodeId: string | null,
   pickerNodeId: string | null,
+  pickerSourceHandleId: string | null,
   issueCountByNodeId: Record<string, number>,
   actions: Pick<
     AgentFlowCanvasNodeData,
@@ -47,32 +49,44 @@ export function toCanvasNodes(
 ): AgentFlowCanvasNode[] {
   return document.graph.nodes
     .filter((node) => node.containerId === activeContainerId)
-    .map((node) => ({
-      id: node.id,
-      type: 'agentFlowNode',
-      selected: node.id === selectedNodeId,
-      position: node.position,
-      width: CANVAS_NODE_WIDTH,
-      height: CANVAS_NODE_HEIGHT,
-      measured: {
+    .map((node) => {
+      const branchSourceHandles =
+        node.type === 'if_else'
+          ? (getIfElseBranchesFromBindings(node.bindings) ?? []).map((branch) => ({
+              id: branch.sourceHandle,
+              title: branch.title
+            }))
+          : [];
+
+      return {
+        id: node.id,
+        type: 'agentFlowNode',
+        selected: node.id === selectedNodeId,
+        position: node.position,
         width: CANVAS_NODE_WIDTH,
-        height: CANVAS_NODE_HEIGHT
-      },
-      data: {
-        nodeId: node.id,
-        nodeType: node.type,
-        nodeSchema: resolveAgentFlowNodeSchema(node.type),
-        typeLabel: nodeTypeLabel(node.type),
-        alias: node.alias,
-        description: node.description,
-        config: node.config,
-        issueCount: issueCountByNodeId[node.id] ?? 0,
-        canEnterContainer: node.type === 'iteration' || node.type === 'loop',
-        pickerOpen: pickerNodeId === node.id,
-        showTargetHandle: node.type !== 'start',
-        showSourceHandle: true,
-        isContainer: node.type === 'iteration' || node.type === 'loop',
-        ...actions
-      }
-    }));
+        height: CANVAS_NODE_HEIGHT,
+        measured: {
+          width: CANVAS_NODE_WIDTH,
+          height: CANVAS_NODE_HEIGHT
+        },
+        data: {
+          nodeId: node.id,
+          nodeType: node.type,
+          nodeSchema: resolveAgentFlowNodeSchema(node.type),
+          typeLabel: nodeTypeLabel(node.type),
+          alias: node.alias,
+          description: node.description,
+          config: node.config,
+          issueCount: issueCountByNodeId[node.id] ?? 0,
+          canEnterContainer: node.type === 'iteration' || node.type === 'loop',
+          pickerOpen: pickerNodeId === node.id,
+          pickerSourceHandleId,
+          showTargetHandle: node.type !== 'start',
+          showSourceHandle: true,
+          branchSourceHandles,
+          isContainer: node.type === 'iteration' || node.type === 'loop',
+          ...actions
+        }
+      };
+    });
 }

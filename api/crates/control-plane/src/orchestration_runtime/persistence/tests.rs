@@ -2,8 +2,27 @@ use orchestration_runtime::execution_state::{
     ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure, NodeExecutionTrace,
 };
 use serde_json::{json, Map, Value};
+use time::OffsetDateTime;
+use uuid::Uuid;
 
-use super::final_flow_output_payload;
+use super::{
+    checkpoint_node_id, checkpoint_snapshot_from_record, final_flow_output_payload,
+    CheckpointLocatorPayload,
+};
+
+fn checkpoint_record(locator_payload: Value, variable_snapshot: Value) -> domain::CheckpointRecord {
+    domain::CheckpointRecord {
+        id: Uuid::nil(),
+        flow_run_id: Uuid::nil(),
+        node_run_id: None,
+        status: "waiting_callback".to_string(),
+        reason: "waiting".to_string(),
+        locator_payload,
+        variable_snapshot,
+        external_ref_payload: None,
+        created_at: OffsetDateTime::UNIX_EPOCH,
+    }
+}
 
 fn typed_trace(
     node_id: &str,
@@ -26,6 +45,90 @@ fn typed_trace(
 
 fn trace(node_id: &str, output_payload: Value, error_payload: Option<Value>) -> NodeExecutionTrace {
     typed_trace(node_id, "llm", output_payload, error_payload)
+}
+
+#[test]
+fn checkpoint_snapshot_from_record_reads_active_node_ids() {
+    let checkpoint = checkpoint_record(
+        json!({
+            "node_id": "node-human",
+            "next_node_index": 3,
+            "active_node_ids": ["node-answer", "node-followup"]
+        }),
+        json!({ "node-human": { "answer": "ok" } }),
+    );
+
+    let snapshot = checkpoint_snapshot_from_record(&checkpoint).unwrap();
+
+    assert_eq!(snapshot.next_node_index, 3);
+    assert_eq!(
+        snapshot.active_node_ids,
+        vec!["node-answer".to_string(), "node-followup".to_string()]
+    );
+}
+
+#[test]
+fn checkpoint_snapshot_from_record_requires_active_node_ids() {
+    let checkpoint = checkpoint_record(
+        json!({
+            "node_id": "node-human",
+            "next_node_index": 3
+        }),
+        json!({}),
+    );
+
+    let error = checkpoint_snapshot_from_record(&checkpoint).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("checkpoint is missing active_node_ids"),
+        "{error}"
+    );
+}
+
+#[test]
+fn checkpoint_locator_payload_round_trips_snapshot_fields() {
+    let snapshot = orchestration_runtime::execution_state::CheckpointSnapshot {
+        next_node_index: 3,
+        variable_pool: Map::from_iter([("node-human".to_string(), json!({ "answer": "ok" }))]),
+        active_node_ids: vec!["node-answer".to_string(), "node-followup".to_string()],
+    };
+    let locator_payload =
+        CheckpointLocatorPayload::from_snapshot("node-human", &snapshot).into_json();
+    let checkpoint = checkpoint_record(
+        locator_payload,
+        Value::Object(snapshot.variable_pool.clone()),
+    );
+
+    let locator = CheckpointLocatorPayload::from_record(&checkpoint).unwrap();
+    let restored = locator
+        .into_checkpoint_snapshot(&checkpoint.variable_snapshot)
+        .unwrap();
+
+    assert_eq!(restored, snapshot);
+}
+
+#[test]
+fn checkpoint_locator_payload_from_runtime_position_preserves_branch_state() {
+    let checkpoint = checkpoint_record(
+        CheckpointLocatorPayload::from_runtime_position(
+            "node-tool",
+            2,
+            vec!["node-answer".to_string(), "node-cleanup".to_string()],
+        )
+        .into_json(),
+        json!({ "node-tool": { "output": "waiting" } }),
+    );
+
+    let snapshot = checkpoint_snapshot_from_record(&checkpoint).unwrap();
+
+    assert_eq!(checkpoint_node_id(&checkpoint).unwrap(), "node-tool");
+    assert_eq!(snapshot.next_node_index, 2);
+    assert_eq!(
+        snapshot.active_node_ids,
+        vec!["node-answer".to_string(), "node-cleanup".to_string()]
+    );
 }
 
 #[test]

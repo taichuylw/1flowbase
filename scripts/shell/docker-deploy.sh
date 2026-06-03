@@ -146,6 +146,164 @@ prompt_official_plugin_github_proxy_url() {
   fi
 }
 
+normalize_docker_architecture() {
+  case "$1" in
+    amd64|x86_64)
+      printf '%s\n' "amd64"
+      ;;
+    arm64|aarch64|arm64/v8)
+      printf '%s\n' "arm64"
+      ;;
+    *)
+      printf '%s\n' "$1"
+      ;;
+  esac
+}
+
+normalize_docker_platform() {
+  platform="$1"
+  case "$platform" in
+    */*)
+      os_name="${platform%%/*}"
+      arch_name="${platform#*/}"
+      ;;
+    *)
+      os_name="linux"
+      arch_name="$platform"
+      ;;
+  esac
+
+  os_name="$(printf '%s' "$os_name" | tr '[:upper:]' '[:lower:]')"
+  arch_name="$(normalize_docker_architecture "$(printf '%s' "$arch_name" | tr '[:upper:]' '[:lower:]')")"
+  printf '%s/%s\n' "$os_name" "$arch_name"
+}
+
+detect_docker_platform() {
+  if [ -n "${DOCKER_DEFAULT_PLATFORM:-}" ]; then
+    normalize_docker_platform "$DOCKER_DEFAULT_PLATFORM"
+    return
+  fi
+
+  platform="$(docker info --format '{{.OSType}}/{{.Architecture}}' 2>/dev/null || true)"
+  [ -n "$platform" ] || fail "Could not detect Docker server platform."
+  normalize_docker_platform "$platform"
+}
+
+flowbase_env_or_file_value() {
+  key="$1"
+  file="$2"
+  default_value="$3"
+  value=""
+
+  case "$key" in
+    FLOWBASE_WEB_VERSION)
+      value="${FLOWBASE_WEB_VERSION:-}"
+      ;;
+    FLOWBASE_API_SERVER_VERSION)
+      value="${FLOWBASE_API_SERVER_VERSION:-}"
+      ;;
+    FLOWBASE_PLUGIN_RUNNER_VERSION)
+      value="${FLOWBASE_PLUGIN_RUNNER_VERSION:-}"
+      ;;
+  esac
+
+  if [ -z "$value" ]; then
+    value="$(read_env_value "$key" "$file")"
+  fi
+  if [ -z "$value" ]; then
+    value="$default_value"
+  fi
+
+  printf '%s\n' "$value"
+}
+
+flowbase_web_image() {
+  file="$1"
+  version="$(flowbase_env_or_file_value FLOWBASE_WEB_VERSION "$file" latest)"
+  printf '%s\n' "ghcr.io/taichuy/1flowbase-web:${version}"
+}
+
+flowbase_api_server_image() {
+  file="$1"
+  version="$(flowbase_env_or_file_value FLOWBASE_API_SERVER_VERSION "$file" latest)"
+  printf '%s\n' "ghcr.io/taichuy/1flowbase-api-server:${version}"
+}
+
+flowbase_plugin_runner_image() {
+  file="$1"
+  version="$(flowbase_env_or_file_value FLOWBASE_PLUGIN_RUNNER_VERSION "$file" latest)"
+  printf '%s\n' "ghcr.io/taichuy/1flowbase-plugin-runner:${version}"
+}
+
+flowbase_uses_latest_image_tags() {
+  file="$1"
+  [ "$(flowbase_env_or_file_value FLOWBASE_WEB_VERSION "$file" latest)" = "latest" ] || return 1
+  [ "$(flowbase_env_or_file_value FLOWBASE_API_SERVER_VERSION "$file" latest)" = "latest" ] || return 1
+  [ "$(flowbase_env_or_file_value FLOWBASE_PLUGIN_RUNNER_VERSION "$file" latest)" = "latest" ] || return 1
+  return 0
+}
+
+local_flowbase_latest_images_exist() {
+  file="$1"
+  flowbase_uses_latest_image_tags "$file" || return 1
+  docker image inspect "$(flowbase_web_image "$file")" >/dev/null 2>&1 || return 1
+  docker image inspect "$(flowbase_api_server_image "$file")" >/dev/null 2>&1 || return 1
+  docker image inspect "$(flowbase_plugin_runner_image "$file")" >/dev/null 2>&1 || return 1
+  return 0
+}
+
+prompt_pull_images() {
+  if local_flowbase_latest_images_exist ./docker/.env; then
+    prompt_yes_no "Local latest Docker images were found. Update Docker images?" "no"
+  else
+    prompt_yes_no "Pull Docker images?" "no"
+  fi
+}
+
+manifest_supports_platform() {
+  image="$1"
+  platform="$2"
+  os_name="${platform%%/*}"
+  arch_name="${platform#*/}"
+  manifest="$(docker manifest inspect "$image" 2>/dev/null || true)"
+
+  [ -n "$manifest" ] || return 2
+  printf '%s\n' "$manifest" | grep -Eq "\"os\"[[:space:]]*:[[:space:]]*\"${os_name}\"" || return 1
+  printf '%s\n' "$manifest" | grep -Eq "\"architecture\"[[:space:]]*:[[:space:]]*\"${arch_name}\"" || return 1
+  return 0
+}
+
+verify_flowbase_image_platforms() {
+  platform="$(detect_docker_platform)"
+  echo "Detected Docker platform: ${platform}"
+
+  case "$platform" in
+    linux/amd64|linux/arm64)
+      ;;
+    *)
+      fail "This 1flowbase Docker package supports linux/amd64 and linux/arm64. Detected Docker platform: ${platform}."
+      ;;
+  esac
+
+  for image in \
+    "$(flowbase_web_image .env)" \
+    "$(flowbase_api_server_image .env)" \
+    "$(flowbase_plugin_runner_image .env)"
+  do
+    manifest_status=0
+    manifest_supports_platform "$image" "$platform" || manifest_status="$?"
+    if [ "$manifest_status" -eq 0 ]; then
+      continue
+    fi
+
+    if [ "$manifest_status" -eq 1 ]; then
+      fail "Docker image ${image} does not publish ${platform}. Rebuild/publish the 1flowbase multi-platform images, or set DOCKER_DEFAULT_PLATFORM=linux/amd64 as a temporary workaround on ARM machines."
+    fi
+
+    echo "Could not verify Docker image platform support for ${image}; continuing to Docker pull."
+  done
+}
+
 usage() {
   cat <<'EOF'
 Usage: docker-deploy.sh [options]
@@ -175,6 +333,7 @@ Environment variables with the same effect:
   FLOWBASE_PULL_IMAGES=1
   FLOWBASE_START_CONTAINERS=1
   FLOWBASE_NON_INTERACTIVE=1
+  DOCKER_DEFAULT_PLATFORM=linux/amd64
 EOF
 }
 
@@ -290,11 +449,23 @@ else
   echo "Downloaded ./docker."
 fi
 
+PROMPT_CONFIG_VALUES=0
 if [ ! -f ./docker/.env ]; then
   cp ./docker/.env.example ./docker/.env
   echo "Created docker/.env from docker/.env.example."
+  PROMPT_CONFIG_VALUES=1
 else
   echo "Using existing docker/.env."
+  if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
+    OVERWRITE_ENV="$(prompt_yes_no "Overwrite current docker/.env from docker/.env.example?" "no")"
+    if [ "$OVERWRITE_ENV" = "yes" ]; then
+      cp ./docker/.env.example ./docker/.env
+      echo "Overwrote docker/.env from docker/.env.example."
+      PROMPT_CONFIG_VALUES=1
+    else
+      echo "Keeping existing docker/.env."
+    fi
+  fi
 fi
 
 if [ -n "$DB_PASSWORD" ]; then
@@ -322,7 +493,7 @@ if [ -n "$PLUGIN_GITHUB_PROXY_URL" ]; then
   echo "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
 fi
 
-if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
+if [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   echo "Configure docker/.env. Press Enter to keep the value shown in brackets."
   prompt_env_value POSTGRES_PASSWORD "Database password"
   prompt_env_value BOOTSTRAP_ROOT_ACCOUNT "Root account"
@@ -330,13 +501,13 @@ if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   prompt_env_value API_PROVIDER_SECRET_MASTER_KEY "API provider secret master key"
   prompt_env_value WEB_PORT "Web port"
   prompt_official_plugin_github_proxy_url
-elif [ "$INTERACTIVE" -eq 1 ]; then
+elif [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "No interactive terminal was found. Keeping docker/.env values."
 fi
 
 if [ -z "$PULL_IMAGES" ]; then
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
-    PULL_IMAGES="$(prompt_yes_no "Pull Docker images?" "no")"
+    PULL_IMAGES="$(prompt_pull_images)"
   else
     PULL_IMAGES="no"
   fi
@@ -364,6 +535,8 @@ fi
 docker info >/dev/null 2>&1 || fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
 
 cd docker
+verify_flowbase_image_platforms
+
 if [ "$PULL_IMAGES" = "yes" ]; then
   compose pull
 else

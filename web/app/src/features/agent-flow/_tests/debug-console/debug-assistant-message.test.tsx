@@ -205,6 +205,33 @@ describe('DebugAssistantMessage', () => {
     });
   });
 
+  test('opens the resume timeline for the clicked assistant message', () => {
+    const onOpenResumeTimeline = vi.fn();
+    const message: AgentFlowDebugMessage = {
+      id: 'assistant-resume',
+      role: 'assistant',
+      status: 'waiting_callback',
+      runId: 'conversation-run',
+      detailRunId: 'detail-run',
+      content: '等待回调',
+      rawOutput: null,
+      traceSummary: []
+    };
+
+    render(
+      <DebugAssistantMessage
+        message={message}
+        onOpenResumeTimeline={onOpenResumeTimeline}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '查看 Resume 时间线' })
+    );
+
+    expect(onOpenResumeTimeline).toHaveBeenCalledWith(message);
+  });
+
   test('renders raw debug payload as data processing for trace items', () => {
     const message: AgentFlowDebugMessage = {
       id: 'assistant-process',

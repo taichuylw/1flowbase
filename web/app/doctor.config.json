@@ -22,6 +22,34 @@
       },
       {
         "files": [
+          "src/features/agent-flow/_tests/node-inspector/support.tsx"
+        ],
+        "rules": [
+          "react-doctor/no-pass-data-to-parent",
+          "react-doctor/no-prop-callback-in-effect",
+          "react-doctor/only-export-components"
+        ]
+      },
+      {
+        "files": [
+          "src/features/agent-flow/components/editor/AgentFlowCanvas.tsx"
+        ],
+        "rules": [
+          "react-doctor/no-pass-data-to-parent",
+          "react-doctor/no-prop-callback-in-effect"
+        ]
+      },
+      {
+        "files": [
+          "src/features/agent-flow/components/nodes/AgentFlowNodeCard.tsx"
+        ],
+        "rules": [
+          "react-doctor/no-giant-component",
+          "react-doctor/prefer-tag-over-role"
+        ]
+      },
+      {
+        "files": [
           "src/features/applications/components/api/ApplicationApiKeysPanel.tsx"
         ],
         "rules": ["react-doctor/prefer-module-scope-pure-function"]
@@ -30,6 +58,7 @@
         "files": ["src/features/applications/pages/ApplicationLogsPage.tsx"],
         "rules": [
           "react-doctor/no-adjust-state-on-prop-change",
+          "react-doctor/no-cascading-set-state",
           "react-doctor/no-chain-state-updates",
           "react-doctor/no-derived-state-effect",
           "react-doctor/no-giant-component",

@@ -9,6 +9,10 @@ import { createEdgeDocument } from '../edge-factory';
 import { createNodeDocument } from '../node-factory';
 import type { NodePickerOption } from '../../plugin-node-definitions';
 import { getOutgoingEdges, getNodeById } from '../selectors';
+import {
+  getDefaultIfElseSourceHandle,
+  getIfElseBranches
+} from '../../if-else-branches';
 import { shiftDownstreamNodesBFS } from './layout';
 
 const NODE_GAP_X = 280;
@@ -189,75 +193,94 @@ export function updateNodeField(
     value: NodeFieldValue;
   }
 ): FlowAuthoringDocument {
+  const nextNodes = document.graph.nodes.map((node) => {
+    if (node.id !== payload.nodeId) {
+      return node;
+    }
+
+    if (payload.fieldKey === 'alias' && typeof payload.value === 'string') {
+      return {
+        ...node,
+        alias: payload.value
+      };
+    }
+
+    if (
+      payload.fieldKey === 'description' &&
+      typeof payload.value === 'string'
+    ) {
+      return {
+        ...node,
+        description: payload.value
+      };
+    }
+
+    if (payload.fieldKey.startsWith('config.')) {
+      const configKey = payload.fieldKey.slice('config.'.length);
+      const nextConfig = {
+        ...node.config,
+        [configKey]: payload.value
+      };
+
+      return {
+        ...node,
+        config: nextConfig,
+        outputs:
+          node.type === 'llm' && configKey === 'response_format'
+            ? deriveLlmOutputs(nextConfig, node.outputs)
+            : node.outputs
+      };
+    }
+
+    if (payload.fieldKey.startsWith('bindings.')) {
+      const bindingKey = payload.fieldKey.slice('bindings.'.length);
+
+      return {
+        ...node,
+        bindings: {
+          ...node.bindings,
+          [bindingKey]: payload.value as FlowBinding
+        }
+      };
+    }
+
+    if (
+      payload.fieldKey.startsWith('outputs.') &&
+      typeof payload.value === 'string'
+    ) {
+      const outputKey = payload.fieldKey.slice('outputs.'.length);
+
+      return {
+        ...node,
+        outputs: replaceOutputTitle(node.outputs, outputKey, payload.value)
+      };
+    }
+
+    return node;
+  });
+  const branches =
+    payload.fieldKey === 'bindings.branches'
+      ? getIfElseBranches(payload.value as FlowBinding)
+      : null;
+  const nextEdges = branches
+    ? document.graph.edges.filter((edge) => {
+        if (edge.source !== payload.nodeId) {
+          return true;
+        }
+
+        return (
+          edge.sourceHandle !== null &&
+          branches.some((branch) => branch.sourceHandle === edge.sourceHandle)
+        );
+      })
+    : document.graph.edges;
+
   return {
     ...document,
     graph: {
       ...document.graph,
-      nodes: document.graph.nodes.map((node) => {
-        if (node.id !== payload.nodeId) {
-          return node;
-        }
-
-        if (payload.fieldKey === 'alias' && typeof payload.value === 'string') {
-          return {
-            ...node,
-            alias: payload.value
-          };
-        }
-
-        if (
-          payload.fieldKey === 'description' &&
-          typeof payload.value === 'string'
-        ) {
-          return {
-            ...node,
-            description: payload.value
-          };
-        }
-
-        if (payload.fieldKey.startsWith('config.')) {
-          const configKey = payload.fieldKey.slice('config.'.length);
-          const nextConfig = {
-            ...node.config,
-            [configKey]: payload.value
-          };
-
-          return {
-            ...node,
-            config: nextConfig,
-            outputs:
-              node.type === 'llm' && configKey === 'response_format'
-                ? deriveLlmOutputs(nextConfig, node.outputs)
-                : node.outputs
-          };
-        }
-
-        if (payload.fieldKey.startsWith('bindings.')) {
-          const bindingKey = payload.fieldKey.slice('bindings.'.length);
-
-          return {
-            ...node,
-            bindings: {
-              ...node.bindings,
-              [bindingKey]: payload.value as FlowBinding
-            }
-          };
-        }
-
-        if (
-          payload.fieldKey.startsWith('outputs.') &&
-          typeof payload.value === 'string'
-        ) {
-          const outputKey = payload.fieldKey.slice('outputs.'.length);
-
-          return {
-            ...node,
-            outputs: replaceOutputTitle(node.outputs, outputKey, payload.value)
-          };
-        }
-
-        return node;
-      })
+      nodes: nextNodes,
+      edges: nextEdges
     }
   };
 }
@@ -265,7 +288,8 @@ export function updateNodeField(
 export function insertNodeAfter(
   document: FlowAuthoringDocument,
   anchorNodeId: string,
-  node: FlowNodeDocument
+  node: FlowNodeDocument,
+  sourceHandle: string | null = null
 ): FlowAuthoringDocument {
   const anchorNode = getNodeById(document, anchorNodeId);
 
@@ -273,7 +297,11 @@ export function insertNodeAfter(
     return document;
   }
 
-  const outgoingEdges = getOutgoingEdges(document, anchorNodeId);
+  const resolvedSourceHandle =
+    sourceHandle ?? getDefaultIfElseSourceHandle(anchorNode);
+  const outgoingEdges = getOutgoingEdges(document, anchorNodeId).filter(
+    (edge) => edge.sourceHandle === resolvedSourceHandle
+  );
   const nextPositionX = anchorNode.position.x + NODE_GAP_X;
 
   const insertedNode = {
@@ -290,11 +318,16 @@ export function insertNodeAfter(
     graph: {
       nodes: [...document.graph.nodes, insertedNode],
       edges: [
-        ...document.graph.edges.filter((edge) => edge.source !== anchorNodeId),
+        ...document.graph.edges.filter(
+          (edge) =>
+            edge.source !== anchorNodeId ||
+            edge.sourceHandle !== resolvedSourceHandle
+        ),
         createEdgeDocument({
           id: `edge-${anchorNodeId}-${insertedNode.id}`,
           source: anchorNodeId,
           target: insertedNode.id,
+          sourceHandle: resolvedSourceHandle,
           containerId: anchorNode.containerId
         }),
         ...outgoingEdges.map((edge) =>
@@ -302,7 +335,7 @@ export function insertNodeAfter(
             id: `edge-${insertedNode.id}-${edge.target}`,
             source: insertedNode.id,
             target: edge.target,
-            sourceHandle: edge.sourceHandle,
+            sourceHandle: null,
             targetHandle: edge.targetHandle,
             containerId: edge.containerId,
             points: edge.points

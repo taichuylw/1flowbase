@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
 
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
 import { AgentFlowNodeCard } from '../components/nodes/AgentFlowNodeCard';
+import type { NodePickerOption } from '../lib/plugin-node-definitions';
 import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
+
+const updateNodeInternalsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@xyflow/react', () => ({
   Handle: ({
@@ -35,10 +38,15 @@ vi.mock('@xyflow/react', () => ({
   Position: {
     Left: 'left',
     Right: 'right'
-  }
+  },
+  useUpdateNodeInternals: () => updateNodeInternalsMock
 }));
 
 describe('AgentFlowNodeCard', () => {
+  beforeEach(() => {
+    updateNodeInternalsMock.mockClear();
+  });
+
   test('keeps node color on the shell theme instead of per-type selectors', () => {
     const canvasStyles = readFileSync(
       'src/features/agent-flow/components/editor/styles/canvas.css',
@@ -227,6 +235,170 @@ describe('AgentFlowNodeCard', () => {
     fireEvent.click(trigger);
 
     expect(onOpenPicker).toHaveBeenCalledWith('node-llm');
+  });
+
+  test('routes If / Else branch handles through picker open and insert callbacks', async () => {
+    const onOpenPicker = vi.fn();
+    const onInsertNode = vi.fn();
+    const codeOption = {
+      kind: 'builtin',
+      type: 'code',
+      label: 'Code',
+      description: 'Run code',
+      category: 'data',
+      inputKeys: [],
+      outputKeys: []
+    } satisfies NodePickerOption;
+    const baseData = {
+      nodeId: 'node-if-else',
+      nodeType: 'if_else',
+      nodeSchema: resolveAgentFlowNodeSchema('if_else'),
+      typeLabel: 'If / Else',
+      alias: 'If / Else',
+      description: '按条件分支继续执行工作流。',
+      config: {},
+      issueCount: 0,
+      canEnterContainer: false,
+      pickerOpen: false,
+      pickerSourceHandleId: null,
+      showTargetHandle: true,
+      showSourceHandle: true,
+      branchSourceHandles: [
+        { id: 'if', title: 'If' },
+        { id: 'else', title: 'Else' }
+      ],
+      isContainer: false,
+      nodePickerOptions: [codeOption],
+      onOpenPicker,
+      onClosePicker: vi.fn(),
+      onOpenContainer: vi.fn(),
+      onSelectNode: vi.fn(),
+      onInsertNode,
+      onRunNode: vi.fn(),
+      onReplaceNode: vi.fn(),
+      onDeleteNode: vi.fn()
+    };
+
+    const { rerender } = render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: baseData,
+            id: 'node-if-else',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    const ifHandle = screen.getByRole('button', {
+      name: '在 If / Else 的 If 分支后新增节点'
+    });
+    const elseHandle = screen.getByRole('button', {
+      name: '在 If / Else 的 Else 分支后新增节点'
+    });
+
+    expect(ifHandle).toHaveClass('agent-flow-node-handle--branch');
+    expect(elseHandle).toHaveClass('agent-flow-node-handle--branch');
+    expect(within(ifHandle).queryByText('If')).not.toBeInTheDocument();
+    expect(within(elseHandle).queryByText('Else')).not.toBeInTheDocument();
+    expect(screen.queryByText('If')).not.toBeInTheDocument();
+    expect(screen.queryByText('Else')).not.toBeInTheDocument();
+
+    fireEvent.click(ifHandle);
+
+    expect(onOpenPicker).toHaveBeenCalledWith('node-if-else', 'if');
+
+    rerender(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              ...baseData,
+              pickerOpen: true,
+              pickerSourceHandleId: 'if'
+            },
+            id: 'node-if-else',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Code' }));
+
+    expect(onInsertNode).toHaveBeenCalledWith(
+      'node-if-else',
+      codeOption,
+      'if'
+    );
+  });
+
+  test('refreshes React Flow internals when dynamic If / Else branch handles change', () => {
+    const baseData = {
+      nodeId: 'node-if-else',
+      nodeType: 'if_else',
+      nodeSchema: resolveAgentFlowNodeSchema('if_else'),
+      typeLabel: 'If / Else',
+      alias: 'If / Else',
+      description: '按条件分支继续执行工作流。',
+      config: {},
+      issueCount: 0,
+      canEnterContainer: false,
+      pickerOpen: false,
+      pickerSourceHandleId: null,
+      showTargetHandle: true,
+      showSourceHandle: true,
+      branchSourceHandles: [
+        { id: 'if', title: 'If' },
+        { id: 'else', title: 'Else' }
+      ],
+      isContainer: false,
+      nodePickerOptions: [],
+      onOpenPicker: vi.fn(),
+      onClosePicker: vi.fn(),
+      onOpenContainer: vi.fn(),
+      onSelectNode: vi.fn(),
+      onInsertNode: vi.fn(),
+      onRunNode: vi.fn(),
+      onReplaceNode: vi.fn(),
+      onDeleteNode: vi.fn()
+    };
+
+    const { rerender } = render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: baseData,
+            id: 'node-if-else',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    updateNodeInternalsMock.mockClear();
+
+    rerender(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              ...baseData,
+              branchSourceHandles: [
+                { id: 'if', title: 'If' },
+                { id: 'else-if-1', title: 'Else If 1' },
+                { id: 'else', title: 'Else' }
+              ]
+            },
+            id: 'node-if-else',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    expect(updateNodeInternalsMock).toHaveBeenCalledWith('node-if-else');
   });
 
   test('shows hover quick actions for running, replacing and deleting a node', async () => {

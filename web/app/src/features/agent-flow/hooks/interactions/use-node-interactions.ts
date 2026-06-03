@@ -44,12 +44,14 @@ export function useNodeInteractions() {
         }
       });
     },
-    openNodePicker(nodeId: string) {
+    openNodePicker(nodeId: string, sourceHandleId: string | null = null) {
+      const sourceNode = document.graph.nodes.find((node) => node.id === nodeId);
+
       setInteractionState({
         connectingPayload: {
-          sourceNodeId: null,
-          sourceHandleId: null,
-          sourceNodeType: null
+          sourceNodeId: nodeId,
+          sourceHandleId,
+          sourceNodeType: sourceNode?.type ?? null
         }
       });
       setPanelState({
@@ -78,7 +80,11 @@ export function useNodeInteractions() {
         }
       });
     },
-    insertAfterNode(anchorNodeId: string, option: NodePickerOption) {
+    insertAfterNode(
+      anchorNodeId: string,
+      option: NodePickerOption,
+      sourceHandleId: string | null = null
+    ) {
       const anchorNode = document.graph.nodes.find(
         (node) => node.id === anchorNodeId
       );
@@ -93,7 +99,12 @@ export function useNodeInteractions() {
         anchorNode.position.x + 280,
         anchorNode.position.y
       );
-      const nextDocument = insertNodeAfter(document, anchorNodeId, nextNode);
+      const nextDocument = insertNodeAfter(
+        document,
+        anchorNodeId,
+        nextNode,
+        sourceHandleId
+      );
 
       setWorkingDocument(nextDocument);
       setSelection({

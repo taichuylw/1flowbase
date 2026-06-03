@@ -5,12 +5,12 @@ import {
   SwapOutlined
 } from '@ant-design/icons';
 import { Button, Dropdown, Tooltip, type MenuProps } from 'antd';
-import { Position, type NodeProps } from '@xyflow/react';
+import { Position, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   useEffect,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent
+  type SyntheticEvent
 } from 'react';
 
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
@@ -27,17 +27,19 @@ import { i18nText } from '../../../../shared/i18n/text';
 
 const QUICK_ACTION_HIDE_DELAY_MS = 1000;
 
+function stopActionEvent(event: SyntheticEvent<HTMLElement>) {
+  event.stopPropagation();
+}
+
 export function AgentFlowNodeCard({
   data,
   selected
 }: NodeProps<AgentFlowCanvasNode>) {
   const [quickActionsVisible, setQuickActionsVisible] = useState(false);
+  const updateNodeInternals = useUpdateNodeInternals();
   const hideQuickActionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
-  const stopActionEvent = (event: ReactMouseEvent<HTMLElement>) => {
-    event.stopPropagation();
-  };
   const clearHideQuickActionsTimer = () => {
     if (hideQuickActionsTimerRef.current === null) {
       return;
@@ -59,9 +61,12 @@ export function AgentFlowNodeCard({
   };
 
   useEffect(() => {
+    const timerRef = hideQuickActionsTimerRef;
+
     return () => {
-      if (hideQuickActionsTimerRef.current !== null) {
-        clearTimeout(hideQuickActionsTimerRef.current);
+      const timer = timerRef.current;
+      if (timer !== null) {
+        clearTimeout(timer);
       }
     };
   }, []);
@@ -146,6 +151,129 @@ export function AgentFlowNodeCard({
     },
     dispatch: () => undefined
   } as const;
+  const branchSourceHandles = data.branchSourceHandles ?? [];
+  const branchHandleSignature = branchSourceHandles
+    .map((handle) => handle.id)
+    .join('|');
+  const sourceHandles =
+    branchSourceHandles.length > 0
+      ? branchSourceHandles
+      : [{ id: null, title: null }];
+
+  useEffect(() => {
+    updateNodeInternals(data.nodeId);
+  }, [branchHandleSignature, data.nodeId, updateNodeInternals]);
+
+  function renderSourceHandle(
+    handle: { id: string | null; title: string | null },
+    index: number
+  ) {
+    const pickerSourceHandleId = data.pickerSourceHandleId ?? null;
+    const pickerOpen =
+      data.pickerOpen && pickerSourceHandleId === handle.id;
+    const ariaLabel = handle.title
+      ? i18nText("agentFlow", "auto.add_node_after_branch", {
+          value1: data.alias,
+          value2: handle.title
+        })
+      : i18nText("agentFlow", "auto.add_node_after", { value1: data.alias });
+    const top =
+      sourceHandles.length > 1
+        ? `${((index + 1) / (sourceHandles.length + 1)) * 100}%`
+        : undefined;
+    const style = top ? { top } : undefined;
+    const tooltipTitle = handle.title ? (
+      <div style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}>
+        <div>{handle.title}</div>
+        <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
+      </div>
+    ) : (
+      <div style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}>
+        <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
+        <div>{i18nText("agentFlow", "auto.drag_drop_connect_nodes")}</div>
+      </div>
+    );
+
+    return (
+      <div key={handle.id ?? 'default'}>
+        <NodePickerPopover
+          ariaLabel={ariaLabel}
+          open={pickerOpen}
+          options={data.nodePickerOptions}
+          onOpenChange={(open) => {
+            if (open) {
+              if (handle.id) {
+                data.onOpenPicker(data.nodeId, handle.id);
+              } else {
+                data.onOpenPicker(data.nodeId);
+              }
+              return;
+            }
+
+            data.onClosePicker();
+          }}
+          onPickNode={(option) =>
+            handle.id
+              ? data.onInsertNode(data.nodeId, option, handle.id)
+              : data.onInsertNode(data.nodeId, option)
+          }
+        >
+          <Tooltip
+            title={tooltipTitle}
+            placement="top"
+            color="#ffffff"
+            styles={{
+              body: {
+                color: '#333',
+                borderRadius: 8,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
+            }}
+            open={!pickerOpen ? undefined : false}
+          >
+            <CanvasHandle
+              id={handle.id ?? undefined}
+              type="source"
+              position={Position.Right}
+              aria-expanded={pickerOpen}
+              aria-haspopup="menu"
+              aria-label={ariaLabel}
+              className={`agent-flow-node-handle agent-flow-node-handle--source${handle.id ? ' agent-flow-node-handle--branch' : ''}`}
+              role="button"
+              style={style}
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                  return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (pickerOpen) {
+                  data.onClosePicker();
+                  return;
+                }
+
+                if (handle.id) {
+                  data.onOpenPicker(data.nodeId, handle.id);
+                } else {
+                  data.onOpenPicker(data.nodeId);
+                }
+              }}
+            >
+              <span aria-hidden="true" className="agent-flow-node-handle__icon">
+                +
+              </span>
+            </CanvasHandle>
+          </Tooltip>
+        </NodePickerPopover>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -185,11 +313,9 @@ export function AgentFlowNodeCard({
         <div
           className={`agent-flow-node-card__quick-actions${quickActionsVisible ? ' agent-flow-node-card__quick-actions--visible' : ''}`}
           data-testid={`agent-flow-node-quick-actions-${data.nodeId}`}
-          onClick={stopActionEvent}
-          onDoubleClick={stopActionEvent}
           onMouseEnter={showQuickActions}
           onMouseLeave={scheduleHideQuickActions}
-          onMouseDown={stopActionEvent}
+          onPointerDown={stopActionEvent}
         >
           <Tooltip title={i18nText("agentFlow", "auto.execute_this_node")}>
             <Button
@@ -219,78 +345,9 @@ export function AgentFlowNodeCard({
           </Dropdown>
         </div>
       </div>
-      {data.showSourceHandle ? (
-        <NodePickerPopover
-          ariaLabel={i18nText("agentFlow", "auto.add_node_after", { value1: data.alias })}
-          open={data.pickerOpen}
-          options={data.nodePickerOptions}
-          onOpenChange={(open) => {
-            if (open) {
-              data.onOpenPicker(data.nodeId);
-              return;
-            }
-
-            data.onClosePicker();
-          }}
-          onPickNode={(option) => data.onInsertNode(data.nodeId, option)}
-        >
-          <Tooltip
-            title={
-              <div
-                style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}
-              >
-                <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
-                <div>{i18nText("agentFlow", "auto.drag_drop_connect_nodes")}</div>
-              </div>
-            }
-            placement="top"
-            color="#ffffff"
-            styles={{
-              body: {
-                color: '#333',
-                borderRadius: 8,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-              }
-            }}
-            open={
-              !data.pickerOpen ? undefined : false
-            } /* Disable tooltip when popover is open */
-          >
-            <CanvasHandle
-              type="source"
-              position={Position.Right}
-              aria-expanded={data.pickerOpen}
-              aria-haspopup="menu"
-              aria-label={i18nText("agentFlow", "auto.add_node_after", { value1: data.alias })}
-              className="agent-flow-node-handle agent-flow-node-handle--source"
-              role="button"
-              tabIndex={0}
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') {
-                  return;
-                }
-
-                event.preventDefault();
-                event.stopPropagation();
-
-                if (data.pickerOpen) {
-                  data.onClosePicker();
-                  return;
-                }
-
-                data.onOpenPicker(data.nodeId);
-              }}
-            >
-              <span aria-hidden="true" className="agent-flow-node-handle__icon">
-                +
-              </span>
-            </CanvasHandle>
-          </Tooltip>
-        </NodePickerPopover>
-      ) : null}
+      {data.showSourceHandle
+        ? sourceHandles.map((handle, index) => renderSourceHandle(handle, index))
+        : null}
     </>
   );
 }

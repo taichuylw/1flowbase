@@ -72,6 +72,7 @@ fn runtime_reasoning_delta(run_id: Uuid, node_run_id: Uuid, text: &str) -> Runti
 }
 
 mod billing_plugin_nodes;
+mod branching_failover;
 mod callback_tasks;
 mod code_nodes;
 mod data_model_nodes;

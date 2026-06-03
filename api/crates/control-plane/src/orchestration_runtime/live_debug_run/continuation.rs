@@ -24,6 +24,7 @@ use super::super::{
     debug_variable_cache::{persist_debug_variable_cache_entries, public_node_variable_cache},
     llm_observability_refs::apply_llm_debug_observability_refs,
     payloads::persisted_node_output_payload,
+    persistence::CheckpointLocatorPayload,
 };
 
 mod engine;

@@ -284,6 +284,60 @@ describe('agent-flow node schema registry', () => {
     ]);
   });
 
+  test('models If / Else branches as first-class source handles', () => {
+    const contract = getBuiltinNodeRuntimeContract('if_else');
+    const ifElseNode = createNodeDocument('if_else', 'node-if-else');
+    const schema = resolveAgentFlowNodeSchema('if_else');
+    const loopSchema = resolveAgentFlowNodeSchema('loop');
+    const branchField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'bindings.branches'
+    );
+    const loopConditionField = findFieldBlock(
+      loopSchema.detail.tabs.config.blocks,
+      'bindings.entry_condition'
+    );
+
+    expect(contract?.defaults.outputs).toEqual([]);
+    expect(contract?.ports.outputs).toEqual([
+      { key: 'if', title: 'If' },
+      { key: 'else', title: 'Else' }
+    ]);
+    expect(contract?.defaults.bindings.branches).toEqual({
+      kind: 'if_else_branches',
+      value: {
+        branches: [
+          {
+            id: 'if',
+            kind: 'if',
+            title: 'If',
+            sourceHandle: 'if',
+            condition: { operator: 'and', conditions: [] }
+          },
+          {
+            id: 'else',
+            kind: 'else',
+            title: 'Else',
+            sourceHandle: 'else'
+          }
+        ]
+      }
+    });
+    expect(ifElseNode.bindings).toEqual(contract?.defaults.bindings);
+    expect(branchField).toEqual(
+      expect.objectContaining({
+        renderer: 'if_else_branches',
+        path: 'bindings.branches'
+      })
+    );
+    expect(loopConditionField).toEqual(
+      expect.objectContaining({
+        renderer: 'condition_group',
+        path: 'bindings.entry_condition'
+      })
+    );
+  });
+
   test('keeps the start node on input fields instead of the shared output editor', () => {
     const schema = resolveAgentFlowNodeSchema('start');
     const serializedConfigBlocks = JSON.stringify(

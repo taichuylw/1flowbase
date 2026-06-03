@@ -3,7 +3,13 @@ import {
   validatePublicOutputKey,
   type FlowAuthoringDocument
 } from '@1flowbase/flow-schema';
-import type { FlowBinding, FlowNodeDocument } from '@1flowbase/flow-schema';
+import type {
+  FlowBinding,
+  FlowConditionGroupDocument,
+  FlowConditionRuleDocument,
+  FlowNodeDocument,
+  IfElseBranchDocument
+} from '@1flowbase/flow-schema';
 
 import { evaluateSchemaRule } from '../../../shared/schema-ui/runtime/rule-evaluator';
 import type { AgentFlowModelProviderOptions } from '../api/model-provider-options';
@@ -26,6 +32,13 @@ import { findInspectorSectionKey, nodeDefinitions } from './node-definitions';
 import { outputTypeSupportsJsonSchema } from './output-contract/schema';
 import { isOutputVariableKeyAllowed } from './output-contract/variable-key';
 import { hasPluginContributionRef } from './plugin-node-definitions';
+import {
+  collectConditionSelectors,
+  collectIfElseBranchSelectors,
+  getIfElseBranchesFromBindings,
+  isConditionGroup,
+  isConditionRule
+} from './if-else-branches';
 import {
   isSelectorVisible,
   listVisibleSelectorOptions,
@@ -108,9 +121,68 @@ function isMissingRequiredField(
       return binding.value.length === 0;
     case 'condition_group':
       return binding.value.conditions.length === 0;
+    case 'if_else_branches':
+      return ifElseBranchesMissingRequiredInput(binding.value.branches);
     case 'state_write':
       return binding.value.length === 0;
   }
+}
+
+function conditionGroupHasCompleteRules(
+  group: FlowConditionGroupDocument
+): boolean {
+  return (
+    group.conditions.length > 0 &&
+    group.conditions.every((condition) => {
+      if (isConditionGroup(condition)) {
+        return conditionGroupHasCompleteRules(condition);
+      }
+
+      return isConditionRule(condition) && conditionRuleHasRequiredInput(condition);
+    })
+  );
+}
+
+function selectorHasRequiredInput(selector: string[]): boolean {
+  return (
+    selector.length >= 2 &&
+    selector.every((segment) => segment.trim().length > 0)
+  );
+}
+
+function conditionRuleHasRequiredInput(
+  rule: FlowConditionRuleDocument
+): boolean {
+  if (!selectorHasRequiredInput(rule.left)) {
+    return false;
+  }
+
+  if (rule.comparator === 'exists' || rule.comparator === 'empty') {
+    return true;
+  }
+
+  if (!rule.right) {
+    return false;
+  }
+
+  return (
+    rule.right.kind !== 'selector' ||
+    selectorHasRequiredInput(rule.right.selector)
+  );
+}
+
+function ifElseBranchesMissingRequiredInput(
+  branches: IfElseBranchDocument[]
+): boolean {
+  return (
+    !branches.some((branch) => branch.kind === 'if') ||
+    !branches.some((branch) => branch.kind === 'else') ||
+    branches.some(
+      (branch) =>
+        branch.kind !== 'else' &&
+        (!branch.condition || !conditionGroupHasCompleteRules(branch.condition))
+    )
+  );
 }
 
 function createNodeRuleValues(node: FlowNodeDocument): Record<string, unknown> {
@@ -180,15 +252,9 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
     case 'named_bindings':
       return extractNamedBindingSelectors(binding.value);
     case 'condition_group':
-      return binding.value.conditions.flatMap((condition) => {
-        const selectors = [condition.left];
-
-        if (Array.isArray(condition.right)) {
-          selectors.push(condition.right);
-        }
-
-        return selectors;
-      });
+      return collectConditionSelectors(binding.value);
+    case 'if_else_branches':
+      return collectIfElseBranchSelectors(binding.value.branches);
     case 'state_write':
       return binding.value.flatMap((entry) =>
         entry.source ? [entry.source] : []
@@ -632,6 +698,31 @@ export function validateDocument(
 
   for (const edge of document.graph.edges) {
     if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+      const sourceNode = nodeById.get(edge.source);
+      const sourceBranches =
+        sourceNode?.type === 'if_else'
+          ? getIfElseBranchesFromBindings(sourceNode.bindings)
+          : null;
+
+      if (sourceBranches) {
+        const branchHandles = new Set(
+          sourceBranches.map((branch) => branch.sourceHandle)
+        );
+
+        if (!edge.sourceHandle || !branchHandles.has(edge.sourceHandle)) {
+          issues.push({
+            id: `${edge.id}-invalid-source-handle`,
+            scope: 'node',
+            level: 'error',
+            nodeId: edge.source,
+            sectionKey: 'inputs',
+            fieldKey: 'bindings.branches',
+            title: i18nText("agentFlow", "auto.branch_connection_invalid"),
+            message: i18nText("agentFlow", "auto.branch_connection_invalid_message")
+          });
+        }
+      }
+
       continue;
     }
 

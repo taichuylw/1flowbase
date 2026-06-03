@@ -19,13 +19,19 @@ export interface AgentFlowCanvasNodeData extends Record<string, unknown> {
   pickerOpen: boolean;
   showTargetHandle: boolean;
   showSourceHandle: boolean;
+  branchSourceHandles: Array<{ id: string; title: string }>;
+  pickerSourceHandleId: string | null;
   isContainer: boolean;
   nodePickerOptions: NodePickerOption[];
-  onOpenPicker: (nodeId: string) => void;
+  onOpenPicker: (nodeId: string, sourceHandleId?: string | null) => void;
   onClosePicker: () => void;
   onOpenContainer: (nodeId: string) => void;
   onSelectNode: (nodeId: string) => void;
-  onInsertNode: (targetId: string, option: NodePickerOption) => void;
+  onInsertNode: (
+    targetId: string,
+    option: NodePickerOption,
+    sourceHandleId?: string | null
+  ) => void;
   onRunNode: (nodeId: string) => void;
   onReplaceNode: (targetId: string, option: NodePickerOption) => void;
   onDeleteNode: (nodeId: string) => void;

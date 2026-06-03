@@ -15,11 +15,12 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::{
     binding_runtime::{
-        render_templated_bindings, resolve_answer_node_inputs, resolve_node_inputs,
-        BindingResolutionIssue,
+        lookup_selector_value, render_templated_bindings, resolve_answer_node_inputs,
+        resolve_node_inputs, BindingResolutionIssue,
     },
     compiled_plan::{
-        CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime, LlmRoutingMode,
+        CompiledEdge, CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime,
+        LlmRoutingMode,
     },
     execution_state::{
         CheckpointSnapshot, ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure,
@@ -36,6 +37,7 @@ pub use crate::code_runtime::{
     execute_code_node, CodeInvocationOutput, CodeInvoker, QuickJsCodeInvoker,
 };
 
+pub mod branching;
 mod llm_callbacks;
 mod llm_context;
 mod llm_error_payloads;
@@ -47,6 +49,7 @@ mod llm_parameters;
 #[cfg(test)]
 mod tests;
 
+use branching::*;
 pub use llm_callbacks::build_llm_tool_callback_wait;
 use llm_callbacks::*;
 use llm_context::*;
@@ -143,7 +146,7 @@ where
         .ok_or_else(|| anyhow!("input payload must be an object"))?;
     let runtime_context = ExecutionRuntimeContext::from_plan_input(plan, &variable_pool);
 
-    execute_from(plan, 0, variable_pool, &runtime_context, invoker).await
+    execute_from(plan, 0, variable_pool, None, &runtime_context, invoker).await
 }
 
 pub async fn resume_flow_debug_run<I>(
@@ -169,6 +172,7 @@ where
             plan,
             checkpoint.next_node_index,
             variable_pool,
+            Some(checkpoint.active_node_ids.iter().cloned().collect()),
             &runtime_context,
             invoker,
         )
@@ -196,6 +200,7 @@ where
         plan,
         checkpoint.next_node_index,
         variable_pool,
+        Some(checkpoint.active_node_ids.iter().cloned().collect()),
         &runtime_context,
         invoker,
     )
@@ -206,6 +211,7 @@ async fn execute_from<I>(
     plan: &CompiledPlan,
     next_node_index: usize,
     mut variable_pool: Map<String, Value>,
+    active_node_ids: Option<BTreeSet<String>>,
     runtime_context: &ExecutionRuntimeContext,
     invoker: &I,
 ) -> Result<FlowDebugExecutionOutcome>
@@ -214,6 +220,7 @@ where
 {
     let mut node_traces = Vec::new();
     let mut pending_failure: Option<NodeExecutionFailure> = None;
+    let mut active_node_ids = active_node_ids.unwrap_or_else(|| initial_active_node_ids(plan));
 
     for (index, node_id) in plan
         .topological_order
@@ -225,6 +232,11 @@ where
             .nodes
             .get(node_id)
             .ok_or_else(|| anyhow!("compiled node missing: {node_id}"))?;
+
+        if !active_node_ids.contains(node_id) {
+            continue;
+        }
+
         let (resolved_inputs, answer_binding_error_payload) =
             match resolve_node_inputs(node, &variable_pool) {
                 Ok(inputs) => (inputs, None),
@@ -261,6 +273,7 @@ where
                 }
             };
         let rendered_templates = render_templated_bindings(node, &resolved_inputs);
+        let mut selected_source_handle: Option<String> = None;
 
         match node.node_type.as_str() {
             "start" => {
@@ -277,6 +290,22 @@ where
                     error_payload: None,
                     metrics_payload: json!({ "preview_mode": true }),
                     debug_payload: json!({}),
+                    provider_events: Vec::new(),
+                });
+            }
+            "if_else" => {
+                selected_source_handle = select_if_else_source_handle(node, &variable_pool)?;
+                node_traces.push(NodeExecutionTrace {
+                    node_id: node.node_id.clone(),
+                    node_type: node.node_type.clone(),
+                    node_alias: node.alias.clone(),
+                    input_payload: Value::Object(resolved_inputs),
+                    output_payload: json!({}),
+                    error_payload: None,
+                    metrics_payload: json!({ "preview_mode": true }),
+                    debug_payload: json!({
+                        "selected_source_handle": selected_source_handle.clone(),
+                    }),
                     provider_events: Vec::new(),
                 });
             }
@@ -313,7 +342,15 @@ where
                         node_alias: node.alias.clone(),
                         error_payload,
                     };
-                    if can_continue_to_terminal_template_nodes(plan, index) {
+                    let mut next_active_node_ids = active_node_ids.clone();
+                    activate_downstream_nodes(
+                        plan,
+                        &mut next_active_node_ids,
+                        node,
+                        selected_source_handle.as_deref(),
+                    );
+                    if can_continue_to_terminal_template_nodes(plan, index, &next_active_node_ids) {
+                        active_node_ids = next_active_node_ids;
                         pending_failure = Some(failure);
                         continue;
                     }
@@ -342,6 +379,7 @@ where
                         checkpoint_snapshot: Some(CheckpointSnapshot {
                             next_node_index: index,
                             variable_pool: wait.checkpoint_variable_pool,
+                            active_node_ids: checkpoint_active_node_ids(&active_node_ids),
                         }),
                         node_traces,
                     });
@@ -453,6 +491,7 @@ where
                     debug_payload: json!({}),
                     provider_events: Vec::new(),
                 });
+                activate_downstream_nodes(plan, &mut active_node_ids, node, None);
                 return Ok(FlowDebugExecutionOutcome {
                     stop_reason: ExecutionStopReason::WaitingHuman(PendingHumanInput {
                         node_id: node.node_id.clone(),
@@ -463,6 +502,7 @@ where
                     checkpoint_snapshot: Some(CheckpointSnapshot {
                         next_node_index: index + 1,
                         variable_pool,
+                        active_node_ids: checkpoint_active_node_ids(&active_node_ids),
                     }),
                     node_traces,
                 });
@@ -479,6 +519,7 @@ where
                     debug_payload: json!({}),
                     provider_events: Vec::new(),
                 });
+                activate_downstream_nodes(plan, &mut active_node_ids, node, None);
                 return Ok(FlowDebugExecutionOutcome {
                     stop_reason: ExecutionStopReason::WaitingCallback(PendingCallbackTask {
                         node_id: node.node_id.clone(),
@@ -490,6 +531,7 @@ where
                     checkpoint_snapshot: Some(CheckpointSnapshot {
                         next_node_index: index + 1,
                         variable_pool,
+                        active_node_ids: checkpoint_active_node_ids(&active_node_ids),
                     }),
                     node_traces,
                 });
@@ -551,6 +593,12 @@ where
                 });
             }
         }
+        activate_downstream_nodes(
+            plan,
+            &mut active_node_ids,
+            node,
+            selected_source_handle.as_deref(),
+        );
     }
 
     if let Some(failure) = pending_failure {
