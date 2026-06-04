@@ -10,7 +10,7 @@ use control_plane::{
         },
         run_service::{
             ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
-            CancelPublishedFlowRunInput,
+            CancelPublishedFlowRunInput, ListWaitingCallbackPublishedRunsInput,
         },
     },
     errors::ControlPlaneError,
@@ -631,6 +631,96 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
             input.from_status,
         )
         .await
+    }
+
+    async fn cancel_published_pending_callback_tasks_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> Result<Vec<domain::CallbackTaskRecord>> {
+        let rows = sqlx::query(
+            r#"
+            update flow_run_callback_tasks
+            set status = 'cancelled',
+                completed_at = $2
+            where flow_run_id = $1
+              and status = 'pending'
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(flow_run_id)
+        .bind(completed_at)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_callback_task_record).collect()
+    }
+
+    async fn list_waiting_callback_published_flow_runs_for_conversation(
+        &self,
+        input: &ListWaitingCallbackPublishedRunsInput,
+    ) -> Result<Vec<domain::FlowRunRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
+                run_mode,
+                target_node_id,
+                title,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                null::text as authorized_account,
+                api_key_id,
+                publication_version_id,
+                external_user,
+                external_conversation_id,
+                external_trace_id,
+                compatibility_mode,
+                idempotency_key,
+                started_at,
+                finished_at,
+                created_at,
+                updated_at
+            from flow_runs
+            where application_id = $1
+              and api_key_id = $2
+              and external_user = $3
+              and external_conversation_id = $4
+              and compatibility_mode = $5
+              and run_mode = 'published_api_run'
+              and status = 'waiting_callback'
+            order by started_at asc, id asc
+            "#,
+        )
+        .bind(input.application_id)
+        .bind(input.api_key_id)
+        .bind(&input.external_user)
+        .bind(&input.external_conversation_id)
+        .bind(&input.compatibility_mode)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_flow_run_record).collect()
     }
 
     async fn get_published_callback_task(

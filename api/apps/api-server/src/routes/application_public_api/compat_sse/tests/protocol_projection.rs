@@ -588,6 +588,67 @@ async fn openai_responses_failed_terminal_with_answer_completes_without_failed_e
     assert!(!body.contains("event: response.failed"), "{body}");
 }
 
+#[tokio::test]
+async fn openai_responses_waiting_callback_streams_function_call_added_done_and_completed() {
+    let run = native_run();
+    let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
+    let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, false);
+    let events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            1,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "tool_calls": [
+                        {
+                            "id": "call_inventory",
+                            "name": "lookup_inventory",
+                            "arguments": {"sku": "sku_123"}
+                        }
+                    ]
+                }),
+            },
+        ),
+    );
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    let added_index = body
+        .find("event: response.output_item.added")
+        .unwrap_or_else(|| panic!("Responses function_call should emit output_item.added: {body}"));
+    let done_index = body
+        .find("event: response.output_item.done")
+        .unwrap_or_else(|| panic!("Responses function_call should emit output_item.done: {body}"));
+    let completed_index = body
+        .find("event: response.completed")
+        .unwrap_or_else(|| panic!("Responses function_call should complete the response: {body}"));
+    assert!(
+        added_index < done_index && done_index < completed_index,
+        "Responses function_call events should follow added -> done -> completed: {body}"
+    );
+    assert!(body.contains("\"type\":\"function_call\""), "{body}");
+    assert!(body.contains("\"name\":\"lookup_inventory\""), "{body}");
+    assert!(
+        body.contains("\"arguments\":\"{\\\"sku\\\":\\\"sku_123\\\"}\""),
+        "{body}"
+    );
+}
+
 #[test]
 fn anthropic_waiting_callback_maps_to_tool_use_block() {
     let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
@@ -611,6 +672,74 @@ fn anthropic_waiting_callback_maps_to_tool_use_block() {
         .as_str()
         .expect("tool_use id should be encoded")
         .contains("toolu_weather"));
+}
+
+#[tokio::test]
+async fn anthropic_text_stream_follows_claude_messages_event_order() {
+    let run = native_run();
+    let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+    let mut events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+    );
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            debug_stream_events::answer_text_delta(
+                "node-answer",
+                "hello ClaudeCode".to_string(),
+                0,
+                Some("node-llm"),
+                None,
+                Some("text"),
+            ),
+        ),
+    ));
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            3,
+            debug_stream_events::flow_finished(run.id, json!({ "answer": "hello ClaudeCode" })),
+        ),
+    ));
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    let message_start = body
+        .find("event: message_start")
+        .unwrap_or_else(|| panic!("Anthropic stream should start with message_start: {body}"));
+    let block_start = body
+        .find("event: content_block_start")
+        .unwrap_or_else(|| panic!("Anthropic stream should open a content block: {body}"));
+    let text_delta = body
+        .find("\"type\":\"text_delta\"")
+        .unwrap_or_else(|| panic!("Anthropic stream should emit text_delta: {body}"));
+    let block_stop = body
+        .find("event: content_block_stop")
+        .unwrap_or_else(|| panic!("Anthropic stream should close the content block: {body}"));
+    let message_delta = body
+        .find("event: message_delta")
+        .unwrap_or_else(|| panic!("Anthropic stream should emit message_delta: {body}"));
+    let message_stop = body
+        .find("event: message_stop")
+        .unwrap_or_else(|| panic!("Anthropic stream should stop with message_stop: {body}"));
+    assert!(
+        message_start < block_start
+            && block_start < text_delta
+            && text_delta < block_stop
+            && block_stop < message_delta
+            && message_delta < message_stop,
+        "Anthropic event order should match Claude Messages streaming: {body}"
+    );
+    assert!(body.contains("hello ClaudeCode"), "{body}");
+    assert!(body.contains("\"stop_reason\":\"end_turn\""), "{body}");
 }
 
 #[tokio::test]

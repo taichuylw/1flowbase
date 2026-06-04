@@ -1,4 +1,5 @@
 use serde_json::{Map, Value};
+use uuid::Uuid;
 
 use crate::application_public_api::native::NativeRunRequest;
 
@@ -253,8 +254,10 @@ fn metadata_conversation(metadata: Option<&Value>) -> Value {
         .or_else(|| metadata.get("session_id").and_then(Value::as_str))
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| user_id.and_then(claude_code_session_id_from_identity))
     {
-        conversation.insert("id".to_string(), Value::String(session_id.to_string()));
+        conversation.insert("id".to_string(), Value::String(session_id));
     }
     Value::Object(conversation)
 }
@@ -277,6 +280,18 @@ fn metadata_user_from_user_id(user_id: Option<&str>, payload: Option<&Value>) ->
         })
         .or(user_id)
         .map(ToOwned::to_owned)
+}
+
+fn claude_code_session_id_from_identity(identity: &str) -> Option<String> {
+    let marker = "_session_";
+    let start = identity.rfind(marker)? + marker.len();
+    let candidate = identity[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '-')
+        .collect::<String>();
+    Uuid::parse_str(&candidate)
+        .ok()
+        .map(|session_id| session_id.to_string())
 }
 
 fn normalize_anthropic_tool(tool: &Value) -> Option<Value> {

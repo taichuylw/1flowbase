@@ -16,14 +16,18 @@ use plugin_framework::{
         ProviderInvocationResult, ProviderModelDescriptor, ProviderStdioMethod,
         ProviderStdioRequest, ProviderStreamEvent,
     },
+    PluginRuntimeLimits,
 };
 use serde::Serialize;
 use serde_json::Value;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 use crate::package_loader::{LoadedProviderPackage, PackageLoader};
-use crate::stdio_runtime::{call_executable, call_executable_streaming, ProviderWorker};
+use crate::stdio_runtime::{
+    call_executable, call_executable_streaming, ProviderWorker,
+    DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS,
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoadedProviderSummary {
@@ -160,11 +164,27 @@ impl ActiveProviderStreamRecord {
 }
 
 #[derive(Debug)]
+struct ActiveProviderInvocationLease {
+    provider_pool_key: String,
+    _permit: OwnedSemaphorePermit,
+}
+
+impl Drop for ActiveProviderInvocationLease {
+    fn drop(&mut self) {
+        tracing::debug!(
+            provider_pool_key = %self.provider_pool_key,
+            "active provider invocation lease released"
+        );
+    }
+}
+
+#[derive(Debug)]
 pub struct ProviderHost {
     loaded_packages: HashMap<String, LoadedProviderPackage>,
     loaded_sources: HashMap<String, LoadedProviderSource>,
     provider_workers: Mutex<HashMap<String, ProviderWorker>>,
     active_streams: Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
+    active_invocation_leases: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
     next_invocation_sequence: AtomicU64,
 }
 
@@ -175,6 +195,7 @@ impl Default for ProviderHost {
             loaded_sources: HashMap::new(),
             provider_workers: Mutex::new(HashMap::new()),
             active_streams: Arc::new(Mutex::new(HashMap::new())),
+            active_invocation_leases: Arc::new(Mutex::new(HashMap::new())),
             next_invocation_sequence: AtomicU64::new(1),
         }
     }
@@ -336,18 +357,20 @@ impl ProviderHost {
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
         let loaded = self.loaded_package(plugin_id)?;
+        let _lease = self.acquire_active_invocation_lease(&input).await?;
         let invocation_id = self.register_active_stream(plugin_id, &input).await;
         let event_observer = Some(self.active_stream_event_observer(invocation_id.clone()));
         let request = ProviderStdioRequest {
             method: ProviderStdioMethod::Invoke,
             input: serde_json::to_value(input).unwrap(),
         };
+        let invocation_limits = provider_invocation_limits(&loaded.package.manifest.runtime.limits);
         let output = match loaded.package.manifest.execution_mode {
             PluginExecutionMode::ProcessPerCall => {
                 call_executable_streaming(
                     &loaded.runtime_executable,
                     &request,
-                    &loaded.package.manifest.runtime.limits,
+                    &invocation_limits,
                     live_events,
                     event_observer,
                 )
@@ -362,7 +385,12 @@ impl ProviderHost {
                     )
                 });
                 worker
-                    .call_streaming(&request, live_events, event_observer)
+                    .call_streaming_with_limits(
+                        &request,
+                        &invocation_limits,
+                        live_events,
+                        event_observer,
+                    )
                     .await
             }
             _ => Err(PluginFrameworkError::invalid_provider_package(
@@ -427,6 +455,41 @@ impl ProviderHost {
         self.active_streams.lock().await.remove(invocation_id);
     }
 
+    async fn acquire_active_invocation_lease(
+        &self,
+        input: &ProviderInvocationInput,
+    ) -> FrameworkResult<ActiveProviderInvocationLease> {
+        let provider_pool_key = provider_pool_key(input);
+        let semaphore = {
+            let mut leases = self.active_invocation_leases.lock().await;
+            leases
+                .entry(provider_pool_key.clone())
+                .or_insert_with(|| Arc::new(Semaphore::new(1)))
+                .clone()
+        };
+        tracing::debug!(
+            provider_pool_key = %provider_pool_key,
+            "active provider invocation lease acquiring"
+        );
+        let permit = semaphore.acquire_owned().await.map_err(|_| {
+            PluginFrameworkError::runtime(
+                plugin_framework::provider_contract::ProviderRuntimeError::normalize(
+                    "provider_invocation_lease",
+                    "active provider invocation lease is closed",
+                    None,
+                ),
+            )
+        })?;
+        tracing::debug!(
+            provider_pool_key = %provider_pool_key,
+            "active provider invocation lease acquired"
+        );
+        Ok(ActiveProviderInvocationLease {
+            provider_pool_key,
+            _permit: permit,
+        })
+    }
+
     fn loaded_package(&self, plugin_id: &str) -> FrameworkResult<&LoadedProviderPackage> {
         self.loaded_packages.get(plugin_id).ok_or_else(|| {
             PluginFrameworkError::invalid_provider_package(format!(
@@ -467,6 +530,38 @@ impl ProviderHost {
             )),
         }
     }
+}
+
+fn provider_invocation_limits(limits: &PluginRuntimeLimits) -> PluginRuntimeLimits {
+    let mut invocation_limits = limits.clone();
+    invocation_limits.timeout_ms = limits
+        .invoke_timeout_ms
+        .or(Some(DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS));
+    invocation_limits
+}
+
+fn provider_pool_key(input: &ProviderInvocationInput) -> String {
+    format!(
+        "provider_pool:v1:provider_instance={}:provider_code={}:protocol={}:model={}",
+        stable_pool_component(&input.provider_instance_id),
+        stable_pool_component(&input.provider_code),
+        stable_pool_component(&input.protocol),
+        stable_pool_component(&input.model),
+    )
+}
+
+fn stable_pool_component(value: &str) -> String {
+    value
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | ':') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn provider_stream_transport(input: &ProviderInvocationInput) -> String {
@@ -538,10 +633,12 @@ mod tests {
     use std::{
         fs,
         path::{Path, PathBuf},
-        time::{SystemTime, UNIX_EPOCH},
+        sync::Arc,
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
     use serde_json::json;
+    use tokio::time::sleep;
 
     struct TempProviderPackage {
         root: PathBuf,
@@ -573,6 +670,10 @@ mod tests {
         }
 
         fn write_provider_package(&self, display_name: &str) {
+            self.write_provider_package_with_runtime_timeout(display_name, 30_000);
+        }
+
+        fn write_provider_package_with_runtime_timeout(&self, display_name: &str, timeout_ms: u64) {
             self.write(
                 "manifest.yaml",
                 &format!(
@@ -604,7 +705,7 @@ runtime:
   protocol: stdio_json
   entry: bin/fixture_provider
   limits:
-    timeout_ms: 30000
+    timeout_ms: {timeout_ms}
 node_contributions: []
 "#
                 ),
@@ -623,6 +724,35 @@ config_schema: []
                 r#"{ "plugin": { "label": "Fixture Provider" } }"#,
             );
             self.write("bin/fixture_provider", "#!/usr/bin/env bash\n");
+        }
+
+        fn write_slow_invoke_runtime(&self) {
+            self.write(
+                "bin/fixture_provider",
+                r#"#!/usr/bin/env bash
+set -euo pipefail
+payload="$(cat)"
+case "${payload}" in
+  *'"method":"invoke"'*)
+    printf '%s\n' '{"type":"text_delta","delta":"started"}'
+    sleep 0.08
+    printf '%s\n' '{"type":"result","result":{"final_content":"done","finish_reason":"stop"}}'
+    ;;
+  *)
+    printf '%s' '{"ok":true,"result":{}}'
+    ;;
+esac
+"#,
+            );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+
+                let path = self.path().join("bin/fixture_provider");
+                let mut permissions = fs::metadata(&path).unwrap().permissions();
+                permissions.set_mode(0o755);
+                fs::set_permissions(path, permissions).unwrap();
+            }
         }
     }
 
@@ -706,5 +836,115 @@ config_schema: []
 
         let loaded = host.loaded_packages.get(&summary.plugin_id).unwrap();
         assert_eq!(loaded.package.manifest.display_name, "Mutated Provider");
+    }
+
+    fn invocation_input(model: &str) -> ProviderInvocationInput {
+        ProviderInvocationInput {
+            provider_instance_id: "provider-1".to_string(),
+            provider_code: "fixture_provider".to_string(),
+            protocol: "openai_compatible".to_string(),
+            model: model.to_string(),
+            provider_config: json!({}),
+            ..ProviderInvocationInput::default()
+        }
+    }
+
+    async fn wait_for_active_streams(host: &ProviderHost, count: usize) {
+        for _ in 0..20 {
+            if host.active_stream_snapshot().await.streams.len() == count {
+                return;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+        panic!("expected {count} active provider stream(s)");
+    }
+
+    #[tokio::test]
+    async fn active_invocation_lease_serializes_same_provider_pool() {
+        let package = TempProviderPackage::new();
+        package.write_slow_invoke_runtime();
+        let mut host = ProviderHost::default();
+        let plugin_id = host
+            .load(package.path().to_str().unwrap())
+            .unwrap()
+            .plugin_id;
+        let host = Arc::new(host);
+
+        let first_host = Arc::clone(&host);
+        let first_plugin_id = plugin_id.clone();
+        let first = tokio::spawn(async move {
+            first_host
+                .invoke_stream(&first_plugin_id, invocation_input("fixture-model"))
+                .await
+                .unwrap()
+        });
+        wait_for_active_streams(&host, 1).await;
+
+        let second_host = Arc::clone(&host);
+        let second_plugin_id = plugin_id.clone();
+        let second = tokio::spawn(async move {
+            second_host
+                .invoke_stream(&second_plugin_id, invocation_input("fixture-model"))
+                .await
+                .unwrap()
+        });
+        sleep(Duration::from_millis(20)).await;
+
+        assert_eq!(host.active_stream_snapshot().await.streams.len(), 1);
+        first.await.unwrap();
+        second.await.unwrap();
+        assert!(host.active_stream_snapshot().await.streams.is_empty());
+    }
+
+    #[tokio::test]
+    async fn invoke_stream_uses_default_provider_invocation_budget() {
+        let package = TempProviderPackage::new();
+        package.write_provider_package_with_runtime_timeout("Fixture Provider", 1);
+        package.write_slow_invoke_runtime();
+        let mut host = ProviderHost::default();
+        let plugin_id = host
+            .load(package.path().to_str().unwrap())
+            .unwrap()
+            .plugin_id;
+
+        let output = host
+            .invoke_stream(&plugin_id, invocation_input("fixture-model"))
+            .await
+            .expect("provider invocation should not inherit the short runtime command timeout");
+
+        assert_eq!(output.result.final_content.as_deref(), Some("done"));
+    }
+
+    #[tokio::test]
+    async fn active_invocation_lease_allows_different_provider_pools() {
+        let package = TempProviderPackage::new();
+        package.write_slow_invoke_runtime();
+        let mut host = ProviderHost::default();
+        let plugin_id = host
+            .load(package.path().to_str().unwrap())
+            .unwrap()
+            .plugin_id;
+        let host = Arc::new(host);
+
+        let first_host = Arc::clone(&host);
+        let first_plugin_id = plugin_id.clone();
+        let first = tokio::spawn(async move {
+            first_host
+                .invoke_stream(&first_plugin_id, invocation_input("fixture-model-a"))
+                .await
+                .unwrap()
+        });
+        let second_host = Arc::clone(&host);
+        let second_plugin_id = plugin_id.clone();
+        let second = tokio::spawn(async move {
+            second_host
+                .invoke_stream(&second_plugin_id, invocation_input("fixture-model-b"))
+                .await
+                .unwrap()
+        });
+
+        wait_for_active_streams(&host, 2).await;
+        first.await.unwrap();
+        second.await.unwrap();
     }
 }

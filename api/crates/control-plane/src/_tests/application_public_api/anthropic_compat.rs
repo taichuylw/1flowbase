@@ -102,6 +102,27 @@ fn metadata_user_id_json_maps_session_to_native_conversation() {
 }
 
 #[test]
+fn metadata_plain_user_id_session_suffix_maps_session_to_native_conversation() {
+    let mut request = base_request();
+    request["metadata"] = json!({
+        "user_id": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+    });
+
+    let native = map_messages_request(request).unwrap();
+
+    assert_eq!(
+        native.conversation.get("user"),
+        Some(&json!(
+            "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        ))
+    );
+    assert_eq!(
+        native.conversation.get("id"),
+        Some(&json!("3e7058c2-3120-4222-bb14-c99ec85e1c0f"))
+    );
+}
+
+#[test]
 fn metadata_session_id_maps_to_native_conversation_id() {
     let mut request = base_request();
     request["metadata"] = json!({

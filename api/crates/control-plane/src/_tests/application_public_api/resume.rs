@@ -312,3 +312,52 @@ async fn public_callback_resume_consumes_pending_callback_in_request() {
     assert!(event_types.contains(&"public_run_resume_succeeded".to_string()));
     assert!(!event_types.contains(&"public_run_resume_claimed".to_string()));
 }
+
+#[tokio::test]
+async fn native_cancel_clears_pending_callback_required_action() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let application = harness.seed_application(actor_user_id(), "Cancel Pending Callback App");
+    let token = issue_key(&harness, application.id, actor_user_id()).await;
+    publish_application(&harness, application.id, actor_user_id()).await;
+    let repository = harness.repository();
+    let native_service = ApplicationNativeRunService::new(repository.clone());
+    let run = native_service
+        .create_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: serde_json::from_value(json!({ "query": "First" })).unwrap(),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(run.id);
+
+    let cancelled = native_service
+        .cancel_native_run(
+            control_plane::application_public_api::native::CancelNativeRunCommand {
+                bearer_token: token.clone(),
+                run_id: run.id,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        cancelled.status,
+        control_plane::application_public_api::native::NativeRunStatus::Cancelled
+    );
+    let detail = native_service
+        .get_native_run(
+            control_plane::application_public_api::native::GetNativeRunCommand {
+                bearer_token: token,
+                run_id: run.id,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(detail.required_action.is_none());
+    let task = repository
+        .get_published_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .expect("callback task should still be durable");
+    assert_eq!(task.status, domain::CallbackTaskStatus::Cancelled);
+}
