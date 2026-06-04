@@ -903,6 +903,8 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
                 from application_conversations conversations
                 join application_conversation_messages messages
                   on messages.conversation_id = conversations.id
+                join flow_runs runs
+                  on runs.id = messages.flow_run_id
                 where conversations.application_id = $1
                   and conversations.api_key_id = $2
                   and conversations.external_user = $3
@@ -910,6 +912,45 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
                   and messages.flow_run_id is not null
                   and messages.role in ('user', 'assistant')
                   and btrim(messages.content) <> ''
+                  and not (
+                      runs.compatibility_mode = 'anthropic-messages-v1'
+                      and (
+                          runs.input_payload #>> '{node-start,compatibility,claude_code_control}' is not null
+                          or runs.input_payload #>> '{start,compatibility,claude_code_control}' is not null
+                          or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
+                              runs.input_payload #>> '{node-start,query}',
+                              runs.input_payload #>> '{start,query}',
+                              runs.input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
+                              runs.input_payload #>> '{node-start,query}',
+                              runs.input_payload #>> '{start,query}',
+                              runs.input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
+                              runs.input_payload #>> '{node-start,query}',
+                              runs.input_payload #>> '{start,query}',
+                              runs.input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or (
+                              position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
+                                  runs.input_payload #>> '{node-start,query}',
+                                  runs.input_payload #>> '{start,query}',
+                                  runs.input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                              and position('If you need specific details from before compaction' in coalesce(
+                                  runs.input_payload #>> '{node-start,query}',
+                                  runs.input_payload #>> '{start,query}',
+                                  runs.input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                          )
+                      )
+                  )
             ),
             current_turn_boundaries as (
                 select

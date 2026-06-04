@@ -250,6 +250,15 @@ impl PgControlPlaneStore {
     ) -> Result<()> {
         let messages = application_conversation_messages_from_flow_run(flow_run);
         if messages.is_empty() {
+            sqlx::query(
+                r#"
+                delete from application_conversation_messages
+                where flow_run_id = $1
+                "#,
+            )
+            .bind(flow_run.id)
+            .execute(self.pool())
+            .await?;
             return Ok(());
         }
         let conversation_key = application_conversation_key(flow_run);
@@ -531,6 +540,10 @@ fn application_conversation_key(flow_run: &domain::FlowRunRecord) -> String {
 fn application_conversation_messages_from_flow_run(
     flow_run: &domain::FlowRunRecord,
 ) -> Vec<ApplicationConversationMessageProjection> {
+    if is_anthropic_claude_code_control_run(flow_run) {
+        return Vec::new();
+    }
+
     let mut messages = Vec::new();
     let mut ordinal = 1_i64;
 
@@ -571,6 +584,24 @@ fn application_conversation_messages_from_flow_run(
     }
 
     messages
+}
+
+fn is_anthropic_claude_code_control_run(flow_run: &domain::FlowRunRecord) -> bool {
+    if flow_run.compatibility_mode.as_deref() != Some("anthropic-messages-v1") {
+        return false;
+    }
+
+    application_conversation_start_payload(&flow_run.input_payload)
+        .get("compatibility")
+        .and_then(|value| value.get("claude_code_control"))
+        .and_then(serde_json::Value::as_str)
+        .is_some()
+        || application_conversation_user_text(&flow_run.input_payload)
+            .as_deref()
+            .and_then(
+                control_plane::application_public_api::compat::anthropic::claude_code_control_kind,
+            )
+            .is_some()
 }
 
 fn push_application_conversation_message(

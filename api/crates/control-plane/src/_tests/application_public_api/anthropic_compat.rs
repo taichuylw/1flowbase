@@ -351,6 +351,71 @@ fn assistant_thinking_history_is_ignored_for_claude_code_replay() {
 }
 
 #[test]
+fn claude_code_compact_summary_request_marks_control_metadata() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "metadata": {
+            "user_id": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        },
+        "messages": [
+            {"role": "user", "content": "hi ?"},
+            {
+                "role": "user",
+                "content": "CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.\n\nYour task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.\n\nIMPORTANT: Do NOT use any tools. You MUST respond with ONLY the <summary>...</summary> block as your text output."
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        native.metadata.as_value()["compatibility"]["claude_code_control"],
+        json!("compact_summary")
+    );
+    assert_eq!(
+        native.inputs.as_value()["compatibility"]["claude_code_control"],
+        json!("compact_summary")
+    );
+}
+
+#[test]
+fn claude_code_compact_resume_history_is_marked_hidden_from_conversation() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "metadata": {
+            "user_id": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        },
+        "messages": [
+            {
+                "role": "user",
+                "content": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n- user said hi\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: C:\\Users\\Lw\\.claude\\projects\\repo\\session.jsonl\nPlease continue the conversation from where we left off without asking the user any further questions."
+            },
+            {"role": "assistant", "content": "已恢复上下文。"},
+            {"role": "user", "content": "那你帮我拉一下最新代码"}
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(native.query, "那你帮我拉一下最新代码");
+    assert_eq!(native.history.len(), 2);
+    assert_eq!(
+        native.history[0]["metadata"]["hidden_from_conversation"],
+        json!(true)
+    );
+    assert_eq!(
+        native.history[0]["metadata"]["claude_code_control"],
+        json!("compact_resume")
+    );
+    assert_eq!(
+        native.history[1]["metadata"]["hidden_from_conversation"],
+        json!(true)
+    );
+    assert_eq!(
+        native.history[1]["metadata"]["claude_code_control"],
+        json!("compact_resume")
+    );
+}
+
+#[test]
 fn computer_use_returns_unsupported_feature() {
     let mut request = base_request();
     request["messages"] = json!([
