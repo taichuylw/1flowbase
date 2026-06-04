@@ -79,6 +79,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+          fetch-depth: 0
       - name: Prepare security risk diff base
         run: git fetch --no-tags --prune origin main:refs/remotes/origin/main
       - name: Resolve quality gate target SHA
@@ -119,6 +120,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+          fetch-depth: 0
       - name: Prepare security risk diff base
         run: git fetch --no-tags --prune origin main:refs/remotes/origin/main
       - name: Resolve quality gate target SHA

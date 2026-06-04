@@ -87,6 +87,10 @@ test("verify workflow runs quality gate scopes in parallel before one aggregate 
   assert.match(workflow, /repo-tooling-gate:\n\s+runs-on: ubuntu-latest/u);
   assert.match(
     workflow,
+    /repo-tooling-gate:[\s\S]*?fetch-depth: 0/u,
+  );
+  assert.match(
+    workflow,
     /repo-tooling-gate:[\s\S]*?git fetch --no-tags --prune origin main:refs\/remotes\/origin\/main/u,
   );
   assert.match(workflow, /repo-frontend-gate:\n\s+runs-on: ubuntu-latest/u);
@@ -479,6 +483,10 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
   assert.match(
     workflow,
     /single-scope-gate:\n\s+if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.scope != 'ci' && inputs\.scope != 'container-images' \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /single-scope-gate:[\s\S]*?fetch-depth: 0/u,
   );
   assert.match(
     workflow,
