@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Prepare security risk diff base
-        run: git fetch --no-tags --prune --depth=1 origin main:refs/remotes/origin/main
+        run: git fetch --no-tags --prune origin main:refs/remotes/origin/main
       - uses: pnpm/action-setup@v5
         with:
           version: 11.5.0
