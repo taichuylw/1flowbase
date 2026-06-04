@@ -448,6 +448,17 @@ test("container image workflows keep vulnerability findings as warnings", () => 
   );
 });
 
+test("container image publishing avoids deprecated artifact runtime and qemu cache races", () => {
+  const workflow = readContainerImagesWorkflow();
+
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@v4/u);
+  assert.match(workflow, /actions\/upload-artifact@v6/u);
+  assert.match(
+    workflow,
+    /docker\/setup-qemu-action@v4[\s\S]*?with:\n\s+cache-image: false/u,
+  );
+});
+
 test("quality gate workflow keeps non-ci dispatch scopes on a single targeted job", () => {
   const workflow = readQualityGateWorkflow();
 
