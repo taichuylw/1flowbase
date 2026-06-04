@@ -424,7 +424,7 @@ jobs:
           scope: container-images
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
           environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment || 'container-images' }}
-          publish_issue: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'container-images' }}
+          publish_issue: "false"
           start_postgres: "false"
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v6

@@ -19,6 +19,13 @@ function readQualityGateWorkflow() {
   );
 }
 
+function readContainerImagesWorkflow() {
+  return fs.readFileSync(
+    path.join(repoRoot, ".github", "workflows", "container-images.yml"),
+    "utf8",
+  );
+}
+
 function readQualityGateAction() {
   return fs.readFileSync(
     path.join(repoRoot, ".github", "actions", "quality-gate", "action.yml"),
@@ -442,6 +449,24 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
   assert.match(workflow, /name: test-governance-container-images/u);
   assert.match(workflow, /name: test-governance-artifacts/u);
+});
+
+test("container image workflows keep vulnerability findings as warnings", () => {
+  const publishWorkflow = readContainerImagesWorkflow();
+  const qualityGateWorkflow = readQualityGateWorkflow();
+
+  assert.match(
+    publishWorkflow,
+    /Enforce CRITICAL Trivy release gate[\s\S]*?output: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-critical\.json\n\s+exit-code: "0"/u,
+  );
+  assert.match(
+    publishWorkflow,
+    /scope: container-images\n\s+report_type: cd\n\s+environment: container-images\n\s+publish_issue: "false"/u,
+  );
+  assert.match(
+    qualityGateWorkflow,
+    /scope: container-images\n\s+report_type: \$\{\{ env\.QUALITY_GATE_REPORT_TYPE \}\}\n\s+environment: \$\{\{ github\.event_name == 'schedule' && env\.QUALITY_GATE_SCHEDULED_ENVIRONMENT \|\| inputs\.environment \|\| 'container-images' \}\}\n\s+publish_issue: "false"/u,
+  );
 });
 
 test("quality gate workflow keeps non-ci dispatch scopes on a single targeted job", () => {

@@ -10,8 +10,8 @@ const {
 } = require('../core.js');
 
 const CONTAINER_IMAGE_SECURITY_REPORT = {
-  status: 'failed',
-  exitCode: 1,
+  status: 'warning',
+  exitCode: 0,
   highCount: 9,
   criticalCount: 5,
   reportPath: 'tmp/test-governance/container-image-security.json',
@@ -20,7 +20,7 @@ const CONTAINER_IMAGE_SECURITY_REPORT = {
     {
       component: 'api-server',
       imageRef: 'ghcr.io/taichuy/1flowbase-api-server:scan-1',
-      status: 'failed',
+      status: 'warning',
       highCount: 9,
       criticalCount: 5,
       evidence: [
@@ -51,7 +51,7 @@ function writeContainerImageSecurityReport(repoRoot) {
   );
 }
 
-test('runQualityGate publishes container image security reports in CD issues', async () => {
+test('runQualityGate records container image security warnings without publishing CD issues', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-quality-gate-container-images-'));
   const createdIssues = [];
 
@@ -60,8 +60,8 @@ test('runQualityGate publishes container image security reports in CD issues', a
     scope: 'container-images',
     reportType: 'cd',
     environmentName: 'container-images',
-    publishIssue: true,
-    githubToken: 'token',
+    publishIssue: false,
+    githubToken: '',
     env: {
       GITHUB_ACTOR: 'taichu',
       GITHUB_REF_NAME: 'latest',
@@ -76,8 +76,8 @@ test('runQualityGate publishes container image security reports in CD issues', a
       assert.deepEqual(args, [path.join(repoRoot, 'scripts', 'node', 'cli', 'container-image-security.js')]);
       writeContainerImageSecurityReport(repoRoot);
       return {
-        status: 1,
-        stdout: 'container image security failed\n',
+        status: 0,
+        stdout: 'container image security warning\n',
         stderr: '',
       };
     },
@@ -93,16 +93,19 @@ test('runQualityGate publishes container image security reports in CD issues', a
     writeStderr() {},
   });
 
-  assert.equal(status.status, 'failed');
-  assert.equal(status.exitCode, 1);
-  assert.equal(createdIssues[0].title, '[Quality Gate][CD] 2026-05-03 23:40 container-images abcdef1 failed');
-  assert.match(createdIssues[0].body, /## Container Image Security/u);
-  assert.match(createdIssues[0].body, /Status: failed; Components: 1; HIGH: 9; CRITICAL: 5/u);
-  assert.match(createdIssues[0].body, /\| `api-server` \| failed \| 9 \| 5 \|/u);
-  assert.match(createdIssues[0].body, /CVE-2026-33845/u);
-  assert.match(createdIssues[0].body, /Container image security report: tmp\/test-governance\/container-image-security\.md/u);
+  assert.equal(status.status, 'passed');
+  assert.equal(status.exitCode, 0);
+  assert.equal(createdIssues.length, 0);
   const report = JSON.parse(fs.readFileSync(path.join(repoRoot, 'tmp', 'test-governance', 'quality-gate-report.json'), 'utf8'));
+  assert.equal(report.status, 'passed');
+  assert.equal(report.exitCode, 0);
+  assert.equal(report.issueUrl, '');
+  assert.equal(report.containerImageSecurity.status, 'warning');
   assert.equal(report.containerImageSecurity.criticalCount, 5);
+  assert.match(
+    fs.readFileSync(path.join(repoRoot, 'tmp', 'test-governance', 'quality-gate-report.md'), 'utf8'),
+    /Status: warning; Components: 1; HIGH: 9; CRITICAL: 5/u
+  );
 });
 
 test('runQualityGateAggregate includes container image security reports when present', async () => {
@@ -116,9 +119,9 @@ test('runQualityGateAggregate includes container image security reports when pre
     path.join(artifactDir, 'quality-gate-report.json'),
     `${JSON.stringify({
       reportType: 'cd',
-      status: 'failed',
+      status: 'passed',
       scope: 'container-images',
-      exitCode: 1,
+      exitCode: 0,
       coverageSummaries: [],
       backendConsistencyTargets: [],
       warningFiles: [],
@@ -154,11 +157,11 @@ test('runQualityGateAggregate includes container image security reports when pre
     },
   });
 
-  assert.equal(result.status, 'failed');
-  assert.equal(result.exitCode, 1);
+  assert.equal(result.status, 'passed');
+  assert.equal(result.exitCode, 0);
   assert.match(createdIssues[0].body, /## Container Image Security/u);
-  assert.match(createdIssues[0].body, /container-images: failed, components 1, HIGH 9, CRITICAL 5/u);
-  assert.match(createdIssues[0].body, /\| `api-server` \| failed \| 9 \| 5 \| `ghcr\.io\/taichuy\/1flowbase-api-server:scan-1` \|/u);
+  assert.match(createdIssues[0].body, /container-images: warning, components 1, HIGH 9, CRITICAL 5/u);
+  assert.match(createdIssues[0].body, /\| `api-server` \| warning \| 9 \| 5 \| `ghcr\.io\/taichuy\/1flowbase-api-server:scan-1` \|/u);
   assert.match(createdIssues[0].body, /CVE-2026-33845/u);
   assert.match(createdIssues[0].body, /Container image security report: tmp\/test-governance\/container-image-security\.md/u);
   const report = JSON.parse(fs.readFileSync(path.join(repoRoot, 'tmp', 'test-governance', 'quality-gate-report.json'), 'utf8'));

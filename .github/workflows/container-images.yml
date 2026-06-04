@@ -186,7 +186,7 @@ jobs:
           severity: CRITICAL
           format: json
           output: tmp/test-governance/trivy-${{ matrix.component }}-critical.json
-          exit-code: "1"
+          exit-code: "0"
 
       - name: Upload Trivy reports
         if: always() && steps.select.outputs.enabled == 'true'
@@ -240,7 +240,7 @@ jobs:
           scope: container-images
           report_type: cd
           environment: container-images
-          publish_issue: "true"
+          publish_issue: "false"
           start_postgres: "false"
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v6

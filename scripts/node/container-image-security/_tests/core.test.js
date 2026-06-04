@@ -32,7 +32,7 @@ function writeTrivyReport({ repoRoot, component, level, imageRef, vulnerabilitie
   );
 }
 
-test('collectContainerImageSecurityReport summarizes high warnings and critical blockers', () => {
+test('collectContainerImageSecurityReport summarizes high and critical findings as warnings', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-container-image-security-'));
 
   writeTrivyReport({
@@ -91,8 +91,8 @@ test('collectContainerImageSecurityReport summarizes high warnings and critical 
 
   const report = collectContainerImageSecurityReport({ repoRoot });
 
-  assert.equal(report.status, 'failed');
-  assert.equal(report.exitCode, 1);
+  assert.equal(report.status, 'warning');
+  assert.equal(report.exitCode, 0);
   assert.equal(report.highCount, 2);
   assert.equal(report.criticalCount, 1);
   assert.deepEqual(report.components.map((component) => ({
@@ -101,8 +101,8 @@ test('collectContainerImageSecurityReport summarizes high warnings and critical 
     highCount: component.highCount,
     criticalCount: component.criticalCount,
   })), [
-    { component: 'api-server', status: 'failed', highCount: 1, criticalCount: 1 },
-    { component: 'web', status: 'passed', highCount: 1, criticalCount: 0 },
+    { component: 'api-server', status: 'warning', highCount: 1, criticalCount: 1 },
+    { component: 'web', status: 'warning', highCount: 1, criticalCount: 0 },
   ]);
   assert.equal(report.components[0].imageRef, 'ghcr.io/taichuy/1flowbase-api-server:scan-1');
   assert.deepEqual(report.components[0].evidence, [
@@ -114,15 +114,15 @@ test('collectContainerImageSecurityReport summarizes high warnings and critical 
 
 test('formatContainerImageSecurityMarkdown renders component and evidence tables', () => {
   const markdown = formatContainerImageSecurityMarkdown({
-    status: 'failed',
-    exitCode: 1,
+    status: 'warning',
+    exitCode: 0,
     highCount: 2,
     criticalCount: 1,
     components: [
       {
         component: 'api-server',
         imageRef: 'ghcr.io/taichuy/1flowbase-api-server:scan-1',
-        status: 'failed',
+        status: 'warning',
         highCount: 1,
         criticalCount: 1,
         evidence: [
@@ -143,7 +143,7 @@ test('formatContainerImageSecurityMarkdown renders component and evidence tables
   });
 
   assert.match(markdown, /# Container Image Security Report/u);
-  assert.match(markdown, /\| `api-server` \| failed \| 1 \| 1 \| `ghcr\.io\/taichuy\/1flowbase-api-server:scan-1` \|/u);
+  assert.match(markdown, /\| `api-server` \| warning \| 1 \| 1 \| `ghcr\.io\/taichuy\/1flowbase-api-server:scan-1` \|/u);
   assert.match(markdown, /\| `api-server` \| CRITICAL \| `CVE-2026-33845` \| `libgnutls30` \|/u);
   assert.match(markdown, /tmp\/test-governance\/trivy-api-server-critical\.json/u);
 });

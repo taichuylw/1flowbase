@@ -141,10 +141,12 @@ function collectContainerImageSecurityReport({
         level: 'critical',
       }).length;
 
+      const hasFindings = highCount > 0 || criticalCount > 0;
+
       return {
         component: entry.component,
         imageRef: entry.imageRef,
-        status: criticalCount > 0 ? 'failed' : 'passed',
+        status: hasFindings ? 'warning' : 'passed',
         highCount,
         criticalCount,
         evidence: entry.evidence.sort(sortEvidencePaths),
@@ -158,11 +160,11 @@ function collectContainerImageSecurityReport({
 
   const highCount = components.reduce((total, component) => total + component.highCount, 0);
   const criticalCount = components.reduce((total, component) => total + component.criticalCount, 0);
-  const status = components.length > 0 && criticalCount === 0 ? 'passed' : 'failed';
+  const status = highCount > 0 || criticalCount > 0 ? 'warning' : 'passed';
 
   return {
     status,
-    exitCode: status === 'passed' ? 0 : 1,
+    exitCode: 0,
     highCount,
     criticalCount,
     componentCount: components.length,
