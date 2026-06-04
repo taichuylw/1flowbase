@@ -20,6 +20,13 @@ test('parseCliArgs accepts page-regression frontend gate', () => {
   });
 });
 
+test('parseCliArgs accepts pr frontend gate', () => {
+  assert.deepEqual(parseCliArgs(['pr']), {
+    help: false,
+    layer: 'pr',
+  });
+});
+
 test('buildCommands maps full layer to lint, test, build and style-boundary', () => {
   const repoRoot = '/repo-root';
 
@@ -47,6 +54,31 @@ test('buildCommands maps full layer to lint, test, build and style-boundary', ()
       command: process.execPath,
       args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'check-style-boundary', 'all-pages'],
       cwd: repoRoot,
+    },
+  ]);
+});
+
+test('pr layer runs lint, PR smoke tests, and build without style-boundary', () => {
+  const repoRoot = '/repo-root';
+
+  assert.deepEqual(buildCommands({ layer: 'pr', repoRoot }), [
+    {
+      label: 'frontend-lint',
+      command: 'pnpm',
+      args: ['--dir', 'web', 'lint'],
+      cwd: '.',
+    },
+    {
+      label: 'frontend-pr-smoke-test',
+      command: 'pnpm',
+      args: ['--dir', 'web/app', 'test:pr'],
+      cwd: '.',
+    },
+    {
+      label: 'frontend-build',
+      command: 'pnpm',
+      args: ['--dir', 'web/app', 'build'],
+      cwd: '.',
     },
   ]);
 });
@@ -128,6 +160,24 @@ test('main keeps fast frontend gate outside heavy lock mode', async () => {
 
   assert.equal(status, 0);
   assert.equal(capturedLockMode, 'none');
+});
+
+test('main names pr frontend gate as a lightweight merge scope', async () => {
+  let capturedOptions = null;
+
+  const status = await main(['pr'], {
+    repoRoot: '/repo-root',
+    env: {},
+    managedRunnerImpl(options) {
+      capturedOptions = options;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(capturedOptions.scope, 'frontend-pr');
+  assert.equal(capturedOptions.lockMode, 'none');
+  assert.equal(capturedOptions.commandDisplay, 'node scripts/node/test-frontend.js pr');
 });
 
 test('main names page-regression as its own frontend scope', async () => {

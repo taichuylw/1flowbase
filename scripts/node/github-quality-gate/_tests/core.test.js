@@ -80,6 +80,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-frontend-pr' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'frontend-pr'],
+    cwd: repoRoot,
+  });
+
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'backend'],

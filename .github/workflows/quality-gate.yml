@@ -19,6 +19,7 @@ on:
           - repo
           - repo-tooling
           - repo-frontend
+          - repo-frontend-pr
           - repo-backend
           - repo-backend-static
           - repo-backend-fmt

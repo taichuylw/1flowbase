@@ -55,6 +55,7 @@ const VALID_SCOPES = new Set([
   'repo',
   'repo-tooling',
   'repo-frontend',
+  'repo-frontend-pr',
   'repo-backend',
   'backend',
   'backend-consistency',
@@ -134,6 +135,14 @@ function buildGateCommand({ repoRoot, scope }) {
     return {
       command,
       args: [resolveCliEntry(repoRoot, 'verify-repo'), 'frontend'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'repo-frontend-pr') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'frontend-pr'],
       cwd: repoRoot,
     };
   }

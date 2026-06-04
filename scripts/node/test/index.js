@@ -12,7 +12,7 @@ const {
 const { loadVerifyRuntimeConfig } = require('../testing/verify-runtime.js');
 const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
 
-const FRONTEND_LAYERS = new Set(['fast', 'full', 'page-regression']);
+const FRONTEND_LAYERS = new Set(['fast', 'pr', 'full', 'page-regression']);
 const TEST_COMMANDS = new Set(['backend', 'contracts', 'frontend', 'scripts']);
 const CONTRACT_TEST_FILES = [
   'src/features/settings/api/_tests/settings-api.test.ts',
@@ -162,6 +162,29 @@ function buildFrontendCommands({ layer, repoRoot, env = process.env }) {
     ];
   }
 
+  if (layer === 'pr') {
+    return [
+      {
+        label: 'frontend-lint',
+        command: 'pnpm',
+        args: ['--dir', 'web', 'lint'],
+        cwd: '.',
+      },
+      {
+        label: 'frontend-pr-smoke-test',
+        command: 'pnpm',
+        args: ['--dir', 'web/app', 'test:pr'],
+        cwd: '.',
+      },
+      {
+        label: 'frontend-build',
+        command: 'pnpm',
+        args: ['--dir', 'web/app', 'build'],
+        cwd: '.',
+      },
+    ];
+  }
+
   if (layer === 'page-regression') {
     return [
       {
@@ -204,7 +227,7 @@ function buildFrontendCommands({ layer, repoRoot, env = process.env }) {
 }
 
 function usageFrontend(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout('Usage: node scripts/node/test-frontend.js [fast|full|page-regression]\n');
+  writeStdout('Usage: node scripts/node/test-frontend.js [fast|pr|full|page-regression]\n');
 }
 
 async function runFrontend(argv = [], deps = {}) {
