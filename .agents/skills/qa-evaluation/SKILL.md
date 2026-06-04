@@ -38,10 +38,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`
 - 多语言 key / value hygiene、warning 解释和修复边界看 `references/i18n-hygiene-gate.md`
 - 需要处理周期性质量门禁值守、GitHub Issue / Actions 报告闭环或无权限贡献者本地门禁取证时，看 `references/quality-gate-watch.md`
-- 容器镜像扫描漏洞默认先按 warning 处理；基础镜像 / OS package 漏洞优先跟随最新稳定官方镜像重建，不把发行版维护变成项目常规维护范围
-- 容器漏洞评估必须说明实际触达路径：能否经公网入口、HTTP/WebSocket、nginx 模块、插件上传、后端解析链路或运行时依赖触发；仅“镜像内存在受影响库”不得直接等同为当前服务可利用
-- 容器漏洞只有命中 RCE、容器逃逸、权限提升、数据库 / token / 用户数据读取、公网入口直接触发，或当前配置实际加载受影响模块时，才升级为重点修复或阻断建议
-- `unfixed`、不可触达、仅基础镜像传导的 HIGH / CRITICAL 漏洞，应记录组件、数量、fixed/unfixed 状态、影响面判断和官方镜像跟随升级建议；不建议为此长期手工维护发行版包
+- 评估范围命中容器镜像、Trivy、GHCR、Dockerfile、基础镜像或镜像漏洞报告时，再加载 `references/container-image-security.md`
 - 如果评估范围命中后端，必须先读 `api/AGENTS.md`，再对齐 `.memory/project-memory` 中最近的后端规范、计划和插件边界记忆，不能沿用旧口径
 - `task mode` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归
 - `project evaluation mode` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口
