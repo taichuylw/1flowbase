@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use super::{
     api_keys::{ApplicationApiKeyActor, ApplicationApiKeyService},
+    callback_resume::ApplicationPublishedCallbackAttemptRepository,
     conversations::{
         ApplicationPublicConversationMessageRecord, ApplicationPublicConversationRepository,
         BindApplicationPublicConversationInput, ListApplicationPublicConversationMessagesInput,
@@ -30,6 +31,7 @@ use crate::{
 };
 
 const APPLICATION_PUBLIC_CONVERSATION_HISTORY_LIMIT: i64 = 50;
+const ANTHROPIC_MESSAGES_COMPATIBILITY_MODE: &str = "anthropic-messages-v1";
 
 pub struct ApplicationPublishedRunService<R> {
     repository: R,
@@ -45,6 +47,7 @@ where
         + ApplicationCompiledPlanRepository
         + ApplicationPublishedFlowRunRepository
         + ApplicationPublishedRunControlRepository
+        + ApplicationPublishedCallbackAttemptRepository
         + ApplicationPublicConversationRepository
         + Clone,
 {
@@ -110,6 +113,9 @@ where
                 return Ok(native_result_from_flow_run(&flow_run, metadata));
             }
         }
+
+        self.cancel_previous_anthropic_waiting_callback_runs(&actor, &request)
+            .await?;
 
         let environment_variables = self
             .repository
@@ -336,6 +342,96 @@ where
         .await;
     }
 
+    async fn cancel_previous_anthropic_waiting_callback_runs(
+        &self,
+        actor: &ApplicationApiKeyActor,
+        request: &NativeRunRequest,
+    ) -> std::result::Result<(), NativeRunValidationError> {
+        if request.compatibility_mode.as_deref() != Some(ANTHROPIC_MESSAGES_COMPATIBILITY_MODE) {
+            return Ok(());
+        }
+        let Some(external_user) = request.conversation.string("user") else {
+            return Ok(());
+        };
+        let Some(external_conversation_id) = request.conversation.string("id") else {
+            return Ok(());
+        };
+
+        let waiting_runs = self
+            .repository
+            .list_waiting_callback_published_flow_runs_for_conversation(
+                &ListWaitingCallbackPublishedRunsInput {
+                    application_id: actor.application_id,
+                    api_key_id: actor.api_key_id,
+                    external_user,
+                    external_conversation_id,
+                    compatibility_mode: ANTHROPIC_MESSAGES_COMPATIBILITY_MODE.to_string(),
+                },
+            )
+            .await
+            .map_err(|_| NativeRunValidationError::InvalidState)?;
+
+        for waiting_run in waiting_runs {
+            let cancelled = self.cancel_published_run(actor, &waiting_run).await?;
+            if cancelled.status == domain::FlowRunStatus::Cancelled {
+                let completed_at = cancelled
+                    .finished_at
+                    .unwrap_or_else(OffsetDateTime::now_utc);
+                self.cancel_callback_state_for_run(cancelled.id, completed_at)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn cancel_callback_state_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> std::result::Result<(), NativeRunValidationError> {
+        let cancelled_callback_tasks = self
+            .repository
+            .cancel_published_pending_callback_tasks_for_run(flow_run_id, completed_at)
+            .await
+            .map_err(|_| NativeRunValidationError::InvalidState)?;
+        for callback_task in cancelled_callback_tasks {
+            self.repository
+                .append_published_run_event(&crate::ports::AppendRunEventInput {
+                    flow_run_id,
+                    node_run_id: Some(callback_task.node_run_id),
+                    event_type: "public_run_callback_cancelled".to_string(),
+                    payload: json!({
+                        "callback_task_id": callback_task.id,
+                        "callback_kind": callback_task.callback_kind,
+                    }),
+                })
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+        }
+        let cancelled_attempts = self
+            .repository
+            .cancel_published_callback_resume_attempts_for_run(flow_run_id, completed_at)
+            .await
+            .map_err(|_| NativeRunValidationError::InvalidState)?;
+        for attempt in cancelled_attempts {
+            self.repository
+                .append_published_run_event(&crate::ports::AppendRunEventInput {
+                    flow_run_id,
+                    node_run_id: None,
+                    event_type: "public_run_resume_cancelled".to_string(),
+                    payload: json!({
+                        "callback_task_id": attempt.callback_task_id,
+                        "resume_attempt_id": attempt.id,
+                    }),
+                })
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+        }
+
+        Ok(())
+    }
+
     async fn bind_conversation(
         &self,
         application_id: Uuid,
@@ -533,6 +629,15 @@ pub struct CancelPublishedFlowRunInput {
     pub finished_at: OffsetDateTime,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListWaitingCallbackPublishedRunsInput {
+    pub application_id: Uuid,
+    pub api_key_id: Uuid,
+    pub external_user: String,
+    pub external_conversation_id: String,
+    pub compatibility_mode: String,
+}
+
 #[async_trait]
 pub trait ApplicationPublishedRunControlRepository: Send + Sync {
     async fn get_published_flow_run(
@@ -550,6 +655,11 @@ pub trait ApplicationPublishedRunControlRepository: Send + Sync {
         flow_run_id: Uuid,
         completed_at: OffsetDateTime,
     ) -> Result<Vec<domain::CallbackTaskRecord>>;
+
+    async fn list_waiting_callback_published_flow_runs_for_conversation(
+        &self,
+        input: &ListWaitingCallbackPublishedRunsInput,
+    ) -> Result<Vec<domain::FlowRunRecord>>;
 
     async fn get_published_callback_task(
         &self,

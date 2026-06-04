@@ -503,6 +503,101 @@ async fn published_run_control_cancels_pending_callback_tasks_for_run() {
 }
 
 #[tokio::test]
+async fn published_run_control_lists_waiting_callback_runs_for_conversation() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-06-04 12:00:00 UTC);
+    let matching = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: matching.id,
+            status: FlowRunStatus::WaitingCallback,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: None,
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        update flow_runs
+        set api_key_id = $2,
+            external_user = $3,
+            external_conversation_id = $4,
+            compatibility_mode = $5
+        where id = $1
+        "#,
+    )
+    .bind(matching.id)
+    .bind(api_key_id)
+    .bind("claude-user")
+    .bind("session-1")
+    .bind("anthropic-messages-v1")
+    .execute(store.pool())
+    .await
+    .unwrap();
+    let finished = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at + Duration::seconds(1),
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    sqlx::query(
+        r#"
+        update flow_runs
+        set api_key_id = $2,
+            external_user = $3,
+            external_conversation_id = $4,
+            compatibility_mode = $5,
+            status = 'succeeded'
+        where id = $1
+        "#,
+    )
+    .bind(finished.id)
+    .bind(api_key_id)
+    .bind("claude-user")
+    .bind("session-1")
+    .bind("anthropic-messages-v1")
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let waiting_runs =
+        <PgControlPlaneStore as control_plane::application_public_api::run_service::ApplicationPublishedRunControlRepository>::list_waiting_callback_published_flow_runs_for_conversation(
+            &store,
+            &control_plane::application_public_api::run_service::ListWaitingCallbackPublishedRunsInput {
+                application_id: matching.application_id,
+                api_key_id,
+                external_user: "claude-user".to_string(),
+                external_conversation_id: "session-1".to_string(),
+                compatibility_mode: "anthropic-messages-v1".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(waiting_runs.len(), 1);
+    assert_eq!(waiting_runs[0].id, matching.id);
+}
+
+#[tokio::test]
 async fn orchestration_runtime_repository_records_callback_resume_attempts_idempotently() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

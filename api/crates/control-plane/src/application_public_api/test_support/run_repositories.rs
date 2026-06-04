@@ -267,6 +267,36 @@ impl run_service::ApplicationPublishedRunControlRepository for ApplicationPublic
         Ok(cancelled)
     }
 
+    async fn list_waiting_callback_published_flow_runs_for_conversation(
+        &self,
+        input: &run_service::ListWaitingCallbackPublishedRunsInput,
+    ) -> Result<Vec<domain::FlowRunRecord>> {
+        let mut runs = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .flow_runs
+            .values()
+            .filter(|run| {
+                run.run_mode == domain::FlowRunMode::PublishedApiRun
+                    && run.status == domain::FlowRunStatus::WaitingCallback
+                    && run.application_id == input.application_id
+                    && run.api_key_id == Some(input.api_key_id)
+                    && run.external_user.as_deref() == Some(input.external_user.as_str())
+                    && run.external_conversation_id.as_deref()
+                        == Some(input.external_conversation_id.as_str())
+                    && run.compatibility_mode.as_deref() == Some(input.compatibility_mode.as_str())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        runs.sort_by(|left, right| {
+            left.started_at
+                .cmp(&right.started_at)
+                .then(left.id.cmp(&right.id))
+        });
+        Ok(runs)
+    }
+
     async fn get_published_callback_task(
         &self,
         callback_task_id: Uuid,
