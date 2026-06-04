@@ -239,7 +239,9 @@ function loadBaseline(repoRoot) {
   }
 
   const parsed = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
-  return new Set((parsed.allowedFindings || []).map((entry) => findingKey(entry)));
+  return new Map(
+    (parsed.allowedFindings || []).map((entry) => [findingKey(entry), entry.reason || null])
+  );
 }
 
 function findingKey(finding) {
@@ -251,10 +253,15 @@ function findingKey(finding) {
 }
 
 function applyBaseline(findings, baseline) {
-  return findings.map((finding) => ({
-    ...finding,
-    suppressed: baseline.has(findingKey(finding)),
-  }));
+  return findings.map((finding) => {
+    const key = findingKey(finding);
+    const suppressed = baseline.has(key);
+    return {
+      ...finding,
+      suppressed,
+      ...(suppressed && baseline.get(key) ? { suppressionReason: baseline.get(key) } : {}),
+    };
+  });
 }
 
 function collectRustBackendFindings({ repoRoot = getRepoRoot(), includeSuppressed = false } = {}) {

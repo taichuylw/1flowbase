@@ -89,8 +89,9 @@ async fn seed_pending_restart_host_extension(
         .await
         .unwrap()
         .unwrap();
-    let manifest_fingerprint =
-        compute_manifest_fingerprint(&installed_root.join("manifest.yaml")).unwrap();
+    let manifest_fingerprint = compute_manifest_fingerprint(&installed_root.join("manifest.yaml"))
+        .await
+        .unwrap();
 
     PluginRepository::upsert_installation(
         &state.store,

@@ -59,7 +59,8 @@ where
         installed_path: std::path::Path::new(&installation.installed_path),
         expected_artifact_sha256: installation.checksum.as_deref(),
         expected_manifest_fingerprint: installation.manifest_fingerprint.as_deref(),
-    })?;
+    })
+    .await?;
     let artifact_status = match reconcile.outcome {
         ArtifactReconcileOutcome::Missing => PluginArtifactStatus::Missing,
         ArtifactReconcileOutcome::InstallIncomplete => PluginArtifactStatus::InstallIncomplete,
