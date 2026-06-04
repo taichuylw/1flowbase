@@ -509,7 +509,7 @@ async fn application_public_api_mapping_service_requires_edit_permission_for_rep
 }
 
 #[tokio::test]
-async fn application_public_api_publish_creates_immutable_publication_version_record() {
+async fn application_public_api_publish_updates_current_publication_record() {
     let harness = ApplicationPublicApiTestHarness::new();
     let application = harness.seed_application(actor_user_id(), "Support Bot");
     let service = ApplicationPublicationService::new(harness.repository());
@@ -542,15 +542,21 @@ async fn application_public_api_publish_creates_immutable_publication_version_re
         .await
         .unwrap();
 
-    let reloaded_first = service
+    let reloaded = service
         .get_publication_version(first.id)
         .await
         .unwrap()
         .unwrap();
-    assert_ne!(first.id, second.id);
-    assert_eq!(reloaded_first.mapping_snapshot, first.mapping_snapshot);
-    assert_eq!(reloaded_first.compiled_plan_id, first.compiled_plan_id);
-    assert!(!reloaded_first.active);
+    let versions = service
+        .list_publication_versions(application.id)
+        .await
+        .unwrap();
+
+    assert_eq!(first.id, second.id);
+    assert_eq!(versions, vec![second.clone()]);
+    assert_eq!(reloaded.mapping_snapshot, second.mapping_snapshot);
+    assert_eq!(reloaded.compiled_plan_id, second.compiled_plan_id);
+    assert!(reloaded.active);
 }
 
 #[tokio::test]
@@ -579,7 +585,7 @@ async fn application_public_api_js_dependency_snapshot_is_empty_without_selectio
 }
 
 #[tokio::test]
-async fn application_public_api_js_dependency_snapshot_is_frozen_per_publication_version() {
+async fn application_public_api_js_dependency_snapshot_updates_current_publication() {
     let harness = ApplicationPublicApiTestHarness::new();
     let application = harness.seed_application(actor_user_id(), "Support Bot");
     let repository = harness.repository();
@@ -658,22 +664,23 @@ async fn application_public_api_js_dependency_snapshot_is_frozen_per_publication
         })
         .await
         .unwrap();
-    let reloaded_first = service
+    let reloaded = service
         .get_publication_version(first.id)
         .await
         .unwrap()
         .unwrap();
 
-    assert_eq!(reloaded_first.dependency_snapshot.len(), 1);
-    assert_eq!(reloaded_first.dependency_snapshot[0].alias, "zod");
-    assert_eq!(reloaded_first.dependency_snapshot[0].package, "zod");
-    assert_eq!(reloaded_first.dependency_snapshot[0].version, "3.24.0");
+    assert_eq!(first.id, second.id);
+    assert_eq!(reloaded.dependency_snapshot.len(), 1);
+    assert_eq!(reloaded.dependency_snapshot[0].alias, "zod");
+    assert_eq!(reloaded.dependency_snapshot[0].package, "zod");
+    assert_eq!(reloaded.dependency_snapshot[0].version, "4.0.0");
     assert_eq!(
-        reloaded_first.dependency_snapshot[0].artifact_hash,
-        "sha256-zod-3.24.0"
+        reloaded.dependency_snapshot[0].artifact_hash,
+        "sha256-zod-4.0.0"
     );
     assert_eq!(
-        reloaded_first.dependency_snapshot[0].permissions.network,
+        reloaded.dependency_snapshot[0].permissions.network,
         "outbound_only"
     );
     assert_eq!(second.dependency_snapshot[0].version, "4.0.0");
@@ -819,7 +826,7 @@ async fn application_public_api_publish_requires_application_edit_permission() {
 }
 
 #[tokio::test]
-async fn application_public_api_only_one_active_publication_exists_per_application() {
+async fn application_public_api_only_one_current_publication_exists_per_application() {
     let harness = ApplicationPublicApiTestHarness::new();
     let application = harness.seed_application(actor_user_id(), "Support Bot");
     let service = ApplicationPublicationService::new(harness.repository());
@@ -847,13 +854,7 @@ async fn application_public_api_only_one_active_publication_exists_per_applicati
         .list_publication_versions(application.id)
         .await
         .unwrap();
-    let active = versions
-        .iter()
-        .filter(|version| version.active)
-        .collect::<Vec<_>>();
-
-    assert_eq!(active.len(), 1);
-    assert_eq!(active[0].id, latest.id);
+    assert_eq!(versions, vec![latest]);
 }
 
 #[tokio::test]
