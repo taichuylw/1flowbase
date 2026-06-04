@@ -40,6 +40,7 @@ fn invoke_request() -> ProviderStdioRequest {
 fn limits() -> PluginRuntimeLimits {
     PluginRuntimeLimits {
         timeout_ms: Some(2_000),
+        invoke_timeout_ms: None,
         first_token_timeout_ms: None,
         stream_idle_timeout_ms: None,
         memory_bytes: None,
@@ -49,6 +50,7 @@ fn limits() -> PluginRuntimeLimits {
 fn default_limits() -> PluginRuntimeLimits {
     PluginRuntimeLimits {
         timeout_ms: None,
+        invoke_timeout_ms: None,
         first_token_timeout_ms: None,
         stream_idle_timeout_ms: None,
         memory_bytes: None,
@@ -126,6 +128,7 @@ printf '%s\n' '{"type":"result","result":{"final_content":"too-late","finish_rea
     );
     let short_limits = PluginRuntimeLimits {
         timeout_ms: Some(1),
+        invoke_timeout_ms: None,
         first_token_timeout_ms: None,
         stream_idle_timeout_ms: None,
         memory_bytes: None,
@@ -164,6 +167,7 @@ printf '%s\n' '{"type":"result","result":{"final_content":"late","finish_reason"
     );
     let short_limits = PluginRuntimeLimits {
         timeout_ms: Some(2_000),
+        invoke_timeout_ms: None,
         first_token_timeout_ms: Some(1),
         stream_idle_timeout_ms: None,
         memory_bytes: None,
@@ -201,6 +205,7 @@ printf '%s\n' '{"type":"result","result":{"final_content":"first","finish_reason
     );
     let short_limits = PluginRuntimeLimits {
         timeout_ms: Some(2_000),
+        invoke_timeout_ms: None,
         first_token_timeout_ms: None,
         stream_idle_timeout_ms: Some(1),
         memory_bytes: None,

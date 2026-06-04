@@ -16,6 +16,7 @@ use plugin_framework::{
         ProviderInvocationResult, ProviderModelDescriptor, ProviderStdioMethod,
         ProviderStdioRequest, ProviderStreamEvent,
     },
+    PluginRuntimeLimits,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -23,7 +24,10 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 use crate::package_loader::{LoadedProviderPackage, PackageLoader};
-use crate::stdio_runtime::{call_executable, call_executable_streaming, ProviderWorker};
+use crate::stdio_runtime::{
+    call_executable, call_executable_streaming, ProviderWorker,
+    DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS,
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoadedProviderSummary {
@@ -360,12 +364,13 @@ impl ProviderHost {
             method: ProviderStdioMethod::Invoke,
             input: serde_json::to_value(input).unwrap(),
         };
+        let invocation_limits = provider_invocation_limits(&loaded.package.manifest.runtime.limits);
         let output = match loaded.package.manifest.execution_mode {
             PluginExecutionMode::ProcessPerCall => {
                 call_executable_streaming(
                     &loaded.runtime_executable,
                     &request,
-                    &loaded.package.manifest.runtime.limits,
+                    &invocation_limits,
                     live_events,
                     event_observer,
                 )
@@ -380,7 +385,12 @@ impl ProviderHost {
                     )
                 });
                 worker
-                    .call_streaming(&request, live_events, event_observer)
+                    .call_streaming_with_limits(
+                        &request,
+                        &invocation_limits,
+                        live_events,
+                        event_observer,
+                    )
                     .await
             }
             _ => Err(PluginFrameworkError::invalid_provider_package(
@@ -522,6 +532,14 @@ impl ProviderHost {
     }
 }
 
+fn provider_invocation_limits(limits: &PluginRuntimeLimits) -> PluginRuntimeLimits {
+    let mut invocation_limits = limits.clone();
+    invocation_limits.timeout_ms = limits
+        .invoke_timeout_ms
+        .or(Some(DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS));
+    invocation_limits
+}
+
 fn provider_pool_key(input: &ProviderInvocationInput) -> String {
     format!(
         "provider_pool:v1:provider_instance={}:provider_code={}:protocol={}:model={}",
@@ -652,6 +670,10 @@ mod tests {
         }
 
         fn write_provider_package(&self, display_name: &str) {
+            self.write_provider_package_with_runtime_timeout(display_name, 30_000);
+        }
+
+        fn write_provider_package_with_runtime_timeout(&self, display_name: &str, timeout_ms: u64) {
             self.write(
                 "manifest.yaml",
                 &format!(
@@ -683,7 +705,7 @@ runtime:
   protocol: stdio_json
   entry: bin/fixture_provider
   limits:
-    timeout_ms: 30000
+    timeout_ms: {timeout_ms}
 node_contributions: []
 "#
                 ),
@@ -872,6 +894,25 @@ esac
         first.await.unwrap();
         second.await.unwrap();
         assert!(host.active_stream_snapshot().await.streams.is_empty());
+    }
+
+    #[tokio::test]
+    async fn invoke_stream_uses_default_provider_invocation_budget() {
+        let package = TempProviderPackage::new();
+        package.write_provider_package_with_runtime_timeout("Fixture Provider", 1);
+        package.write_slow_invoke_runtime();
+        let mut host = ProviderHost::default();
+        let plugin_id = host
+            .load(package.path().to_str().unwrap())
+            .unwrap()
+            .plugin_id;
+
+        let output = host
+            .invoke_stream(&plugin_id, invocation_input("fixture-model"))
+            .await
+            .expect("provider invocation should not inherit the short runtime command timeout");
+
+        assert_eq!(output.result.final_content.as_deref(), Some("done"));
     }
 
     #[tokio::test]

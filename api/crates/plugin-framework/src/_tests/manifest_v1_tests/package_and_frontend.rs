@@ -34,6 +34,7 @@ runtime:
   entry: bin/openai-compatible-provider
   limits:
     timeout_ms: 30000
+    invoke_timeout_ms: 300000
     memory_bytes: 268435456
 node_contributions: []
 "#,
@@ -57,6 +58,7 @@ node_contributions: []
     assert_eq!(manifest.runtime.protocol, "stdio_json");
     assert_eq!(manifest.runtime.entry, "bin/openai-compatible-provider");
     assert_eq!(manifest.runtime.limits.timeout_ms, Some(30000));
+    assert_eq!(manifest.runtime.limits.invoke_timeout_ms, Some(300000));
     assert_eq!(manifest.runtime.limits.memory_bytes, Some(268435456));
     assert!(manifest.node_contributions.is_empty());
 }

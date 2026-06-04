@@ -68,9 +68,21 @@ impl ProviderWorker {
     }
 
     pub async fn call(&mut self, request: &ProviderStdioRequest) -> FrameworkResult<Value> {
-        let timeout_ms = provider_invocation_timeout_ms(&self.limits);
-        match tokio::time::timeout(Duration::from_millis(timeout_ms), self.call_inner(request))
-            .await
+        let limits = self.limits.clone();
+        self.call_with_limits(request, &limits).await
+    }
+
+    pub async fn call_with_limits(
+        &mut self,
+        request: &ProviderStdioRequest,
+        timeout_limits: &PluginRuntimeLimits,
+    ) -> FrameworkResult<Value> {
+        let timeout_ms = provider_invocation_timeout_ms(timeout_limits);
+        match tokio::time::timeout(
+            Duration::from_millis(timeout_ms),
+            self.call_inner(request, timeout_limits),
+        )
+        .await
         {
             Ok(Ok(output)) => Ok(output),
             Ok(Err(error)) => {
@@ -93,10 +105,22 @@ impl ProviderWorker {
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
         event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
     ) -> FrameworkResult<StreamingProviderOutput> {
-        let timeout_ms = provider_invocation_timeout_ms(&self.limits);
+        let limits = self.limits.clone();
+        self.call_streaming_with_limits(request, &limits, live_events, event_observer)
+            .await
+    }
+
+    pub async fn call_streaming_with_limits(
+        &mut self,
+        request: &ProviderStdioRequest,
+        timeout_limits: &PluginRuntimeLimits,
+        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+        event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
+    ) -> FrameworkResult<StreamingProviderOutput> {
+        let timeout_ms = provider_invocation_timeout_ms(timeout_limits);
         match tokio::time::timeout(
             Duration::from_millis(timeout_ms),
-            self.call_streaming_inner(request, live_events, event_observer),
+            self.call_streaming_inner(request, timeout_limits, live_events, event_observer),
         )
         .await
         {
@@ -121,9 +145,13 @@ impl ProviderWorker {
         }
     }
 
-    async fn call_inner(&mut self, request: &ProviderStdioRequest) -> FrameworkResult<Value> {
+    async fn call_inner(
+        &mut self,
+        request: &ProviderStdioRequest,
+        timeout_limits: &PluginRuntimeLimits,
+    ) -> FrameworkResult<Value> {
         let executable_path = self.executable_path.clone();
-        let limits = self.limits.clone();
+        let timeout_limits = timeout_limits.clone();
         let process = self.ensure_process()?;
         write_worker_request(&executable_path, &mut process.stdin, request).await?;
 
@@ -131,7 +159,7 @@ impl ProviderWorker {
         while let Some(line) = next_provider_stdout_line(
             &mut process.stdout,
             &executable_path,
-            &limits,
+            &timeout_limits,
             &mut timeout_state,
         )
         .await?
@@ -149,11 +177,12 @@ impl ProviderWorker {
     async fn call_streaming_inner(
         &mut self,
         request: &ProviderStdioRequest,
+        timeout_limits: &PluginRuntimeLimits,
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
         event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
     ) -> FrameworkResult<StreamingProviderOutput> {
         let executable_path = self.executable_path.clone();
-        let limits = self.limits.clone();
+        let timeout_limits = timeout_limits.clone();
         let process = self.ensure_process()?;
         write_worker_request(&executable_path, &mut process.stdin, request).await?;
 
@@ -164,7 +193,7 @@ impl ProviderWorker {
         while let Some(line) = next_provider_stdout_line(
             &mut process.stdout,
             &executable_path,
-            &limits,
+            &timeout_limits,
             &mut timeout_state,
         )
         .await?
