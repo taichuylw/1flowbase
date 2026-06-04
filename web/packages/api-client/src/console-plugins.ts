@@ -4,6 +4,9 @@ import type { ConsolePluginFormFieldSchema } from './console-model-providers';
 export interface ConsolePluginCatalogFilter {
   plugin_type?: string;
   locale?: string;
+  q?: string;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface ConsolePluginInstallation {
@@ -70,10 +73,8 @@ export interface ConsoleOfficialPluginCatalogEntry {
   plugin_id: string;
   provider_code: string;
   plugin_type: string;
-  namespace: string;
-  label_key: string;
-  description_key: string | null;
-  provider_label_key: string;
+  display_name: string;
+  description: string | null;
   icon?: string | null;
   protocol: string;
   latest_version: string;
@@ -83,12 +84,17 @@ export interface ConsoleOfficialPluginCatalogEntry {
   install_status: ConsoleOfficialPluginInstallStatus;
 }
 
+export interface ConsoleOfficialPluginCatalogPage {
+  limit: number;
+  next_cursor: string | null;
+}
+
 export interface ConsoleOfficialPluginCatalogResponse {
   source_kind: string;
   source_label: string;
   registry_url: string;
   locale_meta: Record<string, unknown>;
-  i18n_catalog: Record<string, unknown>;
+  page: ConsoleOfficialPluginCatalogPage;
   entries: ConsoleOfficialPluginCatalogEntry[];
 }
 
@@ -373,6 +379,18 @@ function buildPluginCatalogPath(
 
   if (filter.locale) {
     params.set('locale', filter.locale);
+  }
+
+  if (filter.q) {
+    params.set('q', filter.q);
+  }
+
+  if (filter.cursor) {
+    params.set('cursor', filter.cursor);
+  }
+
+  if (filter.limit !== undefined) {
+    params.set('limit', String(filter.limit));
   }
 
   const queryString = params.toString();

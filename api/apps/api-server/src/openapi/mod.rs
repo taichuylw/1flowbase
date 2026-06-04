@@ -295,6 +295,7 @@ use utoipa::OpenApi;
         crate::routes::plugins::InstallPluginResponse,
         crate::routes::plugins::OfficialPluginCatalogResponse,
         crate::routes::plugins::OfficialPluginCatalogEntryResponse,
+        crate::routes::plugins::OfficialPluginCatalogPageResponse,
         crate::routes::plugins::PluginCatalogEntryResponse,
         crate::routes::plugins::PluginCatalogProjectionResponse,
         crate::routes::plugins::PluginFamilyResponse,

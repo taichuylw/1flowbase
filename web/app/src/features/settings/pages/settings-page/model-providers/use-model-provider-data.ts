@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 import {
   fetchSettingsModelProviderCatalog,
@@ -30,25 +31,45 @@ import {
   type ModelProviderInstanceModalState
 } from './shared';
 import { i18nText } from '../../../../../shared/i18n/text';
+import {
+  FALLBACK_APP_LOCALE,
+  toAppLocale
+} from '../../../../../shared/i18n/locales';
 
 export function useModelProviderData({
   drawerState,
-  instanceModalState
+  instanceModalState,
+  officialSearchQuery
 }: {
   drawerState: ModelProviderDrawerState;
   instanceModalState: ModelProviderInstanceModalState;
+  officialSearchQuery?: string;
 }) {
+  const { i18n } = useTranslation();
+  const appLocale =
+    toAppLocale(i18n.resolvedLanguage) ??
+    toAppLocale(i18n.language) ??
+    FALLBACK_APP_LOCALE;
+  const normalizedOfficialSearchQuery = officialSearchQuery?.trim() ?? '';
   const catalogQuery = useQuery({
-    queryKey: settingsModelProviderCatalogQueryKey,
-    queryFn: fetchSettingsModelProviderCatalog
+    queryKey: [...settingsModelProviderCatalogQueryKey, appLocale],
+    queryFn: () => fetchSettingsModelProviderCatalog(appLocale)
   });
   const familiesQuery = useQuery({
-    queryKey: settingsPluginFamiliesQueryKey,
-    queryFn: fetchSettingsPluginFamilies
+    queryKey: [...settingsPluginFamiliesQueryKey, appLocale],
+    queryFn: () => fetchSettingsPluginFamilies(appLocale)
   });
   const officialCatalogQuery = useQuery({
-    queryKey: settingsOfficialPluginsQueryKey,
-    queryFn: fetchSettingsOfficialPluginCatalog
+    queryKey: [
+      ...settingsOfficialPluginsQueryKey,
+      appLocale,
+      normalizedOfficialSearchQuery
+    ],
+    queryFn: () =>
+      fetchSettingsOfficialPluginCatalog({
+        locale: appLocale,
+        q: normalizedOfficialSearchQuery || undefined
+      })
   });
   const instancesQuery = useQuery({
     queryKey: settingsModelProviderInstancesQueryKey,
@@ -66,10 +87,10 @@ export function useModelProviderData({
   const providerOptions = optionsQuery.data?.providers;
   const officialSourceMeta = officialCatalogQuery.data
     ? {
-      sourceKind: officialCatalogQuery.data.source_kind,
-      sourceLabel: officialCatalogQuery.data.source_label,
-      registryUrl: officialCatalogQuery.data.registry_url
-    }
+        sourceKind: officialCatalogQuery.data.source_kind,
+        sourceLabel: officialCatalogQuery.data.source_label,
+        registryUrl: officialCatalogQuery.data.registry_url
+      }
     : null;
 
   const catalogEntriesByInstallationId = useMemo(() => {
@@ -131,7 +152,6 @@ export function useModelProviderData({
     return grouped;
   }, [providerOptions]);
 
-
   const editingInstance =
     drawerState?.mode === 'edit'
       ? (instances.find((instance) => instance.id === drawerState.instanceId) ??
@@ -170,11 +190,14 @@ export function useModelProviderData({
   const mainInstanceProviderCode =
     drawerState?.mode === 'create'
       ? drawerState.providerCode
-      : instanceModalState?.providerCode ?? null;
+      : (instanceModalState?.providerCode ?? null);
 
   const mainInstanceQuery = useQuery({
     queryKey: mainInstanceProviderCode
-      ? [...MODEL_PROVIDER_MAIN_INSTANCE_QUERY_KEY_PREFIX, mainInstanceProviderCode]
+      ? [
+          ...MODEL_PROVIDER_MAIN_INSTANCE_QUERY_KEY_PREFIX,
+          mainInstanceProviderCode
+        ]
       : [...MODEL_PROVIDER_MAIN_INSTANCE_QUERY_KEY_PREFIX, 'idle'],
     queryFn: () =>
       fetchSettingsModelProviderMainInstance(mainInstanceProviderCode!),
@@ -183,11 +206,11 @@ export function useModelProviderData({
 
   const drawerDefaultIncludedInMain =
     drawerState?.mode === 'create'
-      ? mainInstanceQuery.data?.auto_include_new_instances ??
+      ? (mainInstanceQuery.data?.auto_include_new_instances ??
         providerOptionsByProviderCode[drawerState.providerCode]?.main_instance
           .auto_include_new_instances ??
-        false
-      : editingInstance?.included_in_main ?? false;
+        false)
+      : (editingInstance?.included_in_main ?? false);
 
   const editingModelsQuery = useQuery({
     queryKey: editingInstance
@@ -206,10 +229,26 @@ export function useModelProviderData({
   const providerCount = families.length;
   const officialCount = officialCatalogEntries.length;
   const overviewRows = [
-    { key: 'providers', label: i18nText("settings", "auto.provider_installed"), value: String(providerCount) },
-    { key: 'ready', label: i18nText("settings", "auto.available_instances"), value: String(readyCount) },
-    { key: 'invalid', label: i18nText("settings", "auto.exception_instance"), value: String(invalidCount) },
-    { key: 'official', label: i18nText("settings", "auto.installable_providers"), value: String(officialCount) }
+    {
+      key: 'providers',
+      label: i18nText('settings', 'auto.provider_installed'),
+      value: String(providerCount)
+    },
+    {
+      key: 'ready',
+      label: i18nText('settings', 'auto.available_instances'),
+      value: String(readyCount)
+    },
+    {
+      key: 'invalid',
+      label: i18nText('settings', 'auto.exception_instance'),
+      value: String(invalidCount)
+    },
+    {
+      key: 'official',
+      label: i18nText('settings', 'auto.installable_providers'),
+      value: String(officialCount)
+    }
   ];
 
   return {

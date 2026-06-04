@@ -27,15 +27,21 @@ import {
   type UpdateConsoleModelProviderMainInstanceInput
 } from '@1flowbase/api-client';
 
-export type SettingsModelProviderCatalogEntry = ConsoleModelProviderCatalogEntry;
+export type SettingsModelProviderCatalogEntry =
+  ConsoleModelProviderCatalogEntry;
 export type SettingsModelProviderInstance = ConsoleModelProviderInstance;
 export type SettingsModelProviderOptions = ConsoleModelProviderOptions;
-export type SettingsModelProviderModelCatalog = ConsoleModelProviderModelCatalog;
-export type SettingsRevealModelProviderSecretResult = RevealConsoleModelProviderSecretResult;
-export type SettingsValidateModelProviderResult = ConsoleValidateModelProviderResult;
-export type SettingsModelProviderMainInstance = ConsoleModelProviderMainInstance;
+export type SettingsModelProviderModelCatalog =
+  ConsoleModelProviderModelCatalog;
+export type SettingsRevealModelProviderSecretResult =
+  RevealConsoleModelProviderSecretResult;
+export type SettingsValidateModelProviderResult =
+  ConsoleValidateModelProviderResult;
+export type SettingsModelProviderMainInstance =
+  ConsoleModelProviderMainInstance;
 export type CreateSettingsModelProviderInput = CreateConsoleModelProviderInput;
-export type PreviewSettingsModelProviderModelsInput = PreviewConsoleModelProviderModelsInput;
+export type PreviewSettingsModelProviderModelsInput =
+  PreviewConsoleModelProviderModelsInput;
 export type PreviewSettingsModelProviderModelsResponse =
   PreviewConsoleModelProviderModelsResponse;
 export type UpdateSettingsModelProviderInput = UpdateConsoleModelProviderInput;
@@ -115,7 +121,10 @@ function resolveCatalogLocalizedValue(
   value: null | undefined
 ): null | undefined;
 function resolveCatalogLocalizedValue(
-  response: Pick<ConsoleModelProviderCatalogResponse, 'locale_meta' | 'i18n_catalog'>,
+  response: Pick<
+    ConsoleModelProviderCatalogResponse,
+    'locale_meta' | 'i18n_catalog'
+  >,
   namespace: string,
   value: string | null | undefined
 ) {
@@ -170,7 +179,10 @@ function resolveOptionalCatalogLocalizedValue(
 }
 
 function localizeCatalogEntryConfigSchema(
-  response: Pick<ConsoleModelProviderCatalogResponse, 'locale_meta' | 'i18n_catalog'>,
+  response: Pick<
+    ConsoleModelProviderCatalogResponse,
+    'locale_meta' | 'i18n_catalog'
+  >,
   entry: ConsoleModelProviderCatalogEntry
 ) {
   return {
@@ -213,7 +225,8 @@ function localizeCatalogEntryConfigSchema(
                     entry.namespace,
                     option.label
                   ),
-                  ...(optionDescription === undefined || optionDescription === null
+                  ...(optionDescription === undefined ||
+                  optionDescription === null
                     ? {}
                     : { description: optionDescription })
                 };
@@ -225,8 +238,8 @@ function localizeCatalogEntryConfigSchema(
   };
 }
 
-export function fetchSettingsModelProviderCatalog() {
-  return listConsoleModelProviderCatalog().then((response) =>
+export function fetchSettingsModelProviderCatalog(locale?: string) {
+  return listConsoleModelProviderCatalog({ locale }).then((response) =>
     response.entries.map((entry) =>
       localizeCatalogEntryConfigSchema(response, entry)
     )

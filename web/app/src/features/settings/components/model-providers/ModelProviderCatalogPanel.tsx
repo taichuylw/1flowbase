@@ -100,9 +100,9 @@ export function ModelProviderCatalogPanel({
                       type="link"
                       onClick={() => onViewInstances(entry)}
                     >
-                      {i18nText("settings", "auto.configuration_alt")}</Button>
+                      {i18nText("settings", "auto.model_provider_manage_action")}</Button>
                     <Button type="link" onClick={() => onCreate(entry)}>
-                      {i18nText("settings", "auto.add")}</Button>
+                      {i18nText("settings", "auto.model_provider_create_action")}</Button>
                     <Button
                       danger
                       type="link"

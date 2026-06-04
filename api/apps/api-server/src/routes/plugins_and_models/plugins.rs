@@ -9,10 +9,11 @@ use axum::{
 use control_plane::plugin_management::{
     AssignPluginCommand, DeletePluginFamilyCommand, EnablePluginCommand,
     InstallOfficialPluginCommand, InstallPluginCommand, InstallPluginResult,
-    InstallUploadedPluginCommand, OfficialPluginCatalogEntry, OfficialPluginCatalogView,
-    PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView, PluginInstalledVersionView,
-    PluginManagementService, RefreshPluginPackageCatalogProjectionCommand,
-    SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
+    InstallUploadedPluginCommand, OfficialPluginCatalogEntry, OfficialPluginCatalogFilter,
+    OfficialPluginCatalogView, PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView,
+    PluginInstalledVersionView, PluginManagementService,
+    RefreshPluginPackageCatalogProjectionCommand, SwitchPluginVersionCommand,
+    UpgradeLatestPluginFamilyCommand,
 };
 use control_plane::resource_action::{
     ActionDefinition, ResourceActionKernel, ResourceActionRegistry, ResourceDefinition,
@@ -32,6 +33,9 @@ use crate::{
     response::ApiSuccess,
     routes::system::LocaleMetaResponse,
 };
+
+const DEFAULT_OFFICIAL_PLUGIN_CATALOG_LIMIT: usize = 20;
+const MAX_OFFICIAL_PLUGIN_CATALOG_LIMIT: usize = 50;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct InstallPluginBody {
@@ -53,6 +57,16 @@ pub struct PluginCatalogQuery {
     /// Optional plugin kind filter for catalog views.
     pub plugin_type: Option<String>,
     pub locale: Option<String>,
+}
+
+#[derive(Debug, Deserialize, IntoParams, Clone)]
+pub struct OfficialPluginCatalogQuery {
+    /// Optional plugin kind filter for official catalog views.
+    pub plugin_type: Option<String>,
+    pub locale: Option<String>,
+    pub q: Option<String>,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -142,10 +156,8 @@ pub struct OfficialPluginCatalogEntryResponse {
     pub plugin_id: String,
     pub plugin_type: String,
     pub provider_code: String,
-    pub namespace: String,
-    pub label_key: String,
-    pub description_key: Option<String>,
-    pub provider_label_key: String,
+    pub display_name: String,
+    pub description: Option<String>,
     pub icon: Option<String>,
     pub protocol: String,
     pub latest_version: String,
@@ -156,13 +168,18 @@ pub struct OfficialPluginCatalogEntryResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct OfficialPluginCatalogPageResponse {
+    pub limit: usize,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct OfficialPluginCatalogResponse {
     pub source_kind: String,
     pub source_label: String,
     pub registry_url: String,
     pub locale_meta: LocaleMetaResponse,
-    #[schema(value_type = Object)]
-    pub i18n_catalog: serde_json::Value,
+    pub page: OfficialPluginCatalogPageResponse,
     pub entries: Vec<OfficialPluginCatalogEntryResponse>,
 }
 
@@ -432,10 +449,8 @@ fn to_official_catalog_entry_response(
         plugin_id: entry.plugin_id,
         plugin_type: entry.plugin_type,
         provider_code: entry.provider_code,
-        namespace: entry.namespace,
-        label_key: entry.label_key,
-        description_key: entry.description_key,
-        provider_label_key: entry.provider_label_key,
+        display_name: entry.display_name,
+        description: entry.description,
         icon: entry.icon,
         protocol: entry.protocol,
         latest_version: entry.latest_version,
@@ -459,12 +474,20 @@ fn to_official_catalog_response(
     locale_meta: LocaleMetaResponse,
     catalog: OfficialPluginCatalogView,
 ) -> OfficialPluginCatalogResponse {
+    let source_label = localized_official_source_label(
+        &catalog.source_kind,
+        catalog.source_label,
+        &locale_meta.resolved_locale,
+    );
     OfficialPluginCatalogResponse {
         source_kind: catalog.source_kind,
-        source_label: catalog.source_label,
+        source_label,
         registry_url: catalog.registry_url,
         locale_meta,
-        i18n_catalog: serde_json::to_value(catalog.i18n_catalog).unwrap(),
+        page: OfficialPluginCatalogPageResponse {
+            limit: catalog.page.limit,
+            next_cursor: catalog.page.next_cursor,
+        },
         entries: catalog
             .entries
             .into_iter()
@@ -567,6 +590,41 @@ fn filter_from_query(query: &PluginCatalogQuery) -> PluginCatalogFilter {
     }
 }
 
+fn official_filter_from_query(query: &OfficialPluginCatalogQuery) -> OfficialPluginCatalogFilter {
+    let limit = query
+        .limit
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_OFFICIAL_PLUGIN_CATALOG_LIMIT)
+        .min(MAX_OFFICIAL_PLUGIN_CATALOG_LIMIT);
+
+    OfficialPluginCatalogFilter {
+        plugin_type: query.plugin_type.clone(),
+        search_query: query
+            .q
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        cursor: query
+            .cursor
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        limit,
+    }
+}
+
+fn localized_official_source_label(source_kind: &str, fallback: String, locale: &str) -> String {
+    match (source_kind, locale) {
+        ("official_registry", "en_US") => "Official source".to_string(),
+        ("official_registry", _) => "官方源".to_string(),
+        ("mirror_registry", "en_US") => "Mirror source".to_string(),
+        ("mirror_registry", _) => "镜像源".to_string(),
+        _ => fallback,
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/api/console/plugins/catalog",
@@ -642,14 +700,14 @@ pub async fn list_families(
 #[utoipa::path(
     get,
     path = "/api/console/plugins/official-catalog",
-    params(PluginCatalogQuery),
+    params(OfficialPluginCatalogQuery),
     operation_id = "plugin_list_official_catalog",
     responses((status = 200, body = OfficialPluginCatalogResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
 pub async fn list_official_catalog(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-    Query(query): Query<PluginCatalogQuery>,
+    Query(query): Query<OfficialPluginCatalogQuery>,
 ) -> Result<Json<ApiSuccess<OfficialPluginCatalogResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let locale_meta = resolve_locale_meta(
@@ -660,7 +718,7 @@ pub async fn list_official_catalog(
     let catalog = service(&state)
         .list_official_catalog(
             context.user.id,
-            filter_from_query(&query),
+            official_filter_from_query(&query),
             requested_locales(&locale_meta),
         )
         .await?;

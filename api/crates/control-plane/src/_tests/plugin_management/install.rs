@@ -3,8 +3,8 @@ use std::{fs, path::PathBuf, sync::Arc};
 use crate::{
     plugin_management::{
         AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
-        InstallPluginCommand, InstallUploadedPluginCommand, PluginCatalogFilter,
-        PluginManagementService,
+        InstallPluginCommand, InstallUploadedPluginCommand, OfficialPluginCatalogFilter,
+        PluginCatalogFilter, PluginManagementService,
     },
     ports::{FrontendBlockCatalogRepository, JsDependencyRepository, NodeContributionRepository},
 };
@@ -78,7 +78,7 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
     let catalog = service
         .list_official_catalog(
             repository.actor.user_id,
-            PluginCatalogFilter::default(),
+            OfficialPluginCatalogFilter::default(),
             requested_locales(),
         )
         .await

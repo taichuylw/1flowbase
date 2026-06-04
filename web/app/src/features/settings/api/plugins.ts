@@ -21,16 +21,9 @@ export type SettingsPluginFamilyEntry = ConsolePluginFamilyEntry & {
   description: string | null;
 };
 export type SettingsOfficialPluginCatalogEntry =
-  ConsoleOfficialPluginCatalogEntry & {
-    display_name: string;
-    description: string | null;
-  };
-export type SettingsOfficialPluginCatalogResponse = Omit<
-  ConsoleOfficialPluginCatalogResponse,
-  'entries'
-> & {
-  entries: SettingsOfficialPluginCatalogEntry[];
-};
+  ConsoleOfficialPluginCatalogEntry;
+export type SettingsOfficialPluginCatalogResponse =
+  ConsoleOfficialPluginCatalogResponse;
 export type SettingsPluginInstallation = ConsolePluginInstallation;
 export type SettingsInstallPluginResult = InstallConsolePluginResult;
 export type SettingsPluginTask = ConsolePluginTask;
@@ -94,7 +87,7 @@ function resolvePluginDisplayName(
     plugin_id?: string;
   },
   response: Pick<
-    ConsolePluginFamilyCatalogResponse | ConsoleOfficialPluginCatalogResponse,
+    ConsolePluginFamilyCatalogResponse,
     'locale_meta' | 'i18n_catalog'
   >
 ) {
@@ -154,7 +147,7 @@ function resolvePluginDescription(
     description_key: string | null;
   },
   response: Pick<
-    ConsolePluginFamilyCatalogResponse | ConsoleOfficialPluginCatalogResponse,
+    ConsolePluginFamilyCatalogResponse,
     'locale_meta' | 'i18n_catalog'
   >
 ) {
@@ -202,9 +195,10 @@ function resolvePluginDescription(
   return null;
 }
 
-export function fetchSettingsPluginFamilies() {
+export function fetchSettingsPluginFamilies(locale?: string) {
   return listConsolePluginFamilies({
-    plugin_type: MODEL_PROVIDER_PLUGIN_TYPE
+    plugin_type: MODEL_PROVIDER_PLUGIN_TYPE,
+    ...(locale ? { locale } : {})
   }).then((response) =>
     response.entries.map((entry) => ({
       ...entry,
@@ -214,17 +208,24 @@ export function fetchSettingsPluginFamilies() {
   );
 }
 
-export function fetchSettingsOfficialPluginCatalog() {
+export function fetchSettingsOfficialPluginCatalog({
+  locale,
+  q,
+  cursor,
+  limit = 20
+}: {
+  locale?: string;
+  q?: string;
+  cursor?: string;
+  limit?: number;
+} = {}) {
   return listConsoleOfficialPluginCatalog({
-    plugin_type: MODEL_PROVIDER_PLUGIN_TYPE
-  }).then((response) => ({
-    ...response,
-    entries: response.entries.map((entry) => ({
-      ...entry,
-      display_name: resolvePluginDisplayName(entry, response),
-      description: resolvePluginDescription(entry, response)
-    }))
-  }));
+    plugin_type: MODEL_PROVIDER_PLUGIN_TYPE,
+    ...(locale ? { locale } : {}),
+    ...(q ? { q } : {}),
+    ...(cursor ? { cursor } : {}),
+    limit
+  });
 }
 
 export function installSettingsOfficialPlugin(

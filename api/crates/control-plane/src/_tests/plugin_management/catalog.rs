@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 use crate::{
     i18n::RequestedLocales,
-    plugin_management::{PluginCatalogFilter, PluginManagementService},
+    plugin_management::{
+        OfficialPluginCatalogFilter, PluginCatalogFilter, PluginManagementService,
+    },
     ports::{
         CreatePluginAssignmentInput, DownloadedOfficialPluginPackage,
         OfficialPluginCatalogSnapshot, OfficialPluginCatalogSource, OfficialPluginSourceEntry,
@@ -368,7 +370,7 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
     let catalog = service
         .list_official_catalog(
             repository.actor.user_id,
-            PluginCatalogFilter::default(),
+            OfficialPluginCatalogFilter::default(),
             requested_locales(),
         )
         .await
@@ -470,7 +472,7 @@ async fn plugin_management_service_uses_persisted_missing_artifact_snapshot_for_
 }
 
 #[tokio::test]
-async fn list_official_catalog_filters_by_plugin_type_and_trims_i18n_bundles() {
+async fn list_official_catalog_filters_by_plugin_type_and_returns_localized_items() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
         workspace_id,
@@ -486,8 +488,9 @@ async fn list_official_catalog_filters_by_plugin_type_and_trims_i18n_bundles() {
     let view = service
         .list_official_catalog(
             repository.actor.user_id,
-            PluginCatalogFilter {
+            OfficialPluginCatalogFilter {
                 plugin_type: Some("model_provider".into()),
+                ..OfficialPluginCatalogFilter::default()
             },
             RequestedLocales::new("zh_Hans", "en_US"),
         )
@@ -513,7 +516,7 @@ async fn list_official_catalog_filters_by_plugin_type_and_trims_i18n_bundles() {
 
     assert_eq!(view.entries.len(), 1);
     assert_eq!(entry.plugin_type, reference.plugin_type);
-    assert_eq!(entry.namespace, reference.namespace);
-    assert!(view.i18n_catalog["plugin.openai_compatible"].contains_key("zh_Hans"));
-    assert!(!view.i18n_catalog["plugin.openai_compatible"].contains_key("fr_FR"));
+    assert_eq!(entry.display_name, "OpenAI-Compatible API Provider");
+    assert_eq!(view.page.limit, 20);
+    assert!(view.page.next_cursor.is_none());
 }
