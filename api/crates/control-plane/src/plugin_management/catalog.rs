@@ -37,6 +37,52 @@ impl PluginCatalogFilter {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct OfficialPluginCatalogFilter {
+    pub plugin_type: Option<String>,
+    pub search_query: Option<String>,
+    pub cursor: Option<String>,
+    pub limit: usize,
+}
+
+impl Default for OfficialPluginCatalogFilter {
+    fn default() -> Self {
+        Self {
+            plugin_type: None,
+            search_query: None,
+            cursor: None,
+            limit: 20,
+        }
+    }
+}
+
+impl OfficialPluginCatalogFilter {
+    fn matches_plugin_type(&self, plugin_type: &str) -> bool {
+        self.plugin_type
+            .as_deref()
+            .is_none_or(|value| value == plugin_type)
+    }
+
+    fn matches_search(&self, entry: &OfficialPluginCatalogEntry) -> bool {
+        let Some(search_query) = self.search_query.as_deref() else {
+            return true;
+        };
+        let query = search_query.trim().to_lowercase();
+        if query.is_empty() {
+            return true;
+        }
+
+        entry.display_name.to_lowercase().contains(&query)
+            || entry
+                .description
+                .as_deref()
+                .is_some_and(|description| description.to_lowercase().contains(&query))
+            || entry.provider_code.to_lowercase().contains(&query)
+            || entry.plugin_id.to_lowercase().contains(&query)
+            || entry.protocol.to_lowercase().contains(&query)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OfficialPluginInstallStatus {
     NotInstalled,
@@ -59,10 +105,8 @@ pub struct OfficialPluginCatalogEntry {
     pub plugin_id: String,
     pub plugin_type: String,
     pub provider_code: String,
-    pub namespace: String,
-    pub label_key: String,
-    pub description_key: Option<String>,
-    pub provider_label_key: String,
+    pub display_name: String,
+    pub description: Option<String>,
     pub protocol: String,
     pub latest_version: String,
     pub icon: Option<String>,
@@ -73,11 +117,17 @@ pub struct OfficialPluginCatalogEntry {
 }
 
 #[derive(Debug, Clone)]
+pub struct OfficialPluginCatalogPage {
+    pub limit: usize,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct OfficialPluginCatalogView {
     pub source_kind: String,
     pub source_label: String,
     pub registry_url: String,
-    pub i18n_catalog: I18nCatalog,
+    pub page: OfficialPluginCatalogPage,
     pub entries: Vec<OfficialPluginCatalogEntry>,
 }
 
@@ -202,6 +252,72 @@ pub(super) fn normalize_official_entries(
     normalized
 }
 
+fn read_official_i18n_value(bundle: &serde_json::Value, dotted_key: &str) -> Option<String> {
+    let mut current = bundle;
+    for segment in dotted_key.split('.') {
+        current = current.get(segment)?;
+    }
+
+    current.as_str().map(str::trim).and_then(|value| {
+        if value.is_empty() {
+            None
+        } else {
+            Some(value.to_string())
+        }
+    })
+}
+
+fn official_locale_candidates(
+    i18n_summary: &crate::ports::OfficialPluginI18nSummary,
+    locales: &RequestedLocales,
+) -> Vec<String> {
+    let mut candidates = vec![
+        locales.resolved_locale.clone(),
+        locales.fallback_locale.clone(),
+        i18n_summary.default_locale.clone(),
+    ];
+    candidates.extend(i18n_summary.available_locales.iter().cloned());
+    candidates.dedup();
+    candidates
+}
+
+fn resolve_official_i18n_value(
+    i18n_summary: &crate::ports::OfficialPluginI18nSummary,
+    locales: &RequestedLocales,
+    dotted_key: &str,
+) -> Option<String> {
+    for locale in official_locale_candidates(i18n_summary, locales) {
+        let Some(bundle) = i18n_summary.bundles.get(&locale) else {
+            continue;
+        };
+        if let Some(value) = read_official_i18n_value(bundle, dotted_key) {
+            return Some(value);
+        }
+    }
+
+    None
+}
+
+fn paginate_official_entries(
+    entries: Vec<OfficialPluginCatalogEntry>,
+    filter: &OfficialPluginCatalogFilter,
+) -> (Vec<OfficialPluginCatalogEntry>, Option<String>) {
+    let start_index = filter
+        .cursor
+        .as_deref()
+        .and_then(|cursor| entries.iter().position(|entry| entry.plugin_id == cursor))
+        .map_or(0, |index| index.saturating_add(1));
+    let page_end = start_index.saturating_add(filter.limit).min(entries.len());
+    let page_entries = entries[start_index..page_end].to_vec();
+    let next_cursor = if page_end < entries.len() {
+        page_entries.last().map(|entry| entry.plugin_id.clone())
+    } else {
+        None
+    };
+
+    (page_entries, next_cursor)
+}
+
 fn provider_help_url(
     installation: &domain::PluginInstallationRecord,
     package: Option<&ProviderPackage>,
@@ -318,7 +434,7 @@ where
     pub async fn list_official_catalog(
         &self,
         actor_user_id: Uuid,
-        filter: PluginCatalogFilter,
+        filter: OfficialPluginCatalogFilter,
         locales: RequestedLocales,
     ) -> Result<OfficialPluginCatalogView> {
         let actor = load_actor_context_for_user(&self.repository, actor_user_id).await?;
@@ -335,11 +451,10 @@ where
         let installations = self.repository.list_installations().await?;
         let official_snapshot = self.official_source.list_official_catalog().await?;
         let normalized_entries = normalize_official_entries(official_snapshot.entries);
-        let mut i18n_catalog = BTreeMap::new();
 
         let entries = normalized_entries
             .into_iter()
-            .filter(|entry| filter.matches(&entry.plugin_type))
+            .filter(|entry| filter.matches_plugin_type(&entry.plugin_type))
             .map(|entry| {
                 let matching_installations = installations
                     .iter()
@@ -355,19 +470,28 @@ where
                 } else {
                     OfficialPluginInstallStatus::NotInstalled
                 };
-                merge_i18n_catalog(
-                    &mut i18n_catalog,
-                    trim_json_bundles(&entry.namespace, &entry.i18n_summary.bundles, &locales),
+                let display_name =
+                    resolve_official_i18n_value(&entry.i18n_summary, &locales, "provider.label")
+                        .or_else(|| {
+                            resolve_official_i18n_value(
+                                &entry.i18n_summary,
+                                &locales,
+                                "plugin.label",
+                            )
+                        })
+                        .unwrap_or_else(|| entry.provider_code.clone());
+                let description = resolve_official_i18n_value(
+                    &entry.i18n_summary,
+                    &locales,
+                    "plugin.description",
                 );
 
                 OfficialPluginCatalogEntry {
                     plugin_id: entry.plugin_id,
                     plugin_type: entry.plugin_type,
                     provider_code: entry.provider_code,
-                    namespace: entry.namespace,
-                    label_key: "plugin.label".to_string(),
-                    description_key: Some("plugin.description".to_string()),
-                    provider_label_key: "provider.label".to_string(),
+                    display_name,
+                    description,
                     protocol: entry.protocol,
                     latest_version: entry.latest_version,
                     icon: entry.icon,
@@ -377,13 +501,18 @@ where
                     install_status,
                 }
             })
+            .filter(|entry| filter.matches_search(entry))
             .collect();
+        let (entries, next_cursor) = paginate_official_entries(entries, &filter);
 
         Ok(OfficialPluginCatalogView {
             source_kind: official_snapshot.source.source_kind,
             source_label: official_snapshot.source.source_label,
             registry_url: official_snapshot.source.registry_url,
-            i18n_catalog,
+            page: OfficialPluginCatalogPage {
+                limit: filter.limit,
+                next_cursor,
+            },
             entries,
         })
     }

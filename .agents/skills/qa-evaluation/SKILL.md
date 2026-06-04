@@ -38,10 +38,12 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`
 - 多语言 key / value hygiene、warning 解释和修复边界看 `references/i18n-hygiene-gate.md`
 - 需要处理周期性质量门禁值守、GitHub Issue / Actions 报告闭环或无权限贡献者本地门禁取证时，看 `references/quality-gate-watch.md`
+- 评估范围命中容器镜像、Trivy、GHCR、Dockerfile、基础镜像或镜像漏洞报告时，再加载 `references/container-image-security.md`
 - 如果评估范围命中后端，必须先读 `api/AGENTS.md`，再对齐 `.memory/project-memory` 中最近的后端规范、计划和插件边界记忆，不能沿用旧口径
 - `task mode` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归
 - `project evaluation mode` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口
 - 前后端字段契约必查：接口字段名必须沿用后端 DTO / 领域语义；展示文案可本地化，但不得为展示另起业务字段别名
+- 前端用户可见文案属于用户已调好的产品内容；QA / i18n hygiene 修复不得改文案值，只能复用既有 key、合并重复 key、删除确认多余 key，或保留相同文案值并说明原因；只有用户明确要求改文案时才可调整 value
 - 临时兼容旧字段必须标记 `@field-contract-compat source=... alias=... remove_by=yyyy-mm-dd`，带废弃计划和测试；QA 报告和 `repo-hygiene` 必须把它作为 warning 暴露
 - 命中过度抽象、无用代码、空转封装、死代码或无意义 helper / manager / utils 时，加载 `references/maintainability-dead-abstraction.md`；只能基于调用方、边界、运行路径或历史证据输出 finding / warning
 - 热点修改复盘必查：高频文件、提交意图、反复修改原因、缺失的前置判断规则，以及应更新的 `skills / AGENTS / scripts/node` 门禁；报告重点是预防下一次 AI 返工，不是只列业务代码修复建议

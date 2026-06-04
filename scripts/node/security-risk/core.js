@@ -144,6 +144,8 @@ function scanDiffText(diffText) {
           severity: rule.severity,
           kind: rule.kind,
           file: currentFile,
+          source: 'added_diff_line',
+          reviewIntent: 'pattern-match-review',
           sample: content.trim().slice(0, 180),
         });
       }
@@ -160,6 +162,8 @@ function scanChangedFiles(changedFiles) {
       severity: 'medium',
       kind: 'sensitive-file-changed',
       file: filePath,
+      source: 'changed_file',
+      reviewIntent: 'sensitive-path-review',
       sample: filePath,
     }));
 }
@@ -176,9 +180,44 @@ function dedupeFindings(findings) {
   });
 }
 
-function buildReport({ changedFiles, findings }) {
+function summarizeFindings(findings) {
+  return findings.reduce(
+    (summary, finding) => {
+      summary.total += 1;
+      if (finding.severity === 'high') {
+        summary.high += 1;
+      }
+      if (finding.severity === 'medium') {
+        summary.medium += 1;
+      }
+      summary.bySource[finding.source] = (summary.bySource[finding.source] || 0) + 1;
+      return summary;
+    },
+    {
+      total: 0,
+      high: 0,
+      medium: 0,
+      bySource: {},
+    }
+  );
+}
+
+function resolveScanSource(env, name, fallback) {
+  return env?.[name] ? `env:${name}` : fallback;
+}
+
+function buildReport({ changedFiles, findings, baseRef = DEFAULT_BASE_REF, env = process.env }) {
   return {
     status: findings.some((finding) => finding.severity === 'high') ? 'review_required' : 'advisory',
+    scan: {
+      baseRef,
+      headRef: 'HEAD',
+      diffRange: `${baseRef}...HEAD`,
+      changedFilesSource: resolveScanSource(env, 'SECURITY_RISK_CHANGED_FILES', 'git diff --name-only'),
+      diffSource: resolveScanSource(env, 'SECURITY_RISK_DIFF', 'git diff --unified=0'),
+      note: 'security-risk scans the full branch diff range. Findings may include branch-history noise that was introduced before the latest PR update; treat sensitive-file findings as review prompts, not CI blockers.',
+    },
+    summary: summarizeFindings(findings),
     changedFiles,
     findings,
   };
@@ -212,7 +251,7 @@ async function main(argv = [], deps = {}) {
     ...scanChangedFiles(changedFiles),
     ...scanDiffText(diffText),
   ]);
-  const report = buildReport({ changedFiles, findings });
+  const report = buildReport({ changedFiles, findings, baseRef, env });
   const reportPath = writeReport({ repoRoot, env, report });
   const writeStdout = deps.writeStdout || ((text) => process.stdout.write(text));
   const writeStderr = deps.writeStderr || ((text) => process.stderr.write(text));

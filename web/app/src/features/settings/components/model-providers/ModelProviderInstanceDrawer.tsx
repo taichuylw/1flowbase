@@ -786,8 +786,8 @@ function ModelProviderInstanceDrawerContent({
                         onChange={applyCachedModelSelection}
                       />
                     </div>
-                    <Button type="dashed" aria-label={i18nText("settings", "auto.add")} onClick={() => appendConfiguredModelRow()}>
-                      {i18nText("settings", "auto.add")}</Button>
+                    <Button type="dashed" aria-label={i18nText("settings", "auto.new")} onClick={() => appendConfiguredModelRow()}>
+                      {i18nText("settings", "auto.new")}</Button>
                     {previewModels.length > 0 && (
                       <Button
                         type="primary"

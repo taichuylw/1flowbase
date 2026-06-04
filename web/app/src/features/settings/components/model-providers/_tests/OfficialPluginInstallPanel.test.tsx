@@ -8,10 +8,6 @@ const baseEntry: SettingsOfficialPluginCatalogEntry = {
   plugin_id: '1flowbase.openai_compatible',
   provider_code: 'openai_compatible',
   plugin_type: 'model_provider',
-  namespace: 'plugin.openai_compatible',
-  label_key: 'plugin.label',
-  description_key: 'plugin.description',
-  provider_label_key: 'provider.label',
   display_name: 'OpenAI Compatible',
   description: '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。',
   protocol: 'openai_compatible',
@@ -38,11 +34,13 @@ function renderPanel(entry: SettingsOfficialPluginCatalogEntry) {
       entries={[entry]}
       familiesByProviderCode={{}}
       canManage
+      searchQuery=""
       activePluginId={null}
       installState="idle"
       upgradingProviderCode={null}
       onInstall={vi.fn()}
       onOpenUpload={vi.fn()}
+      onSearchQueryChange={vi.fn()}
       onUpgradeLatest={vi.fn()}
     />
   );
@@ -57,9 +55,10 @@ describe('OfficialPluginInstallPanel', () => {
       icon: 'https://cdn.example.com/openai-compatible.svg'
     });
 
-    expect(
-      screen.getByAltText('')
-    ).toHaveAttribute('src', 'https://cdn.example.com/openai-compatible.svg');
+    expect(screen.getByAltText('')).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/openai-compatible.svg'
+    );
   });
 
   test('falls back to the default icon when the catalog entry has no icon', () => {
@@ -68,8 +67,6 @@ describe('OfficialPluginInstallPanel', () => {
       icon: null
     });
 
-    expect(
-      screen.getByAltText('')
-    ).toHaveAttribute('src', '/icon.svg');
+    expect(screen.getByAltText('')).toHaveAttribute('src', '/icon.svg');
   });
 });

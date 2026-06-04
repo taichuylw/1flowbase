@@ -76,7 +76,7 @@ async fn plugin_routes_list_official_catalog_with_source_metadata() {
     let payload: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(payload["data"]["source_kind"], "mirror_registry");
-    assert_eq!(payload["data"]["source_label"], "镜像源");
+    assert_eq!(payload["data"]["source_label"], "Mirror source");
     assert_eq!(
         payload["data"]["entries"][0]["plugin_id"],
         "1flowbase.openai_compatible"
@@ -84,6 +84,46 @@ async fn plugin_routes_list_official_catalog_with_source_metadata() {
     assert_eq!(
         payload["data"]["entries"][0]["icon"],
         "https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/runtime-extensions/model-providers/openai_compatible/_assets/icon.svg"
+    );
+}
+
+#[tokio::test]
+async fn plugin_routes_list_official_catalog_returns_localized_page_items() {
+    let app = test_app().await;
+    let (cookie, _csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/plugins/official-catalog?plugin_type=model_provider&locale=zh_Hans&q=provider&limit=1")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let payload: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(payload["data"]["locale_meta"]["resolved_locale"], "zh_Hans");
+    assert!(payload["data"].get("i18n_catalog").is_none());
+    assert_eq!(payload["data"]["page"]["limit"], 1);
+    assert!(payload["data"]["page"]["next_cursor"].is_null());
+    assert_eq!(
+        payload["data"]["entries"][0]["display_name"],
+        "OpenAI Compatible"
+    );
+    assert_eq!(
+        payload["data"]["entries"][0]["description"],
+        "官方 Provider 插件"
+    );
+    assert_eq!(
+        payload["data"]["entries"][0]["selected_artifact"]["download_url"],
+        "https://example.com/openai-compatible.1flowbasepkg"
     );
 }
 

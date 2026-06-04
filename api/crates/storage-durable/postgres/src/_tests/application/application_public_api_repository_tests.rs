@@ -188,6 +188,61 @@ async fn seed_flow_version_and_compiled_plan(
     (flow_id, version_id, compiled_plan_id, document)
 }
 
+async fn seed_publication_revision(
+    store: &PgControlPlaneStore,
+    flow_id: Uuid,
+    draft_id: Uuid,
+    actor_user_id: Uuid,
+    sequence: i64,
+    document_hash: &str,
+) -> (Uuid, Uuid, serde_json::Value) {
+    let version_id = Uuid::now_v7();
+    let compiled_plan_id = Uuid::now_v7();
+    let mut document = domain::default_flow_document(flow_id);
+    document["revision"] = serde_json::json!(sequence);
+
+    sqlx::query(
+        r#"
+        insert into flow_versions (
+            id, flow_id, sequence, trigger, change_kind, summary,
+            summary_is_custom, is_protected, document, created_by
+        ) values ($1, $2, $3, 'autosave', 'logical', 'published', false, true, $4, $5)
+        "#,
+    )
+    .bind(version_id)
+    .bind(flow_id)
+    .bind(sequence)
+    .bind(&document)
+    .bind(actor_user_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        insert into flow_compiled_plans (
+            id, flow_id, flow_draft_id, schema_version, document_hash,
+            document_updated_at, plan, created_by
+        )
+        select $1, $2, $3, $4, $5, updated_at, $6, $7
+        from flow_drafts
+        where id = $3
+        "#,
+    )
+    .bind(compiled_plan_id)
+    .bind(flow_id)
+    .bind(draft_id)
+    .bind(domain::FLOW_SCHEMA_VERSION)
+    .bind(document_hash)
+    .bind(serde_json::json!({"schema_version": domain::FLOW_SCHEMA_VERSION}))
+    .bind(actor_user_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    (version_id, compiled_plan_id, document)
+}
+
 #[tokio::test]
 async fn application_public_api_repository_api_keys_key_kind_separates_data_model_and_application_keys(
 ) {
@@ -388,6 +443,92 @@ async fn application_public_api_repository_publication_insert_uses_real_foreign_
 }
 
 #[tokio::test]
+async fn application_public_api_repository_republish_updates_single_current_publication() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool.clone());
+    let workspace_id = seed_workspace(&store, "Application Republish").await;
+    let actor_user_id = seed_user(&store, workspace_id, "republish-owner").await;
+    let application_id = seed_application(&store, workspace_id, actor_user_id, "Public App").await;
+    let (flow_id, first_flow_version_id, first_compiled_plan_id, first_document) =
+        seed_flow_version_and_compiled_plan(&store, application_id, actor_user_id).await;
+    let draft_id: Uuid = sqlx::query_scalar("select id from flow_drafts where flow_id = $1")
+        .bind(flow_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let (second_flow_version_id, second_compiled_plan_id, second_document) =
+        seed_publication_revision(&store, flow_id, draft_id, actor_user_id, 2, "sha256:second")
+            .await;
+
+    let first_publication =
+        ApplicationPublicationRepository::create_active_application_publication_version(
+            &store,
+            &CreateApplicationPublicationVersionInput {
+                actor_user_id,
+                application_id,
+                mapping_snapshot: ApplicationApiMappingConfig::default_native(),
+                api_enabled: true,
+                compiled_plan_id: first_compiled_plan_id,
+                flow_id,
+                flow_version_id: first_flow_version_id,
+                flow_schema_version: domain::FLOW_SCHEMA_VERSION.to_string(),
+                document_hash: "sha256:first".into(),
+                document_snapshot: first_document,
+                runtime_profile_snapshot: serde_json::json!({"profile": "first"}),
+                output_selector: serde_json::json!({"answer_selector": "answer.text"}),
+                dependency_snapshot: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let second_publication =
+        ApplicationPublicationRepository::create_active_application_publication_version(
+            &store,
+            &CreateApplicationPublicationVersionInput {
+                actor_user_id,
+                application_id,
+                mapping_snapshot: ApplicationApiMappingConfig::default_native(),
+                api_enabled: false,
+                compiled_plan_id: second_compiled_plan_id,
+                flow_id,
+                flow_version_id: second_flow_version_id,
+                flow_schema_version: domain::FLOW_SCHEMA_VERSION.to_string(),
+                document_hash: "sha256:second".into(),
+                document_snapshot: second_document.clone(),
+                runtime_profile_snapshot: serde_json::json!({"profile": "second"}),
+                output_selector: serde_json::json!({"answer_selector": "answer.final"}),
+                dependency_snapshot: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let publications = ApplicationPublicationRepository::list_application_publication_versions(
+        &store,
+        application_id,
+    )
+    .await
+    .unwrap();
+    let row_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_publication_versions where application_id = $1",
+    )
+    .bind(application_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(second_publication.id, first_publication.id);
+    assert_eq!(second_publication.version_sequence, 1);
+    assert_eq!(second_publication.flow_version_id, second_flow_version_id);
+    assert_eq!(second_publication.compiled_plan_id, second_compiled_plan_id);
+    assert_eq!(second_publication.document_snapshot, second_document);
+    assert!(!second_publication.api_enabled);
+    assert_eq!(publications, vec![second_publication]);
+    assert_eq!(row_count, 1);
+}
+
+#[tokio::test]
 async fn application_public_api_js_dependency_snapshot_persists_empty_array_without_selection() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
@@ -542,13 +683,26 @@ async fn application_public_api_repository_migration_creates_publication_core_ta
     .fetch_all(&pool)
     .await
     .unwrap();
-    let active_publication_indexes: Vec<String> = sqlx::query_scalar(
+    let partial_active_publication_indexes: Vec<String> = sqlx::query_scalar(
         r#"
         select indexdef
         from pg_indexes
         where schemaname = $1
           and tablename = 'application_publication_versions'
           and indexdef ilike '%where active%'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let current_publication_indexes: Vec<String> = sqlx::query_scalar(
+        r#"
+        select indexdef
+        from pg_indexes
+        where schemaname = $1
+          and tablename = 'application_publication_versions'
+          and indexname = 'application_publication_versions_application_id_idx'
         "#,
     )
     .bind(&schema)
@@ -578,9 +732,12 @@ async fn application_public_api_repository_migration_creates_publication_core_ta
             "missing application_publication_versions.{expected_column}"
         );
     }
-    assert_eq!(
-        active_publication_indexes.len(),
-        1,
-        "exactly one partial active-publication index should enforce one active version per application"
+    assert!(
+        partial_active_publication_indexes.is_empty(),
+        "current publication is unique per application and should not rely on a partial active index"
+    );
+    assert!(
+        current_publication_indexes.len() == 1 && current_publication_indexes[0].contains("UNIQUE"),
+        "a unique application_id index should enforce one current publication per application"
     );
 }

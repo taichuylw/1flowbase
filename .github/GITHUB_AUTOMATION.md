@@ -6,8 +6,9 @@ This directory owns GitHub Actions automation for repository quality gates.
 
 | Path | Purpose |
 | --- | --- |
-| `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; runs repo slices, backend consistency, coverage slices, and React Doctor frontend gates in parallel, updates one PR report comment for same-repository pull requests, then publishes one aggregate issue only for `latest` pushes. |
-| `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run; full `ci` scope runs component gates in parallel before one aggregate Issue report. |
+| `.github/workflows/verify.yml` | Automatic merge CI for `pull_request` and `push` to `main` / `latest`; runs lightweight repo tooling, frontend PR, and backend static/fmt/check gates, updates one PR report comment for same-repository pull requests, then publishes one aggregate issue only for `latest` pushes. |
+| `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run; full `ci` scope runs component gates, coverage gates, and container image security in parallel before one aggregate Issue report. |
+| `.github/workflows/container-images.yml` | Container image CD for `web`, `api-server`, and `plugin-runner`; builds scan-candidate GHCR tags, runs Trivy admission scans, promotes passing images to version and `latest` tags, then publishes a CD quality gate Issue report. |
 | `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI, manual, and nightly quality gates. |
 
 ## Automatic CI
@@ -18,19 +19,19 @@ This directory owns GitHub Actions automation for repository quality gates.
 - `push` to `main`
 - `push` to `latest`
 
-It runs local Quality Gate Action jobs in parallel:
+It runs lightweight local Quality Gate Action jobs in parallel:
 
 ```yaml
 scope: repo-tooling
-scope: repo-frontend
+scope: repo-frontend-pr
 scope: repo-backend-static
 scope: repo-backend-fmt
-scope: repo-backend-{clippy,check}-{core-libs,runtime-storage,apps}
-scope: repo-backend-test-{core-libs,runtime-storage,control-plane,api-server,plugin-runner}
-scope: backend-consistency
-scope: coverage-frontend
-scope: coverage-backend-{control-plane,storage-postgres,api-server}
+scope: repo-backend-check-{core-libs,runtime-storage,apps}
 ```
+
+The `repo-frontend-pr` scope runs web lint, a compact frontend PR smoke suite, and the app
+build. Full app Vitest, page regression, style-boundary, React Doctor, coverage, and backend
+consistency evidence stay in nightly or manual full quality gates.
 
 The `repo-tooling` scope includes `repo-hygiene`, which writes
 `tmp/test-governance/repo-hygiene.json` with debt-marker, weak-assertion,
@@ -40,15 +41,14 @@ dependency, lockfile, communication, CI, Docker, deploy, proxy, plugin, and runt
 execution-path risks. Advisory findings remain warnings; focused tests still fail
 the repo gate.
 
-It also runs React Doctor as a frontend quality gate against `web/app` changed files:
+React Doctor is no longer an automatic PR merge blocker. Run it from a nightly or manual full quality gate when you need structural frontend debt evidence:
 
 ```yaml
 run: npx react-doctor@0.2.16 web/app --diff origin/main --offline --fail-on warning --verbose
 ```
 
-Current React Doctor structural debt is kept in `web/app/doctor.config.json`
-as narrow per-file rule overrides, so React Doctor still blocks new warnings
-outside that explicit baseline.
+Current React Doctor structural debt is kept in `web/app/doctor.config.json` as
+narrow per-file rule overrides for those stricter runs.
 
 The final aggregate job downloads the component artifacts and publishes a single
 report with:
@@ -62,11 +62,42 @@ Automatic CI updates one fixed-marker PR comment for same-repository pull reques
 creates a GitHub Issue only for `latest` branch pushes. It also uploads the merged
 `tmp/test-governance` directory as the `test-governance-artifacts` artifact. The report body
 includes the aggregate result summary, component status table, advisory warning status,
-security-risk summary, coverage percentages, evidence paths, and a failure excerpt when a
+security-risk summary, evidence paths, and a failure excerpt when a
 component gate fails.
-Use the artifact for full logs, raw coverage files, and security-risk finding details.
+Use the artifact for full logs and security-risk finding details.
 Runs use branch-level concurrency, so a newer push cancels an older in-progress quality gate
 for the same branch before stale runs can publish or close quality issues.
+
+## Container Image CD
+
+`container-images.yml` publishes the `web`, `api-server`, and `plugin-runner` images for
+`latest` pushes and for the selected `workflow_dispatch` component. Each enabled matrix row
+builds a multi-platform scan-candidate tag named `scan-<run_id>-<run_attempt>-<sha>` first.
+The workflow does not push the official version tag or `latest` tag from the build step.
+
+Before promotion, Trivy scans the candidate image with a pinned `aquasecurity/trivy-action`
+commit for action version `v0.36.0`; the action installs Trivy `v0.70.0`. `HIGH` and
+`CRITICAL` findings are written as warning evidence with `exit-code: "0"`. Reports are
+uploaded from:
+
+```text
+tmp/test-governance/trivy-${component}-high.json
+tmp/test-governance/trivy-${component}-critical.json
+```
+
+After the publish matrix finishes, the report job downloads the Trivy artifacts, runs
+`scope: container-images` through the local Quality Gate Action, and publishes one
+`[Quality Gate][CD]` Issue for the container image run. The issue body includes a readable
+component table, HIGH / CRITICAL counts, top vulnerabilities, and evidence paths. The local
+reporter writes:
+
+```text
+tmp/test-governance/container-image-security.md
+tmp/test-governance/container-image-security.json
+```
+
+The workflow promotes the scanned candidate manifest to `${image_tag}` and `latest` with
+`docker buildx imagetools create` after the warning reports are captured.
 
 ## Manual And Nightly Quality Gate
 
@@ -81,17 +112,18 @@ report_type: ci
 environment: leave empty
 ```
 
-For `scope: ci`, manual and scheduled runs mirror the automatic CI shape: repo tooling,
-repo frontend, backend static/fmt/package shards, backend app test package shards, backend
-consistency, frontend coverage, and backend coverage package shards run as separate jobs.
+For `scope: ci`, manual and scheduled runs use the full quality gate shape: repo tooling,
+full repo frontend, backend static/fmt/package shards, backend app test package shards, backend
+consistency, frontend coverage, backend coverage package shards, React Doctor, and container
+image security run as separate jobs.
 An aggregate job downloads their artifacts, publishes one Issue report, and uploads
 `test-governance-artifacts`.
 This keeps wall time close to the slowest component gate instead of the sum of all gates.
 Each component job publishes `publish_issue: "false"`; only the aggregate job publishes the
 final report with `publish_issue: "true"`.
 
-For narrower dispatch scopes such as `repo-frontend`, `repo-backend`, `backend-consistency`,
-or `coverage-backend`,
+For narrower dispatch scopes such as `repo-frontend-pr`, `repo-frontend`, `repo-backend`, `backend-consistency`,
+`coverage-backend`, or `container-images`,
 `quality-gate.yml` runs one targeted job and publishes that single-scope report directly.
 Manual runs share the same target-branch concurrency group as automatic quality gates.
 Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-latest`.
@@ -103,6 +135,7 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `ci` | GitHub workflow only: parallel repo slices + `backend-consistency` + coverage slices, then `github-quality-gate-aggregate.js` |
 | `repo` | `node scripts/node/verify-repo.js` |
 | `repo-tooling` | `node scripts/node/verify-repo.js tooling` |
+| `repo-frontend-pr` | `node scripts/node/verify-repo.js frontend-pr` |
 | `repo-frontend` | `node scripts/node/verify-repo.js frontend` |
 | `repo-backend` | `node scripts/node/verify-repo.js backend` |
 | `repo-backend-static` | `node scripts/node/verify-backend.js static` |
@@ -126,6 +159,7 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `coverage-backend-control-plane` | `node scripts/node/verify-coverage.js backend control-plane` |
 | `coverage-backend-storage-postgres` | `node scripts/node/verify-coverage.js backend storage-postgres` |
 | `coverage-backend-api-server` | `node scripts/node/verify-coverage.js backend api-server` |
+| `container-images` | `node scripts/node/cli/container-image-security.js` |
 
 Use `ci` for the full online repository quality gate. The local `node scripts/node/verify-ci.js`
 entry still runs the same gates serially for environments that need one local command, but the

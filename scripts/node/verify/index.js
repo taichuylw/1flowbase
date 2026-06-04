@@ -20,7 +20,7 @@ const {
 } = require('../testing/coverage-thresholds.js');
 
 const VALID_COVERAGE_TARGETS = new Set(['frontend', 'backend', 'all']);
-const VALID_REPO_TARGETS = new Set(['tooling', 'frontend', 'backend', 'all']);
+const VALID_REPO_TARGETS = new Set(['tooling', 'frontend', 'frontend-pr', 'backend', 'all']);
 const VALID_BACKEND_TARGETS = new Set(['all', 'static', 'fmt', 'clippy', 'test', 'check']);
 const VERIFY_COMMANDS = new Set(['backend', 'backend-consistency', 'ci', 'coverage', 'repo']);
 const FRONTEND_METRICS = ['lines', 'functions', 'statements', 'branches'];
@@ -1040,6 +1040,14 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       cwd: repoRoot,
     },
   ];
+  const frontendPrCommands = [
+    {
+      label: 'repo-frontend-pr',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'test'), 'frontend', 'pr'],
+      cwd: repoRoot,
+    },
+  ];
   const backendCommands = [
     {
       label: 'repo-backend-full',
@@ -1057,6 +1065,10 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
     return frontendCommands;
   }
 
+  if (target === 'frontend-pr') {
+    return frontendPrCommands;
+  }
+
   if (target === 'backend') {
     return backendCommands;
   }
@@ -1070,7 +1082,7 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
 
 function usageRepo(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/verify-repo.js [tooling|frontend|backend|all]\n'
+    'Usage: node scripts/node/verify-repo.js [tooling|frontend|frontend-pr|backend|all]\n'
       + 'Runs repository gates, optionally restricted to a CI-friendly slice.\n'
   );
 }

@@ -10,7 +10,7 @@ use control_plane::{
         },
         run_service::{
             ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
-            CancelPublishedFlowRunInput,
+            CancelPublishedFlowRunInput, ListWaitingCallbackPublishedRunsInput,
         },
     },
     errors::ControlPlaneError,
@@ -633,6 +633,96 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
         .await
     }
 
+    async fn cancel_published_pending_callback_tasks_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> Result<Vec<domain::CallbackTaskRecord>> {
+        let rows = sqlx::query(
+            r#"
+            update flow_run_callback_tasks
+            set status = 'cancelled',
+                completed_at = $2
+            where flow_run_id = $1
+              and status = 'pending'
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(flow_run_id)
+        .bind(completed_at)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_callback_task_record).collect()
+    }
+
+    async fn list_waiting_callback_published_flow_runs_for_conversation(
+        &self,
+        input: &ListWaitingCallbackPublishedRunsInput,
+    ) -> Result<Vec<domain::FlowRunRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
+                run_mode,
+                target_node_id,
+                title,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                null::text as authorized_account,
+                api_key_id,
+                publication_version_id,
+                external_user,
+                external_conversation_id,
+                external_trace_id,
+                compatibility_mode,
+                idempotency_key,
+                started_at,
+                finished_at,
+                created_at,
+                updated_at
+            from flow_runs
+            where application_id = $1
+              and api_key_id = $2
+              and external_user = $3
+              and external_conversation_id = $4
+              and compatibility_mode = $5
+              and run_mode = 'published_api_run'
+              and status = 'waiting_callback'
+            order by started_at asc, id asc
+            "#,
+        )
+        .bind(input.application_id)
+        .bind(input.api_key_id)
+        .bind(&input.external_user)
+        .bind(&input.external_conversation_id)
+        .bind(&input.compatibility_mode)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_flow_run_record).collect()
+    }
+
     async fn get_published_callback_task(
         &self,
         callback_task_id: Uuid,
@@ -813,6 +903,8 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
                 from application_conversations conversations
                 join application_conversation_messages messages
                   on messages.conversation_id = conversations.id
+                join flow_runs runs
+                  on runs.id = messages.flow_run_id
                 where conversations.application_id = $1
                   and conversations.api_key_id = $2
                   and conversations.external_user = $3
@@ -820,6 +912,45 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
                   and messages.flow_run_id is not null
                   and messages.role in ('user', 'assistant')
                   and btrim(messages.content) <> ''
+                  and not (
+                      runs.compatibility_mode = 'anthropic-messages-v1'
+                      and (
+                          runs.input_payload #>> '{node-start,compatibility,claude_code_control}' is not null
+                          or runs.input_payload #>> '{start,compatibility,claude_code_control}' is not null
+                          or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
+                              runs.input_payload #>> '{node-start,query}',
+                              runs.input_payload #>> '{start,query}',
+                              runs.input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
+                              runs.input_payload #>> '{node-start,query}',
+                              runs.input_payload #>> '{start,query}',
+                              runs.input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
+                              runs.input_payload #>> '{node-start,query}',
+                              runs.input_payload #>> '{start,query}',
+                              runs.input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or (
+                              position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
+                                  runs.input_payload #>> '{node-start,query}',
+                                  runs.input_payload #>> '{start,query}',
+                                  runs.input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                              and position('If you need specific details from before compaction' in coalesce(
+                                  runs.input_payload #>> '{node-start,query}',
+                                  runs.input_payload #>> '{start,query}',
+                                  runs.input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                          )
+                      )
+                  )
             ),
             current_turn_boundaries as (
                 select

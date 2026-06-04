@@ -5,7 +5,7 @@ use control_plane::application_public_api::{
     },
     native::{CreateNativeRunCommand, NativeRunRequest, NativeRunValidationError},
     publications::{ApplicationPublicationService, PublishApplicationCommand},
-    run_service::ApplicationPublishedRunService,
+    run_service::{ApplicationPublishedRunControlRepository, ApplicationPublishedRunService},
     ApplicationPublicApiTestHarness,
 };
 use control_plane::ports::{
@@ -40,6 +40,20 @@ fn native_request(response_mode: &str, idempotency_key: Option<&str>) -> NativeR
             "request_id": "req-1"
         },
         "compatibility_mode": "native-v1"
+    }))
+    .unwrap()
+}
+
+fn anthropic_request(query: &str) -> NativeRunRequest {
+    serde_json::from_value(json!({
+        "query": query,
+        "model": "public-model/pass-through",
+        "conversation": {
+            "id": "3e7058c2-3120-4222-bb14-c99ec85e1c0f",
+            "user": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        },
+        "response_mode": "streaming",
+        "compatibility_mode": "anthropic-messages-v1"
     }))
     .unwrap()
 }
@@ -621,6 +635,58 @@ async fn start_native_run_replays_existing_run_for_same_idempotency_key() {
 
     assert_eq!(first.id, second.id);
     assert_eq!(repository.flow_run_count(), 1);
+}
+
+#[tokio::test]
+async fn start_anthropic_run_cancels_previous_waiting_callback_in_same_conversation() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let repository = harness.repository();
+    let application = harness.seed_application(actor_user_id(), "Anthropic Session App");
+    let token = issue_key(&harness, application.id).await;
+    ApplicationPublicationService::new(repository.clone())
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: published_mapping(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let service = ApplicationPublishedRunService::new(repository.clone());
+
+    let first = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: anthropic_request("hi"),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(first.id);
+
+    let second = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token,
+            request: anthropic_request("new message"),
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(first.id, second.id);
+    let first_run = repository
+        .get_flow_run(application.id, first.id)
+        .await
+        .unwrap()
+        .expect("first run should remain durable");
+    let callback_task = repository
+        .get_published_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .expect("callback task should remain durable");
+    assert_eq!(first_run.status, domain::FlowRunStatus::Cancelled);
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Cancelled);
+    let first_run_events = repository.run_event_types(first.id);
+    assert!(first_run_events.contains(&"public_run_cancelled".to_string()));
+    assert!(first_run_events.contains(&"public_run_callback_cancelled".to_string()));
 }
 
 #[tokio::test]

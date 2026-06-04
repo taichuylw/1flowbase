@@ -77,11 +77,13 @@ impl Drop for TempArtifactFixture {
     }
 }
 
-#[test]
-fn reconcile_provider_artifact_reports_ready_when_manifest_and_checksums_match() {
+#[tokio::test]
+async fn reconcile_provider_artifact_reports_ready_when_manifest_and_checksums_match() {
     let fixture = TempArtifactFixture::new();
     let manifest_fingerprint =
-        compute_manifest_fingerprint(&fixture.installed_path.join("manifest.yaml")).unwrap();
+        compute_manifest_fingerprint(&fixture.installed_path.join("manifest.yaml"))
+            .await
+            .unwrap();
 
     let result = reconcile_provider_artifact(ArtifactReconcileInput {
         package_path: Some(fixture.package_path.as_path()),
@@ -89,6 +91,7 @@ fn reconcile_provider_artifact_reports_ready_when_manifest_and_checksums_match()
         expected_artifact_sha256: Some(fixture.package_sha256.as_str()),
         expected_manifest_fingerprint: Some(manifest_fingerprint.as_str()),
     })
+    .await
     .unwrap();
 
     assert_eq!(result.outcome, ArtifactReconcileOutcome::Ready);
@@ -99,8 +102,8 @@ fn reconcile_provider_artifact_reports_ready_when_manifest_and_checksums_match()
     assert!(result.last_error.is_none());
 }
 
-#[test]
-fn reconcile_provider_artifact_reports_missing_when_installed_path_is_absent() {
+#[tokio::test]
+async fn reconcile_provider_artifact_reports_missing_when_installed_path_is_absent() {
     let temp = std::env::temp_dir().join(format!(
         "plugin-framework-artifact-reconcile-missing-{}",
         Uuid::now_v7()
@@ -113,6 +116,7 @@ fn reconcile_provider_artifact_reports_missing_when_installed_path_is_absent() {
         expected_artifact_sha256: None,
         expected_manifest_fingerprint: None,
     })
+    .await
     .unwrap();
 
     assert_eq!(result.outcome, ArtifactReconcileOutcome::Missing);
@@ -120,11 +124,13 @@ fn reconcile_provider_artifact_reports_missing_when_installed_path_is_absent() {
     assert_eq!(result.last_error.as_deref(), Some("installed_path_missing"));
 }
 
-#[test]
-fn reconcile_provider_artifact_reports_corrupted_when_manifest_fingerprint_drifts() {
+#[tokio::test]
+async fn reconcile_provider_artifact_reports_corrupted_when_manifest_fingerprint_drifts() {
     let fixture = TempArtifactFixture::new();
     let original_fingerprint =
-        compute_manifest_fingerprint(&fixture.installed_path.join("manifest.yaml")).unwrap();
+        compute_manifest_fingerprint(&fixture.installed_path.join("manifest.yaml"))
+            .await
+            .unwrap();
 
     fs::write(
         fixture.installed_path.join("manifest.yaml"),
@@ -166,6 +172,7 @@ node_contributions: []
         expected_artifact_sha256: Some(fixture.package_sha256.as_str()),
         expected_manifest_fingerprint: Some(original_fingerprint.as_str()),
     })
+    .await
     .unwrap();
 
     assert_eq!(result.outcome, ArtifactReconcileOutcome::Corrupted);

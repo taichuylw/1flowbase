@@ -80,6 +80,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-frontend-pr' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'frontend-pr'],
+    cwd: repoRoot,
+  });
+
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'verify-repo.js'), 'backend'],
@@ -107,6 +113,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'backend-consistency' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'cli', 'verify-backend-consistency.js')],
+    cwd: repoRoot,
+  });
+
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'container-images' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'cli', 'container-image-security.js')],
     cwd: repoRoot,
   });
 
@@ -415,6 +427,7 @@ test('runQualityGate includes security risk findings as advisory report evidence
     listOpenQualityGateIssuesImpl() {
       return [];
     },
+    nowImpl: () => new Date('2026-05-03T23:40:00Z'),
     writeStdout() {},
     writeStderr() {},
   });

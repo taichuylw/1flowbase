@@ -221,6 +221,20 @@
       "file": "api/crates/domain/src/model_provider.rs",
       "line": 457,
       "snippet": "pub encrypted_secret_json: serde_json::Value,"
+    },
+    {
+      "rule": "blocking-in-async-context",
+      "file": "api/apps/api-server/src/runtime_activity.rs",
+      "line": 628,
+      "snippet": "let status = std::fs::read_to_string(\"/proc/self/statm\").ok()?;",
+      "reason": "Linux RSS telemetry reads a tiny procfs file during runtime activity summary sampling; not a durable storage or external request dependency."
+    },
+    {
+      "rule": "blocking-in-async-context",
+      "file": "api/crates/runtime-profile/src/fingerprint.rs",
+      "line": 58,
+      "snippet": "std::fs::read_to_string(path)",
+      "reason": "Host fingerprint detection runs during local runtime profile identification and reads machine-id once; keep synchronous unless it moves into a hot request path."
     }
   ]
 }

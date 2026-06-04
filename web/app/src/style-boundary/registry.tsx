@@ -184,16 +184,17 @@ const styleBoundaryOfficialPluginCatalog = {
   registry_url:
     'https://github.com/taichuy/1flowbase-official-plugins/releases/latest/download/official-registry.json',
   locale_meta: modelProviderCatalogContract.locale_meta,
-  i18n_catalog: styleBoundaryPluginI18nCatalog,
+  page: {
+    limit: 20,
+    next_cursor: null
+  },
   entries: [
     {
       plugin_id: '1flowbase.openai_compatible',
       provider_code: 'openai_compatible',
       plugin_type: 'model_provider',
-      namespace: 'plugin.openai_compatible',
-      label_key: 'provider.label',
-      description_key: 'provider.description',
-      provider_label_key: 'provider.label',
+      display_name: 'OpenAI Compatible',
+      description: 'Provider plugin for OpenAI-compatible APIs.',
       protocol: 'openai_responses',
       latest_version: '0.1.0',
       selected_artifact: {

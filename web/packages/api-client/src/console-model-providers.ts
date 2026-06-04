@@ -210,13 +210,36 @@ export interface DeleteConsoleModelProviderResult {
   deleted: boolean;
 }
 
+export interface ConsoleModelProviderCatalogFilter {
+  locale?: string;
+}
+
 export interface UpdateConsoleModelProviderMainInstanceInput {
   auto_include_new_instances: boolean;
 }
 
-export function listConsoleModelProviderCatalog(baseUrl?: string) {
+function buildModelProviderCatalogPath(
+  path: string,
+  filter?: ConsoleModelProviderCatalogFilter
+) {
+  if (!filter?.locale) {
+    return path;
+  }
+
+  const params = new URLSearchParams();
+  params.set('locale', filter.locale);
+  return `${path}?${params.toString()}`;
+}
+
+export function listConsoleModelProviderCatalog(
+  filter?: ConsoleModelProviderCatalogFilter,
+  baseUrl?: string
+) {
   return apiFetch<ConsoleModelProviderCatalogResponse>({
-    path: '/api/console/model-providers/catalog',
+    path: buildModelProviderCatalogPath(
+      '/api/console/model-providers/catalog',
+      filter
+    ),
     baseUrl
   });
 }
@@ -309,7 +332,10 @@ export function validateConsoleModelProviderInstance(
   });
 }
 
-export function getConsoleModelProviderModels(instanceId: string, baseUrl?: string) {
+export function getConsoleModelProviderModels(
+  instanceId: string,
+  baseUrl?: string
+) {
   return apiFetch<ConsoleModelProviderModelCatalog>({
     path: `/api/console/model-providers/${instanceId}/models`,
     baseUrl

@@ -279,6 +279,133 @@ async fn save_draft_only_appends_history_for_logical_changes() {
 }
 
 #[tokio::test]
+async fn save_draft_trim_keeps_current_publication_flow_version() {
+    let _permit = repository_test_semaphore().acquire_owned().await.unwrap();
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool.clone());
+    let workspace_id = seed_workspace(&store, "Flow Publication Workspace").await;
+    let actor_user_id = seed_user(&store, workspace_id, "flow-publication-owner").await;
+    let application = seed_agent_flow_application(&store, workspace_id, actor_user_id).await;
+    let initial = <PgControlPlaneStore as FlowRepository>::get_or_create_editor_state(
+        &store,
+        workspace_id,
+        application.id,
+        actor_user_id,
+    )
+    .await
+    .unwrap();
+    let published_version_id = initial.versions[0].id;
+    let compiled_plan_id = Uuid::now_v7();
+    let publication_id = Uuid::now_v7();
+
+    sqlx::query(
+        r#"
+        insert into flow_compiled_plans (
+            id, flow_id, flow_draft_id, schema_version, document_hash,
+            document_updated_at, plan, created_by
+        )
+        select $1, $2, $3, $4, 'sha256:published', updated_at, $5, $6
+        from flow_drafts
+        where id = $3
+        "#,
+    )
+    .bind(compiled_plan_id)
+    .bind(initial.flow.id)
+    .bind(initial.draft.id)
+    .bind(domain::FLOW_SCHEMA_VERSION)
+    .bind(json!({"schema_version": domain::FLOW_SCHEMA_VERSION}))
+    .bind(actor_user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        insert into application_publication_versions (
+            id,
+            application_id,
+            flow_id,
+            flow_version_id,
+            compiled_plan_id,
+            version_sequence,
+            active,
+            api_enabled,
+            flow_schema_version,
+            document_hash,
+            document_snapshot,
+            mapping_snapshot,
+            runtime_profile_snapshot,
+            output_selector,
+            dependency_snapshot,
+            created_by
+        ) values (
+            $1, $2, $3, $4, $5, 1, true, true, $6, 'sha256:published',
+            $7, $8, '{}', '{}', '[]', $9
+        )
+        "#,
+    )
+    .bind(publication_id)
+    .bind(application.id)
+    .bind(initial.flow.id)
+    .bind(published_version_id)
+    .bind(compiled_plan_id)
+    .bind(domain::FLOW_SCHEMA_VERSION)
+    .bind(&initial.draft.document)
+    .bind(json!({
+        "input": {
+            "query_target": "start.query",
+            "model_target": null,
+            "inputs_target": null,
+            "history_target": null,
+            "attachments_target": null
+        },
+        "output": {
+            "answer_selector": null,
+            "usage_selector": null,
+            "files_selector": null,
+            "error_selector": null
+        }
+    }))
+    .bind(actor_user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut current_document = initial.draft.document.clone();
+    let mut current_state = initial;
+
+    for index in 0..=domain::FLOW_HISTORY_LIMIT {
+        current_document["graph"]["nodes"][1]["bindings"]["prompt_messages"]["value"][0]
+            ["content"]["value"] = json!(format!("Prompt {index}"));
+        current_state = <PgControlPlaneStore as FlowRepository>::save_draft(
+            &store,
+            workspace_id,
+            application.id,
+            actor_user_id,
+            current_document.clone(),
+            FlowChangeKind::Logical,
+            &format!("update {index}"),
+        )
+        .await
+        .unwrap();
+    }
+
+    assert!(current_state
+        .versions
+        .iter()
+        .any(|version| version.id == published_version_id));
+    assert!(
+        current_state
+            .versions
+            .iter()
+            .filter(|version| version.id != published_version_id && !version.is_protected)
+            .count()
+            <= domain::FLOW_HISTORY_LIMIT
+    );
+}
+
+#[tokio::test]
 async fn restore_version_replaces_current_draft_and_appends_restore_history() {
     let _permit = repository_test_semaphore().acquire_owned().await.unwrap();
     let pool = connect(&isolated_database_url().await).await.unwrap();

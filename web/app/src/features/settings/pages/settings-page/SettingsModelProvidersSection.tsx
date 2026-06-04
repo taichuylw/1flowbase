@@ -57,6 +57,7 @@ export function SettingsModelProvidersSection({
     useState<UploadResultSummary>(null);
   const [recentVersionSwitchNotice, setRecentVersionSwitchNotice] =
     useState<RecentVersionSwitchNotice>(null);
+  const [officialSearchQuery, setOfficialSearchQuery] = useState('');
   const clearUploadState = () => {
     resetUploadState(
       setUploadFileList,
@@ -120,7 +121,8 @@ export function SettingsModelProvidersSection({
     overviewRows
   } = useModelProviderData({
     drawerState,
-    instanceModalState
+    instanceModalState,
+    officialSearchQuery
   });
   const {
     createMutation,
@@ -174,7 +176,7 @@ export function SettingsModelProvidersSection({
     <>
       {modalContextHolder}
       <SettingsSectionSurface
-        title={i18nText("settings", "auto.model_providers")}
+        title={i18nText('settings', 'auto.model_providers')}
         hideHeader
         heightMode="fill"
         status={
@@ -199,13 +201,13 @@ export function SettingsModelProvidersSection({
                 }
                 switchingProviderCode={
                   versionMutation.isPending &&
-                    versionMutation.variables.mode === 'switch'
+                  versionMutation.variables.mode === 'switch'
                     ? versionMutation.variables.providerCode
                     : null
                 }
                 upgradingProviderCode={
                   versionMutation.isPending &&
-                    versionMutation.variables.mode === 'upgrade'
+                  versionMutation.variables.mode === 'upgrade'
                     ? versionMutation.variables.providerCode
                     : null
                 }
@@ -236,12 +238,12 @@ export function SettingsModelProvidersSection({
                 }}
                 onDelete={(entry) => {
                   void modal.confirm({
-                    title: i18nText("settings", "auto.delete_supplier"),
+                    title: i18nText('settings', 'auto.delete_supplier'),
                     icon: null,
                     centered: true,
-                    okText: i18nText("settings", "auto.delete"),
+                    okText: i18nText('settings', 'auto.delete'),
                     okType: 'danger',
-                    cancelText: i18nText("settings", "auto.cancel"),
+                    cancelText: i18nText('settings', 'auto.cancel'),
                     okButtonProps: {
                       loading:
                         familyDeleteMutation.isPending &&
@@ -254,9 +256,17 @@ export function SettingsModelProvidersSection({
                             {entry.display_name}
                           </Typography.Title>
                           <Typography.Paragraph type="secondary">
-                            {i18nText("settings", "auto.deletion_all_instances_installation_records_local_plug_files_provider_cleaned")}</Typography.Paragraph>
+                            {i18nText(
+                              'settings',
+                              'auto.deletion_all_instances_installation_records_local_plug_files_provider_cleaned'
+                            )}
+                          </Typography.Paragraph>
                           <Typography.Paragraph type="secondary">
-                            {i18nText("settings", "auto.existing_process_node_still_references_provider_subsequent_error_reports_normal")}</Typography.Paragraph>
+                            {i18nText(
+                              'settings',
+                              'auto.existing_process_node_still_references_provider_subsequent_error_reports_normal'
+                            )}
+                          </Typography.Paragraph>
                         </div>
                       </div>
                     ),
@@ -279,13 +289,14 @@ export function SettingsModelProvidersSection({
                 sourceMeta={officialSourceMeta}
                 entries={officialCatalogEntries}
                 familiesByProviderCode={familiesByProviderCode}
+                searchQuery={officialSearchQuery}
                 loading={officialCatalogQuery.isLoading}
                 canManage={canManage}
                 activePluginId={officialInstallState.pluginId}
                 installState={officialInstallState.status}
                 upgradingProviderCode={
                   versionMutation.isPending &&
-                    versionMutation.variables?.mode === 'upgrade'
+                  versionMutation.variables?.mode === 'upgrade'
                     ? (versionMutation.variables.providerCode ?? null)
                     : null
                 }
@@ -296,6 +307,7 @@ export function SettingsModelProvidersSection({
                   setUploadModalOpen(true);
                   clearUploadState();
                 }}
+                onSearchQueryChange={setOfficialSearchQuery}
                 onUpgradeLatest={(entry) => {
                   versionMutation.mutate({
                     mode: 'upgrade',
@@ -384,10 +396,10 @@ export function SettingsModelProvidersSection({
           mainInstanceQuery.data ??
           (modalProviderOption
             ? {
-              provider_code: modalProviderOption.provider_code,
-              auto_include_new_instances:
-                modalProviderOption.main_instance.auto_include_new_instances
-            }
+                provider_code: modalProviderOption.provider_code,
+                auto_include_new_instances:
+                  modalProviderOption.main_instance.auto_include_new_instances
+              }
             : null)
         }
         modelGroups={modalProviderOption?.model_groups ?? []}
@@ -404,13 +416,13 @@ export function SettingsModelProvidersSection({
         canManage={canManage}
         versionSwitchNotice={
           instanceModalState &&
-            recentVersionSwitchNotice?.providerCode ===
+          recentVersionSwitchNotice?.providerCode ===
             instanceModalState.providerCode
             ? {
-              targetVersion: recentVersionSwitchNotice.targetVersion,
-              migratedInstanceCount:
-                recentVersionSwitchNotice.migratedInstanceCount
-            }
+                targetVersion: recentVersionSwitchNotice.targetVersion,
+                migratedInstanceCount:
+                  recentVersionSwitchNotice.migratedInstanceCount
+              }
             : null
         }
         onClose={() => {
@@ -471,7 +483,9 @@ export function SettingsModelProvidersSection({
         onSubmit={() => {
           const file = uploadFileList[0]?.originFileObj;
           if (!(file instanceof File)) {
-            setUploadValidationMessage(i18nText("settings", "auto.select_plug_package_first"));
+            setUploadValidationMessage(
+              i18nText('settings', 'auto.select_plug_package_first')
+            );
             return;
           }
 

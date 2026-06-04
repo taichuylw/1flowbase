@@ -43,6 +43,7 @@ mod payloads;
 mod persistence;
 mod provider_invoker;
 mod runtime_event_persister;
+pub mod scheduler_admission;
 
 #[cfg(test)]
 pub(crate) use provider_invoker::test_support;

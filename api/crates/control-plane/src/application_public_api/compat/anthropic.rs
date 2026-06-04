@@ -1,6 +1,18 @@
 use serde_json::{Map, Value};
+use uuid::Uuid;
 
 use crate::application_public_api::native::NativeRunRequest;
+
+const CLAUDE_CODE_COMPACT_SUMMARY_PROMPT_PREFIX: &str =
+    "Your task is to create a detailed summary of the conversation so far";
+const CLAUDE_CODE_PARTIAL_COMPACT_SUMMARY_PROMPT_PREFIX: &str =
+    "Your task is to create a detailed summary of the RECENT portion of the conversation";
+const CLAUDE_CODE_CONTEXT_CONTINUATION_SUMMARY_PROMPT_PREFIX: &str =
+    "Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session";
+const CLAUDE_CODE_COMPACT_RESUME_MARKER: &str =
+    "This session is being continued from a previous conversation that ran out of context.";
+const CLAUDE_CODE_COMPACT_TRANSCRIPT_MARKER: &str =
+    "If you need specific details from before compaction";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnthropicCompatError {
@@ -51,6 +63,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
     let latest_user_media_blocks = query_media_content_blocks(latest_user_content);
 
     let mut history = Vec::new();
+    let mut hidden_control_kind = None;
     for (index, message) in messages.iter().enumerate() {
         let role = message
             .get("role")
@@ -71,9 +84,25 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         if content.trim().is_empty() && content_blocks.is_none() {
             continue;
         }
+        let message_control_kind = (role == "user")
+            .then(|| claude_code_control_kind(&raw_content))
+            .flatten();
+        if role == "user" {
+            hidden_control_kind = message_control_kind;
+        }
         let mut history_entry = serde_json::json!({ "role": role, "content": content });
         if let Some(content_blocks) = content_blocks {
             history_entry["content_blocks"] = content_blocks;
+        }
+        if let Some(control_kind) = message_control_kind.or_else(|| {
+            (role == "assistant")
+                .then_some(hidden_control_kind)
+                .flatten()
+        }) {
+            history_entry["metadata"] = serde_json::json!({
+                "hidden_from_conversation": true,
+                "claude_code_control": control_kind,
+            });
         }
         history.push(history_entry);
     }
@@ -93,12 +122,13 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .filter(|stream| *stream)
         .map(|_| "streaming".to_string());
     let conversation = metadata_conversation(object.get("metadata"));
+    let current_control_kind = claude_code_control_kind(&latest_user_text);
     let metadata = object
         .get("metadata")
         .filter(|value| value.is_object())
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
-    let compatibility = compatibility_payload(object);
+    let compatibility = compatibility_payload(object, current_control_kind);
     let mut metadata = metadata;
     if !compatibility.is_null() {
         metadata["compatibility"] = compatibility.clone();
@@ -187,12 +217,21 @@ fn system_from_parts(parts: Vec<String>) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
-fn compatibility_payload(object: &serde_json::Map<String, Value>) -> Value {
+fn compatibility_payload(
+    object: &serde_json::Map<String, Value>,
+    claude_code_control: Option<&'static str>,
+) -> Value {
     let mut compatibility = serde_json::Map::new();
     for key in ["tools", "tool_choice"] {
         if let Some(value) = object.get(key) {
             compatibility.insert(key.to_string(), value.clone());
         }
+    }
+    if let Some(claude_code_control) = claude_code_control {
+        compatibility.insert(
+            "claude_code_control".to_string(),
+            Value::String(claude_code_control.to_string()),
+        );
     }
     if compatibility.is_empty() {
         Value::Null
@@ -222,7 +261,30 @@ fn compatibility_inputs(compatibility: Value) -> Value {
     if let Some(tool_choice) = object.get("tool_choice") {
         inputs.insert("tool_choice".to_string(), tool_choice.clone());
     }
+    if let Some(claude_code_control) = object.get("claude_code_control") {
+        inputs.insert(
+            "compatibility".to_string(),
+            serde_json::json!({
+                "claude_code_control": claude_code_control,
+            }),
+        );
+    }
     Value::Object(inputs)
+}
+
+pub fn claude_code_control_kind(content: &str) -> Option<&'static str> {
+    if content.contains(CLAUDE_CODE_COMPACT_SUMMARY_PROMPT_PREFIX)
+        || content.contains(CLAUDE_CODE_PARTIAL_COMPACT_SUMMARY_PROMPT_PREFIX)
+        || content.contains(CLAUDE_CODE_CONTEXT_CONTINUATION_SUMMARY_PROMPT_PREFIX)
+    {
+        return Some("compact_summary");
+    }
+    if content.contains(CLAUDE_CODE_COMPACT_RESUME_MARKER)
+        && content.contains(CLAUDE_CODE_COMPACT_TRANSCRIPT_MARKER)
+    {
+        return Some("compact_resume");
+    }
+    None
 }
 
 fn metadata_conversation(metadata: Option<&Value>) -> Value {
@@ -253,8 +315,10 @@ fn metadata_conversation(metadata: Option<&Value>) -> Value {
         .or_else(|| metadata.get("session_id").and_then(Value::as_str))
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| user_id.and_then(claude_code_session_id_from_identity))
     {
-        conversation.insert("id".to_string(), Value::String(session_id.to_string()));
+        conversation.insert("id".to_string(), Value::String(session_id));
     }
     Value::Object(conversation)
 }
@@ -277,6 +341,18 @@ fn metadata_user_from_user_id(user_id: Option<&str>, payload: Option<&Value>) ->
         })
         .or(user_id)
         .map(ToOwned::to_owned)
+}
+
+fn claude_code_session_id_from_identity(identity: &str) -> Option<String> {
+    let marker = "_session_";
+    let start = identity.rfind(marker)? + marker.len();
+    let candidate = identity[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '-')
+        .collect::<String>();
+    Uuid::parse_str(&candidate)
+        .ok()
+        .map(|session_id| session_id.to_string())
 }
 
 fn normalize_anthropic_tool(tool: &Value) -> Option<Value> {

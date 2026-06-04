@@ -444,6 +444,25 @@ where
             let completed_at = cancelled
                 .finished_at
                 .unwrap_or_else(OffsetDateTime::now_utc);
+            let cancelled_callback_tasks = self
+                .repository
+                .cancel_published_pending_callback_tasks_for_run(cancelled.id, completed_at)
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidState)?;
+            for callback_task in cancelled_callback_tasks {
+                self.repository
+                    .append_published_run_event(&crate::ports::AppendRunEventInput {
+                        flow_run_id: cancelled.id,
+                        node_run_id: Some(callback_task.node_run_id),
+                        event_type: "public_run_callback_cancelled".to_string(),
+                        payload: json!({
+                            "callback_task_id": callback_task.id,
+                            "callback_kind": callback_task.callback_kind,
+                        }),
+                    })
+                    .await
+                    .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+            }
             let cancelled_attempts = self
                 .repository
                 .cancel_published_callback_resume_attempts_for_run(cancelled.id, completed_at)

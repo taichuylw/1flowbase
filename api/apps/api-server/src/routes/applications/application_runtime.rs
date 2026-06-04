@@ -841,6 +841,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn run_conversation_hides_claude_code_control_history_from_imported_context() {
+        let run_id = Uuid::now_v7();
+        let run = domain::FlowRunRecord {
+            id: run_id,
+            application_id: Uuid::now_v7(),
+            flow_id: Uuid::now_v7(),
+            draft_id: Uuid::now_v7(),
+            compiled_plan_id: None,
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1flowbase.flow/v2".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "current question".to_string(),
+            status: domain::FlowRunStatus::Succeeded,
+            input_payload: serde_json::json!({
+                "node-start": {
+                    "query": "那你帮我拉一下最新代码",
+                    "history": [
+                        {
+                            "role": "user",
+                            "content": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary: hi\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: C:\\Users\\Lw\\.claude\\projects\\repo\\session.jsonl"
+                        },
+                        {
+                            "role": "assistant",
+                            "content": "已恢复上下文。"
+                        },
+                        { "role": "user", "content": "visible old question" },
+                        { "role": "assistant", "content": "visible old answer" }
+                    ]
+                }
+            }),
+            output_payload: serde_json::json!({ "answer": "current answer" }),
+            error_payload: None,
+            created_by: Uuid::now_v7(),
+            authorized_account: Some("root".to_string()),
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            created_at: OffsetDateTime::UNIX_EPOCH,
+            updated_at: OffsetDateTime::UNIX_EPOCH,
+        };
+
+        let load_debug_artifact = |_| async { None::<serde_json::Value> };
+        let page = conversation_messages_from_single_run(
+            &run,
+            &ApplicationConversationMessagesQuery {
+                around_run_id: None,
+                before: None,
+                after: None,
+                limit: Some(5),
+            },
+            &load_debug_artifact,
+        )
+        .await;
+
+        let visible_text = page
+            .items
+            .iter()
+            .flat_map(|item| {
+                [
+                    item.content.clone(),
+                    item.query.clone(),
+                    item.answer.clone(),
+                ]
+                .into_iter()
+                .flatten()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(!visible_text.contains("This session is being continued"));
+        assert!(!visible_text.contains("已恢复上下文"));
+        assert!(visible_text.contains("visible old question"));
+        assert!(visible_text.contains("visible old answer"));
+        assert!(visible_text.contains("那你帮我拉一下最新代码"));
+        assert!(visible_text.contains("current answer"));
+    }
+
+    #[tokio::test]
     async fn run_conversation_reads_llm_system_when_run_input_system_is_split_from_provider_messages(
     ) {
         let run_id = Uuid::now_v7();

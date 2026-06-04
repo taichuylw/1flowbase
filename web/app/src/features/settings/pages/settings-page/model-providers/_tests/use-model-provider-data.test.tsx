@@ -134,6 +134,14 @@ describe('useModelProviderData', () => {
       source_kind: 'official_registry',
       source_label: 'official',
       registry_url: 'https://official.example.com/registry.json',
+      locale_meta: {
+        resolved_locale: 'zh_Hans',
+        fallback_locale: 'en_US'
+      },
+      page: {
+        limit: 20,
+        next_cursor: null
+      },
       entries: []
     });
   });
@@ -147,5 +155,15 @@ describe('useModelProviderData', () => {
     expect(
       modelProvidersApi.fetchSettingsModelProviderMainInstance
     ).toHaveBeenCalledWith('openai_compatible');
+    expect(
+      modelProvidersApi.fetchSettingsModelProviderCatalog
+    ).toHaveBeenCalledWith('zh_Hans');
+    expect(pluginsApi.fetchSettingsPluginFamilies).toHaveBeenCalledWith(
+      'zh_Hans'
+    );
+    expect(pluginsApi.fetchSettingsOfficialPluginCatalog).toHaveBeenCalledWith({
+      locale: 'zh_Hans',
+      q: undefined
+    });
   });
 });

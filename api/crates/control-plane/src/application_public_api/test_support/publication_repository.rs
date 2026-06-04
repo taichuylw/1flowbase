@@ -15,33 +15,24 @@ impl ApplicationPublicationRepository for ApplicationPublicApiTestRepository {
             return Err(ControlPlaneError::NotFound("application").into());
         }
 
-        inner.next_publication_ordinal += 1;
-        let ordinal = inner.next_publication_ordinal;
-        let version_sequence = inner
+        let existing_id = inner
             .publications
             .values()
-            .filter(|publication| publication.application_id == input.application_id)
-            .map(|publication| publication.version_sequence)
-            .max()
-            .unwrap_or(0)
-            + 1;
-
-        for publication in inner
-            .publications
-            .values_mut()
-            .filter(|publication| publication.application_id == input.application_id)
-        {
-            publication.active = false;
-        }
+            .find(|publication| publication.application_id == input.application_id)
+            .map(|publication| publication.id);
+        inner.next_publication_ordinal += 1;
+        let ordinal = inner.next_publication_ordinal;
 
         let publication = publications::ApplicationPublicationVersionRecord {
-            id: deterministic_test_id(0x44444444444444440000000000000000, ordinal),
+            id: existing_id.unwrap_or_else(|| {
+                deterministic_test_id(0x44444444444444440000000000000000, ordinal)
+            }),
             application_id: input.application_id,
             flow_id: input.flow_id,
             flow_version_id: input.flow_version_id,
             mapping_snapshot: input.mapping_snapshot.clone(),
             compiled_plan_id: input.compiled_plan_id,
-            version_sequence,
+            version_sequence: 1,
             active: true,
             api_enabled: input.api_enabled,
             flow_schema_version: input.flow_schema_version.clone(),

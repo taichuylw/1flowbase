@@ -171,6 +171,20 @@ vi.mock('@1flowbase/api-client', () => ({
   }),
   listConsoleOfficialPluginCatalog: vi.fn().mockResolvedValue({
     source_kind: 'official_registry',
+    source_label: '官方源',
+    registry_url: 'https://official.example.com/official-registry.json',
+    locale_meta: {
+      requested_locale: null,
+      resolved_locale: 'zh_Hans',
+      user_preferred_locale: null,
+      accept_language: null,
+      fallback_locale: 'en_US',
+      supported_locales: ['zh_Hans', 'en_US']
+    },
+    page: {
+      limit: 20,
+      next_cursor: null
+    },
     entries: []
   }),
   installConsoleOfficialPlugin: vi.fn().mockResolvedValue({
@@ -365,6 +379,5 @@ vi.mock('@1flowbase/api-client', () => ({
     hosts: []
   })
 }));
-
 
 export { modelProviderCatalogContract, modelProviderCatalogEntries };

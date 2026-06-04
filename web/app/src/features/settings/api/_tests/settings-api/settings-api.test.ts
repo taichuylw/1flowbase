@@ -740,39 +740,18 @@ describe('settings api wrappers', () => {
         fallback_locale: 'en_US',
         supported_locales: ['zh_Hans', 'en_US']
       },
-      i18n_catalog: {
-        'plugin.openai_compatible': {
-          zh_Hans: {
-            plugin: {
-              label: 'OpenAI 兼容插件',
-              description:
-                '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。'
-            },
-            provider: {
-              label: 'OpenAI Compatible'
-            }
-          },
-          en_US: {
-            plugin: {
-              label: 'OpenAI-Compatible API Provider',
-              description:
-                'Provider plugin for services exposing an OpenAI-compatible Chat Completions API.'
-            },
-            provider: {
-              label: 'OpenAI Compatible'
-            }
-          }
-        }
+      page: {
+        limit: 20,
+        next_cursor: null
       },
       entries: [
         {
           plugin_id: '1flowbase.openai_compatible',
           plugin_type: 'model_provider',
           provider_code: 'openai_compatible',
-          namespace: 'plugin.openai_compatible',
-          label_key: 'plugin.label',
-          description_key: 'plugin.description',
-          provider_label_key: 'provider.label',
+          display_name: 'OpenAI Compatible',
+          description:
+            '面向 OpenAI 兼容 Chat Completions API 的 provider 插件。',
           icon: 'https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/runtime-extensions/model-providers/openai_compatible/_assets/icon.svg',
           protocol: 'openai_compatible',
           latest_version: '0.3.7',
@@ -843,7 +822,8 @@ describe('settings api wrappers', () => {
       plugin_type: 'model_provider'
     });
     expect(listConsoleOfficialPluginCatalog).toHaveBeenCalledWith({
-      plugin_type: 'model_provider'
+      plugin_type: 'model_provider',
+      limit: 20
     });
     expect(installConsoleOfficialPlugin).toHaveBeenCalledWith(
       { plugin_id: 'openai_compatible@0.2.0' },

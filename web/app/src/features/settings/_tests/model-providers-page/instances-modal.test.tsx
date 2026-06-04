@@ -205,7 +205,7 @@ async function openProviderInstancesModal() {
     },
     { timeout: 10_000 }
   );
-  fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
+  fireEvent.click(within(catalogRow).getByRole('button', { name: '管理' }));
 
   return screen.findByRole('dialog', { name: /OpenAI Compatible 实例/ });
 }
@@ -322,10 +322,9 @@ describe('ModelProvidersPage - instances modal', () => {
       }
     ]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
-      source_kind: 'official_registry',
-      source_label: '官方源',
-      registry_url: 'https://official.example.com/official-registry.json',
-      entries: []
+      locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
+page: { limit: 20, next_cursor: null },
+entries: []
     });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {
@@ -475,7 +474,7 @@ describe('ModelProvidersPage - instances modal', () => {
         </AppProviders>
       );
 
-      fireEvent.click(await screen.findByRole('button', { name: '添加' }));
+      fireEvent.click(await screen.findByRole('button', { name: '新增' }));
 
       expect(await screen.findByText('API 密钥授权配置')).toBeInTheDocument();
       expect(screen.getByRole('switch', { name: '注入主实例' })).toBeChecked();
@@ -515,7 +514,7 @@ describe('ModelProvidersPage - instances modal', () => {
       expect(screen.queryByLabelText('模型 ID 1')).not.toBeInTheDocument();
 
       fireEvent.click(
-        within(screen.getByRole('dialog')).getByRole('button', { name: '添加' })
+        within(screen.getByRole('dialog')).getByRole('button', { name: '新增' })
       );
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }

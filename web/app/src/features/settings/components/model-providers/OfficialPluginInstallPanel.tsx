@@ -18,21 +18,21 @@ function getInstallButtonLabel(
   activePluginId: string | null
 ) {
   if (activePluginId === entry.plugin_id && installState === 'installing') {
-    return i18nText("settings", "auto.installing");
+    return i18nText('settings', 'auto.installing');
   }
 
   if (
     entry.install_status === 'assigned' ||
     (activePluginId === entry.plugin_id && installState === 'success')
   ) {
-    return i18nText("settings", "auto.installed_workspace");
+    return i18nText('settings', 'auto.installed_workspace');
   }
 
   if (activePluginId === entry.plugin_id && installState === 'failed') {
-    return i18nText("settings", "auto.retry_installation");
+    return i18nText('settings', 'auto.retry_installation');
   }
 
-  return i18nText("settings", "auto.install_workspace");
+  return i18nText('settings', 'auto.install_workspace');
 }
 
 function compareOfficialVersion(left: string, right: string) {
@@ -119,7 +119,12 @@ function renderTagLabel(tag: string) {
     return (
       <span className="model-provider-panel__tag-label">
         latest
-        <Tooltip title={i18nText("settings", "auto.indicates_version_already_latest_official_version")}>
+        <Tooltip
+          title={i18nText(
+            'settings',
+            'auto.indicates_version_already_latest_official_version'
+          )}
+        >
           <QuestionCircleOutlined className="model-provider-panel__tag-help" />
         </Tooltip>
       </span>
@@ -133,10 +138,19 @@ function renderTagLabel(tag: string) {
         <Tooltip
           title={
             tag === 'hybrid'
-              ? i18nText("settings", "auto.discovery_mode_preset_model_list_plus_dynamically_pull_model_list")
+              ? i18nText(
+                  'settings',
+                  'auto.discovery_mode_preset_model_list_plus_dynamically_pull_model_list'
+                )
               : tag === 'dynamic'
-                ? i18nText("settings", "auto.discovery_mode_dynamically_pull_list_models_runtime")
-                : i18nText("settings", "auto.discovery_mode_use_preset_model_list_plug")
+                ? i18nText(
+                    'settings',
+                    'auto.discovery_mode_dynamically_pull_list_models_runtime'
+                  )
+                : i18nText(
+                    'settings',
+                    'auto.discovery_mode_use_preset_model_list_plug'
+                  )
           }
         >
           <QuestionCircleOutlined className="model-provider-panel__tag-help" />
@@ -191,11 +205,13 @@ export function OfficialPluginInstallPanel({
   familiesByProviderCode,
   loading,
   canManage,
+  searchQuery,
   activePluginId,
   installState,
   upgradingProviderCode,
   onInstall,
   onOpenUpload,
+  onSearchQueryChange,
   onUpgradeLatest
 }: {
   sourceMeta: {
@@ -207,11 +223,13 @@ export function OfficialPluginInstallPanel({
   familiesByProviderCode: Record<string, SettingsPluginFamilyEntry | undefined>;
   loading?: boolean;
   canManage: boolean;
+  searchQuery: string;
   activePluginId: string | null;
   installState: InstallState;
   upgradingProviderCode: string | null;
   onInstall: (entry: SettingsOfficialPluginCatalogEntry) => void;
   onOpenUpload: () => void;
+  onSearchQueryChange: (query: string) => void;
   onUpgradeLatest: (entry: SettingsOfficialPluginCatalogEntry) => void;
 }) {
   const [modal, contextHolder] = Modal.useModal();
@@ -256,22 +274,33 @@ export function OfficialPluginInstallPanel({
       {contextHolder}
       <div className="model-provider-panel__section-head">
         <div>
-          <Typography.Title level={5}>{i18nText("settings", "auto.model_providers")}</Typography.Title>
+          <Typography.Title level={5}>
+            {i18nText('settings', 'auto.model_providers')}
+          </Typography.Title>
           {sourceMeta ? (
             <Typography.Text type="secondary">
-              {i18nText("settings", "auto.currently_from")}{sourceMeta.sourceLabel}
-              {i18nText("settings", "auto.read_installable_supplier_directory_directly_view_instructions_install_workspace")}</Typography.Text>
+              {i18nText('settings', 'auto.currently_from')}
+              {sourceMeta.sourceLabel}
+              {i18nText(
+                'settings',
+                'auto.read_installable_supplier_directory_directly_view_instructions_install_workspace'
+              )}
+            </Typography.Text>
           ) : null}
           <div className="model-provider-panel__official-toolbar">
             {canManage ? (
-              <Button onClick={onOpenUpload}>{i18nText("settings", "auto.upload_plugin")}</Button>
+              <Button onClick={onOpenUpload}>
+                {i18nText('settings', 'auto.upload_plugin')}
+              </Button>
             ) : null}
             {sourceMeta ? (
               <Button onClick={() => openExternal(sourceMeta.registryUrl)}>
-                {i18nText("settings", "auto.source")}</Button>
+                {i18nText('settings', 'auto.source')}
+              </Button>
             ) : null}
             <Button onClick={() => openExternal(OFFICIAL_PLUGIN_RELEASES_URL)}>
-              {i18nText("settings", "auto.go_warehouse_download")}</Button>
+              {i18nText('settings', 'auto.go_warehouse_download')}
+            </Button>
           </div>
         </div>
       </div>
@@ -279,10 +308,19 @@ export function OfficialPluginInstallPanel({
         allowClear
         showSearch
         className="model-provider-panel__official-select"
-        placeholder={i18nText("settings", "auto.drop_down_search_installable_vendors")}
+        placeholder={i18nText(
+          'settings',
+          'auto.drop_down_search_installable_vendors'
+        )}
         optionFilterProp="label"
+        filterOption={false}
+        searchValue={searchQuery}
         value={selectedPluginId}
         onChange={(value) => setSelectedPluginId(value ?? null)}
+        onSearch={(value) => {
+          setSelectedPluginId(null);
+          onSearchQueryChange(value);
+        }}
         options={normalizedEntries.map((entry) => ({
           value: entry.plugin_id,
           label: `${entry.display_name} / ${entry.protocol}`
@@ -294,7 +332,12 @@ export function OfficialPluginInstallPanel({
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              loading ? i18nText("settings", "auto.loading_official_supplier_catalog") : i18nText("settings", "auto.currently_official_supplier_install")
+              loading
+                ? i18nText('settings', 'auto.loading_official_supplier_catalog')
+                : i18nText(
+                    'settings',
+                    'auto.currently_official_supplier_install'
+                  )
             }
           />
         </div>
@@ -313,9 +356,9 @@ export function OfficialPluginInstallPanel({
             const buttonLabel = family
               ? family.has_update
                 ? upgrading
-                  ? i18nText("settings", "auto.upgrading")
-                  : i18nText("settings", "auto.upgrade_latest_version")
-                : i18nText("settings", "auto.currently_latest_version")
+                  ? i18nText('settings', 'auto.upgrading')
+                  : i18nText('settings', 'auto.upgrade_latest_version')
+                : i18nText('settings', 'auto.currently_latest_version')
               : getInstallButtonLabel(entry, installState, activePluginId);
             const buttonDisabled = family ? !family.has_update : installed;
 
@@ -370,7 +413,8 @@ export function OfficialPluginInstallPanel({
                   <div className="model-provider-panel__catalog-item-actions">
                     {entry.help_url ? (
                       <Button onClick={() => openExternal(entry.help_url!)}>
-                        {i18nText("settings", "auto.documentation")}</Button>
+                        {i18nText('settings', 'auto.documentation')}
+                      </Button>
                     ) : null}
                     <Button
                       type={buttonDisabled ? 'default' : 'primary'}
@@ -378,11 +422,13 @@ export function OfficialPluginInstallPanel({
                       disabled={buttonDisabled}
                       onClick={() => {
                         void modal.confirm({
-                          title: family ? i18nText("settings", "auto.upgrade_plugin") : i18nText("settings", "auto.install_plugin"),
+                          title: family
+                            ? i18nText('settings', 'auto.upgrade_plugin')
+                            : i18nText('settings', 'auto.install_plugin'),
                           icon: null,
                           centered: true,
                           okText: buttonLabel,
-                          cancelText: i18nText("settings", "auto.cancel"),
+                          cancelText: i18nText('settings', 'auto.cancel'),
                           okButtonProps: {
                             loading: installing || upgrading,
                             disabled: buttonDisabled
@@ -395,13 +441,31 @@ export function OfficialPluginInstallPanel({
                                 </Typography.Title>
                                 <Typography.Paragraph type="secondary">
                                   {family
-                                    ? i18nText("settings", "auto.workspace_s_upgraded_latest_official_version_completion_all_instances_supplier", { value1: entry.display_name, value2: entry.latest_version })
-                                    : i18nText("settings", "auto.latest_official_version_about_installed_completion_automatically_enabled_workspace", { value1: entry.latest_version })}
+                                    ? i18nText(
+                                        'settings',
+                                        'auto.workspace_s_upgraded_latest_official_version_completion_all_instances_supplier',
+                                        {
+                                          value1: entry.display_name,
+                                          value2: entry.latest_version
+                                        }
+                                      )
+                                    : i18nText(
+                                        'settings',
+                                        'auto.latest_official_version_about_installed_completion_automatically_enabled_workspace',
+                                        { value1: entry.latest_version }
+                                      )}
                                 </Typography.Paragraph>
                                 <div className="model-provider-panel__catalog-item-meta">
-                                  <span>{i18nText("settings", "auto.agreement")}{entry.protocol}</span>
                                   <span>
-                                    {i18nText("settings", "auto.discovery_mode")}{entry.model_discovery_mode}
+                                    {i18nText('settings', 'auto.agreement')}
+                                    {entry.protocol}
+                                  </span>
+                                  <span>
+                                    {i18nText(
+                                      'settings',
+                                      'auto.discovery_mode'
+                                    )}
+                                    {entry.model_discovery_mode}
                                   </span>
                                 </div>
                               </div>
@@ -424,7 +488,8 @@ export function OfficialPluginInstallPanel({
                 ) : entry.help_url ? (
                   <div className="model-provider-panel__catalog-item-actions">
                     <Button onClick={() => openExternal(entry.help_url!)}>
-                      {i18nText("settings", "auto.documentation")}</Button>
+                      {i18nText('settings', 'auto.documentation')}
+                    </Button>
                   </div>
                 ) : null}
               </article>

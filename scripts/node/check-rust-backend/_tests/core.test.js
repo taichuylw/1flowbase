@@ -205,14 +205,17 @@ test('baseline suppression survives unrelated line shifts', async () => {
           file: 'api/crates/domain/src/existing.rs',
           line: 1,
           snippet: 'pub fn existing() { Some(1).unwrap(); }',
+          reason: 'existing panic cleanup is tracked separately',
         },
       ],
     })
   );
 
-  const findings = collectRustBackendFindings({ repoRoot });
+  const findings = collectRustBackendFindings({ repoRoot, includeSuppressed: true });
 
-  assert.deepEqual(findings, []);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].suppressed, true);
+  assert.equal(findings[0].suppressionReason, 'existing panic cleanup is tracked separately');
 });
 
 test('current api routes do not contain active blocking IO warnings', () => {

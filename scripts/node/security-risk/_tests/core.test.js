@@ -79,11 +79,35 @@ test('main writes a security-risk report and returns advisory status to CI', asy
 
   const report = JSON.parse(fs.readFileSync(path.join(outputDir, 'security-risk.json'), 'utf8'));
   assert.equal(report.status, 'review_required');
+  assert.deepEqual(report.scan, {
+    baseRef: 'origin/main',
+    headRef: 'HEAD',
+    diffRange: 'origin/main...HEAD',
+    changedFilesSource: 'env:SECURITY_RISK_CHANGED_FILES',
+    diffSource: 'env:SECURITY_RISK_DIFF',
+    note: 'security-risk scans the full branch diff range. Findings may include branch-history noise that was introduced before the latest PR update; treat sensitive-file findings as review prompts, not CI blockers.'
+  });
+  assert.deepEqual(report.summary, {
+    total: 5,
+    high: 1,
+    medium: 4,
+    bySource: {
+      changed_file: 1,
+      added_diff_line: 4,
+    },
+  });
   assert.deepEqual(report.findings.map((finding) => finding.kind), [
     'sensitive-file-changed',
     'install-script',
     'external-url',
     'javascript-network-call',
     'callback-or-webhook',
+  ]);
+  assert.deepEqual(report.findings.map((finding) => finding.source), [
+    'changed_file',
+    'added_diff_line',
+    'added_diff_line',
+    'added_diff_line',
+    'added_diff_line',
   ]);
 });

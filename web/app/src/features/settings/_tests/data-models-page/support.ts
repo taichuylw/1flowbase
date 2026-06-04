@@ -477,6 +477,10 @@ export function setupDataModelsPageTest() {
   });
   pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
     source_kind: 'official_registry',
+    source_label: '官方源',
+    registry_url: 'https://official.example.com/official-registry.json',
+    locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
+    page: { limit: 20, next_cursor: null },
     entries: []
   });
   systemRuntimeApi.fetchSettingsSystemRuntimeProfile.mockResolvedValue({

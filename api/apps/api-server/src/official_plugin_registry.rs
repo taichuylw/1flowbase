@@ -1,4 +1,8 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -11,10 +15,12 @@ use plugin_framework::RuntimeTarget;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use tokio::sync::RwLock;
 
 use crate::config::ResolvedOfficialPluginSourceConfig;
 
 const GITHUB_RAW_CONTENT_BASE_URL: &str = "https://raw.githubusercontent.com/";
+const OFFICIAL_PLUGIN_REGISTRY_CACHE_TTL: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 pub struct ApiOfficialPluginRegistry {
@@ -24,6 +30,13 @@ pub struct ApiOfficialPluginRegistry {
     github_proxy_url: Option<String>,
     trusted_public_keys: Vec<plugin_framework::TrustedPublicKey>,
     client: Client,
+    registry_cache: Arc<RwLock<Option<CachedOfficialRegistryDocument>>>,
+}
+
+#[derive(Clone)]
+struct CachedOfficialRegistryDocument {
+    fetched_at: Instant,
+    document: OfficialRegistryDocument,
 }
 
 impl ApiOfficialPluginRegistry {
@@ -40,11 +53,17 @@ impl ApiOfficialPluginRegistry {
             github_proxy_url: source.github_proxy_url,
             trusted_public_keys,
             client: Client::new(),
+            registry_cache: Arc::new(RwLock::new(None)),
         }
     }
 
     async fn fetch_registry(&self) -> Result<OfficialRegistryDocument> {
-        self.client
+        if let Some(document) = self.cached_registry().await {
+            return Ok(document);
+        }
+
+        let document = self
+            .client
             .get(&self.registry_url)
             .send()
             .await
@@ -53,7 +72,22 @@ impl ApiOfficialPluginRegistry {
             .context("official plugin registry returned an error status")?
             .json::<OfficialRegistryDocument>()
             .await
-            .context("failed to decode official plugin registry")
+            .context("failed to decode official plugin registry")?;
+        *self.registry_cache.write().await = Some(CachedOfficialRegistryDocument {
+            fetched_at: Instant::now(),
+            document: document.clone(),
+        });
+
+        Ok(document)
+    }
+
+    async fn cached_registry(&self) -> Option<OfficialRegistryDocument> {
+        self.registry_cache
+            .read()
+            .await
+            .as_ref()
+            .filter(|cached| cached.fetched_at.elapsed() <= OFFICIAL_PLUGIN_REGISTRY_CACHE_TTL)
+            .map(|cached| cached.document.clone())
     }
 
     async fn download_bytes(&self, url: &str) -> Result<Vec<u8>> {
@@ -148,7 +182,7 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct OfficialRegistryDocument {
     #[allow(dead_code)]
     version: u32,

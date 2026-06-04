@@ -463,7 +463,13 @@ async fn trim_versions(tx: &mut Transaction<'_, Postgres>, flow_id: Uuid) -> Res
         where id in (
             select id
             from flow_versions
-            where flow_id = $1 and is_protected = false
+            where flow_id = $1
+              and is_protected = false
+              and not exists (
+                  select 1
+                  from application_publication_versions publication
+                  where publication.flow_version_id = flow_versions.id
+              )
             order by sequence desc
             offset $2
         )

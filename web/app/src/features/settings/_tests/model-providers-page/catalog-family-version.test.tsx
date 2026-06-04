@@ -308,10 +308,9 @@ describe('ModelProvidersPage - catalog and family version', () => {
       }
     ]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
-      source_kind: 'official_registry',
-      source_label: '官方源',
-      registry_url: 'https://official.example.com/official-registry.json',
-      entries: []
+      locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
+page: { limit: 20, next_cursor: null },
+entries: []
     });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {
@@ -524,7 +523,7 @@ describe('ModelProvidersPage - catalog and family version', () => {
       );
     });
 
-    fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
+    fireEvent.click(within(catalogRow).getByRole('button', { name: '管理' }));
     expect(
       await screen.findByText(
         '该供应商刚完成版本切换，建议刷新模型并验证关键实例。'
@@ -598,7 +597,7 @@ describe('ModelProvidersPage - catalog and family version', () => {
       screen.queryByRole('heading', { name: '当前实例' })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '配置' })
+      screen.queryByRole('button', { name: '管理' })
     ).not.toBeInTheDocument();
     expect(screen.queryByText('OpenAI Production')).not.toBeInTheDocument();
   }, 10000);
@@ -611,7 +610,7 @@ describe('ModelProvidersPage - catalog and family version', () => {
     await screen.findByText('可用实例', {}, { timeout: 10000 });
 
     expect(
-      await screen.findByRole('button', { name: '配置' }, { timeout: 10000 })
+      await screen.findByRole('button', { name: '管理' }, { timeout: 10000 })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: '当前实例' })
@@ -625,10 +624,10 @@ describe('ModelProvidersPage - catalog and family version', () => {
       { timeout: 10000 }
     );
     expect(
-      within(catalogRow).getByRole('button', { name: '配置' })
+      within(catalogRow).getByRole('button', { name: '管理' })
     ).toBeInTheDocument();
     expect(
-      within(catalogRow).getByRole('button', { name: '添加' })
+      within(catalogRow).getByRole('button', { name: '新增' })
     ).toBeInTheDocument();
     expect(
       within(catalogRow).queryByRole('button', { name: '版本管理' })

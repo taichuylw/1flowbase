@@ -270,6 +270,245 @@ async fn terminal_published_run_projects_application_conversation_messages_once(
 }
 
 #[tokio::test]
+async fn terminal_claude_code_control_run_does_not_project_conversation_messages() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-06-04 13:00:00 UTC);
+    let run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "claude-code-compact-projection".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "compact summary".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": "Your task is to create a detailed summary of the conversation so far",
+                    "compatibility": {
+                        "claude_code_control": "compact_summary"
+                    }
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("claude-code-user".to_string()),
+            external_conversation_id: Some("claude-code-session".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "<summary>internal</summary>" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let projected_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_conversation_messages where flow_run_id = $1",
+    )
+    .bind(run.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(projected_count, 0);
+}
+
+#[tokio::test]
+async fn conversation_message_history_ignores_legacy_claude_code_control_runs() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-06-04 13:10:00 UTC);
+    let external_user = "claude-code-user";
+    let external_conversation_id = "claude-code-session";
+    let visible_run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "visible-claude-code-run".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "visible question".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": "visible question"
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some(external_user.to_string()),
+            external_conversation_id: Some(external_conversation_id.to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: visible_run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "visible answer" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let legacy_control_run =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+            &store,
+            &CreateFlowRunInput {
+                actor_user_id: seeded.actor_user_id,
+                application_id: seeded.application_id,
+                flow_id: seeded.flow_id,
+                flow_draft_id: seeded.draft_id,
+                compiled_plan_id: compiled.id,
+                debug_session_id: "legacy-claude-code-compact".to_string(),
+                flow_schema_version: compiled.schema_version.clone(),
+                document_hash: compiled.document_hash.clone(),
+                run_mode: FlowRunMode::PublishedApiRun,
+                target_node_id: None,
+                title: "compact resume".to_string(),
+                status: FlowRunStatus::Running,
+                input_payload: json!({
+                    "node-start": {
+                        "query": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary: hi\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: C:\\Users\\Lw\\.claude\\projects\\repo\\session.jsonl"
+                    }
+                }),
+                started_at: started_at + Duration::seconds(10),
+                api_key_id: Some(api_key_id),
+                publication_version_id: Some(Uuid::now_v7()),
+                external_user: Some(external_user.to_string()),
+                external_conversation_id: Some(external_conversation_id.to_string()),
+                external_trace_id: None,
+                compatibility_mode: Some("anthropic-messages-v1".to_string()),
+                idempotency_key: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let conversation_id: Uuid = sqlx::query_scalar(
+        r#"
+        select id
+        from application_conversations
+        where application_id = $1
+          and api_key_id = $2
+          and external_user = $3
+          and external_conversation_id = $4
+        "#,
+    )
+    .bind(seeded.application_id)
+    .bind(api_key_id)
+    .bind(external_user)
+    .bind(external_conversation_id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    for (role, content, ordinal) in [
+        (
+            "user",
+            "This session is being continued from a previous conversation that ran out of context.",
+            1_i64,
+        ),
+        ("assistant", "已恢复上下文。", 2_i64),
+    ] {
+        sqlx::query(
+            r#"
+            insert into application_conversation_messages (
+                id,
+                scope_id,
+                conversation_id,
+                application_id,
+                flow_run_id,
+                node_run_id,
+                role,
+                content,
+                sequence,
+                status,
+                started_at,
+                finished_at,
+                created_at,
+                updated_at
+            ) values ($1, $2, $3, $4, $5, null, $6, $7, $8, 'succeeded', $9, $10, $9, $10)
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(seeded.workspace_id)
+        .bind(conversation_id)
+        .bind(seeded.application_id)
+        .bind(legacy_control_run.id)
+        .bind(role)
+        .bind(content)
+        .bind((started_at + Duration::seconds(10)).unix_timestamp() * 1_000_000 + ordinal)
+        .bind(started_at + Duration::seconds(10))
+        .bind(started_at + Duration::seconds(13))
+        .execute(store.pool())
+        .await
+        .unwrap();
+    }
+
+    let messages =
+        <PgControlPlaneStore as control_plane::application_public_api::conversations::ApplicationPublicConversationRepository>::list_application_public_conversation_messages(
+            &store,
+            &control_plane::application_public_api::conversations::ListApplicationPublicConversationMessagesInput {
+                application_id: seeded.application_id,
+                api_key_id,
+                external_user: external_user.to_string(),
+                external_conversation_id: external_conversation_id.to_string(),
+                limit: 10,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].role, "user");
+    assert_eq!(messages[0].content, "visible question");
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].content, "visible answer");
+}
+
+#[tokio::test]
 async fn terminal_published_run_without_external_conversation_projects_run_messages() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

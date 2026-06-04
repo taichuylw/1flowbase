@@ -7,7 +7,20 @@ const {
   runQualityGateAggregate,
 } = require('../github-quality-gate/core.js');
 
+function parseExpectedScopes(value) {
+  if (!value) {
+    return null;
+  }
+
+  return value
+    .split(',')
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
 function readInputs(env = process.env) {
+  const expectedScopes = parseExpectedScopes(env.INPUT_EXPECTED_SCOPES);
+
   return {
     artifactRoot: env.INPUT_ARTIFACT_ROOT || path.join('tmp', 'test-governance', 'parallel'),
     reportType: env.INPUT_REPORT_TYPE || 'ci',
@@ -16,6 +29,7 @@ function readInputs(env = process.env) {
     prNumber: env.INPUT_PR_NUMBER ? Number.parseInt(env.INPUT_PR_NUMBER, 10) : 0,
     githubToken: env.INPUT_GITHUB_TOKEN || '',
     environmentName: env.INPUT_ENVIRONMENT || '',
+    ...(expectedScopes ? { expectedScopes } : {}),
   };
 }
 
@@ -50,5 +64,6 @@ if (require.main === module) {
 
 module.exports = {
   main,
+  parseExpectedScopes,
   readInputs,
 };

@@ -17,6 +17,13 @@ const {
   BACKEND_CONSISTENCY_TARGETS,
   BACKEND_SHARDS,
 } = require('../verify/index.js');
+const {
+  buildContainerImageSecurityMarkdownLines,
+  formatContainerImageSecurityComponentLine,
+  formatContainerImageSecuritySummaryLine,
+  formatContainerImageSecurityVulnerabilityLine,
+  readContainerImageSecurityReport,
+} = require('./container-image-security-report.js');
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
@@ -48,12 +55,14 @@ const VALID_SCOPES = new Set([
   'repo',
   'repo-tooling',
   'repo-frontend',
+  'repo-frontend-pr',
   'repo-backend',
   'backend',
   'backend-consistency',
   'coverage',
   'coverage-frontend',
   'coverage-backend',
+  'container-images',
   ...REPO_BACKEND_COMPONENT_SCOPES,
   ...COVERAGE_BACKEND_COMPONENT_SCOPES,
 ]);
@@ -62,7 +71,7 @@ const PR_REPORT_MARKER = '<!-- 1flowbase-quality-gate-pr-report -->';
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FAILURE_EXCERPT_MAX_LINES = 80;
 const ANSI_CONTROL_SEQUENCE_PATTERN = /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/gu;
-const PACKED_CLI_ENTRIES = new Set(['verify-backend-consistency']);
+const PACKED_CLI_ENTRIES = new Set(['container-image-security', 'verify-backend-consistency']);
 
 function resolveCliEntry(repoRoot, entryName) {
   const cliDir = PACKED_CLI_ENTRIES.has(entryName)
@@ -130,6 +139,14 @@ function buildGateCommand({ repoRoot, scope }) {
     };
   }
 
+  if (scope === 'repo-frontend-pr') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'frontend-pr'],
+      cwd: repoRoot,
+    };
+  }
+
   if (scope === 'repo-backend') {
     return {
       command,
@@ -150,6 +167,14 @@ function buildGateCommand({ repoRoot, scope }) {
     return {
       command,
       args: [resolveCliEntry(repoRoot, 'verify-backend'), 'fmt'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'container-images') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'container-image-security')],
       cwd: repoRoot,
     };
   }
@@ -536,6 +561,7 @@ function buildReport({
     .map((filePath) => toRepoRelative(repoRoot, filePath));
   const coverageSummaries = buildCoverageSummaries({ repoRoot, coverageFiles });
   const securityRisk = readSecurityRiskReport({ repoRoot, outputDir });
+  const containerImageSecurity = readContainerImageSecurityReport({ repoRoot, outputDir });
   const backendConsistencyTargets = buildBackendConsistencyTargets({ repoRoot, scope });
   const runUrl = buildRunUrl(env);
   const shortSha = shortShaFromEnv(env);
@@ -560,6 +586,7 @@ function buildReport({
     coverageFiles,
     coverageSummaries,
     securityRisk,
+    containerImageSecurity,
     backendConsistencyTargets,
   };
 
@@ -593,6 +620,39 @@ function buildReport({
     securityRisk ? formatSecurityRiskLine(securityRisk) : 'No security risk report was captured for this scope.',
     securityRisk ? `- Report: ${securityRisk.reportPath}` : null,
     '',
+    ...(containerImageSecurity
+      ? [
+        '## Container Image Security',
+        '',
+        formatContainerImageSecuritySummaryLine(containerImageSecurity),
+        '',
+        '| Component | Status | HIGH | CRITICAL | Image |',
+        '| --- | --- | ---: | ---: | --- |',
+        ...containerImageSecurity.components.map(formatContainerImageSecurityComponentLine),
+        '',
+        ...((containerImageSecurity.components || []).some((component) => (
+          (component.topVulnerabilities || []).length > 0
+        ))
+          ? [
+            '### Top Vulnerabilities',
+            '',
+            '| Component | Severity | Vulnerability | Package | Installed | Fixed |',
+            '| --- | --- | --- | --- | --- | --- |',
+            ...containerImageSecurity.components.flatMap((component) => (
+              (component.topVulnerabilities || []).slice(0, 5).map((vulnerability) => (
+                formatContainerImageSecurityVulnerabilityLine({ component, vulnerability })
+              ))
+            )),
+            '',
+          ]
+          : []),
+      ]
+      : [
+        '## Container Image Security',
+        '',
+        'No container image security report was captured for this scope.',
+        '',
+      ]),
     backendConsistencyTargets.length > 0 ? '## Backend Consistency Targets' : null,
     backendConsistencyTargets.length > 0 ? '' : null,
     backendConsistencyTargets.length > 0 ? '| Label | Package | Rust test filter | Status | Duration | Passed | Failed |' : null,
@@ -606,6 +666,8 @@ function buildReport({
     ...warningFiles.map((filePath) => `- Warning log: ${filePath}`),
     ...coverageFiles.map((filePath) => `- Coverage summary file: ${filePath}`),
     securityRisk ? `- Security risk report: ${securityRisk.reportPath}` : null,
+    containerImageSecurity ? `- Container image security report: ${containerImageSecurity.markdownPath}` : null,
+    containerImageSecurity ? `- Container image security JSON: ${containerImageSecurity.reportPath}` : null,
     failureExcerpt ? '' : null,
     failureExcerpt ? '## Failure Excerpt' : null,
     failureExcerpt ? '' : null,
@@ -711,6 +773,7 @@ function addMissingAggregateScopes({ componentArtifacts, expectedScopes }) {
         backendConsistencyTargets: [],
         warningFiles: [],
         securityRisk: null,
+        containerImageSecurity: null,
       },
     }));
 
@@ -749,6 +812,13 @@ function buildAggregateReport({
         : [])),
     (securityRisk) => `${securityRisk.scope}:${securityRisk.reportPath}`
   );
+  const containerImageSecurityReports = dedupeBy(
+    componentArtifacts
+      .flatMap((artifact) => (artifact.report.containerImageSecurity
+        ? [{ ...artifact.report.containerImageSecurity, scope: artifact.scope }]
+        : [])),
+    (containerImageSecurity) => `${containerImageSecurity.scope}:${containerImageSecurity.reportPath}`
+  );
   const backendConsistencyTargets = componentArtifacts.flatMap(
     (artifact) => artifact.report.backendConsistencyTargets || []
   );
@@ -776,6 +846,7 @@ function buildAggregateReport({
     coverageFiles: coverageSummaries.map((summary) => summary.path).filter(Boolean),
     coverageSummaries,
     securityRiskReports,
+    containerImageSecurityReports,
     backendConsistencyTargets,
     components,
   };
@@ -820,6 +891,7 @@ function buildAggregateReport({
     securityRiskReports.length === 0 ? 'No security risk reports were captured.' : null,
     ...securityRiskReports.map(formatAggregateSecurityRiskLine),
     '',
+    ...buildContainerImageSecurityMarkdownLines(containerImageSecurityReports),
     backendConsistencyTargets.length > 0 ? '## Backend Consistency Targets' : null,
     backendConsistencyTargets.length > 0 ? '' : null,
     backendConsistencyTargets.length > 0 ? '| Label | Package | Rust test filter | Status | Duration | Passed | Failed |' : null,
@@ -837,6 +909,14 @@ function buildAggregateReport({
     ...warningFiles.map((filePath) => `- Warning log: ${filePath}`),
     ...coverageSummaries.map((summary) => `- Coverage summary file: ${summary.path}`),
     ...securityRiskReports.map((securityRisk) => `- Security risk report: ${securityRisk.reportPath}`),
+    ...containerImageSecurityReports.flatMap((containerImageSecurity) => [
+      containerImageSecurity.markdownPath
+        ? `- Container image security report: ${containerImageSecurity.markdownPath}`
+        : null,
+      containerImageSecurity.reportPath
+        ? `- Container image security JSON: ${containerImageSecurity.reportPath}`
+        : null,
+    ]),
     ...failedComponents.flatMap((component) => (
       component.failureExcerpt
         ? [

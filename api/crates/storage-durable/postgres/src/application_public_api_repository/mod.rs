@@ -83,20 +83,6 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
             return Err(ControlPlaneError::NotFound("application").into());
         }
 
-        sqlx::query(
-            "update application_publication_versions set active = false where application_id = $1 and active = true",
-        )
-        .bind(input.application_id)
-        .execute(&mut *tx)
-        .await?;
-
-        let version_sequence = sqlx::query_scalar::<_, i64>(
-            "select coalesce(max(version_sequence), 0) + 1 from application_publication_versions where application_id = $1",
-        )
-        .bind(input.application_id)
-        .fetch_one(&mut *tx)
-        .await?;
-
         let row = sqlx::query(
             r#"
             insert into application_publication_versions (
@@ -117,8 +103,24 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
                 dependency_snapshot,
                 created_by
             ) values (
-                $1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $13, $14, $15
+                $1, $2, $3, $4, $5, 1, true, $6, $7, $8, $9, $10, $11, $12, $13, $14
             )
+            on conflict (application_id) do update
+            set flow_id = excluded.flow_id,
+                flow_version_id = excluded.flow_version_id,
+                compiled_plan_id = excluded.compiled_plan_id,
+                version_sequence = 1,
+                active = true,
+                api_enabled = excluded.api_enabled,
+                flow_schema_version = excluded.flow_schema_version,
+                document_hash = excluded.document_hash,
+                document_snapshot = excluded.document_snapshot,
+                mapping_snapshot = excluded.mapping_snapshot,
+                runtime_profile_snapshot = excluded.runtime_profile_snapshot,
+                output_selector = excluded.output_selector,
+                dependency_snapshot = excluded.dependency_snapshot,
+                created_by = excluded.created_by,
+                created_at = now()
             returning
                 id,
                 application_id,
@@ -144,7 +146,6 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
         .bind(input.flow_id)
         .bind(input.flow_version_id)
         .bind(input.compiled_plan_id)
-        .bind(version_sequence)
         .bind(input.api_enabled)
         .bind(&input.flow_schema_version)
         .bind(&input.document_hash)
@@ -194,12 +195,10 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
         &self,
         application_id: Uuid,
     ) -> Result<Option<ApplicationPublicationVersionRecord>> {
-        let row = sqlx::query(
-            publication_select_sql("where application_id = $1 and active = true").as_str(),
-        )
-        .bind(application_id)
-        .fetch_optional(self.pool())
-        .await?;
+        let row = sqlx::query(publication_select_sql("where application_id = $1").as_str())
+            .bind(application_id)
+            .fetch_optional(self.pool())
+            .await?;
 
         row.map(map_publication_row).transpose()
     }
@@ -222,9 +221,7 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
             return Err(ControlPlaneError::NotFound("application").into());
         }
 
-        sqlx::query(
-            "update application_publication_versions set api_enabled = $2 where application_id = $1 and active = true",
-        )
+        sqlx::query("update application_publication_versions set api_enabled = $2 where application_id = $1")
         .bind(input.application_id)
         .bind(input.api_enabled)
         .execute(&mut *tx)

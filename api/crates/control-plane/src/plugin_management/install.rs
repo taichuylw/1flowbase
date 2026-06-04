@@ -585,6 +585,7 @@ where
             copy_installation_artifact(Path::new(&command.package_root), &install_path)?;
             let manifest_fingerprint =
                 compute_manifest_fingerprint(&install_path.join("manifest.yaml"))
+                    .await
                     .map_err(map_framework_error)?;
             match package_kind {
                 RoutedPluginPackageKind::HostExtension => {

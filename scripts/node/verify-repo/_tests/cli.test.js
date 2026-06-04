@@ -73,6 +73,10 @@ test('buildCommands can select repository gate slices for parallel CI jobs', () 
     ['repo-frontend-full', 'repo-frontend-page-regression']
   );
   assert.deepEqual(
+    buildCommands({ repoRoot, target: 'frontend-pr' }).map((command) => command.label),
+    ['repo-frontend-pr']
+  );
+  assert.deepEqual(
     buildCommands({ repoRoot, target: 'backend' }).map((command) => command.label),
     ['repo-backend-full']
   );
@@ -145,6 +149,26 @@ test('main runs only the requested repository gate slice', async () => {
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[0].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'full']);
   assert.deepEqual(calls[1].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'page-regression']);
+});
+
+test('main runs the requested frontend PR repository gate slice', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-repo-pr-slice-'));
+  const calls = [];
+
+  const status = await main(['frontend-pr'], {
+    repoRoot,
+    env: {},
+    writeStdout() {},
+    writeStderr() {},
+    spawnSyncImpl(command, args, options) {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: '', stderr: '' };
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'pr']);
 });
 
 test('main passes the inherited lock token through every repository gate command', async () => {

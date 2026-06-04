@@ -181,7 +181,7 @@ describe('ModelProviderInstanceDrawer', () => {
       await screen.findByRole('dialog');
       expect(screen.getByText('API 密钥授权配置')).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: '添加' })
+        screen.getByRole('button', { name: '新增' })
       ).toBeInTheDocument();
       expect(screen.queryByText('校验模型')).not.toBeInTheDocument();
       expect(screen.queryByText('validate_model')).not.toBeInTheDocument();
@@ -228,12 +228,12 @@ describe('ModelProviderInstanceDrawer', () => {
       fireEvent.click(await screen.findByText('gpt-4o-mini'));
       expect(screen.queryByLabelText('模型 ID 1')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: '添加' }));
+      fireEvent.click(screen.getByRole('button', { name: '新增' }));
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }
       });
 
-      fireEvent.click(screen.getByRole('button', { name: '添加' }));
+      fireEvent.click(screen.getByRole('button', { name: '新增' }));
 
       fireEvent.change(screen.getByLabelText('模型 ID 2'), {
         target: { value: 'manual-model-id' }
@@ -379,7 +379,7 @@ describe('ModelProviderInstanceDrawer', () => {
       fireEvent.change(screen.getByLabelText('名称'), {
         target: { value: 'OpenAI Draft' }
       });
-      fireEvent.click(screen.getByRole('button', { name: '添加' }));
+      fireEvent.click(screen.getByRole('button', { name: '新增' }));
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }
       });
