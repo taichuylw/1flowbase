@@ -246,6 +246,27 @@ impl run_service::ApplicationPublishedRunControlRepository for ApplicationPublic
         Ok(Some(record.clone()))
     }
 
+    async fn cancel_published_pending_callback_tasks_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> Result<Vec<domain::CallbackTaskRecord>> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let mut cancelled = Vec::new();
+        for task in inner.callback_tasks.values_mut() {
+            if task.flow_run_id == flow_run_id && task.status == domain::CallbackTaskStatus::Pending
+            {
+                task.status = domain::CallbackTaskStatus::Cancelled;
+                task.completed_at = Some(completed_at);
+                cancelled.push(task.clone());
+            }
+        }
+        Ok(cancelled)
+    }
+
     async fn get_published_callback_task(
         &self,
         callback_task_id: Uuid,

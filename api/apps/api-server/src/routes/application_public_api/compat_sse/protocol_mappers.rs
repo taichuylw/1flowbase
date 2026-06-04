@@ -678,21 +678,27 @@ fn openai_response_function_call_sse(
     previous_response_id: Option<&str>,
     output: Vec<Value>,
 ) -> Vec<Result<Event, Infallible>> {
-    let mut events = output
-        .iter()
-        .enumerate()
-        .map(|(index, item)| {
-            event_json_sse(
-                "response.output_item.added",
-                json!({
-                    "type": "response.output_item.added",
-                    "response_id": response_id_from_run_id(initial_run.id),
-                    "output_index": index,
-                    "item": item
-                }),
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut events = Vec::with_capacity(output.len() * 2 + 1);
+    for (index, item) in output.iter().enumerate() {
+        events.push(event_json_sse(
+            "response.output_item.added",
+            json!({
+                "type": "response.output_item.added",
+                "response_id": response_id_from_run_id(initial_run.id),
+                "output_index": index,
+                "item": item
+            }),
+        ));
+        events.push(event_json_sse(
+            "response.output_item.done",
+            json!({
+                "type": "response.output_item.done",
+                "response_id": response_id_from_run_id(initial_run.id),
+                "output_index": index,
+                "item": item
+            }),
+        ));
+    }
     events.push(event_json_sse(
         "response.completed",
         json!({

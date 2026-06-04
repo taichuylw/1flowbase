@@ -43,6 +43,10 @@ pub struct PluginRuntimeLimits {
     #[serde(default)]
     pub timeout_ms: Option<u64>,
     #[serde(default)]
+    pub first_token_timeout_ms: Option<u64>,
+    #[serde(default)]
+    pub stream_idle_timeout_ms: Option<u64>,
+    #[serde(default)]
     pub memory_bytes: Option<u64>,
 }
 

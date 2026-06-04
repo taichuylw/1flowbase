@@ -633,6 +633,39 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
         .await
     }
 
+    async fn cancel_published_pending_callback_tasks_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> Result<Vec<domain::CallbackTaskRecord>> {
+        let rows = sqlx::query(
+            r#"
+            update flow_run_callback_tasks
+            set status = 'cancelled',
+                completed_at = $2
+            where flow_run_id = $1
+              and status = 'pending'
+            returning
+                id,
+                flow_run_id,
+                node_run_id,
+                callback_kind,
+                status,
+                request_payload,
+                response_payload,
+                external_ref_payload,
+                created_at,
+                completed_at
+            "#,
+        )
+        .bind(flow_run_id)
+        .bind(completed_at)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_callback_task_record).collect()
+    }
+
     async fn get_published_callback_task(
         &self,
         callback_task_id: Uuid,

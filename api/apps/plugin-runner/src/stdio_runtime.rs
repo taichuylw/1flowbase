@@ -1,7 +1,7 @@
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use plugin_framework::{
@@ -19,10 +19,29 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
 };
 
+pub const DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS: u64 = 300_000;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StreamingProviderOutput {
     pub events: Vec<ProviderStreamEvent>,
     pub result: ProviderInvocationResult,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProviderTimeoutKind {
+    WallClock,
+    FirstToken,
+    StreamIdle,
+}
+
+impl ProviderTimeoutKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::WallClock => "wall_clock",
+            Self::FirstToken => "first_token",
+            Self::StreamIdle => "stream_idle",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -49,7 +68,7 @@ impl ProviderWorker {
     }
 
     pub async fn call(&mut self, request: &ProviderStdioRequest) -> FrameworkResult<Value> {
-        let timeout_ms = self.limits.timeout_ms.unwrap_or(30_000);
+        let timeout_ms = provider_invocation_timeout_ms(&self.limits);
         match tokio::time::timeout(Duration::from_millis(timeout_ms), self.call_inner(request))
             .await
         {
@@ -60,7 +79,10 @@ impl ProviderWorker {
             }
             Err(_) => {
                 self.stop().await;
-                Err(provider_timeout_error())
+                Err(provider_timeout_error(
+                    ProviderTimeoutKind::WallClock,
+                    timeout_ms,
+                ))
             }
         }
     }
@@ -71,7 +93,7 @@ impl ProviderWorker {
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
         event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
     ) -> FrameworkResult<StreamingProviderOutput> {
-        let timeout_ms = self.limits.timeout_ms.unwrap_or(30_000);
+        let timeout_ms = provider_invocation_timeout_ms(&self.limits);
         match tokio::time::timeout(
             Duration::from_millis(timeout_ms),
             self.call_streaming_inner(request, live_events, event_observer),
@@ -85,7 +107,10 @@ impl ProviderWorker {
             }
             Err(_) => {
                 self.stop().await;
-                Err(provider_timeout_error())
+                Err(provider_timeout_error(
+                    ProviderTimeoutKind::WallClock,
+                    timeout_ms,
+                ))
             }
         }
     }
@@ -98,13 +123,18 @@ impl ProviderWorker {
 
     async fn call_inner(&mut self, request: &ProviderStdioRequest) -> FrameworkResult<Value> {
         let executable_path = self.executable_path.clone();
+        let limits = self.limits.clone();
         let process = self.ensure_process()?;
         write_worker_request(&executable_path, &mut process.stdin, request).await?;
 
-        while let Some(line) =
-            process.stdout.next_line().await.map_err(|error| {
-                PluginFrameworkError::io(Some(&executable_path), error.to_string())
-            })?
+        let mut timeout_state = ProviderStreamTimeoutState::new();
+        while let Some(line) = next_provider_stdout_line(
+            &mut process.stdout,
+            &executable_path,
+            &limits,
+            &mut timeout_state,
+        )
+        .await?
         {
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -123,16 +153,21 @@ impl ProviderWorker {
         event_observer: Option<tokio::sync::mpsc::UnboundedSender<()>>,
     ) -> FrameworkResult<StreamingProviderOutput> {
         let executable_path = self.executable_path.clone();
+        let limits = self.limits.clone();
         let process = self.ensure_process()?;
         write_worker_request(&executable_path, &mut process.stdin, request).await?;
 
         let mut events = Vec::new();
         let mut result = None;
 
-        while let Some(line) =
-            process.stdout.next_line().await.map_err(|error| {
-                PluginFrameworkError::io(Some(&executable_path), error.to_string())
-            })?
+        let mut timeout_state = ProviderStreamTimeoutState::new();
+        while let Some(line) = next_provider_stdout_line(
+            &mut process.stdout,
+            &executable_path,
+            &limits,
+            &mut timeout_state,
+        )
+        .await?
         {
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -154,6 +189,7 @@ impl ProviderWorker {
                 }
                 other => {
                     if let Some(event) = other.into_stream_event() {
+                        timeout_state.record_stream_event(&event);
                         if let Some(event_observer) = &event_observer {
                             let _ = event_observer.send(());
                         }
@@ -218,13 +254,11 @@ pub async fn call_executable(
             .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
     }
 
-    let output = tokio::time::timeout(
-        Duration::from_millis(limits.timeout_ms.unwrap_or(30_000)),
-        child.wait_with_output(),
-    )
-    .await
-    .map_err(|_| provider_timeout_error())?
-    .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
+    let timeout_ms = provider_invocation_timeout_ms(limits);
+    let output = tokio::time::timeout(Duration::from_millis(timeout_ms), child.wait_with_output())
+        .await
+        .map_err(|_| provider_timeout_error(ProviderTimeoutKind::WallClock, timeout_ms))?
+        .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
 
     parse_stdio_response(executable_path, &output.stdout, &output.stderr)
 }
@@ -279,80 +313,75 @@ pub async fn call_executable_streaming(
         text
     });
 
-    let timeout_ms = limits.timeout_ms.unwrap_or(30_000);
-    tokio::time::timeout(Duration::from_millis(timeout_ms), async {
-        let mut lines = BufReader::new(stdout).lines();
-        let mut events = Vec::new();
-        let mut result = None;
+    let mut lines = BufReader::new(stdout).lines();
+    let mut events = Vec::new();
+    let mut result = None;
+    let mut timeout_state = ProviderStreamTimeoutState::new();
 
-        while let Some(line) = lines
-            .next_line()
-            .await
-            .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?
-        {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
+    while let Some(line) =
+        next_provider_stdout_line(&mut lines, executable_path, limits, &mut timeout_state).await?
+    {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let runtime_line =
+            serde_json::from_str::<ProviderRuntimeLine>(trimmed).map_err(|error| {
+                PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
+                    "invalid_provider_ndjson",
+                    format!("invalid provider ndjson: {error}"),
+                    Some(trimmed),
+                ))
+            })?;
+        match runtime_line {
+            ProviderRuntimeLine::Result { result: value } => {
+                result = Some(value);
             }
-
-            let runtime_line =
-                serde_json::from_str::<ProviderRuntimeLine>(trimmed).map_err(|error| {
-                    PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
-                        "invalid_provider_ndjson",
-                        format!("invalid provider ndjson: {error}"),
-                        Some(trimmed),
-                    ))
-                })?;
-            match runtime_line {
-                ProviderRuntimeLine::Result { result: value } => {
-                    result = Some(value);
-                }
-                other => {
-                    if let Some(event) = other.into_stream_event() {
-                        if let Some(event_observer) = &event_observer {
-                            let _ = event_observer.send(());
-                        }
-                        if let Some(live_events) = &live_events {
-                            let _ = live_events.send(event.clone());
-                        }
-                        events.push(event);
+            other => {
+                if let Some(event) = other.into_stream_event() {
+                    timeout_state.record_stream_event(&event);
+                    if let Some(event_observer) = &event_observer {
+                        let _ = event_observer.send(());
                     }
+                    if let Some(live_events) = &live_events {
+                        let _ = live_events.send(event.clone());
+                    }
+                    events.push(event);
                 }
             }
         }
+    }
 
-        let status = child
-            .wait()
-            .await
-            .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
-        let stderr = stderr_task.await.unwrap_or_default();
-        if !status.success() {
-            let summary = stderr.trim();
-            return Err(PluginFrameworkError::runtime(
-                ProviderRuntimeError::normalize(
-                    "provider_runtime",
-                    if summary.is_empty() {
-                        "provider runtime exited with failure"
-                    } else {
-                        summary
-                    },
-                    None,
-                ),
-            ));
-        }
-
-        let result = result.ok_or_else(|| {
-            PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
+    let status = child
+        .wait()
+        .await
+        .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))?;
+    let stderr = stderr_task.await.unwrap_or_default();
+    if !status.success() {
+        let summary = stderr.trim();
+        return Err(PluginFrameworkError::runtime(
+            ProviderRuntimeError::normalize(
                 "provider_runtime",
-                "provider runtime ended without result line",
+                if summary.is_empty() {
+                    "provider runtime exited with failure"
+                } else {
+                    summary
+                },
                 None,
-            ))
-        })?;
+            ),
+        ));
+    }
 
-        Ok(StreamingProviderOutput { events, result })
-    })
-    .await
-    .map_err(|_| provider_timeout_error())?
+    let result = result.ok_or_else(|| {
+        PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
+            "provider_runtime",
+            "provider runtime ended without result line",
+            None,
+        ))
+    })?;
+
+    Ok(StreamingProviderOutput { events, result })
 }
 
 fn spawn_worker_process(
@@ -431,11 +460,128 @@ fn parse_stdio_response_line(executable_path: &Path, line: &str) -> FrameworkRes
     }))
 }
 
-fn provider_timeout_error() -> PluginFrameworkError {
+struct ProviderStreamTimeoutState {
+    started_at: Instant,
+    first_token_seen: bool,
+    last_stream_event_at: Option<Instant>,
+}
+
+impl ProviderStreamTimeoutState {
+    fn new() -> Self {
+        Self {
+            started_at: Instant::now(),
+            first_token_seen: false,
+            last_stream_event_at: None,
+        }
+    }
+
+    fn record_stream_event(&mut self, event: &ProviderStreamEvent) {
+        let now = Instant::now();
+        if matches!(
+            event,
+            ProviderStreamEvent::TextDelta { .. } | ProviderStreamEvent::ReasoningDelta { .. }
+        ) {
+            self.first_token_seen = true;
+        }
+        self.last_stream_event_at = Some(now);
+    }
+
+    fn next_read_timeout(
+        &self,
+        limits: &PluginRuntimeLimits,
+    ) -> (Duration, ProviderTimeoutKind, u64) {
+        let mut timeout = remaining_timeout(
+            self.started_at,
+            provider_invocation_timeout_ms(limits),
+            ProviderTimeoutKind::WallClock,
+        );
+        if !self.first_token_seen {
+            if let Some(timeout_ms) = limits.first_token_timeout_ms {
+                timeout = earlier_timeout(
+                    timeout,
+                    remaining_timeout(self.started_at, timeout_ms, ProviderTimeoutKind::FirstToken),
+                );
+            }
+        }
+        if let (Some(last_stream_event_at), Some(timeout_ms)) =
+            (self.last_stream_event_at, limits.stream_idle_timeout_ms)
+        {
+            timeout = earlier_timeout(
+                timeout,
+                remaining_timeout(
+                    last_stream_event_at,
+                    timeout_ms,
+                    ProviderTimeoutKind::StreamIdle,
+                ),
+            );
+        }
+        timeout
+    }
+}
+
+async fn next_provider_stdout_line(
+    lines: &mut Lines<BufReader<ChildStdout>>,
+    executable_path: &Path,
+    limits: &PluginRuntimeLimits,
+    timeout_state: &mut ProviderStreamTimeoutState,
+) -> FrameworkResult<Option<String>> {
+    let (duration, timeout_kind, timeout_ms) = timeout_state.next_read_timeout(limits);
+    if duration.is_zero() {
+        return Err(provider_timeout_error(timeout_kind, timeout_ms));
+    }
+
+    tokio::time::timeout(duration, lines.next_line())
+        .await
+        .map_err(|_| provider_timeout_error(timeout_kind, timeout_ms))?
+        .map_err(|error| PluginFrameworkError::io(Some(executable_path), error.to_string()))
+}
+
+fn provider_invocation_timeout_ms(limits: &PluginRuntimeLimits) -> u64 {
+    limits
+        .timeout_ms
+        .unwrap_or(DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS)
+}
+
+fn remaining_timeout(
+    started_at: Instant,
+    timeout_ms: u64,
+    timeout_kind: ProviderTimeoutKind,
+) -> (Duration, ProviderTimeoutKind, u64) {
+    let elapsed_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+    let remaining_ms = timeout_ms.saturating_sub(elapsed_ms);
+    (
+        Duration::from_millis(remaining_ms),
+        timeout_kind,
+        timeout_ms,
+    )
+}
+
+fn earlier_timeout(
+    left: (Duration, ProviderTimeoutKind, u64),
+    right: (Duration, ProviderTimeoutKind, u64),
+) -> (Duration, ProviderTimeoutKind, u64) {
+    if right.0 < left.0 {
+        right
+    } else {
+        left
+    }
+}
+
+fn provider_timeout_error(
+    timeout_kind: ProviderTimeoutKind,
+    timeout_ms: u64,
+) -> PluginFrameworkError {
+    let provider_summary = format!(
+        "timeout_kind={};timeout_ms={timeout_ms}",
+        timeout_kind.as_str()
+    );
     PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
         "invoke",
-        "provider runtime timed out",
-        None,
+        format!(
+            "provider runtime timed out: timeout_kind={} timeout_ms={timeout_ms}",
+            timeout_kind.as_str()
+        ),
+        Some(&provider_summary),
     ))
 }
 

@@ -4,7 +4,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use plugin_framework::{provider_contract::ProviderStdioRequest, PluginRuntimeLimits};
+use plugin_framework::{
+    error::PluginFrameworkError, provider_contract::ProviderStdioRequest, PluginRuntimeLimits,
+};
 
 fn write_script(name: &str, body: &str) -> PathBuf {
     let nonce = SystemTime::now()
@@ -38,6 +40,17 @@ fn invoke_request() -> ProviderStdioRequest {
 fn limits() -> PluginRuntimeLimits {
     PluginRuntimeLimits {
         timeout_ms: Some(2_000),
+        first_token_timeout_ms: None,
+        stream_idle_timeout_ms: None,
+        memory_bytes: None,
+    }
+}
+
+fn default_limits() -> PluginRuntimeLimits {
+    PluginRuntimeLimits {
+        timeout_ms: None,
+        first_token_timeout_ms: None,
+        stream_idle_timeout_ms: None,
         memory_bytes: None,
     }
 }
@@ -68,6 +81,148 @@ printf '%s\n' '{"type":"result","result":{"final_content":"hello","usage":{"inpu
 
     assert_eq!(output.events.len(), 4);
     assert_eq!(output.result.final_content.as_deref(), Some("hello"));
+}
+
+#[tokio::test]
+async fn provider_stdio_default_invocation_budget_is_300_seconds() {
+    assert_eq!(
+        plugin_runner::stdio_runtime::DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS,
+        300_000
+    );
+
+    let script = write_script(
+        "default-budget",
+        r#"#!/usr/bin/env bash
+read _request
+printf '%s\n' '{"type":"result","result":{"final_content":"within-default-budget","finish_reason":"stop"}}'
+"#,
+    );
+
+    let output = plugin_runner::stdio_runtime::call_executable_streaming(
+        &script,
+        &invoke_request(),
+        &default_limits(),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        output.result.final_content.as_deref(),
+        Some("within-default-budget")
+    );
+}
+
+#[tokio::test]
+async fn provider_stdio_timeout_error_classifies_wall_clock_budget() {
+    let script = write_script(
+        "wall-clock-timeout",
+        r#"#!/usr/bin/env bash
+read _request
+sleep 0.05
+printf '%s\n' '{"type":"result","result":{"final_content":"too-late","finish_reason":"stop"}}'
+"#,
+    );
+    let short_limits = PluginRuntimeLimits {
+        timeout_ms: Some(1),
+        first_token_timeout_ms: None,
+        stream_idle_timeout_ms: None,
+        memory_bytes: None,
+    };
+
+    let error = plugin_runner::stdio_runtime::call_executable_streaming(
+        &script,
+        &invoke_request(),
+        &short_limits,
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    let PluginFrameworkError::RuntimeContract { error } = error else {
+        panic!("expected provider runtime contract error");
+    };
+    assert!(error.message.contains("provider runtime timed out"));
+    assert!(error
+        .provider_summary
+        .as_deref()
+        .is_some_and(|summary| summary.contains("timeout_kind=wall_clock")));
+}
+
+#[tokio::test]
+async fn provider_stdio_timeout_error_classifies_first_token_budget() {
+    let script = write_script(
+        "first-token-timeout",
+        r#"#!/usr/bin/env bash
+read _request
+sleep 0.05
+printf '%s\n' '{"type":"text_delta","delta":"late"}'
+printf '%s\n' '{"type":"result","result":{"final_content":"late","finish_reason":"stop"}}'
+"#,
+    );
+    let short_limits = PluginRuntimeLimits {
+        timeout_ms: Some(2_000),
+        first_token_timeout_ms: Some(1),
+        stream_idle_timeout_ms: None,
+        memory_bytes: None,
+    };
+
+    let error = plugin_runner::stdio_runtime::call_executable_streaming(
+        &script,
+        &invoke_request(),
+        &short_limits,
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    let PluginFrameworkError::RuntimeContract { error } = error else {
+        panic!("expected provider runtime contract error");
+    };
+    assert!(error
+        .provider_summary
+        .as_deref()
+        .is_some_and(|summary| summary.contains("timeout_kind=first_token")));
+}
+
+#[tokio::test]
+async fn provider_stdio_timeout_error_classifies_stream_idle_budget() {
+    let script = write_script(
+        "stream-idle-timeout",
+        r#"#!/usr/bin/env bash
+read _request
+printf '%s\n' '{"type":"text_delta","delta":"first"}'
+sleep 0.05
+printf '%s\n' '{"type":"result","result":{"final_content":"first","finish_reason":"stop"}}'
+"#,
+    );
+    let short_limits = PluginRuntimeLimits {
+        timeout_ms: Some(2_000),
+        first_token_timeout_ms: None,
+        stream_idle_timeout_ms: Some(1),
+        memory_bytes: None,
+    };
+
+    let error = plugin_runner::stdio_runtime::call_executable_streaming(
+        &script,
+        &invoke_request(),
+        &short_limits,
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    let PluginFrameworkError::RuntimeContract { error } = error else {
+        panic!("expected provider runtime contract error");
+    };
+    assert!(error
+        .provider_summary
+        .as_deref()
+        .is_some_and(|summary| summary.contains("timeout_kind=stream_idle")));
 }
 
 #[tokio::test]

@@ -372,6 +372,28 @@ where
                 "persist_flow_completed",
             )?;
             let output_payload = final_flow_output_payload(outcome);
+            let updated = repository
+                .update_flow_run_if_status(
+                    &UpdateFlowRunInput {
+                        flow_run_id: flow_run.id,
+                        status: domain::FlowRunStatus::Succeeded,
+                        output_payload: output_payload.clone(),
+                        error_payload: None,
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    },
+                    flow_run.status,
+                )
+                .await?;
+            if updated.is_none() {
+                let detail = repository
+                    .get_application_run_detail(application_id, flow_run.id)
+                    .await?
+                    .ok_or_else(|| anyhow!("persisted flow run detail not found"))?;
+                return Ok(PersistedFlowDebugOutcome {
+                    detail,
+                    answer_presentation_events: Vec::new(),
+                });
+            }
             answer_presentation_events = append_answer_presentation_suffix(
                 repository,
                 flow_run.id,
@@ -379,15 +401,6 @@ where
                 &output_payload,
             )
             .await?;
-            repository
-                .update_flow_run(&UpdateFlowRunInput {
-                    flow_run_id: flow_run.id,
-                    status: domain::FlowRunStatus::Succeeded,
-                    output_payload: output_payload.clone(),
-                    error_payload: None,
-                    finished_at: Some(OffsetDateTime::now_utc()),
-                })
-                .await?;
             repository
                 .append_run_event(&AppendRunEventInput {
                     flow_run_id: flow_run.id,
@@ -411,6 +424,28 @@ where
             )?;
             let output_payload = final_flow_output_payload(outcome);
             let error_payload = failure.error_payload.clone();
+            let updated = repository
+                .update_flow_run_if_status(
+                    &UpdateFlowRunInput {
+                        flow_run_id: flow_run.id,
+                        status: domain::FlowRunStatus::Failed,
+                        output_payload: output_payload.clone(),
+                        error_payload: Some(error_payload.clone()),
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    },
+                    flow_run.status,
+                )
+                .await?;
+            if updated.is_none() {
+                let detail = repository
+                    .get_application_run_detail(application_id, flow_run.id)
+                    .await?
+                    .ok_or_else(|| anyhow!("persisted flow run detail not found"))?;
+                return Ok(PersistedFlowDebugOutcome {
+                    detail,
+                    answer_presentation_events: Vec::new(),
+                });
+            }
             answer_presentation_events = append_answer_presentation_suffix(
                 repository,
                 flow_run.id,
@@ -418,15 +453,6 @@ where
                 &output_payload,
             )
             .await?;
-            repository
-                .update_flow_run(&UpdateFlowRunInput {
-                    flow_run_id: flow_run.id,
-                    status: domain::FlowRunStatus::Failed,
-                    output_payload,
-                    error_payload: Some(error_payload.clone()),
-                    finished_at: Some(OffsetDateTime::now_utc()),
-                })
-                .await?;
             repository
                 .append_run_event(&AppendRunEventInput {
                     flow_run_id: flow_run.id,

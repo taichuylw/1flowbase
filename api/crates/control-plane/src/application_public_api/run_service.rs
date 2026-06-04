@@ -253,6 +253,10 @@ where
         flow_run: &domain::FlowRunRecord,
         metadata: &Value,
     ) {
+        let admission =
+            crate::orchestration_runtime::scheduler_admission::derive_scheduler_admission_metadata(
+                flow_run,
+            );
         let payload = json!({
             "api_key_id": actor.api_key_id,
             "application_id": actor.application_id,
@@ -267,6 +271,7 @@ where
                 .cloned()
                 .unwrap_or(Value::Null),
             "compatibility_mode": flow_run.compatibility_mode,
+            "admission": admission,
         });
 
         let _ = self
@@ -539,6 +544,12 @@ pub trait ApplicationPublishedRunControlRepository: Send + Sync {
         &self,
         input: &CancelPublishedFlowRunInput,
     ) -> Result<Option<domain::FlowRunRecord>>;
+
+    async fn cancel_published_pending_callback_tasks_for_run(
+        &self,
+        flow_run_id: Uuid,
+        completed_at: OffsetDateTime,
+    ) -> Result<Vec<domain::CallbackTaskRecord>>;
 
     async fn get_published_callback_task(
         &self,
