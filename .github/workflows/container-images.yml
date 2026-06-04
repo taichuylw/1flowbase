@@ -118,7 +118,20 @@ jobs:
         if: steps.select.outputs.enabled == 'true'
         run: node scripts/node/cli/verify-container-version.js ${{ matrix.component }} ${{ steps.select.outputs.image_tag }}
 
-      - name: Build and push ${{ matrix.image }}
+      - name: Prepare image references
+        id: image_refs
+        if: steps.select.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          scan_tag=scan-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          echo "scan_tag=$scan_tag" >> "$GITHUB_OUTPUT"
+          echo "scan_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:$scan_tag" >> "$GITHUB_OUTPUT"
+          echo "version_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          echo "latest_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push scan candidate ${{ matrix.image }}
         if: steps.select.outputs.enabled == 'true'
         uses: docker/build-push-action@v7
         with:
@@ -127,8 +140,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.image_refs.outputs.scan_tag }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -136,3 +148,53 @@ jobs:
             org.opencontainers.image.title=${{ matrix.image }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: Prepare Trivy report directory
+        if: steps.select.outputs.enabled == 'true'
+        run: mkdir -p tmp/test-governance
+
+      - name: Generate HIGH Trivy warning report
+        if: steps.select.outputs.enabled == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ steps.image_refs.outputs.scan_image_ref }}
+          version: v0.70.0
+          scanners: vuln
+          severity: HIGH
+          format: json
+          output: tmp/test-governance/trivy-${{ matrix.component }}-high.json
+          exit-code: "0"
+
+      - name: Enforce CRITICAL Trivy release gate
+        if: steps.select.outputs.enabled == 'true'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ steps.image_refs.outputs.scan_image_ref }}
+          version: v0.70.0
+          scanners: vuln
+          severity: CRITICAL
+          format: json
+          output: tmp/test-governance/trivy-${{ matrix.component }}-critical.json
+          exit-code: "1"
+
+      - name: Upload Trivy reports
+        if: always() && steps.select.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-governance-trivy-${{ matrix.component }}
+          path: tmp/test-governance/trivy-${{ matrix.component }}-*.json
+          if-no-files-found: warn
+
+      - name: Promote scanned image to official tags
+        if: steps.select.outputs.enabled == 'true'
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
+            --tag "${{ steps.image_refs.outputs.latest_image_ref }}" \
+            "${{ steps.image_refs.outputs.scan_image_ref }}"

@@ -346,6 +346,40 @@ test('container image workflow publishes linux amd64 and arm64 manifests', () =>
   assert.match(workflow, /^\s+platforms:\s+linux\/amd64,linux\/arm64$/mu);
 });
 
+test('container image workflow scans temporary image tags before official promotion', () => {
+  const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
+
+  for (const component of ['web', 'api-server', 'plugin-runner']) {
+    assert.match(workflow, new RegExp(`component: ${component}`, 'u'));
+  }
+
+  assert.match(workflow, /scan_tag=scan-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-\$\{\{ github\.sha \}\}/u);
+  assert.match(workflow, /echo "scan_image_ref=ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:\$scan_tag"/u);
+  assert.match(workflow, /name: Build and push scan candidate \$\{\{ matrix\.image \}\}/u);
+  assert.match(workflow, /ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:\$\{\{ steps\.image_refs\.outputs\.scan_tag \}\}/u);
+  assert.doesNotMatch(workflow, /Build and push[\s\S]*?ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:\$\{\{ steps\.select\.outputs\.image_tag \}\}/u);
+  assert.doesNotMatch(workflow, /Build and push[\s\S]*?ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:latest/u);
+
+  assert.match(workflow, /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/u);
+  assert.match(workflow, /version: v0\.70\.0/u);
+  assert.match(workflow, /name: Generate HIGH Trivy warning report/u);
+  assert.match(workflow, /severity: HIGH/u);
+  assert.match(workflow, /exit-code: "0"/u);
+  assert.match(workflow, /name: Enforce CRITICAL Trivy release gate/u);
+  assert.match(workflow, /severity: CRITICAL/u);
+  assert.match(workflow, /exit-code: "1"/u);
+  assert.match(workflow, /output: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-high\.json/u);
+  assert.match(workflow, /output: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-critical\.json/u);
+
+  assert.match(workflow, /name: Promote scanned image to official tags/u);
+  assert.match(workflow, /docker buildx imagetools create/u);
+  assert.match(workflow, /--tag "\$\{\{ steps\.image_refs\.outputs\.version_image_ref \}\}"/u);
+  assert.match(workflow, /--tag "\$\{\{ steps\.image_refs\.outputs\.latest_image_ref \}\}"/u);
+  assert.match(workflow, /"\$\{\{ steps\.image_refs\.outputs\.scan_image_ref \}\}"/u);
+  assert.match(workflow, /name: test-governance-trivy-\$\{\{ matrix\.component \}\}/u);
+  assert.match(workflow, /path: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-\*\.json/u);
+});
+
 test('docker deploy shell script stops before pull when the image tag lacks the detected platform', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
   const tempBin = path.join(tempRoot, 'bin');
