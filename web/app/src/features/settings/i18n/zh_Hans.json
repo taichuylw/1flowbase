@@ -511,7 +511,6 @@
     "import_all": "全部导入",
     "delete_supplier": "删除供应商",
     "model_provider_manage_action": "管理",
-    "model_provider_create_action": "新增",
     "data_source_name": "数据源名称",
     "value_audit": "值审计",
     "configuration_alt": "配置",

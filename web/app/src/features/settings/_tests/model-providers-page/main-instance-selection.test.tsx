@@ -203,7 +203,7 @@ async function openProviderInstancesModal() {
     },
     { timeout: 10_000 }
   );
-  fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
+  fireEvent.click(within(catalogRow).getByRole('button', { name: '管理' }));
 
   return screen.findByRole('dialog', { name: /OpenAI Compatible 实例/ });
 }

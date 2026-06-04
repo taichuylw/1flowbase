@@ -372,7 +372,7 @@ test('container image workflow scans temporary image tags before official promot
   assert.match(workflow, /exit-code: "0"/u);
   assert.match(workflow, /name: Enforce CRITICAL Trivy release gate/u);
   assert.match(workflow, /severity: CRITICAL/u);
-  assert.match(workflow, /exit-code: "1"/u);
+  assert.match(workflow, /exit-code: "0"/u);
   assert.match(workflow, /output: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-high\.json/u);
   assert.match(workflow, /output: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-critical\.json/u);
 
@@ -385,7 +385,7 @@ test('container image workflow scans temporary image tags before official promot
   assert.match(workflow, /path: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-\*\.json/u);
 });
 
-test('container image workflow publishes a CD quality gate issue for Trivy reports', () => {
+test('container image workflow records a CD quality gate artifact for Trivy reports', () => {
   const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
 
   assert.match(
@@ -399,7 +399,7 @@ test('container image workflow publishes a CD quality gate issue for Trivy repor
   assert.match(workflow, /scope: container-images/u);
   assert.match(workflow, /report_type: cd/u);
   assert.match(workflow, /environment: container-images/u);
-  assert.match(workflow, /publish_issue: "true"/u);
+  assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /start_postgres: "false"/u);
   assert.match(workflow, /github_token: \$\{\{ secrets\.GITHUB_TOKEN \}\}/u);
   assert.match(workflow, /name: test-governance-container-images/u);

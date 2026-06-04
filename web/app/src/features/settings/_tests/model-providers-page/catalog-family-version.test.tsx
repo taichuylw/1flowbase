@@ -523,7 +523,7 @@ entries: []
       );
     });
 
-    fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
+    fireEvent.click(within(catalogRow).getByRole('button', { name: '管理' }));
     expect(
       await screen.findByText(
         '该供应商刚完成版本切换，建议刷新模型并验证关键实例。'
@@ -597,7 +597,7 @@ entries: []
       screen.queryByRole('heading', { name: '当前实例' })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '配置' })
+      screen.queryByRole('button', { name: '管理' })
     ).not.toBeInTheDocument();
     expect(screen.queryByText('OpenAI Production')).not.toBeInTheDocument();
   }, 10000);
@@ -610,7 +610,7 @@ entries: []
     await screen.findByText('可用实例', {}, { timeout: 10000 });
 
     expect(
-      await screen.findByRole('button', { name: '配置' }, { timeout: 10000 })
+      await screen.findByRole('button', { name: '管理' }, { timeout: 10000 })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: '当前实例' })
@@ -624,10 +624,10 @@ entries: []
       { timeout: 10000 }
     );
     expect(
-      within(catalogRow).getByRole('button', { name: '配置' })
+      within(catalogRow).getByRole('button', { name: '管理' })
     ).toBeInTheDocument();
     expect(
-      within(catalogRow).getByRole('button', { name: '添加' })
+      within(catalogRow).getByRole('button', { name: '新增' })
     ).toBeInTheDocument();
     expect(
       within(catalogRow).queryByRole('button', { name: '版本管理' })

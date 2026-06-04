@@ -511,7 +511,6 @@
     "import_all": "Import all",
     "delete_supplier": "Delete supplier",
     "model_provider_manage_action": "Manage",
-    "model_provider_create_action": "New",
     "data_source_name": "Data source name",
     "value_audit": "value audit",
     "configuration_alt": "Configuration",

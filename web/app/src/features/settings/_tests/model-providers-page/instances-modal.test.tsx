@@ -205,7 +205,7 @@ async function openProviderInstancesModal() {
     },
     { timeout: 10_000 }
   );
-  fireEvent.click(within(catalogRow).getByRole('button', { name: '配置' }));
+  fireEvent.click(within(catalogRow).getByRole('button', { name: '管理' }));
 
   return screen.findByRole('dialog', { name: /OpenAI Compatible 实例/ });
 }
@@ -474,7 +474,7 @@ entries: []
         </AppProviders>
       );
 
-      fireEvent.click(await screen.findByRole('button', { name: '添加' }));
+      fireEvent.click(await screen.findByRole('button', { name: '新增' }));
 
       expect(await screen.findByText('API 密钥授权配置')).toBeInTheDocument();
       expect(screen.getByRole('switch', { name: '注入主实例' })).toBeChecked();
@@ -514,7 +514,7 @@ entries: []
       expect(screen.queryByLabelText('模型 ID 1')).not.toBeInTheDocument();
 
       fireEvent.click(
-        within(screen.getByRole('dialog')).getByRole('button', { name: '添加' })
+        within(screen.getByRole('dialog')).getByRole('button', { name: '新增' })
       );
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }
