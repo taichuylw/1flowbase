@@ -110,6 +110,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'container-images' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'cli', 'container-image-security.js')],
+    cwd: repoRoot,
+  });
+
   assert.throws(
     () => buildGateCommand({ repoRoot, scope: 'unknown' }),
     /Unknown quality gate scope: unknown/u
@@ -415,6 +421,7 @@ test('runQualityGate includes security risk findings as advisory report evidence
     listOpenQualityGateIssuesImpl() {
       return [];
     },
+    nowImpl: () => new Date('2026-05-03T23:40:00Z'),
     writeStdout() {},
     writeStderr() {},
   });

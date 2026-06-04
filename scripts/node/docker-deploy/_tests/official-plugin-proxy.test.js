@@ -349,6 +349,11 @@ test('container image workflow publishes linux amd64 and arm64 manifests', () =>
 test('container image workflow scans temporary image tags before official promotion', () => {
   const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
 
+  assert.match(workflow, /permissions:\n\s+contents: read/u);
+  assert.match(
+    workflow,
+    /publish:\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+packages: write/u,
+  );
   for (const component of ['web', 'api-server', 'plugin-runner']) {
     assert.match(workflow, new RegExp(`component: ${component}`, 'u'));
   }
@@ -378,6 +383,27 @@ test('container image workflow scans temporary image tags before official promot
   assert.match(workflow, /"\$\{\{ steps\.image_refs\.outputs\.scan_image_ref \}\}"/u);
   assert.match(workflow, /name: test-governance-trivy-\$\{\{ matrix\.component \}\}/u);
   assert.match(workflow, /path: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-\*\.json/u);
+});
+
+test('container image workflow publishes a CD quality gate issue for Trivy reports', () => {
+  const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
+
+  assert.match(
+    workflow,
+    /report:\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs:\n\s+- publish\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+actions: read\n\s+issues: write/u,
+  );
+  assert.match(workflow, /pattern: test-governance-trivy-\*/u);
+  assert.match(workflow, /path: tmp\/test-governance/u);
+  assert.match(workflow, /merge-multiple: true/u);
+  assert.match(workflow, /uses: \.\/\.github\/actions\/quality-gate/u);
+  assert.match(workflow, /scope: container-images/u);
+  assert.match(workflow, /report_type: cd/u);
+  assert.match(workflow, /environment: container-images/u);
+  assert.match(workflow, /publish_issue: "true"/u);
+  assert.match(workflow, /start_postgres: "false"/u);
+  assert.match(workflow, /github_token: \$\{\{ secrets\.GITHUB_TOKEN \}\}/u);
+  assert.match(workflow, /name: test-governance-container-images/u);
+  assert.match(workflow, /path: tmp\/test-governance/u);
 });
 
 test('docker deploy shell script stops before pull when the image tag lacks the detected platform', () => {

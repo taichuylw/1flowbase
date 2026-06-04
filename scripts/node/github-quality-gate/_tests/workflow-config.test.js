@@ -353,6 +353,7 @@ test("quality gate workflow supports dispatch targets and nightly latest CI defa
     /QUALITY_GATE_REPORT_TYPE: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.report_type \|\| 'ci' \}\}/u,
   );
   assert.match(workflow, /QUALITY_GATE_SCHEDULED_ENVIRONMENT: nightly-latest/u);
+  assert.match(workflow, /- container-images/u);
   assert.match(
     workflow,
     /GITHUB_REF_NAME: \$\{\{ env\.QUALITY_GATE_TARGET_BRANCH \}\}/u,
@@ -401,6 +402,10 @@ test("quality gate workflow runs ci scope as parallel component gates before one
     workflow,
     /coverage-backend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u,
   );
+  assert.match(
+    workflow,
+    /container-images-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && \(inputs\.scope == 'ci' \|\| inputs\.scope == 'container-images'\)\) \}\}/u,
+  );
   assert.match(workflow, /- coverage-backend-control-plane/u);
   assert.match(workflow, /- coverage-backend-storage-postgres/u);
   assert.match(workflow, /- coverage-backend-api-server/u);
@@ -412,6 +417,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
     workflow,
     /aggregate:\n(?:.*\n)*?\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate/u,
   );
+  assert.match(workflow, /- container-images-gate/u);
   assert.match(workflow, /scope: repo-tooling/u);
   assert.match(workflow, /scope: repo-frontend/u);
   assert.match(workflow, /scope: \$\{\{ matrix\.scope \}\}/u);
@@ -421,8 +427,10 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   );
   assert.match(workflow, /scope: backend-consistency/u);
   assert.match(workflow, /scope: coverage-frontend/u);
+  assert.match(workflow, /scope: container-images/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
+  assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*container-images/u);
   assert.match(
     workflow,
     /node scripts\/node\/cli\/github-quality-gate-aggregate\.js/u,
@@ -432,6 +440,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
+  assert.match(workflow, /name: test-governance-container-images/u);
   assert.match(workflow, /name: test-governance-artifacts/u);
 });
 
@@ -440,7 +449,7 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
 
   assert.match(
     workflow,
-    /single-scope-gate:\n\s+if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.scope != 'ci' \}\}/u,
+    /single-scope-gate:\n\s+if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.scope != 'ci' && inputs\.scope != 'container-images' \}\}/u,
   );
   assert.match(workflow, /scope: \$\{\{ env\.QUALITY_GATE_SCOPE \}\}/u);
   assert.match(
