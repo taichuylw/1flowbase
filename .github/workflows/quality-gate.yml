@@ -80,8 +80,6 @@ jobs:
         with:
           ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           fetch-depth: 0
-      - name: Prepare security risk diff base
-        run: git fetch --no-tags --prune origin main:refs/remotes/origin/main
       - name: Resolve quality gate target SHA
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
@@ -121,8 +119,6 @@ jobs:
         with:
           ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           fetch-depth: 0
-      - name: Prepare security risk diff base
-        run: git fetch --no-tags --prune origin main:refs/remotes/origin/main
       - name: Resolve quality gate target SHA
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
