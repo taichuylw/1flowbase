@@ -38,6 +38,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`
 - 多语言 key / value hygiene、warning 解释和修复边界看 `references/i18n-hygiene-gate.md`
 - 需要处理周期性质量门禁值守、GitHub Issue / Actions 报告闭环或无权限贡献者本地门禁取证时，看 `references/quality-gate-watch.md`
+- 评估范围命中容器镜像、Trivy、GHCR、Dockerfile、基础镜像或镜像漏洞报告时，再加载 `references/container-image-security.md`
 - 如果评估范围命中后端，必须先读 `api/AGENTS.md`，再对齐 `.memory/project-memory` 中最近的后端规范、计划和插件边界记忆，不能沿用旧口径
 - `task mode` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归
 - `project evaluation mode` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口

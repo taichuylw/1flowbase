@@ -87,6 +87,39 @@ function Set-EnvValue([string]$Key, [string]$Value, [string]$Path) {
   Set-Content -Path $Path -Value $Lines -Encoding UTF8
 }
 
+function Format-EnvDisplayValue([string]$Key, [string]$Value) {
+  if (-not $Value) {
+    return "<empty>"
+  }
+
+  switch ($Key) {
+    "POSTGRES_PASSWORD" { return "<set>" }
+    "BOOTSTRAP_ROOT_PASSWORD" { return "<set>" }
+    "API_PROVIDER_SECRET_MASTER_KEY" { return "<set>" }
+    default { return $Value }
+  }
+}
+
+function Show-EnvSummary([string]$Path) {
+  Write-Host "Current docker/.env configuration:"
+  foreach ($Key in @(
+      "FLOWBASE_WEB_VERSION",
+      "FLOWBASE_API_SERVER_VERSION",
+      "FLOWBASE_PLUGIN_RUNNER_VERSION",
+      "WEB_PORT",
+      "POSTGRES_DB",
+      "POSTGRES_USER",
+      "POSTGRES_PASSWORD",
+      "BOOTSTRAP_ROOT_ACCOUNT",
+      "BOOTSTRAP_ROOT_PASSWORD",
+      "API_PROVIDER_SECRET_MASTER_KEY",
+      "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL"
+    )) {
+    $Value = Read-EnvValue $Key $Path
+    Write-Host "  $Key=$(Format-EnvDisplayValue $Key $Value)"
+  }
+}
+
 function Prompt-EnvValue([string]$Key, [string]$Label) {
   $CurrentValue = Read-EnvValue $Key ".\docker\.env"
   if ($CurrentValue) {
@@ -151,6 +184,28 @@ function Prompt-OfficialPluginGithubProxyUrl() {
     Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" "" ".\docker\.env"
     Write-Host "Disabled API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
   }
+}
+
+function Test-PostgresDataExists() {
+  $PgDataPath = ".\docker\postgres\data\pgdata"
+  if (-not (Test-Path $PgDataPath)) {
+    return $false
+  }
+  if (Test-Path (Join-Path $PgDataPath "PG_VERSION")) {
+    return $true
+  }
+  return [bool](Get-ChildItem -Path $PgDataPath -Force -ErrorAction SilentlyContinue | Select-Object -First 1)
+}
+
+function Convert-ToSqlLiteralValue([string]$Value) {
+  return $Value.Replace("'", "''")
+}
+
+function Convert-ToSqlUserIdentifier([string]$Value) {
+  if (-not $Value -or $Value -match "[^A-Za-z0-9_]") {
+    return '"' + $Value.Replace('"', '""') + '"'
+  }
+  return $Value
 }
 
 function Normalize-DockerArchitecture([string]$Architecture) {
@@ -284,6 +339,53 @@ if (Invoke-NativeQuiet { docker compose version }) {
   Fail "Docker Compose is required. Install the Docker Compose plugin or docker-compose first."
 }
 
+function Invoke-ComposeCommand([string[]]$Arguments) {
+  if ($UseDockerComposePlugin) {
+    & docker compose @Arguments
+  } else {
+    & docker-compose @Arguments
+  }
+}
+
+function Sync-PostgresPassword([string]$NewPassword) {
+  $DbName = Read-EnvValue "POSTGRES_DB" ".\.env"
+  $DbUser = Read-EnvValue "POSTGRES_USER" ".\.env"
+  if (-not $DbName) { $DbName = "1flowbase" }
+  if (-not $DbUser) { $DbUser = "postgres" }
+
+  $EscapedPassword = Convert-ToSqlLiteralValue $NewPassword
+  $DbUserSql = Convert-ToSqlUserIdentifier $DbUser
+
+  Write-Host "Postgres password changed and existing pgdata was found; syncing database user password."
+  Invoke-ComposeCommand @("up", "-d", "db")
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Could not start Postgres for password sync."
+  }
+
+  $Ready = $false
+  for ($Attempt = 1; $Attempt -le 30; $Attempt++) {
+    if (Invoke-NativeQuiet { Invoke-ComposeCommand @("exec", "-T", "db", "pg_isready", "-U", $DbUser, "-d", $DbName) }) {
+      $Ready = $true
+      break
+    }
+    Start-Sleep -Seconds 2
+  }
+
+  if (-not $Ready) {
+    Fail "Postgres did not become ready; could not sync POSTGRES_PASSWORD."
+  }
+
+  Invoke-ComposeCommand @(
+    "exec", "-T", "db", "psql", "-U", $DbUser, "-d", $DbName,
+    "-v", "ON_ERROR_STOP=1",
+    "-c", "ALTER USER $DbUserSql WITH PASSWORD '$EscapedPassword';"
+  )
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Could not sync Postgres user password."
+  }
+  Write-Host "Synced Postgres user password for $DbUser."
+}
+
 if (Test-Path ".\docker") {
   Write-Host "Using existing ./docker directory."
 } else {
@@ -304,6 +406,17 @@ if (Test-Path ".\docker") {
 }
 
 $PromptConfigValues = $false
+$OldPostgresPassword = $null
+$OldBootstrapRootAccount = $null
+$OldBootstrapRootPassword = $null
+$OldProviderSecret = $null
+if (Test-Path ".\docker\.env") {
+  $OldPostgresPassword = Read-EnvValue "POSTGRES_PASSWORD" ".\docker\.env"
+  $OldBootstrapRootAccount = Read-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" ".\docker\.env"
+  $OldBootstrapRootPassword = Read-EnvValue "BOOTSTRAP_ROOT_PASSWORD" ".\docker\.env"
+  $OldProviderSecret = Read-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" ".\docker\.env"
+}
+
 if (-not (Test-Path ".\docker\.env")) {
   Copy-Item ".\docker\.env.example" ".\docker\.env"
   Write-Host "Created docker/.env from docker/.env.example."
@@ -311,10 +424,9 @@ if (-not (Test-Path ".\docker\.env")) {
 } else {
   Write-Host "Using existing docker/.env."
   if ($ShouldPrompt) {
-    $OverwriteEnv = Prompt-YesNo "Overwrite current docker/.env from docker/.env.example?" $false
-    if ($OverwriteEnv) {
-      Copy-Item ".\docker\.env.example" ".\docker\.env" -Force
-      Write-Host "Overwrote docker/.env from docker/.env.example."
+    Show-EnvSummary ".\docker\.env"
+    $UpdateEnv = Prompt-YesNo "Update current docker/.env configuration?" $false
+    if ($UpdateEnv) {
       $PromptConfigValues = $true
     } else {
       Write-Host "Keeping existing docker/.env."
@@ -357,6 +469,38 @@ if ($ShouldPrompt -and $PromptConfigValues) {
   Prompt-OfficialPluginGithubProxyUrl
 }
 
+$NewPostgresPassword = Read-EnvValue "POSTGRES_PASSWORD" ".\docker\.env"
+$NewBootstrapRootAccount = Read-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" ".\docker\.env"
+$NewBootstrapRootPassword = Read-EnvValue "BOOTSTRAP_ROOT_PASSWORD" ".\docker\.env"
+$NewProviderSecret = Read-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" ".\docker\.env"
+$PostgresPasswordSyncRequired = $false
+
+if (Test-PostgresDataExists) {
+  if ($NewPostgresPassword -and $OldPostgresPassword -ne $NewPostgresPassword) {
+    $PostgresPasswordSyncRequired = $true
+  }
+
+  if ($OldBootstrapRootAccount -and $OldBootstrapRootAccount -ne $NewBootstrapRootAccount) {
+    Write-Host "Warning: BOOTSTRAP_ROOT_ACCOUNT only affects initial bootstrap; existing root users are not renamed automatically."
+  }
+  if ($OldBootstrapRootPassword -and $OldBootstrapRootPassword -ne $NewBootstrapRootPassword) {
+    Write-Host "Warning: BOOTSTRAP_ROOT_PASSWORD only affects initial bootstrap; existing root passwords are not reset automatically."
+  }
+  if ($OldProviderSecret -and $OldProviderSecret -ne $NewProviderSecret) {
+    $Message = "API_PROVIDER_SECRET_MASTER_KEY changed while existing pgdata was found. Existing provider/data-source secrets may become unreadable without a key rotation."
+    if ($ShouldPrompt) {
+      $ContinueProviderSecretChange = Prompt-YesNo "$Message Continue?" $false
+      if (-not $ContinueProviderSecretChange) {
+        Set-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" $OldProviderSecret ".\docker\.env"
+        Fail "Restored the previous API_PROVIDER_SECRET_MASTER_KEY."
+      }
+    } else {
+      Set-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" $OldProviderSecret ".\docker\.env"
+      Fail $Message
+    }
+  }
+}
+
 if ($null -eq $PullImages) {
   if ($ShouldPrompt) {
     if (Test-LocalLatestFlowbaseImages ".\docker\.env") {
@@ -377,7 +521,7 @@ if ($null -eq $StartContainers) {
   }
 }
 
-if (-not $PullImages -and -not $StartContainers) {
+if (-not $PostgresPasswordSyncRequired -and -not $PullImages -and -not $StartContainers) {
   Write-Host "Docker files are ready in ./docker."
   Write-Host "No images were pulled and no containers were started."
   Write-Host "To start later, run: cd docker && docker compose pull && docker compose up -d"
@@ -389,24 +533,23 @@ if (-not (Invoke-NativeQuiet { docker info })) {
 }
 
 Set-Location ".\docker"
-Assert-FlowbaseImagePlatformSupport
+
+if ($PostgresPasswordSyncRequired) {
+  Sync-PostgresPassword $NewPostgresPassword
+}
+
+if ($PullImages -or $StartContainers) {
+  Assert-FlowbaseImagePlatformSupport
+}
 
 if ($PullImages) {
-  if ($UseDockerComposePlugin) {
-    docker compose pull
-  } else {
-    docker-compose pull
-  }
+  Invoke-ComposeCommand @("pull")
 } else {
   Write-Host "Skipping image pull."
 }
 
 if ($StartContainers) {
-  if ($UseDockerComposePlugin) {
-    docker compose up -d
-  } else {
-    docker-compose up -d
-  }
+  Invoke-ComposeCommand @("up", "-d")
 } else {
   Write-Host "Skipping container startup."
   Write-Host "To start later, run: cd docker && docker compose up -d"

@@ -7,6 +7,7 @@ const path = require('node:path');
 const { main, readInputs } = require('../../cli/github-quality-gate.js');
 const {
   main: aggregateMain,
+  parseExpectedScopes,
   readInputs: readAggregateInputs,
 } = require('../../cli/github-quality-gate-aggregate.js');
 
@@ -118,6 +119,33 @@ test('readAggregateInputs maps aggregate environment inputs', () => {
     prNumber: 658,
     githubToken: 'token',
     environmentName: 'nightly-latest',
+  });
+});
+
+test('parseExpectedScopes maps comma-separated aggregate scope inputs', () => {
+  assert.equal(parseExpectedScopes(''), null);
+  assert.deepEqual(parseExpectedScopes('repo-tooling, repo-frontend,container-images'), [
+    'repo-tooling',
+    'repo-frontend',
+    'container-images',
+  ]);
+});
+
+test('readAggregateInputs can override expected aggregate scopes', () => {
+  assert.deepEqual(readAggregateInputs({
+    INPUT_ARTIFACT_ROOT: 'tmp/test-governance/parallel',
+    INPUT_REPORT_TYPE: 'ci',
+    INPUT_PUBLISH_ISSUE: 'false',
+    INPUT_EXPECTED_SCOPES: 'repo-tooling,container-images',
+  }), {
+    artifactRoot: 'tmp/test-governance/parallel',
+    reportType: 'ci',
+    publishIssue: false,
+    publishPrComment: false,
+    prNumber: 0,
+    githubToken: '',
+    environmentName: '',
+    expectedScopes: ['repo-tooling', 'container-images'],
   });
 });
 

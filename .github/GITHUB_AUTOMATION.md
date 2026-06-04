@@ -7,7 +7,8 @@ This directory owns GitHub Actions automation for repository quality gates.
 | Path | Purpose |
 | --- | --- |
 | `.github/workflows/verify.yml` | Automatic CI for `pull_request` and `push` to `main` / `latest`; runs repo slices, backend consistency, coverage slices, and React Doctor frontend gates in parallel, updates one PR report comment for same-repository pull requests, then publishes one aggregate issue only for `latest` pushes. |
-| `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run; full `ci` scope runs component gates in parallel before one aggregate Issue report. |
+| `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run; full `ci` scope runs component gates, coverage gates, and container image security in parallel before one aggregate Issue report. |
+| `.github/workflows/container-images.yml` | Container image CD for `web`, `api-server`, and `plugin-runner`; builds scan-candidate GHCR tags, runs Trivy admission scans, promotes passing images to version and `latest` tags, then publishes a CD quality gate Issue report. |
 | `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI, manual, and nightly quality gates. |
 
 ## Automatic CI
@@ -68,6 +69,37 @@ Use the artifact for full logs, raw coverage files, and security-risk finding de
 Runs use branch-level concurrency, so a newer push cancels an older in-progress quality gate
 for the same branch before stale runs can publish or close quality issues.
 
+## Container Image CD
+
+`container-images.yml` publishes the `web`, `api-server`, and `plugin-runner` images for
+`latest` pushes and for the selected `workflow_dispatch` component. Each enabled matrix row
+builds a multi-platform scan-candidate tag named `scan-<run_id>-<run_attempt>-<sha>` first.
+The workflow does not push the official version tag or `latest` tag from the build step.
+
+Before promotion, Trivy scans the candidate image with a pinned `aquasecurity/trivy-action`
+commit for action version `v0.36.0`; the action installs Trivy `v0.70.0`. `HIGH` findings are
+written as warning evidence with `exit-code: "0"`, while `CRITICAL` findings run with
+`exit-code: "1"` and block official publication. Reports are uploaded from:
+
+```text
+tmp/test-governance/trivy-${component}-high.json
+tmp/test-governance/trivy-${component}-critical.json
+```
+
+After the publish matrix finishes, the report job downloads the Trivy artifacts, runs
+`scope: container-images` through the local Quality Gate Action, and publishes one
+`[Quality Gate][CD]` Issue for the container image run. The issue body includes a readable
+component table, HIGH / CRITICAL counts, top vulnerabilities, and evidence paths. The local
+reporter writes:
+
+```text
+tmp/test-governance/container-image-security.md
+tmp/test-governance/container-image-security.json
+```
+
+Only after the `CRITICAL` gate passes does the workflow promote the scanned candidate manifest
+to `${image_tag}` and `latest` with `docker buildx imagetools create`.
+
 ## Manual And Nightly Quality Gate
 
 `quality-gate.yml` is triggered from GitHub Actions with `workflow_dispatch` and by a daily
@@ -83,7 +115,8 @@ environment: leave empty
 
 For `scope: ci`, manual and scheduled runs mirror the automatic CI shape: repo tooling,
 repo frontend, backend static/fmt/package shards, backend app test package shards, backend
-consistency, frontend coverage, and backend coverage package shards run as separate jobs.
+consistency, frontend coverage, backend coverage package shards, and container image security
+run as separate jobs.
 An aggregate job downloads their artifacts, publishes one Issue report, and uploads
 `test-governance-artifacts`.
 This keeps wall time close to the slowest component gate instead of the sum of all gates.
@@ -91,7 +124,7 @@ Each component job publishes `publish_issue: "false"`; only the aggregate job pu
 final report with `publish_issue: "true"`.
 
 For narrower dispatch scopes such as `repo-frontend`, `repo-backend`, `backend-consistency`,
-or `coverage-backend`,
+`coverage-backend`, or `container-images`,
 `quality-gate.yml` runs one targeted job and publishes that single-scope report directly.
 Manual runs share the same target-branch concurrency group as automatic quality gates.
 Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-latest`.
@@ -126,6 +159,7 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `coverage-backend-control-plane` | `node scripts/node/verify-coverage.js backend control-plane` |
 | `coverage-backend-storage-postgres` | `node scripts/node/verify-coverage.js backend storage-postgres` |
 | `coverage-backend-api-server` | `node scripts/node/verify-coverage.js backend api-server` |
+| `container-images` | `node scripts/node/cli/container-image-security.js` |
 
 Use `ci` for the full online repository quality gate. The local `node scripts/node/verify-ci.js`
 entry still runs the same gates serially for environments that need one local command, but the
