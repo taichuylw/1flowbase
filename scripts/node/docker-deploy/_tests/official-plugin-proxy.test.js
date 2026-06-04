@@ -79,7 +79,7 @@ test('docker deploy shell script can prefill official plugin GitHub proxy URL', 
   );
 });
 
-test('docker deploy shell script asks before overwriting an existing env file', () => {
+test('docker deploy shell script shows and updates existing env configuration', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
   const tempBin = path.join(tempRoot, 'bin');
   const dockerDir = path.join(tempRoot, 'docker');
@@ -120,6 +120,9 @@ test('docker deploy shell script asks before overwriting an existing env file', 
     `#!/usr/bin/env sh
 if [ "$1 $2" = "compose version" ]; then exit 0; fi
 if [ "$1 $2" = "image inspect" ]; then exit 1; fi
+if [ "$1" = "info" ]; then exit 0; fi
+if [ "$1 $2 $3 $4" = "compose up -d db" ]; then exit 0; fi
+if [ "$1 $2 $3" = "compose exec -T" ]; then exit 0; fi
 exit 0
 `,
   );
@@ -127,24 +130,98 @@ exit 0
   const keepResult = runInteractiveShellDeploy({
     tempRoot,
     tempBin,
-    input: `n\n${'\n'.repeat(12)}`,
+    input: `n\nn\nn\n`,
   });
   assert.equal(keepResult.status, 0, `${keepResult.stdout}\n${keepResult.stderr}`);
-  assert.match(keepResult.stdout, /Overwrite current docker\/.env from docker\/.env.example\?/u);
+  assert.match(keepResult.stdout, /Current docker\/.env configuration:/u);
+  assert.match(keepResult.stdout, /POSTGRES_PASSWORD=<set>/u);
+  assert.match(keepResult.stdout, /Update current docker\/.env configuration\?/u);
   assert.match(fs.readFileSync(path.join(dockerDir, '.env'), 'utf8'), /^POSTGRES_PASSWORD=old-password$/mu);
 
-  const overwriteResult = runInteractiveShellDeploy({
+  const updateResult = runInteractiveShellDeploy({
     tempRoot,
     tempBin,
-    input: `y\n${'\n'.repeat(12)}`,
+    input: ['y', 'new-password', '', 'new-root-password', 'new-provider-secret', '4100', 'n', 'n', 'n', ''].join(
+      '\n',
+    ),
   });
-  assert.equal(overwriteResult.status, 0, `${overwriteResult.stdout}\n${overwriteResult.stderr}`);
+  assert.equal(updateResult.status, 0, `${updateResult.stdout}\n${updateResult.stderr}`);
   assert.match(
     fs.readFileSync(path.join(dockerDir, '.env'), 'utf8'),
-    /^POSTGRES_PASSWORD=example-password$/mu,
+    /^POSTGRES_PASSWORD=new-password$/mu,
   );
   assert.match(fs.readFileSync(path.join(dockerDir, '.env'), 'utf8'), /^WEB_PORT=4100$/mu);
+  assert.match(
+    fs.readFileSync(path.join(dockerDir, '.env'), 'utf8'),
+    /^API_PROVIDER_SECRET_MASTER_KEY=new-provider-secret$/mu,
+  );
   assert.doesNotMatch(fs.readFileSync(path.join(dockerDir, '.env'), 'utf8'), /old-password/u);
+});
+
+test('docker deploy shell script syncs postgres password when existing pgdata is reused', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
+  const tempBin = path.join(tempRoot, 'bin');
+  const dockerDir = path.join(tempRoot, 'docker');
+  const callsFile = path.join(tempRoot, 'docker-calls.log');
+  fs.mkdirSync(tempBin);
+  fs.mkdirSync(path.join(dockerDir, 'postgres', 'data', 'pgdata'), { recursive: true });
+  fs.writeFileSync(path.join(dockerDir, 'postgres', 'data', 'pgdata', 'PG_VERSION'), '16\n');
+  fs.writeFileSync(
+    path.join(dockerDir, '.env.example'),
+    [
+      'POSTGRES_DB=1flowbase',
+      'POSTGRES_USER=postgres',
+      'POSTGRES_PASSWORD=example-password',
+      'API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=',
+      '',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(dockerDir, '.env'),
+    [
+      'POSTGRES_DB=1flowbase',
+      'POSTGRES_USER=postgres',
+      'POSTGRES_PASSWORD=old-password',
+      'API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=',
+      '',
+    ].join('\n'),
+  );
+  makeExecutable(
+    path.join(tempBin, 'docker'),
+    `#!/usr/bin/env sh
+printf '%s\\n' "$*" >> ${shellQuote(callsFile)}
+if [ "$1 $2" = "compose version" ]; then exit 0; fi
+if [ "$1" = "info" ]; then exit 0; fi
+if [ "$1 $2 $3 $4" = "compose up -d db" ]; then exit 0; fi
+if [ "$1 $2 $3" = "compose exec -T" ]; then exit 0; fi
+exit 0
+`,
+  );
+
+  const result = spawnSync(
+    'sh',
+    [
+      path.join(repoRoot, 'scripts', 'shell', 'docker-deploy.sh'),
+      '--non-interactive',
+      '--db-password',
+      "new'password",
+    ],
+    {
+      cwd: tempRoot,
+      env: {
+        ...process.env,
+        PATH: `${tempBin}${path.delimiter}${process.env.PATH || ''}`,
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Postgres password changed and existing pgdata was found/u);
+  const calls = fs.readFileSync(callsFile, 'utf8');
+  assert.match(calls, /compose up -d db/u);
+  assert.match(calls, /ALTER USER postgres WITH PASSWORD 'new''password'/u);
+  assert.match(fs.readFileSync(path.join(dockerDir, '.env'), 'utf8'), /^POSTGRES_PASSWORD=new'password$/mu);
 });
 
 test('docker deploy shell script asks before updating local latest images', () => {
@@ -253,7 +330,8 @@ test('docker deploy scripts document the CN accelerator prompt and default proxy
     assert.match(script, /docker manifest inspect/u);
     assert.match(script, /docker image inspect/u);
     assert.match(script, /does not publish/u);
-    assert.match(script, /Overwrite current docker\/.env from docker\/.env.example\?/u);
+    assert.match(script, /Current docker\/.env configuration/u);
+    assert.match(script, /Update current docker\/.env configuration\?/u);
     assert.match(script, /Local latest Docker images were found\. Update Docker images\?/u);
   }
 
@@ -264,7 +342,7 @@ test('docker deploy scripts document the CN accelerator prompt and default proxy
 test('container image workflow publishes linux amd64 and arm64 manifests', () => {
   const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
 
-  assert.match(workflow, /docker\/setup-qemu-action@v3/u);
+  assert.match(workflow, /docker\/setup-qemu-action@v4/u);
   assert.match(workflow, /^\s+platforms:\s+linux\/amd64,linux\/arm64$/mu);
 });
 

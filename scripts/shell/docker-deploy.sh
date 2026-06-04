@@ -54,6 +54,45 @@ set_env_value() {
   ' "$file" > "$tmp" && mv "$tmp" "$file"
 }
 
+display_env_value() {
+  key="$1"
+  value="$2"
+  if [ -z "$value" ]; then
+    printf '%s\n' "<empty>"
+    return
+  fi
+
+  case "$key" in
+    POSTGRES_PASSWORD|BOOTSTRAP_ROOT_PASSWORD|API_PROVIDER_SECRET_MASTER_KEY)
+      printf '%s\n' "<set>"
+      ;;
+    *)
+      printf '%s\n' "$value"
+      ;;
+  esac
+}
+
+print_env_summary() {
+  file="$1"
+  echo "Current docker/.env configuration:"
+  for key in \
+    FLOWBASE_WEB_VERSION \
+    FLOWBASE_API_SERVER_VERSION \
+    FLOWBASE_PLUGIN_RUNNER_VERSION \
+    WEB_PORT \
+    POSTGRES_DB \
+    POSTGRES_USER \
+    POSTGRES_PASSWORD \
+    BOOTSTRAP_ROOT_ACCOUNT \
+    BOOTSTRAP_ROOT_PASSWORD \
+    API_PROVIDER_SECRET_MASTER_KEY \
+    API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL
+  do
+    value="$(read_env_value "$key" "$file")"
+    echo "  ${key}=$(display_env_value "$key" "$value")"
+  done
+}
+
 require_value() {
   option="$1"
   [ -n "${2-}" ] || fail "Missing value for ${option}."
@@ -144,6 +183,59 @@ prompt_official_plugin_github_proxy_url() {
     set_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL "" ./docker/.env
     echo "Disabled API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
   fi
+}
+
+postgres_data_exists() {
+  [ -d ./docker/postgres/data/pgdata ] || return 1
+  [ -f ./docker/postgres/data/pgdata/PG_VERSION ] && return 0
+  find ./docker/postgres/data/pgdata -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .
+}
+
+sql_quote_literal_value() {
+  printf '%s' "$1" | sed "s/'/''/g"
+}
+
+sql_user_identifier() {
+  value="$1"
+  case "$value" in
+    ""|*[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_]*)
+      escaped="$(printf '%s' "$value" | sed 's/"/""/g')"
+      printf '"%s"\n' "$escaped"
+      ;;
+    *)
+      printf '%s\n' "$value"
+      ;;
+  esac
+}
+
+sync_postgres_password() {
+  new_password="$1"
+  db_name="$(read_env_value POSTGRES_DB .env)"
+  db_user="$(read_env_value POSTGRES_USER .env)"
+  [ -n "$db_name" ] || db_name="1flowbase"
+  [ -n "$db_user" ] || db_user="postgres"
+
+  escaped_password="$(sql_quote_literal_value "$new_password")"
+  db_user_sql="$(sql_user_identifier "$db_user")"
+
+  echo "Postgres password changed and existing pgdata was found; syncing database user password."
+  compose up -d db
+
+  ready=0
+  attempt=1
+  while [ "$attempt" -le 30 ]; do
+    if compose exec -T db pg_isready -U "$db_user" -d "$db_name" >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  [ "$ready" -eq 1 ] || fail "Postgres did not become ready; could not sync POSTGRES_PASSWORD."
+
+  compose exec -T db psql -U "$db_user" -d "$db_name" -v ON_ERROR_STOP=1 -c "ALTER USER ${db_user_sql} WITH PASSWORD '${escaped_password}';"
+  echo "Synced Postgres user password for ${db_user}."
 }
 
 normalize_docker_architecture() {
@@ -450,6 +542,17 @@ else
 fi
 
 PROMPT_CONFIG_VALUES=0
+OLD_POSTGRES_PASSWORD=""
+OLD_BOOTSTRAP_ROOT_ACCOUNT=""
+OLD_BOOTSTRAP_ROOT_PASSWORD=""
+OLD_PROVIDER_SECRET=""
+if [ -f ./docker/.env ]; then
+  OLD_POSTGRES_PASSWORD="$(read_env_value POSTGRES_PASSWORD ./docker/.env)"
+  OLD_BOOTSTRAP_ROOT_ACCOUNT="$(read_env_value BOOTSTRAP_ROOT_ACCOUNT ./docker/.env)"
+  OLD_BOOTSTRAP_ROOT_PASSWORD="$(read_env_value BOOTSTRAP_ROOT_PASSWORD ./docker/.env)"
+  OLD_PROVIDER_SECRET="$(read_env_value API_PROVIDER_SECRET_MASTER_KEY ./docker/.env)"
+fi
+
 if [ ! -f ./docker/.env ]; then
   cp ./docker/.env.example ./docker/.env
   echo "Created docker/.env from docker/.env.example."
@@ -457,10 +560,9 @@ if [ ! -f ./docker/.env ]; then
 else
   echo "Using existing docker/.env."
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
-    OVERWRITE_ENV="$(prompt_yes_no "Overwrite current docker/.env from docker/.env.example?" "no")"
-    if [ "$OVERWRITE_ENV" = "yes" ]; then
-      cp ./docker/.env.example ./docker/.env
-      echo "Overwrote docker/.env from docker/.env.example."
+    print_env_summary ./docker/.env
+    UPDATE_ENV="$(prompt_yes_no "Update current docker/.env configuration?" "no")"
+    if [ "$UPDATE_ENV" = "yes" ]; then
       PROMPT_CONFIG_VALUES=1
     else
       echo "Keeping existing docker/.env."
@@ -505,6 +607,38 @@ elif [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "No interactive terminal was found. Keeping docker/.env values."
 fi
 
+NEW_POSTGRES_PASSWORD="$(read_env_value POSTGRES_PASSWORD ./docker/.env)"
+NEW_BOOTSTRAP_ROOT_ACCOUNT="$(read_env_value BOOTSTRAP_ROOT_ACCOUNT ./docker/.env)"
+NEW_BOOTSTRAP_ROOT_PASSWORD="$(read_env_value BOOTSTRAP_ROOT_PASSWORD ./docker/.env)"
+NEW_PROVIDER_SECRET="$(read_env_value API_PROVIDER_SECRET_MASTER_KEY ./docker/.env)"
+POSTGRES_PASSWORD_SYNC_REQUIRED=0
+
+if postgres_data_exists; then
+  if [ -n "$NEW_POSTGRES_PASSWORD" ] && [ "$OLD_POSTGRES_PASSWORD" != "$NEW_POSTGRES_PASSWORD" ]; then
+    POSTGRES_PASSWORD_SYNC_REQUIRED=1
+  fi
+
+  if [ -n "$OLD_BOOTSTRAP_ROOT_ACCOUNT" ] && [ "$OLD_BOOTSTRAP_ROOT_ACCOUNT" != "$NEW_BOOTSTRAP_ROOT_ACCOUNT" ]; then
+    echo "Warning: BOOTSTRAP_ROOT_ACCOUNT only affects initial bootstrap; existing root users are not renamed automatically."
+  fi
+  if [ -n "$OLD_BOOTSTRAP_ROOT_PASSWORD" ] && [ "$OLD_BOOTSTRAP_ROOT_PASSWORD" != "$NEW_BOOTSTRAP_ROOT_PASSWORD" ]; then
+    echo "Warning: BOOTSTRAP_ROOT_PASSWORD only affects initial bootstrap; existing root passwords are not reset automatically."
+  fi
+  if [ -n "$OLD_PROVIDER_SECRET" ] && [ "$OLD_PROVIDER_SECRET" != "$NEW_PROVIDER_SECRET" ]; then
+    message="API_PROVIDER_SECRET_MASTER_KEY changed while existing pgdata was found. Existing provider/data-source secrets may become unreadable without a key rotation."
+    if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
+      CONTINUE_PROVIDER_SECRET_CHANGE="$(prompt_yes_no "${message} Continue?" "no")"
+      if [ "$CONTINUE_PROVIDER_SECRET_CHANGE" != "yes" ]; then
+        set_env_value API_PROVIDER_SECRET_MASTER_KEY "$OLD_PROVIDER_SECRET" ./docker/.env
+        fail "Restored the previous API_PROVIDER_SECRET_MASTER_KEY."
+      fi
+    else
+      set_env_value API_PROVIDER_SECRET_MASTER_KEY "$OLD_PROVIDER_SECRET" ./docker/.env
+      fail "$message"
+    fi
+  fi
+fi
+
 if [ -z "$PULL_IMAGES" ]; then
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
     PULL_IMAGES="$(prompt_pull_images)"
@@ -525,7 +659,7 @@ else
   START_CONTAINERS="$(normalize_yes_no "$START_CONTAINERS")"
 fi
 
-if [ "$PULL_IMAGES" = "no" ] && [ "$START_CONTAINERS" = "no" ]; then
+if [ "$POSTGRES_PASSWORD_SYNC_REQUIRED" -eq 0 ] && [ "$PULL_IMAGES" = "no" ] && [ "$START_CONTAINERS" = "no" ]; then
   echo "Docker files are ready in ./docker."
   echo "No images were pulled and no containers were started."
   echo "To start later, run: cd docker && docker compose pull && docker compose up -d"
@@ -535,7 +669,14 @@ fi
 docker info >/dev/null 2>&1 || fail "Docker is installed but the daemon is not reachable. Start Docker and try again."
 
 cd docker
-verify_flowbase_image_platforms
+
+if [ "$POSTGRES_PASSWORD_SYNC_REQUIRED" -eq 1 ]; then
+  sync_postgres_password "$NEW_POSTGRES_PASSWORD"
+fi
+
+if [ "$PULL_IMAGES" = "yes" ] || [ "$START_CONTAINERS" = "yes" ]; then
+  verify_flowbase_image_platforms
+fi
 
 if [ "$PULL_IMAGES" = "yes" ]; then
   compose pull
