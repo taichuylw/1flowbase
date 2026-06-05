@@ -2,9 +2,7 @@ import {
   CloudDownloadOutlined,
   FileTextOutlined,
   GithubOutlined,
-  QuestionCircleOutlined,
-  TeamOutlined,
-  WarningOutlined
+  QuestionCircleOutlined
 } from '@ant-design/icons';
 import { fetchConsoleReleaseStatus } from '@1flowbase/api-client';
 import { useQuery } from '@tanstack/react-query';
@@ -40,85 +38,47 @@ function ReleaseStatusMenuItem() {
     retry: false
   });
   const releaseStatus = releaseStatusQuery.data;
-  const releaseUrl = releaseStatus?.release_info?.html_url;
+  const currentVersion = formatReleaseVersion(releaseStatus?.current_version);
+  const latestVersion =
+    releaseStatus?.has_update && releaseStatus.latest_version
+      ? formatReleaseVersion(releaseStatus.latest_version)
+      : null;
 
   return (
     <div
       className="app-shell-release-status"
       onClick={(event) => event.stopPropagation()}
     >
-      <div className="app-shell-release-status__header">
-        <span className="app-shell-release-status__title">
-          <CloudDownloadOutlined />
-          <span>{i18nText("appShell", "release_status.version")}</span>
-          {releaseStatus?.has_update ? (
-            <span className="app-shell-release-status__dot" aria-hidden="true" />
-          ) : null}
-        </span>
-        {releaseStatusQuery.isFetching ? <Spin size="small" /> : null}
+      <div className="app-shell-release-status__line">
+        <CloudDownloadOutlined />
+        {currentVersion ? (
+          <span>{currentVersion}</span>
+        ) : (
+          <Spin size="small" />
+        )}
+        {releaseStatusQuery.isFetching && currentVersion ? (
+          <Spin size="small" />
+        ) : null}
       </div>
 
-      {releaseStatus ? (
-        <>
-          <dl className="app-shell-release-status__versions">
-            <div>
-              <dt>{i18nText("appShell", "release_status.current_version")}</dt>
-              <dd>{releaseStatus.current_version}</dd>
-            </div>
-            <div>
-              <dt>{i18nText("appShell", "release_status.latest_version")}</dt>
-              <dd>{releaseStatus.latest_version}</dd>
-            </div>
-          </dl>
-
-          <div
-            className={
-              releaseStatus.has_update
-                ? 'app-shell-release-status__state app-shell-release-status__state--update'
-                : 'app-shell-release-status__state'
-            }
-          >
-            {releaseStatus.has_update
-              ? i18nText("appShell", "release_status.update_available")
-              : i18nText("appShell", "release_status.up_to_date")}
-          </div>
-
-          {releaseStatus.warning ? (
-            <div className="app-shell-release-status__warning">
-              <WarningOutlined />
-              <span>{i18nText("appShell", "release_status.warning")}</span>
-            </div>
-          ) : null}
-
-          <div className="app-shell-release-status__links">
-            {releaseUrl ? (
-              <a href={releaseUrl} target="_blank" rel="noreferrer">
-                {i18nText("appShell", "release_status.view_release")}
-              </a>
-            ) : null}
-            <a
-              href={releaseStatus.contributors_url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <TeamOutlined />
-              {i18nText("appShell", "release_status.contributors")}
-            </a>
-          </div>
-
-          <details className="app-shell-release-status__upgrade">
-            <summary>{i18nText("appShell", "release_status.docker_upgrade")}</summary>
-            <code>{releaseStatus.upgrade_commands.shell}</code>
-            <code>{releaseStatus.upgrade_commands.powershell}</code>
-          </details>
-        </>
-      ) : (
-        <div className="app-shell-release-status__loading">
-          {i18nText("appShell", "release_status.loading")}
-        </div>
-      )}
+      {latestVersion ? (
+        <span className="app-shell-release-status__latest">
+          {latestVersion}
+          {i18nText("appShell", "release_status.latest_marker")}
+        </span>
+      ) : null}
     </div>
   );
+}
+
+function formatReleaseVersion(version: string | null | undefined) {
+  const normalizedVersion = version?.trim();
+  if (!normalizedVersion) {
+    return null;
+  }
+  return normalizedVersion.startsWith('v')
+    ? normalizedVersion
+    : `v${normalizedVersion}`;
 }
 
 export function HelpChromeMenu() {

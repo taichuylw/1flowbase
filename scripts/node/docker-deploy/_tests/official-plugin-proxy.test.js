@@ -385,6 +385,17 @@ test('container image workflow scans temporary image tags before official promot
   assert.match(workflow, /path: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-\*\.json/u);
 });
 
+test('container image workflow publishes a GitHub release for the latest API version', () => {
+  const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
+
+  assert.match(workflow, /publish-release:\n\s+if: \$\{\{ always\(\) && github\.event_name == 'push' && github\.ref == 'refs\/heads\/latest'/u);
+  assert.match(workflow, /permissions:\n\s+contents: write/u);
+  assert.match(workflow, /RELEASE_TAG: \$\{\{ needs\.select-api-server\.outputs\.image_tag \}\}/u);
+  assert.match(workflow, /gh release view "\$RELEASE_TAG"/u);
+  assert.match(workflow, /gh release create "\$RELEASE_TAG"/u);
+  assert.match(workflow, /Docker images for \$RELEASE_TAG have been published from the latest branch/u);
+});
+
 test('container image workflow records a CD quality gate artifact for Trivy reports', () => {
   const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
 

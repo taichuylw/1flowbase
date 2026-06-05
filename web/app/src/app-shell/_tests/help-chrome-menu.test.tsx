@@ -14,17 +14,17 @@ import { appI18n } from '../../shared/i18n/app-i18n';
 import { HelpChromeMenu } from '../HelpChromeMenu';
 
 describe('HelpChromeMenu', () => {
-  test('shows release status and Docker upgrade commands in the help popup', async () => {
+  test('shows compact API version status in the help popup', async () => {
     await appI18n.changeLanguage('zh_Hans');
     fetchConsoleReleaseStatus.mockResolvedValue({
-      current_version: '0.1.5',
-      latest_version: '0.1.6',
+      current_version: '0.1.6',
+      latest_version: '0.1.7',
       has_update: true,
       release_info: {
-        name: 'v0.1.6',
+        name: 'v0.1.7',
         body: 'Release notes',
         published_at: '2026-06-05T00:00:00Z',
-        html_url: 'https://github.com/taichuy/1flowbase/releases/tag/v0.1.6'
+        html_url: 'https://github.com/taichuy/1flowbase/releases/tag/v0.1.7'
       },
       contributors_url:
         'https://github.com/taichuy/1flowbase/graphs/contributors',
@@ -46,19 +46,12 @@ describe('HelpChromeMenu', () => {
 
     fireEvent.mouseEnter(screen.getByLabelText('帮助'));
 
-    expect(await screen.findByText('版本')).toBeInTheDocument();
-    expect(await screen.findByText('0.1.5')).toBeInTheDocument();
-    expect(await screen.findByText('0.1.6')).toBeInTheDocument();
-    expect(await screen.findByText('查看发布')).toHaveAttribute(
-      'href',
-      'https://github.com/taichuy/1flowbase/releases/tag/v0.1.6'
-    );
-    expect(await screen.findByText('贡献者')).toHaveAttribute(
-      'href',
-      'https://github.com/taichuy/1flowbase/graphs/contributors'
-    );
-    expect(
-      await screen.findByText(/scripts\/shell\/docker-deploy\.sh/u)
-    ).toBeInTheDocument();
+    expect(await screen.findByText('v0.1.6')).toBeInTheDocument();
+    expect(await screen.findByText('v0.1.7最新')).toBeInTheDocument();
+    expect(screen.queryByText('版本')).not.toBeInTheDocument();
+    expect(screen.queryByText('当前版本')).not.toBeInTheDocument();
+    expect(screen.queryByText('最新版本')).not.toBeInTheDocument();
+    expect(screen.queryByText('贡献者')).not.toBeInTheDocument();
+    expect(screen.queryByText('Docker 一键升级')).not.toBeInTheDocument();
   });
 });

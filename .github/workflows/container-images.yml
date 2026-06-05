@@ -477,6 +477,38 @@ jobs:
             --tag "${{ steps.image_refs.outputs.latest_image_ref }}" \
             "${{ steps.image_refs.outputs.scan_image_ref }}"
 
+  publish-release:
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/latest' && needs.select-api-server.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') && (needs.publish-api-server.result == 'success' || needs.publish-api-server.result == 'skipped') }}
+    needs:
+      - select-api-server
+      - publish
+      - publish-api-server
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Publish GitHub release for latest API version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.select-api-server.outputs.image_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            --target "${{ github.sha }}" \
+            --title "$RELEASE_TAG" \
+            --notes "Docker images for $RELEASE_TAG have been published from the latest branch."
+
   report:
     if: ${{ always() }}
     needs:
