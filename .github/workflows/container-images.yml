@@ -509,7 +509,7 @@ jobs:
           workflow_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           cat > release-notes.md <<EOF
-          ## Upgrade
+          ## Installation or Upgrade
 
           Linux/macOS:
 
