@@ -104,6 +104,15 @@ async fn test_state_with_runtime_profile_state(
         .join(format!("api-business-files-{}", Uuid::now_v7()))
         .display()
         .to_string();
+    config.provider_install_root = std::env::temp_dir()
+        .join(format!("api-provider-plugins-{}", Uuid::now_v7()))
+        .display()
+        .to_string();
+    config.host_extension_dropin_root = std::path::PathBuf::from(&config.provider_install_root)
+        .join("host-extension")
+        .join("dropins")
+        .display()
+        .to_string();
     let mut pool_settings =
         storage_durable::PgPoolSettings::with_max_connections(config.database_pool_max_connections);
     pool_settings.acquire_timeout = Duration::from_secs(30);
