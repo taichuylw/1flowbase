@@ -64,10 +64,11 @@ fn to_session_response(
     }
 }
 
-pub(crate) fn expired_session_cookie(cookie_name: &str) -> Cookie<'static> {
+pub(crate) fn expired_session_cookie(cookie_name: &str, cookie_secure: bool) -> Cookie<'static> {
     Cookie::build((cookie_name.to_string(), String::new()))
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(cookie_secure)
         .path("/")
         .build()
 }
@@ -117,7 +118,10 @@ pub async fn delete_session(
         .await?;
 
     Ok((
-        CookieJar::new().remove(expired_session_cookie(&state.cookie_name)),
+        CookieJar::new().remove(expired_session_cookie(
+            &state.cookie_name,
+            state.cookie_secure,
+        )),
         StatusCode::NO_CONTENT,
     ))
 }
@@ -142,7 +146,10 @@ pub async fn revoke_all_sessions(
         .await?;
 
     Ok((
-        CookieJar::new().remove(expired_session_cookie(&state.cookie_name)),
+        CookieJar::new().remove(expired_session_cookie(
+            &state.cookie_name,
+            state.cookie_secure,
+        )),
         StatusCode::NO_CONTENT,
     ))
 }

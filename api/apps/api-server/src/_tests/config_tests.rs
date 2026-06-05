@@ -217,6 +217,59 @@ fn api_config_accepts_production_with_explicit_allowed_origins() {
 }
 
 #[test]
+fn api_config_rejects_production_placeholder_provider_secret_master_key() {
+    let error = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_ENV", "production"),
+        ("API_ALLOWED_ORIGINS", "https://console.example.com"),
+        (
+            "API_PROVIDER_SECRET_MASTER_KEY",
+            "change-me-provider-secret-master-key",
+        ),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .expect_err("production config should reject placeholder provider secret key");
+
+    assert!(error.to_string().contains("API_PROVIDER_SECRET_MASTER_KEY"));
+}
+
+#[test]
+fn api_config_marks_session_cookie_secure_in_production() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_ENV", "production"),
+        ("API_ALLOWED_ORIGINS", "https://console.example.com"),
+        (
+            "API_PROVIDER_SECRET_MASTER_KEY",
+            "strong-provider-secret-master-key",
+        ),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .unwrap();
+
+    assert!(config.cookie_secure);
+}
+
+#[test]
+fn api_config_leaves_session_cookie_insecure_by_default_for_development() {
+    let config = ApiConfig::from_env_map(&base_env_without_ephemeral_backend()).unwrap();
+
+    assert!(!config.cookie_secure);
+}
+
+#[test]
 fn api_config_reads_bootstrap_workspace_name() {
     let config = ApiConfig::from_env_map(&[
         (

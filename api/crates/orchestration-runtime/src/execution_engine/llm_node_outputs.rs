@@ -177,10 +177,8 @@ pub(super) fn build_successful_llm_execution(
     if declares_public_output(node, "structured_output")
         && is_structured_response_format(&node.config)
     {
-        executor_output.insert(
-            "structured_output".to_string(),
-            parse_structured_llm_output(&answer_text),
-        );
+        let structured_output = parse_structured_llm_output(&answer_text)?;
+        executor_output.insert("structured_output".to_string(), structured_output);
     }
 
     let debug_facts = build_llm_debug_facts(

@@ -4,7 +4,7 @@ const path = require('node:path');
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const REPORT_FILE = 'repo-hygiene.json';
 const DEFAULT_MAX_FINDINGS = 400;
-const ROOT_ENTRIES = ['api', 'web', 'scripts', '.github', 'AGENTS.md'];
+const ROOT_ENTRIES = ['api', 'web', 'scripts', 'docker', '.github', 'AGENTS.md', 'test_dir.txt'];
 const SOURCE_EXTENSIONS = new Set([
   '.css',
   '.js',
@@ -45,6 +45,9 @@ const WEAK_ASSERTION_PATTERN = /\.(?:toBeTruthy|toBeDefined)\s*\(/u;
 const TEST_TITLE_PATTERN = /\b(?:describe|it|test)\s*\(\s*(['"`])([^'"`\n]+)\1/gu;
 const INLINE_TEST_TITLE_PATTERN = /^\s*(?:it|test)\s*\(\s*(['"`])([^'"`\n]+)\1/u;
 const TEST_PATH_PATTERN = /(?:^|\/)(?:_tests|tests)\//u;
+const LOCAL_ENV_ARTIFACT_PATTERN = /(?:^|\/)(?![^/]+\.env\.example$|[^/]+\.env\.template$)[^/]+\.env$/u;
+const BUILD_ARTIFACT_PATTERN = /(?:^|\/)[^/]+\.tsbuildinfo$/u;
+const ROOT_SCRATCH_ARTIFACT_PATTERN = /^[^/]*(?:test|tmp|scratch)[^/]*\.txt$/iu;
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -61,6 +64,14 @@ function isSkippedDirectory(entryName) {
 function shouldScanFile(relativePath) {
   if (SKIPPED_FILES.has(relativePath)) {
     return false;
+  }
+
+  if (
+    LOCAL_ENV_ARTIFACT_PATTERN.test(relativePath)
+    || BUILD_ARTIFACT_PATTERN.test(relativePath)
+    || ROOT_SCRATCH_ARTIFACT_PATTERN.test(relativePath)
+  ) {
+    return true;
   }
 
   return SOURCE_EXTENSIONS.has(path.extname(relativePath));
@@ -498,10 +509,42 @@ function loadFileContents(files) {
   }));
 }
 
+function collectLocalArtifactFindings(files) {
+  return files.flatMap(({ relativePath }) => {
+    if (LOCAL_ENV_ARTIFACT_PATTERN.test(relativePath)) {
+      return [createFinding({
+        rule: 'tracked-env-artifact',
+        file: relativePath,
+        message: 'local env files should be untracked or converted to an example/template file',
+      })];
+    }
+
+    if (BUILD_ARTIFACT_PATTERN.test(relativePath)) {
+      return [createFinding({
+        rule: 'tracked-build-artifact',
+        file: relativePath,
+        message: 'generated build metadata should not be tracked as source',
+      })];
+    }
+
+    if (ROOT_SCRATCH_ARTIFACT_PATTERN.test(relativePath)) {
+      return [createFinding({
+        rule: 'root-scratch-artifact',
+        file: relativePath,
+        message: 'root-level scratch files should not be tracked as source',
+      })];
+    }
+
+    return [];
+  });
+}
+
 function collectRepoHygieneFindings({ repoRoot = getRepoRoot() } = {}) {
   const files = collectSourceFiles(repoRoot);
   const fileContents = loadFileContents(files);
   const findings = [];
+
+  findings.push(...collectLocalArtifactFindings(files));
 
   for (const fileContent of fileContents) {
     findings.push(...scanSourceFile(fileContent));

@@ -186,6 +186,7 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             runtime_event_stream,
             api_docs,
             cookie_name: config.cookie_name.clone(),
+            cookie_secure: config.cookie_secure,
             session_ttl_days: config.session_ttl_days,
             bootstrap_workspace_name: config.bootstrap_workspace_name.clone(),
         }),

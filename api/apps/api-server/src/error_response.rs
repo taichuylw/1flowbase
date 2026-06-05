@@ -28,32 +28,44 @@ where
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, code) = match self.0.downcast_ref::<ControlPlaneError>() {
+        let (status, code, expose_message) = match self.0.downcast_ref::<ControlPlaneError>() {
             Some(ControlPlaneError::NotAuthenticated) => {
-                (StatusCode::UNAUTHORIZED, "not_authenticated")
+                (StatusCode::UNAUTHORIZED, "not_authenticated", true)
             }
-            Some(ControlPlaneError::PermissionDenied(reason)) => (StatusCode::FORBIDDEN, *reason),
-            Some(ControlPlaneError::NotFound(name)) => (StatusCode::NOT_FOUND, *name),
-            Some(ControlPlaneError::Conflict(name)) => (StatusCode::CONFLICT, *name),
-            Some(ControlPlaneError::InvalidInput(name)) => (StatusCode::BAD_REQUEST, *name),
+            Some(ControlPlaneError::PermissionDenied(reason)) => {
+                (StatusCode::FORBIDDEN, *reason, true)
+            }
+            Some(ControlPlaneError::NotFound(name)) => (StatusCode::NOT_FOUND, *name, true),
+            Some(ControlPlaneError::Conflict(name)) => (StatusCode::CONFLICT, *name, true),
+            Some(ControlPlaneError::InvalidInput(name)) => (StatusCode::BAD_REQUEST, *name, true),
             Some(ControlPlaneError::InvalidStateTransition { .. }) => {
-                (StatusCode::CONFLICT, "invalid_state_transition")
+                (StatusCode::CONFLICT, "invalid_state_transition", true)
             }
-            Some(ControlPlaneError::UpstreamUnavailable(name)) => (StatusCode::BAD_GATEWAY, *name),
+            Some(ControlPlaneError::UpstreamUnavailable(name)) => {
+                (StatusCode::BAD_GATEWAY, *name, true)
+            }
             None => match self.0.downcast_ref::<PluginFrameworkError>() {
                 Some(PluginFrameworkError::RuntimeContract { .. }) => {
-                    (StatusCode::BAD_GATEWAY, "provider_runtime")
+                    (StatusCode::BAD_GATEWAY, "provider_runtime", true)
                 }
-                Some(_) => (StatusCode::BAD_REQUEST, "provider_package"),
-                None => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
+                Some(_) => (StatusCode::BAD_REQUEST, "provider_package", true),
+                None => {
+                    tracing::error!(error = %self.0, "internal api error");
+                    (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", false)
+                }
             },
+        };
+        let message = if expose_message {
+            self.0.to_string()
+        } else {
+            "internal server error".to_string()
         };
 
         (
             status,
             Json(ErrorBody {
                 code: code.to_string(),
-                message: self.0.to_string(),
+                message,
             }),
         )
             .into_response()

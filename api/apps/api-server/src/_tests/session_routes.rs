@@ -14,6 +14,49 @@ use time::OffsetDateTime;
 use tower::ServiceExt;
 
 #[tokio::test]
+async fn production_login_cookie_is_marked_secure() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let mut config = test_config();
+    config.env = api_server::config::ApiEnvironment::Production;
+    config.cookie_secure = true;
+    config.cors_allowed_origins = Some(vec![header::HeaderValue::from_static(
+        "https://console.example.com",
+    )]);
+    let state = std::sync::Arc::new(api_server::app_state::ApiState {
+        cookie_secure: true,
+        ..(*state).clone()
+    });
+    let app = app_with_state_and_config(state, &config);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/public/auth/providers/password-local/sign-in")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "identifier": "root",
+                        "password": "change-me"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let cookie = response
+        .headers()
+        .get(header::SET_COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .expect("login should set session cookie");
+
+    assert!(cookie.contains("Secure"));
+}
+
+#[tokio::test]
 async fn session_route_returns_wrapped_actor_payload_and_csrf_token() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

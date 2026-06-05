@@ -35,6 +35,7 @@ pub struct ApiConfig {
     pub business_file_local_root: String,
     pub plugin_runner_internal_base_url: String,
     pub cookie_name: String,
+    pub cookie_secure: bool,
     pub session_ttl_days: i64,
     pub cors_allowed_origins: Option<Vec<HeaderValue>>,
     pub provider_install_root: String,
@@ -155,6 +156,13 @@ impl ApiConfig {
                 "missing env API_PROVIDER_SECRET_MASTER_KEY when API_ENV=production"
             ));
         }
+        if env == ApiEnvironment::Production
+            && provider_secret_master_key_is_placeholder(&provider_secret_master_key)
+        {
+            return Err(anyhow!(
+                "invalid env API_PROVIDER_SECRET_MASTER_KEY when API_ENV=production"
+            ));
+        }
 
         Ok(Self {
             env,
@@ -173,6 +181,7 @@ impl ApiConfig {
                 .get("API_COOKIE_NAME")
                 .cloned()
                 .unwrap_or_else(|| "flowbase_console_session".to_string()),
+            cookie_secure: env == ApiEnvironment::Production,
             session_ttl_days: map
                 .get("API_SESSION_TTL_DAYS")
                 .and_then(|value| value.parse::<i64>().ok())
@@ -241,6 +250,13 @@ impl ApiConfig {
         })
         .collect()
     }
+}
+
+fn provider_secret_master_key_is_placeholder(value: &str) -> bool {
+    matches!(
+        value.trim(),
+        "" | "change-me-provider-secret-master-key" | "dev-provider-secret-master-key-unsafe"
+    )
 }
 
 fn parse_cors_allowed_origins(value: Option<&String>) -> Result<Option<Vec<HeaderValue>>> {

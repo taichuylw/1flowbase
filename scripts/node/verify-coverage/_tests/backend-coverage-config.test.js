@@ -8,6 +8,25 @@ const {
   buildBackendCommands,
   main,
 } = require('../../verify-coverage.js');
+const {
+  backendThresholds,
+  frontendThresholds,
+} = require('../../testing/coverage-thresholds.js');
+
+test('coverage thresholds include critical runtime areas', () => {
+  assert.equal(
+    backendThresholds.some((threshold) => threshold.packageName === 'plugin-runner'),
+    true
+  );
+  assert.equal(
+    backendThresholds.some((threshold) => threshold.packageName === 'orchestration-runtime'),
+    true
+  );
+  assert.equal(
+    frontendThresholds.some((threshold) => threshold.prefix === 'packages/page-runtime/'),
+    true
+  );
+});
 
 test('backend coverage uses the current storage-postgres crate name', () => {
   const storageCommand = buildBackendCommands({

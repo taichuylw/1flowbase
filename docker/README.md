@@ -21,20 +21,20 @@ docker compose -f .\docker-compose.middleware.yaml up -d
 
 ```bash
 cd docker
+cp .env.example .env
 docker compose up -d
 ```
 
 如果本机只有旧版 Compose，也可以把 `docker compose` 替换为 `docker-compose`。
 
-默认启动值用于本地快速体验：
+本地快速体验可以使用开发 compose，它保留本地默认密码并以 development 模式启动：
 
-- web 访问端口：`3100`
-- PostgreSQL 用户：`postgres`
-- PostgreSQL 密码：`1flowbase`
-- 初始 root 账号：`root`
-- 初始 root 密码：`1flowbase`
+```bash
+cd docker
+docker compose -f docker-compose.dev.yaml up -d
+```
 
-生产部署或需要固定配置时，再复制统一配置模板：
+生产部署或需要固定配置时，使用统一配置模板：
 
 ```bash
 cd docker
@@ -47,7 +47,7 @@ cp .env.example .env
 - `API_PROVIDER_SECRET_MASTER_KEY`
 - `BOOTSTRAP_ROOT_PASSWORD`
 
-然后启动：
+生产 compose 对这些敏感配置使用必填校验；缺少 `.env` 或关键 secret 时会直接失败，不再使用默认密码启动。然后启动：
 
 ```bash
 docker compose up -d

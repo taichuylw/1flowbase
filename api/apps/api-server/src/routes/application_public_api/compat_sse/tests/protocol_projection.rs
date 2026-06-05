@@ -93,6 +93,7 @@ async fn openai_chat_durable_waiting_callback_fallback_drains_text_delta_first()
         runtime_event_stream,
         api_docs: base_state.api_docs.clone(),
         cookie_name: base_state.cookie_name.clone(),
+        cookie_secure: base_state.cookie_secure,
         session_ttl_days: base_state.session_ttl_days,
         bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
     });
@@ -311,6 +312,7 @@ async fn openai_chat_resume_replay_terminal_drains_durable_text_before_tool_call
         runtime_event_stream,
         api_docs: base_state.api_docs.clone(),
         cookie_name: base_state.cookie_name.clone(),
+        cookie_secure: base_state.cookie_secure,
         session_ttl_days: base_state.session_ttl_days,
         bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
     });
@@ -479,6 +481,7 @@ async fn openai_chat_live_answer_delta_is_not_duplicated_by_durable_drain() {
         runtime_event_stream,
         api_docs: base_state.api_docs.clone(),
         cookie_name: base_state.cookie_name.clone(),
+        cookie_secure: base_state.cookie_secure,
         session_ttl_days: base_state.session_ttl_days,
         bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
     });

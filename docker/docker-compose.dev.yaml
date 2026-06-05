@@ -1,4 +1,4 @@
-name: 1flowbase
+name: 1flowbase-dev
 
 services:
   db:
@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-1flowbase}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for production compose}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1flowbase}
       POSTGRES_INITDB_ARGS: "${POSTGRES_INITDB_ARGS:---encoding=UTF8 --locale=C}"
     volumes:
       - ./postgres/data/pgdata:/var/lib/postgresql/data
@@ -37,8 +37,8 @@ services:
         condition: service_started
     environment:
       RUST_LOG: ${API_RUST_LOG:-info}
-      API_ENV: ${API_ENV:-production}
-      API_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for production compose}@db:5432/${POSTGRES_DB:-1flowbase}
+      API_ENV: development
+      API_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-1flowbase}@db:5432/${POSTGRES_DB:-1flowbase}
       API_SERVER_ADDR: 0.0.0.0:7800
       API_PLUGIN_RUNNER_INTERNAL_BASE_URL: http://plugin-runner:7801
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3100,http://127.0.0.1:3100}
@@ -47,7 +47,7 @@ services:
       API_DATABASE_POOL_MAX_CONNECTIONS: ${API_DATABASE_POOL_MAX_CONNECTIONS:-5}
       API_PROVIDER_INSTALL_ROOT: /app/api/plugins
       API_HOST_EXTENSION_DROPIN_ROOT: /app/api/plugins/host-extension/dropins
-      API_PROVIDER_SECRET_MASTER_KEY: ${API_PROVIDER_SECRET_MASTER_KEY:?API_PROVIDER_SECRET_MASTER_KEY is required for production compose}
+      API_PROVIDER_SECRET_MASTER_KEY: ${API_PROVIDER_SECRET_MASTER_KEY:-dev-provider-secret-master-key-unsafe}
       API_OFFICIAL_PLUGIN_REPOSITORY: ${API_OFFICIAL_PLUGIN_REPOSITORY:-taichuy/1flowbase-official-plugins}
       API_OFFICIAL_PLUGIN_REGISTRY_URL: ${API_OFFICIAL_PLUGIN_REGISTRY_URL:-https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/official-registry.json}
       API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL: ${API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-}
@@ -55,12 +55,10 @@ services:
       API_SECRET_RESOLVER: ${API_SECRET_RESOLVER:-env}
       API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS: ${API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS:-false}
       API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS: ${API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS:-false}
-      API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON: >-
-        ${API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON:-[{"key_id":"official-key-2026-04","algorithm":"ed25519","public_key_pem":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAuk3oonNd85FNP8CBRKj8RVvpdbhreoJiCguEJXPSgwg=\n-----END PUBLIC KEY-----"}]}
       BOOTSTRAP_WORKSPACE_NAME: ${BOOTSTRAP_WORKSPACE_NAME:-1flowbase}
       BOOTSTRAP_ROOT_ACCOUNT: ${BOOTSTRAP_ROOT_ACCOUNT:-root}
       BOOTSTRAP_ROOT_EMAIL: ${BOOTSTRAP_ROOT_EMAIL:-root@example.com}
-      BOOTSTRAP_ROOT_PASSWORD: ${BOOTSTRAP_ROOT_PASSWORD:?BOOTSTRAP_ROOT_PASSWORD is required for production compose}
+      BOOTSTRAP_ROOT_PASSWORD: ${BOOTSTRAP_ROOT_PASSWORD:-1flowbase}
       BOOTSTRAP_ROOT_NAME: ${BOOTSTRAP_ROOT_NAME:-Root}
       BOOTSTRAP_ROOT_NICKNAME: ${BOOTSTRAP_ROOT_NICKNAME:-Root}
     expose:
