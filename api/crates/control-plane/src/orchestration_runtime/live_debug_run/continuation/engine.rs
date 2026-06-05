@@ -926,7 +926,7 @@ where
                 return load_run_detail(&service.repository, command.application_id, flow_run.id)
                     .await;
             }
-            "tool" | "http_request" => {
+            "tool" => {
                 let request_payload = Value::Object(resolved_inputs.clone());
                 update_node_run_and_emit(
                     service,
@@ -1032,6 +1032,92 @@ where
                 .await;
                 return load_run_detail(&service.repository, command.application_id, flow_run.id)
                     .await;
+            }
+            "http_request" => {
+                let execution = orchestration_runtime::execution_engine::execute_http_request_node(
+                    node,
+                    &resolved_inputs,
+                    &variable_pool,
+                )
+                .await?;
+                let public_output_payload = persisted_node_output_payload(
+                    &execution.output_payload,
+                    &execution.metrics_payload,
+                    execution.error_payload.as_ref(),
+                    &execution.debug_payload,
+                );
+                let node_status = if execution.error_payload.is_some() {
+                    domain::NodeRunStatus::Failed
+                } else {
+                    domain::NodeRunStatus::Succeeded
+                };
+                ensure_node_run_transition(
+                    domain::NodeRunStatus::Running,
+                    node_status,
+                    "continue_flow_debug_run",
+                )?;
+                update_node_run_and_emit(
+                    service,
+                    flow_run.id,
+                    &UpdateNodeRunInput {
+                        node_run_id: node_run.id,
+                        status: node_status,
+                        output_payload: public_output_payload.clone(),
+                        error_payload: execution.error_payload.clone(),
+                        metrics_payload: execution.metrics_payload.clone(),
+                        debug_payload: execution.debug_payload.clone(),
+                        finished_at: Some(OffsetDateTime::now_utc()),
+                    },
+                )
+                .await?;
+
+                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
+                    .await?
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
+
+                if let Some(error_payload) = execution.error_payload {
+                    ensure_flow_run_transition(
+                        domain::FlowRunStatus::Running,
+                        domain::FlowRunStatus::Failed,
+                        "continue_flow_debug_run",
+                    )?;
+                    service
+                        .repository
+                        .update_flow_run(&UpdateFlowRunInput {
+                            flow_run_id: flow_run.id,
+                            status: domain::FlowRunStatus::Failed,
+                            output_payload: last_output_payload.clone(),
+                            error_payload: Some(error_payload.clone()),
+                            finished_at: Some(OffsetDateTime::now_utc()),
+                        })
+                        .await?;
+                    emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
+                    service
+                        .repository
+                        .append_run_event(&AppendRunEventInput {
+                            flow_run_id: flow_run.id,
+                            node_run_id: Some(node_run.id),
+                            event_type: "flow_run_failed".to_string(),
+                            payload: error_payload,
+                        })
+                        .await?;
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
+
+                last_output_payload = public_output_payload.clone();
+                variable_pool.insert(node.node_id.clone(), public_output_payload);
             }
             "code" => {
                 let execution = orchestration_runtime::execution_engine::execute_code_node(

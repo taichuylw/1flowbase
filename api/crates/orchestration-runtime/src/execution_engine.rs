@@ -38,6 +38,7 @@ pub use crate::code_runtime::{
 };
 
 pub mod branching;
+mod http_request;
 mod llm_callbacks;
 mod llm_context;
 mod llm_error_payloads;
@@ -50,6 +51,7 @@ mod llm_parameters;
 mod tests;
 
 use branching::*;
+pub use http_request::{execute_http_request_node, HttpRequestNodeExecution};
 pub use llm_callbacks::build_llm_tool_callback_wait;
 use llm_callbacks::*;
 use llm_context::*;
@@ -507,7 +509,7 @@ where
                     node_traces,
                 });
             }
-            "tool" | "http_request" => {
+            "tool" => {
                 node_traces.push(NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
@@ -535,6 +537,39 @@ where
                     }),
                     node_traces,
                 });
+            }
+            "http_request" => {
+                let execution =
+                    execute_http_request_node(node, &resolved_inputs, &variable_pool).await?;
+                node_traces.push(NodeExecutionTrace {
+                    node_id: node.node_id.clone(),
+                    node_type: node.node_type.clone(),
+                    node_alias: node.alias.clone(),
+                    input_payload: Value::Object(resolved_inputs),
+                    output_payload: execution.output_payload.clone(),
+                    error_payload: execution.error_payload.clone(),
+                    metrics_payload: execution.metrics_payload.clone(),
+                    debug_payload: execution.debug_payload.clone(),
+                    provider_events: Vec::new(),
+                });
+
+                if let Some(error_payload) = execution.error_payload {
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                            node_id: node.node_id.clone(),
+                            node_alias: node.alias.clone(),
+                            error_payload,
+                        }),
+                        variable_pool,
+                        checkpoint_snapshot: None,
+                        node_traces,
+                    });
+                }
+
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, &execution.output_payload)?,
+                );
             }
             "code" => {
                 let execution = execute_code_node(node, &resolved_inputs, invoker).await?;

@@ -9,6 +9,7 @@ import type {
 import { describe, expect, test, vi } from 'vitest';
 
 import { agentFlowRendererRegistry } from '../schema/agent-flow-renderer-registry';
+import { buildCommonConfigBlocks } from '../schema/node-schema-fragments';
 import { createAgentFlowNodeSchemaAdapter } from '../schema/node-schema-adapter';
 import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
 import { createNodeDocument } from '../lib/document/node-factory';
@@ -663,6 +664,62 @@ describe('agent-flow node schema registry', () => {
     expect(contract?.defaults.outputs).toEqual([
       { key: 'text', title: '转换结果', valueType: 'string' }
     ]);
+  });
+
+  test('HTTP Request defaults to executable request contract outputs', () => {
+    const contract = getBuiltinNodeRuntimeContract('http_request');
+    const node = createNodeDocument('http_request', 'node-http-request');
+
+    expect(contract).not.toBeNull();
+    expect(contract?.defaults.config).toEqual({
+      method: 'GET',
+      url: '',
+      body_type: 'none',
+      verify_ssl: true,
+      timeout_ms: 30000,
+      max_response_bytes: 1048576
+    });
+    expect(contract?.defaults.bindings).toEqual({
+      params: { kind: 'named_bindings', value: [] },
+      headers: { kind: 'named_bindings', value: [] },
+      body: { kind: 'templated_text', value: '' },
+      urlencoded: { kind: 'named_bindings', value: [] },
+      form_data: { kind: 'named_bindings', value: [] }
+    });
+    expect(contract?.defaults.outputs).toEqual([
+      { key: 'body', title: 'HTTP 响应正文', valueType: 'string' },
+      { key: 'status_code', title: '响应状态码', valueType: 'number' },
+      { key: 'headers', title: '响应头列表 JSON', valueType: 'object' },
+      { key: 'files', title: 'HTTP 响应文件', valueType: 'Array[File]' }
+    ]);
+    expect(node.config).toEqual(contract?.defaults.config);
+    expect(node.bindings).toEqual(contract?.defaults.bindings);
+    expect(node.outputs).toEqual(contract?.defaults.outputs);
+  });
+
+  test('HTTP Request config blocks expose request fields before output variables', () => {
+    const configBlocks = buildCommonConfigBlocks('http_request');
+    const serializedConfigBlocks = JSON.stringify(configBlocks);
+
+    expect(serializedConfigBlocks).toContain('"path":"config.method"');
+    expect(serializedConfigBlocks).toContain('"path":"config.url"');
+    expect(serializedConfigBlocks).toContain('"path":"bindings.params"');
+    expect(serializedConfigBlocks).toContain('"path":"bindings.headers"');
+    expect(serializedConfigBlocks).toContain('"path":"config.body_type"');
+    expect(serializedConfigBlocks).toContain('"path":"config.verify_ssl"');
+    expect(serializedConfigBlocks).toContain('"path":"config.timeout_ms"');
+    expect(serializedConfigBlocks).toContain(
+      '"renderer":"http_request_key_values"'
+    );
+    expect(serializedConfigBlocks).toContain(
+      '"renderer":"http_request_body"'
+    );
+    expect(serializedConfigBlocks).toContain(
+      '"renderer":"http_request_curl_import"'
+    );
+    expect(serializedConfigBlocks.indexOf('"path":"config.method"')).toBeLessThan(
+      serializedConfigBlocks.indexOf('"renderer":"output_contract"')
+    );
   });
 
   test('Data Model Delete defaults to deleted_id and affected_count outputs', () => {

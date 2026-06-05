@@ -30,6 +30,9 @@ import { LlmPromptMessagesField } from '../components/detail/fields/LlmPromptMes
 import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
 import { StartInputFieldsField } from '../components/detail/fields/StartInputFieldsField';
 import { StartModelListField } from '../components/detail/fields/StartModelListField';
+import { HttpRequestBodyField } from '../components/detail/fields/HttpRequestBodyField';
+import { HttpRequestCurlImportField } from '../components/detail/fields/HttpRequestCurlImportField';
+import { HttpRequestKeyValuesField } from '../components/detail/fields/HttpRequestKeyValuesField';
 import {
   DATA_MODEL_QUERY_DEFAULT_VALUE,
   normalizeDataModelQueryBindingValue
@@ -114,6 +117,18 @@ function renderStaticSelectField({ adapter, block }: SchemaFieldRendererProps) {
       options={block.options ?? []}
       value={typeof value === 'string' ? value : undefined}
       onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+    />
+  );
+}
+
+function renderSwitchField({ adapter, block }: SchemaFieldRendererProps) {
+  const value = adapter.getValue(block.path);
+
+  return (
+    <Switch
+      aria-label={block.label}
+      checked={value !== false}
+      onChange={(checked) => adapter.setValue(block.path, checked)}
     />
   );
 }
@@ -591,9 +606,66 @@ function renderDataModelQueryField({
   );
 }
 
+function renderHttpRequestKeyValuesField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const addButtonLabel =
+    block.path === 'bindings.headers'
+      ? i18nText('agentFlow', 'auto.add_request_header')
+      : i18nText('agentFlow', 'auto.add_request_param');
+
+  return (
+    <HttpRequestKeyValuesField
+      addButtonLabel={addButtonLabel}
+      ariaLabel={block.label}
+      options={getSelectorOptions(adapter)}
+      value={adapter.getValue(block.path)}
+      onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+    />
+  );
+}
+
+function renderHttpRequestBodyField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  return (
+    <HttpRequestBodyField
+      binaryValue={adapter.getValue('bindings.binary')}
+      bodyType={adapter.getValue(block.path)}
+      bodyValue={adapter.getValue('bindings.body')}
+      formDataValue={adapter.getValue('bindings.form_data')}
+      options={getSelectorOptions(adapter)}
+      urlencodedValue={adapter.getValue('bindings.urlencoded')}
+      onBinaryChange={(nextValue) => adapter.setValue('bindings.binary', nextValue)}
+      onBodyChange={(nextValue) => adapter.setValue('bindings.body', nextValue)}
+      onBodyTypeChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+      onFormDataChange={(nextValue) => adapter.setValue('bindings.form_data', nextValue)}
+      onUrlencodedChange={(nextValue) => adapter.setValue('bindings.urlencoded', nextValue)}
+    />
+  );
+}
+
+function renderHttpRequestCurlImportField({
+  adapter
+}: SchemaFieldRendererProps) {
+  return (
+    <HttpRequestCurlImportField
+      onBodyChange={(nextValue) => adapter.setValue('bindings.body', nextValue)}
+      onBodyTypeChange={(nextValue) => adapter.setValue('config.body_type', nextValue)}
+      onHeadersChange={(nextValue) => adapter.setValue('bindings.headers', nextValue)}
+      onMethodChange={(nextValue) => adapter.setValue('config.method', nextValue)}
+      onParamsChange={(nextValue) => adapter.setValue('bindings.params', nextValue)}
+      onUrlChange={(nextValue) => adapter.setValue('config.url', nextValue)}
+    />
+  );
+}
+
 export const agentFlowFieldRenderers = {
   text: renderTextField,
   static_select: renderStaticSelectField,
+  switch: renderSwitchField,
   data_model: DataModelField,
   data_model_query: renderDataModelQueryField,
   code_source: renderCodeSourceField,
@@ -614,6 +686,9 @@ export const agentFlowFieldRenderers = {
   output_contract_definition: renderOutputContractDefinitionField,
   start_input_fields: renderStartInputFieldsField,
   start_model_list: renderStartModelListField,
+  http_request_key_values: renderHttpRequestKeyValuesField,
+  http_request_body: renderHttpRequestBodyField,
+  http_request_curl_import: renderHttpRequestCurlImportField,
   header_alias: ({ adapter, block }) => {
     const value = adapter.getValue(block.path);
 

@@ -5,7 +5,8 @@ use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
     compiled_plan::CompiledPlan,
     execution_engine::{
-        execute_code_node, execute_llm_node, CodeInvoker, ExecutionRuntimeContext, ProviderInvoker,
+        execute_code_node, execute_http_request_node, execute_llm_node, CodeInvoker,
+        ExecutionRuntimeContext, ProviderInvoker,
     },
     node_errors::build_node_type_not_implemented_error_payload,
 };
@@ -165,6 +166,16 @@ where
             )
         } else if node.node_type == "code" {
             let execution = execute_code_node(node, &resolved_inputs, invoker).await?;
+            (
+                execution.output_payload,
+                execution.error_payload,
+                execution.metrics_payload,
+                execution.debug_payload,
+                Vec::new(),
+            )
+        } else if node.node_type == "http_request" {
+            let execution =
+                execute_http_request_node(node, &resolved_inputs, &variable_pool).await?;
             (
                 execution.output_payload,
                 execution.error_payload,

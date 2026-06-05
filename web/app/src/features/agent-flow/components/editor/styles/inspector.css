@@ -624,6 +624,46 @@
   justify-self: end;
 }
 
+.agent-flow-http-request-key-values,
+.agent-flow-http-request-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-http-request-key-values__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-http-request-key-values__row--form-data {
+  grid-template-columns: minmax(0, 0.8fr) 96px minmax(0, 1fr) 32px;
+}
+
+.agent-flow-http-request-key-values__row .ant-input,
+.agent-flow-http-request-key-values__row .ant-select,
+.agent-flow-http-request-key-values__row .ant-cascader {
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-http-request-body__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.agent-flow-http-request-curl-import {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .agent-flow-if-else-branches {
   display: grid;
   gap: 10px;
@@ -702,6 +742,15 @@
 @media (max-width: 640px) {
   .agent-flow-editor__inspector-field--inline {
     grid-template-columns: 1fr;
+  }
+
+  .agent-flow-http-request-key-values__row,
+  .agent-flow-http-request-key-values__row--form-data {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-flow-http-request-key-values__row .ant-btn {
+    justify-self: start;
   }
 }
 

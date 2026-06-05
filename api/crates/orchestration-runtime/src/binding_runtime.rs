@@ -493,7 +493,10 @@ pub fn lookup_selector_value(
     Ok(cursor.clone())
 }
 
-fn render_template(template: &str, variable_pool: &Map<String, Value>) -> Result<String> {
+pub(crate) fn render_template(
+    template: &str,
+    variable_pool: &Map<String, Value>,
+) -> Result<String> {
     let mut rendered = String::new();
     let mut cursor = 0;
 

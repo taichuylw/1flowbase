@@ -16,6 +16,7 @@ import {
   FocusIssueSeed,
   SelectionSeed,
   createInitialState,
+  createInitialStateWithHttpRequestNode,
   createInitialStateWithCodeNode,
   createAgentFlowNodeSchemaAdapterSpy,
   fetchModelProviderOptionsSpy,
@@ -235,6 +236,87 @@ describe('NodeInspector core', () => {
         '当前 binding 引用了已删除节点 node-llm-1 的输出。'
       )
     ).toBeInTheDocument();
+  });
+
+  test('renders HTTP Request config panel and imports a basic curl command', async () => {
+    const state = createInitialStateWithHttpRequestNode();
+    let latestDocument = state.draft.document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-http-request" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(
+      await screen.findByRole('combobox', { name: '请求方法' })
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('URL')).toHaveAttribute(
+      'contenteditable',
+      'true'
+    );
+    expect(screen.getByText('参数 Params')).toBeInTheDocument();
+    expect(screen.getByText('请求头 Headers')).toBeInTheDocument();
+    expect(screen.getByText('请求体 Body')).toBeInTheDocument();
+    expect(screen.getByLabelText('验证 SSL 证书')).toBeChecked();
+    expect(screen.getByLabelText('超时设置')).toBeInTheDocument();
+    expect(screen.getByText('body')).toBeInTheDocument();
+    expect(screen.getByText('status_code')).toBeInTheDocument();
+    expect(screen.getByText('headers')).toBeInTheDocument();
+    expect(screen.getByText('files')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '导入 cURL' }));
+    fireEvent.change(await screen.findByLabelText('cURL 命令'), {
+      target: {
+        value:
+          "curl -X POST 'https://api.example.com/orders?page=1' -H 'Authorization: Bearer token' -H 'Content-Type: application/json' -d '{\"query\":\"{{node-start.query}}\"}'"
+      }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '导入请求' }));
+
+    await waitFor(() => {
+      const httpNode = latestDocument.graph.nodes.find(
+        (node) => node.id === 'node-http-request'
+      );
+
+      expect(httpNode?.config).toMatchObject({
+        method: 'POST',
+        url: 'https://api.example.com/orders',
+        body_type: 'json'
+      });
+      expect(httpNode?.bindings.params).toEqual({
+        kind: 'named_bindings',
+        value: [
+          {
+            name: 'page',
+            value: { kind: 'templated_text', value: '1' }
+          }
+        ]
+      });
+      expect(httpNode?.bindings.headers).toEqual({
+        kind: 'named_bindings',
+        value: [
+          {
+            name: 'Authorization',
+            value: { kind: 'templated_text', value: 'Bearer token' }
+          },
+          {
+            name: 'Content-Type',
+            value: { kind: 'templated_text', value: 'application/json' }
+          }
+        ]
+      });
+      expect(httpNode?.bindings.body).toEqual({
+        kind: 'templated_text',
+        value: '{"query":"{{node-start.query}}"}'
+      });
+    });
   });
 
   test('keeps code output contract definition editable without rendering the shared output contract card', async () => {

@@ -19,6 +19,13 @@ import {
 } from './nodes/data-model';
 import { normalizeCodeOutput } from '../output-contract/code-output';
 import { createDefaultIfElseBranches } from '../if-else-branches';
+import {
+  HTTP_REQUEST_BODY_TYPE_OPTIONS,
+  HTTP_REQUEST_DEFAULT_BINDINGS,
+  HTTP_REQUEST_DEFAULT_CONFIG,
+  HTTP_REQUEST_METHOD_OPTIONS,
+  HTTP_REQUEST_OUTPUTS
+} from '../http-request/contract';
 import { i18nText } from '../../../../shared/i18n/text';
 
 type BuiltinNodeRuntimeContractType = FlowNodeType;
@@ -554,18 +561,26 @@ function createTemplateTransformContract(): NodeRuntimeUiContract {
 }
 
 function createHttpRequestContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'body', title: i18nText("agentFlow", "auto.response_body"), valueType: 'json' }];
+  const outputs = HTTP_REQUEST_OUTPUTS;
 
   return createNodeRuntimeContract({
     type: 'http_request',
     title: 'HTTP Request',
     description: i18nText("agentFlow", "auto.request_external_http_service"),
     category: 'external',
-    config: { method: 'GET', url: '' },
+    config: HTTP_REQUEST_DEFAULT_CONFIG,
+    bindings: HTTP_REQUEST_DEFAULT_BINDINGS,
     outputs,
     panelSections: [
       basicsPanelSection,
       panelSection('inputs', 'Inputs', [
+        panelField({
+          key: 'config.method',
+          title: i18nText('agentFlow', 'auto.request_method'),
+          renderer: 'static_select',
+          options: HTTP_REQUEST_METHOD_OPTIONS,
+          required: true
+        }),
         panelField({
           key: 'config.url',
           title: 'URL',
@@ -573,19 +588,44 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
           required: true
         }),
         panelField({
-          key: 'bindings.body',
-          title: i18nText("agentFlow", "auto.request_body"),
-          renderer: 'templated_text'
+          key: 'bindings.params',
+          title: i18nText('agentFlow', 'auto.request_params'),
+          renderer: 'http_request_key_values',
+          valueType: 'array'
+        }),
+        panelField({
+          key: 'bindings.headers',
+          title: i18nText('agentFlow', 'auto.request_headers'),
+          renderer: 'http_request_key_values',
+          valueType: 'array'
+        }),
+        panelField({
+          key: 'config.body_type',
+          title: i18nText('agentFlow', 'auto.request_body_section'),
+          renderer: 'http_request_body',
+          valueType: 'string',
+          options: [...HTTP_REQUEST_BODY_TYPE_OPTIONS]
+        }),
+        panelField({
+          key: 'config.verify_ssl',
+          title: i18nText('agentFlow', 'auto.verify_ssl_certificate'),
+          renderer: 'switch',
+          valueType: 'boolean'
+        }),
+        panelField({
+          key: 'config.timeout_ms',
+          title: i18nText('agentFlow', 'auto.timeout_settings'),
+          renderer: 'number',
+          valueType: 'number'
+        }),
+        panelField({
+          key: 'config.curl_import',
+          title: i18nText('agentFlow', 'auto.import_curl'),
+          renderer: 'http_request_curl_import',
+          valueType: 'string'
         })
       ]),
-      outputsPanelSection(outputs),
-      panelSection('policy', 'Policy', [
-        panelField({
-          key: 'config.method',
-          title: 'Method',
-          renderer: 'text'
-        })
-      ])
+      outputsPanelSection(outputs)
     ]
   });
 }

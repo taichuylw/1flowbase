@@ -43,7 +43,13 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
 };
 
 const CONTRACT_FIELD_RENDERER_ALLOWLIST = new Set(
-  Object.values(FIELD_RENDERER_BY_EDITOR)
+  [
+    ...Object.values(FIELD_RENDERER_BY_EDITOR),
+    'switch',
+    'http_request_key_values',
+    'http_request_body',
+    'http_request_curl_import'
+  ]
 );
 
 function createFieldBlock(field: NodeDefinitionField): SchemaFieldBlock {

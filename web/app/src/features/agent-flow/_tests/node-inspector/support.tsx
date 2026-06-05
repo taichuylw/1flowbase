@@ -239,6 +239,35 @@ export function createInitialStateWithDataModelNode(
   };
 }
 
+export function createInitialStateWithHttpRequestNode() {
+  const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+  document.graph.nodes.push(
+    createNodeDocument('http_request', 'node-http-request', 720, 240)
+  );
+  document.graph.edges.push({
+    id: 'edge-start-http-request',
+    source: 'node-start',
+    target: 'node-http-request',
+    sourceHandle: null,
+    targetHandle: null,
+    containerId: null,
+    points: []
+  });
+
+  return {
+    flow_id: 'flow-1',
+    draft: {
+      id: 'draft-1',
+      flow_id: 'flow-1',
+      updated_at: '2026-04-16T10:00:00Z',
+      document
+    },
+    autosave_interval_seconds: 30,
+    versions: []
+  };
+}
+
 export function SelectionSeed({ nodeId }: { nodeId: string }) {
   const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
 
