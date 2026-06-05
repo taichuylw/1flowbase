@@ -261,11 +261,11 @@ describe('NodeInspector core', () => {
       'contenteditable',
       'true'
     );
-    expect(screen.getByText('参数 Params')).toBeInTheDocument();
-    expect(screen.getByText('请求头 Headers')).toBeInTheDocument();
-    expect(screen.getByText('请求体 Body')).toBeInTheDocument();
+    expect(screen.getByText('Params')).toBeInTheDocument();
+    expect(screen.getByText('Headers')).toBeInTheDocument();
+    expect(screen.getByText('body')).toBeInTheDocument();
     expect(screen.getByLabelText('验证 SSL 证书')).toBeChecked();
-    expect(screen.getByLabelText('超时设置')).toBeInTheDocument();
+    expect(screen.getByLabelText('超时设置(ms)')).toBeInTheDocument();
     expect(screen.getByText('body')).toBeInTheDocument();
     expect(screen.getByText('status_code')).toBeInTheDocument();
     expect(screen.getByText('headers')).toBeInTheDocument();

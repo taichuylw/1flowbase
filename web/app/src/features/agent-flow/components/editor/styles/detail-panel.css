@@ -156,6 +156,22 @@
   font-weight: 600;
 }
 
+.agent-flow-node-detail__section-toggle.ant-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  color: #1f3326;
+}
+
+.agent-flow-node-detail__section-toggle-icon {
+  transition: transform 0.16s ease;
+}
+
+.agent-flow-node-detail__section-toggle-icon--expanded {
+  transform: rotate(180deg);
+}
+
 .agent-flow-node-detail__section-subtitle {
   color: #8c8c8c;
   font-size: 13px;

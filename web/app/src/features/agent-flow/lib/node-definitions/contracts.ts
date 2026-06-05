@@ -565,7 +565,7 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
 
   return createNodeRuntimeContract({
     type: 'http_request',
-    title: 'HTTP Request',
+    title: 'HTTP',
     description: i18nText("agentFlow", "auto.request_external_http_service"),
     category: 'external',
     config: HTTP_REQUEST_DEFAULT_CONFIG,
@@ -575,16 +575,9 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
       basicsPanelSection,
       panelSection('inputs', 'Inputs', [
         panelField({
-          key: 'config.method',
-          title: i18nText('agentFlow', 'auto.request_method'),
-          renderer: 'static_select',
-          options: HTTP_REQUEST_METHOD_OPTIONS,
-          required: true
-        }),
-        panelField({
           key: 'config.url',
           title: 'URL',
-          renderer: 'templated_text',
+          renderer: 'http_request_endpoint',
           required: true
         }),
         panelField({

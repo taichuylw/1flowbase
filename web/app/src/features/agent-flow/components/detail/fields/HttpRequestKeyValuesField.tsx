@@ -1,5 +1,5 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Input } from 'antd';
+import { Button } from 'antd';
 import type { FlowBinding, NamedBindingEntry } from '@1flowbase/flow-schema';
 
 import type { FlowSelectorOption } from '../../../lib/selector-options';
@@ -67,15 +67,18 @@ export function HttpRequestKeyValuesField({
           key={`${entry.name}-${index}`}
           className="agent-flow-http-request-key-values__row"
         >
-          <Input
-            aria-label={`${ariaLabel}-${index}-key`}
+          <TemplatedTextField
+            ariaLabel={`${ariaLabel}-${index}-key`}
+            displayMode="input"
+            label={`${ariaLabel}-${index}-key`}
+            options={options}
             placeholder={i18nText('agentFlow', 'auto.field_key')}
             value={entry.name}
-            onChange={(event) =>
+            onChange={(nextValue) =>
               emit(
                 entries.map((candidate, candidateIndex) =>
                   candidateIndex === index
-                    ? { ...candidate, name: event.target.value }
+                    ? { ...candidate, name: nextValue }
                     : candidate
                 )
               )
@@ -117,18 +120,20 @@ export function HttpRequestKeyValuesField({
           />
         </div>
       ))}
-      <Button
-        icon={<PlusOutlined />}
-        type="dashed"
-        onClick={() =>
-          emit([
-            ...entries,
-            { name: '', value: { kind: 'templated_text', value: '' } }
-          ])
-        }
-      >
-        {addButtonLabel ?? i18nText('agentFlow', 'auto.add_new_parameter')}
-      </Button>
+      {addButtonLabel ? (
+        <Button
+          icon={<PlusOutlined />}
+          type="dashed"
+          onClick={() =>
+            emit([
+              ...entries,
+              { name: '', value: { kind: 'templated_text', value: '' } }
+            ])
+          }
+        >
+          {addButtonLabel}
+        </Button>
+      ) : null}
     </div>
   );
 }

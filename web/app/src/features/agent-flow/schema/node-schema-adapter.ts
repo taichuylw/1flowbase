@@ -10,6 +10,7 @@ import {
 import { getDirectDownstreamNodes } from '../lib/document/relations';
 import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getNodeDefinitionMeta } from '../lib/node-definitions';
+import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
 import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
 import type { AgentFlowIssue } from '../lib/validate-document';
 
@@ -43,9 +44,24 @@ function createRootValues(node: FlowNodeDocument) {
     ...node,
     config: {
       ...node.config,
-      output_contract: node.outputs
+      output_contract: getDisplayOutputs(node)
     }
   };
+}
+
+function getDisplayOutputs(node: FlowNodeDocument) {
+  if (node.type !== 'http_request') {
+    return node.outputs;
+  }
+
+  const contractOutputs =
+    getBuiltinNodeRuntimeContract(node.type)?.defaults.outputs ?? [];
+  const outputsByKey = new Map(node.outputs.map((output) => [output.key, output]));
+
+  return [
+    ...node.outputs,
+    ...contractOutputs.filter((output) => !outputsByKey.has(output.key))
+  ];
 }
 
 function groupFieldIssues(
@@ -97,7 +113,7 @@ export function createAgentFlowNodeSchemaAdapter({
       }
 
       if (path === 'config.output_contract' || path === 'outputs') {
-        return node.outputs;
+        return getDisplayOutputs(node);
       }
 
       if (path.startsWith('outputs.')) {

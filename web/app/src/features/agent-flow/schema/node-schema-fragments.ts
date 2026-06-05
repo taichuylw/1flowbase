@@ -46,6 +46,7 @@ const CONTRACT_FIELD_RENDERER_ALLOWLIST = new Set(
   [
     ...Object.values(FIELD_RENDERER_BY_EDITOR),
     'switch',
+    'http_request_endpoint',
     'http_request_key_values',
     'http_request_body',
     'http_request_curl_import'
@@ -140,6 +141,33 @@ function buildSharedOutputVariableBlocks(
   ];
 }
 
+function splitBlocksByPath(
+  sections: SchemaSectionBlock[],
+  paths: Set<string>
+) {
+  const extractedBlocksByPath = new Map<string, SchemaFieldBlock>();
+  const remainingSections = sections
+    .map((section) => {
+      const remainingBlocks = section.blocks.filter((block) => {
+        if (block.kind === 'field' && paths.has(block.path)) {
+          extractedBlocksByPath.set(block.path, block);
+          return false;
+        }
+
+        return true;
+      });
+
+      return { ...section, blocks: remainingBlocks };
+    })
+    .filter((section) => section.blocks.length > 0);
+
+  const extractedBlocks = [...paths]
+    .map((path) => extractedBlocksByPath.get(path))
+    .filter((block): block is SchemaFieldBlock => block !== undefined);
+
+  return { remainingSections, extractedBlocks };
+}
+
 export function buildNodeDetailHeaderBlocks(): SchemaBlock[] {
   return [
     {
@@ -224,14 +252,35 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
         .flatMap((section) => {
           return [createSectionBlock(section.title, section.fields)];
         });
+  const { remainingSections, extractedBlocks } =
+    nodeType === 'http_request'
+      ? splitBlocksByPath(
+          definitionSections,
+          new Set([
+            'config.timeout_ms',
+            'config.curl_import',
+            'config.verify_ssl'
+          ])
+        )
+      : { remainingSections: definitionSections, extractedBlocks: [] };
+  const outputVariableBlocks = buildSharedOutputVariableBlocks(nodeType);
   const policyBlocks: SchemaBlock[] =
     nodeType === 'start'
       ? []
       : [{ kind: 'view', renderer: 'policy_group', title: i18nText("agentFlow", "auto.strategy") }];
 
   return [
-    ...definitionSections,
-    ...buildSharedOutputVariableBlocks(nodeType),
+    ...remainingSections,
+    ...outputVariableBlocks,
+    ...(extractedBlocks.length > 0
+      ? [
+          {
+            kind: 'section' as const,
+            title: 'Inputs',
+            blocks: extractedBlocks
+          }
+        ]
+      : []),
     ...policyBlocks,
     { kind: 'view', renderer: 'relations', title: i18nText("agentFlow", "auto.next_step") }
   ];

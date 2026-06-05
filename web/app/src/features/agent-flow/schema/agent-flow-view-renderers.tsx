@@ -1,11 +1,13 @@
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
 import {
   BookOutlined,
+  DownOutlined,
   HomeOutlined,
   PlusOutlined,
   QuestionCircleOutlined
 } from '@ant-design/icons';
-import { Card, Empty, Select, Space, Switch, Tooltip, Typography } from 'antd';
+import { Button, Card, Empty, Select, Space, Switch, Tooltip, Typography } from 'antd';
+import { useState } from 'react';
 
 import type {
   SchemaViewRenderer,
@@ -111,8 +113,9 @@ function renderCardDescriptionView({ adapter }: SchemaViewRendererProps) {
   );
 }
 
-function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
+function OutputContractView({ adapter, block }: SchemaViewRendererProps) {
   const node = getNode(adapter);
+  const [expanded, setExpanded] = useState(true);
   const outputs =
     (adapter.getValue('config.output_contract') as Array<{
       key: string;
@@ -136,28 +139,47 @@ function renderOutputContractView({ adapter, block }: SchemaViewRendererProps) {
         >
           {block.title ?? title}
         </Typography.Title>
+        <Button
+          aria-expanded={expanded}
+          aria-label={block.title ?? title}
+          className="agent-flow-node-detail__section-toggle"
+          icon={
+            <DownOutlined
+              className={
+                expanded
+                  ? 'agent-flow-node-detail__section-toggle-icon agent-flow-node-detail__section-toggle-icon--expanded'
+                  : 'agent-flow-node-detail__section-toggle-icon'
+              }
+            />
+          }
+          size="small"
+          type="text"
+          onClick={() => setExpanded((current) => !current)}
+        />
       </div>
-      {outputs.length > 0 ? (
-        <div className="agent-flow-node-detail__list">
-          {outputs.map((output) => (
-            <div key={output.key} className="agent-flow-node-detail__list-item">
-              <div className="agent-flow-node-detail__list-item-left">
-                <span className="agent-flow-node-detail__list-item-icon">
-                  {'{x}'}
-                </span>
-                <span className="agent-flow-node-detail__list-item-name">
-                  {output.key}
+      {expanded ? (
+        outputs.length > 0 ? (
+          <div className="agent-flow-node-detail__list">
+            {outputs.map((output) => (
+              <div key={output.key} className="agent-flow-node-detail__list-item">
+                <div className="agent-flow-node-detail__list-item-left">
+                  <span className="agent-flow-node-detail__list-item-icon">
+                    {'{x}'}
+                  </span>
+                  <span className="agent-flow-node-detail__list-item-name">
+                    {output.key}
+                  </span>
+                </div>
+                <span className="agent-flow-node-detail__list-item-type">
+                  {output.valueType}
                 </span>
               </div>
-              <span className="agent-flow-node-detail__list-item-type">
-                {output.valueType}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.no_fields_yet")} />
-      )}
+            ))}
+          </div>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18nText("agentFlow", "auto.no_fields_yet")} />
+        )
+      ) : null}
     </div>
   );
 }
@@ -375,7 +397,7 @@ export const agentFlowViewRenderers = {
   card_model: renderCardModelView,
   card_description: renderCardDescriptionView,
   summary: renderSummaryView,
-  output_contract: renderOutputContractView,
+  output_contract: OutputContractView,
   policy_group: renderPolicyGroupView,
   relations: renderRelationsView,
   runtime_summary: renderRuntimeSummaryView,

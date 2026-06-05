@@ -46,6 +46,7 @@ import {
   getLlmContextPolicy,
   getLlmExternalReasoningPolicy
 } from '../lib/llm-node-config';
+import { HTTP_REQUEST_METHOD_OPTIONS } from '../lib/http-request/contract';
 import { getNamedBindingExpression } from '../lib/named-binding-expressions';
 import {
   encodeSelectorValue,
@@ -97,11 +98,19 @@ function renderTextField({ adapter, block }: SchemaFieldRendererProps) {
 
 function renderNumberField({ adapter, block }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
+  const isCompactNumberField = block.path === 'config.timeout_ms';
 
   return (
     <InputNumber
       aria-label={block.label}
-      className="agent-flow-editor__number-field"
+      className={[
+        'agent-flow-editor__number-field',
+        isCompactNumberField
+          ? 'agent-flow-editor__number-field--compact'
+          : null
+      ]
+        .filter(Boolean)
+        .join(' ')}
       value={typeof value === 'number' && Number.isFinite(value) ? value : null}
       onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
     />
@@ -610,19 +619,45 @@ function renderHttpRequestKeyValuesField({
   adapter,
   block
 }: SchemaFieldRendererProps) {
-  const addButtonLabel =
-    block.path === 'bindings.headers'
-      ? i18nText('agentFlow', 'auto.add_request_header')
-      : i18nText('agentFlow', 'auto.add_request_param');
-
   return (
     <HttpRequestKeyValuesField
-      addButtonLabel={addButtonLabel}
       ariaLabel={block.label}
       options={getSelectorOptions(adapter)}
       value={adapter.getValue(block.path)}
       onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
     />
+  );
+}
+
+function renderHttpRequestEndpointField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const methodValue = adapter.getValue('config.method');
+  const urlValue = adapter.getValue(block.path);
+
+  return (
+    <div className="agent-flow-http-request-endpoint">
+      <Select
+        aria-label={i18nText('agentFlow', 'auto.request_method')}
+        className="agent-flow-http-request-endpoint__method"
+        options={HTTP_REQUEST_METHOD_OPTIONS}
+        value={typeof methodValue === 'string' ? methodValue : 'GET'}
+        onChange={(nextValue) => adapter.setValue('config.method', nextValue)}
+      />
+      <TemplatedTextField
+        ariaLabel={block.label}
+        displayMode="input"
+        label={block.label}
+        options={getSelectorOptions(adapter)}
+        placeholder={i18nText(
+          'agentFlow',
+          'auto.support_text_variable_block_enter_left_curly_bracket_quick_reference'
+        )}
+        value={typeof urlValue === 'string' ? urlValue : ''}
+        onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+      />
+    </div>
   );
 }
 
@@ -686,6 +721,7 @@ export const agentFlowFieldRenderers = {
   output_contract_definition: renderOutputContractDefinitionField,
   start_input_fields: renderStartInputFieldsField,
   start_model_list: renderStartModelListField,
+  http_request_endpoint: renderHttpRequestEndpointField,
   http_request_key_values: renderHttpRequestKeyValuesField,
   http_request_body: renderHttpRequestBodyField,
   http_request_curl_import: renderHttpRequestCurlImportField,

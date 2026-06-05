@@ -671,6 +671,7 @@ describe('agent-flow node schema registry', () => {
     const node = createNodeDocument('http_request', 'node-http-request');
 
     expect(contract).not.toBeNull();
+    expect(contract?.defaults.alias).toBe('HTTP');
     expect(contract?.defaults.config).toEqual({
       method: 'GET',
       url: '',
@@ -697,17 +698,19 @@ describe('agent-flow node schema registry', () => {
     expect(node.outputs).toEqual(contract?.defaults.outputs);
   });
 
-  test('HTTP Request config blocks expose request fields before output variables', () => {
+  test('HTTP Request config blocks expose request fields around output variables', () => {
     const configBlocks = buildCommonConfigBlocks('http_request');
     const serializedConfigBlocks = JSON.stringify(configBlocks);
 
-    expect(serializedConfigBlocks).toContain('"path":"config.method"');
     expect(serializedConfigBlocks).toContain('"path":"config.url"');
     expect(serializedConfigBlocks).toContain('"path":"bindings.params"');
     expect(serializedConfigBlocks).toContain('"path":"bindings.headers"');
     expect(serializedConfigBlocks).toContain('"path":"config.body_type"');
     expect(serializedConfigBlocks).toContain('"path":"config.verify_ssl"');
     expect(serializedConfigBlocks).toContain('"path":"config.timeout_ms"');
+    expect(serializedConfigBlocks).toContain(
+      '"renderer":"http_request_endpoint"'
+    );
     expect(serializedConfigBlocks).toContain(
       '"renderer":"http_request_key_values"'
     );
@@ -717,8 +720,20 @@ describe('agent-flow node schema registry', () => {
     expect(serializedConfigBlocks).toContain(
       '"renderer":"http_request_curl_import"'
     );
-    expect(serializedConfigBlocks.indexOf('"path":"config.method"')).toBeLessThan(
+    expect(serializedConfigBlocks.indexOf('"path":"config.url"')).toBeLessThan(
       serializedConfigBlocks.indexOf('"renderer":"output_contract"')
+    );
+    expect(
+      serializedConfigBlocks.indexOf('"renderer":"output_contract"')
+    ).toBeLessThan(serializedConfigBlocks.indexOf('"path":"config.timeout_ms"'));
+    expect(serializedConfigBlocks.indexOf('"path":"config.timeout_ms"')).toBeLessThan(
+      serializedConfigBlocks.indexOf('"path":"config.curl_import"')
+    );
+    expect(serializedConfigBlocks.indexOf('"path":"config.curl_import"')).toBeLessThan(
+      serializedConfigBlocks.indexOf('"path":"config.verify_ssl"')
+    );
+    expect(serializedConfigBlocks.indexOf('"path":"config.verify_ssl"')).toBeLessThan(
+      serializedConfigBlocks.indexOf('"renderer":"policy_group"')
     );
   });
 
@@ -897,5 +912,34 @@ describe('agent-flow node schema registry', () => {
     expect(nextNode.config).not.toHaveProperty('output_contract');
     expect(nextNode.alias).toBe('LLM');
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  test('fills missing fixed HTTP Request output variables for legacy nodes', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const httpNode = createNodeDocument('http_request', 'node-http-request');
+    const legacyHttpNode: FlowNodeDocument = {
+      ...httpNode,
+      outputs: [{ key: 'body', title: '响应内容', valueType: 'json' }]
+    };
+    const legacyDocument = {
+      ...document,
+      graph: {
+        ...document.graph,
+        nodes: [legacyHttpNode]
+      }
+    };
+    const adapter = createAgentFlowNodeSchemaAdapter({
+      document: legacyDocument,
+      nodeId: 'node-http-request',
+      setWorkingDocument: vi.fn(),
+      dispatch: vi.fn()
+    });
+
+    expect(adapter.getValue('config.output_contract')).toEqual([
+      { key: 'body', title: '响应内容', valueType: 'json' },
+      { key: 'status_code', title: '响应状态码', valueType: 'number' },
+      { key: 'headers', title: '响应头列表 JSON', valueType: 'object' },
+      { key: 'files', title: 'HTTP 响应文件', valueType: 'Array[File]' }
+    ]);
   });
 });

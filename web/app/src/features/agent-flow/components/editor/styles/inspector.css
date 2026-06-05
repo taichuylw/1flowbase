@@ -145,9 +145,10 @@
 .agent-flow-editor__inspector-field--policy
   .agent-flow-editor__inspector-field-control {
   display: inline-flex;
-  flex: none;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .agent-flow-editor__detail-dock[data-layout='compact']
@@ -156,9 +157,25 @@
 }
 
 .agent-flow-editor__inspector-field-label.ant-typography {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   color: #1f3326;
   line-height: 1.45;
+}
+
+.agent-flow-editor__inspector-field-label-action.ant-btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  color: #1f3326;
+}
+
+.agent-flow-editor__inspector-field-label-action.ant-btn:hover,
+.agent-flow-editor__inspector-field-label-action.ant-btn:focus-visible {
+  color: #00a870;
 }
 
 .agent-flow-editor__inspector-field-control {
@@ -193,6 +210,51 @@
 
 .agent-flow-editor__number-field {
   width: 100%;
+}
+
+.agent-flow-editor__number-field--compact.ant-input-number {
+  width: 100%;
+}
+
+.agent-flow-editor__inspector-field[data-field-key='config.timeout_ms'] {
+  grid-template-columns: minmax(max-content, 36%) minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: center;
+}
+
+.agent-flow-editor__inspector-field[data-field-key='config.timeout_ms']
+  .agent-flow-editor__inspector-field-label.ant-typography {
+  white-space: nowrap;
+}
+
+.agent-flow-editor__inspector-field[data-field-key='config.timeout_ms']
+  .agent-flow-editor__inspector-field-control {
+  min-width: 0;
+}
+
+.agent-flow-http-request-endpoint {
+  display: grid;
+  grid-template-columns: minmax(84px, 104px) minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-http-request-endpoint__method.ant-select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+}
+
+.agent-flow-http-request-endpoint__method.ant-select
+  .ant-select-selector {
+  height: 40px;
+  align-items: center;
+}
+
+.agent-flow-http-request-endpoint
+  .agent-flow-templated-text-field__input-frame {
+  min-height: 40px;
 }
 
 .agent-flow-templated-text-field {
@@ -660,8 +722,8 @@
 }
 
 .agent-flow-http-request-curl-import {
-  display: flex;
-  justify-content: flex-start;
+  display: inline-flex;
+  justify-content: flex-end;
 }
 
 .agent-flow-if-else-branches {

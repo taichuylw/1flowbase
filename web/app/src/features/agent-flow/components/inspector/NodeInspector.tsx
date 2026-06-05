@@ -2,17 +2,22 @@ import type {
   SchemaBlock,
   CanvasNodeSchema
 } from '../../../../shared/schema-ui/contracts/canvas-node-schema';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { evaluateSchemaRule } from '../../../../shared/schema-ui/runtime/rule-evaluator';
 import type { SchemaAdapter } from '../../../../shared/schema-ui/registry/create-renderer-registry';
 import { useEffect, useRef } from 'react';
-import { Tag, Tooltip, Typography } from 'antd';
+import { Button, Tag, Tooltip, Typography } from 'antd';
 
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
 import type { AgentFlowIssue } from '../../lib/validate-document';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
+import {
+  namedBindingEntriesFromValue,
+  toNamedBinding
+} from '../detail/fields/HttpRequestKeyValuesField';
 import { useNodeSchemaRuntime } from './use-node-schema-runtime';
+import { i18nText } from '../../../../shared/i18n/text';
 
 function isSectionBlock(
   block: SchemaBlock
@@ -45,7 +50,9 @@ function hasEmbeddedLabel(renderer: string) {
 function isPolicyFieldRenderer(renderer: string) {
   return (
     renderer === 'llm_context_policy' ||
-    renderer === 'llm_external_reasoning_policy'
+    renderer === 'llm_external_reasoning_policy' ||
+    renderer === 'switch' ||
+    renderer === 'http_request_curl_import'
   );
 }
 
@@ -57,6 +64,43 @@ function getFieldHelp(renderer: string) {
   return renderer === 'llm_context_policy'
     ? '将传入上下文注入当前LLM节点中'
     : null;
+}
+
+function createHttpRequestKeyValueEntry() {
+  return { name: '', value: { kind: 'templated_text' as const, value: '' } };
+}
+
+function getFieldLabelAction(
+  block: Extract<SchemaBlock, { kind: 'field' }>,
+  adapter: SchemaAdapter
+) {
+  if (block.renderer !== 'http_request_key_values') {
+    return null;
+  }
+
+  const actionLabel =
+    block.path === 'bindings.headers'
+      ? i18nText('agentFlow', 'auto.add_request_header')
+      : i18nText('agentFlow', 'auto.add_request_param');
+
+  return (
+    <Tooltip title={actionLabel}>
+      <Button
+        aria-label={actionLabel}
+        className="agent-flow-editor__inspector-field-label-action"
+        icon={<PlusOutlined />}
+        size="small"
+        type="text"
+        onClick={() => {
+          const entries = namedBindingEntriesFromValue(adapter.getValue(block.path));
+          adapter.setValue(
+            block.path,
+            toNamedBinding([...entries, createHttpRequestKeyValueEntry()])
+          );
+        }}
+      />
+    </Tooltip>
+  );
 }
 
 function shouldRenderSectionTitle(title: string) {
@@ -182,6 +226,10 @@ export function NodeInspector({
                   );
                   const labelTag = getFieldLabelTag();
                   const labelHelp = getFieldHelp(childBlock.renderer);
+                  const labelAction = getFieldLabelAction(
+                    childBlock,
+                    activeAdapter
+                  );
 
                   if (
                     !shouldRenderFieldBlock(
@@ -235,6 +283,7 @@ export function NodeInspector({
                               />
                             </Tooltip>
                           ) : null}
+                          {labelAction}
                         </Typography.Text>
                       )}
                       <div className="agent-flow-editor__inspector-field-control">
