@@ -384,6 +384,11 @@
   z-index: 1300 !important;
 }
 
+.app-shell-help-popup {
+  width: 328px;
+  max-width: calc(100vw - 32px);
+}
+
 .app-shell-settings-popup.ant-menu,
 .app-shell-settings-popup .ant-menu,
 .app-shell-help-popup.ant-menu,
@@ -409,6 +414,7 @@
 .app-shell-help-popup .ant-menu {
   width: 328px;
   min-width: 328px;
+  max-width: calc(100vw - 32px);
 }
 
 .app-shell-settings-popup.ant-menu .ant-menu-item,
@@ -481,6 +487,16 @@
   cursor: default;
 }
 
+.app-shell-help-popup.ant-menu
+  .app-shell-help-popup__release-menu-item
+  .ant-menu-title-content,
+.app-shell-help-popup
+  .app-shell-help-popup__release-menu-item
+  .ant-menu-title-content {
+  min-width: 0;
+  width: 100%;
+}
+
 .app-shell-help-popup.ant-menu .app-shell-help-popup__release-menu-item:hover,
 .app-shell-help-popup .app-shell-help-popup__release-menu-item:hover {
   background: transparent;
@@ -490,9 +506,12 @@
   display: grid;
   gap: 10px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 8px 12px;
   color: var(--text-primary);
   white-space: normal;
+  box-sizing: border-box;
 }
 
 .app-shell-release-status__header,
@@ -594,9 +613,13 @@
   gap: 6px;
 }
 
-.app-shell-release-status__upgrade > span {
+.app-shell-release-status__upgrade summary {
+  width: fit-content;
+  max-width: 100%;
   color: var(--text-secondary);
+  cursor: pointer;
   font-size: 12px;
+  line-height: 1.4;
 }
 
 .app-shell-release-status__upgrade code {

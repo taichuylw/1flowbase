@@ -106,11 +106,11 @@ function ReleaseStatusMenuItem() {
             </a>
           </div>
 
-          <div className="app-shell-release-status__upgrade">
-            <span>{i18nText("appShell", "release_status.docker_upgrade")}</span>
+          <details className="app-shell-release-status__upgrade">
+            <summary>{i18nText("appShell", "release_status.docker_upgrade")}</summary>
             <code>{releaseStatus.upgrade_commands.shell}</code>
             <code>{releaseStatus.upgrade_commands.powershell}</code>
-          </div>
+          </details>
         </>
       ) : (
         <div className="app-shell-release-status__loading">
