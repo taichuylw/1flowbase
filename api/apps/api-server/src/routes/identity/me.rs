@@ -210,7 +210,10 @@ pub async fn change_password(
         .await?;
 
     Ok((
-        CookieJar::new().remove(expired_session_cookie(&state.cookie_name)),
+        CookieJar::new().remove(expired_session_cookie(
+            &state.cookie_name,
+            state.cookie_secure,
+        )),
         StatusCode::NO_CONTENT,
     ))
 }

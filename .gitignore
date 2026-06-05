@@ -26,6 +26,7 @@ docs/superpowers/specs/history
 docker/volumes/
 docker/.env
 docker/.env.local
+docker/middleware.env
 docker/api/api.env
 docker/plugin-runner/plugin-runner.env
 docker/postgres/postgres.env
@@ -42,6 +43,8 @@ docker/api/plugins/host-extension/dropins/*
 # Local runtime outputs
 tmp/
 web/app/tmp/
+web/app/tsconfig.tsbuildinfo
+test_dir.txt
 .1flowbase.verify.local.json
 
 # Local backend env
@@ -57,3 +60,4 @@ docs/superpowers/specs/1flowbase/2026-04-21-1flowbase-product-vision.md
 api/storage/*
 web/app/.env
 .claude/*
+.agents/skills/fuck-my-shit-mountain/*

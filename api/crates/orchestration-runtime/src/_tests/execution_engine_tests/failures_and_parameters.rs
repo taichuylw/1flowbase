@@ -446,3 +446,43 @@ async fn llm_json_schema_response_exposes_structured_output_only_when_declared()
         json!(12)
     );
 }
+
+#[tokio::test]
+async fn llm_json_schema_response_rejects_invalid_structured_output() {
+    let mut plan = base_plan();
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config = json!({
+        "model_provider": {
+            "provider_instance_id": "provider-ready",
+            "model_id": "gpt-5.4-mini"
+        },
+        "response_format": {
+            "mode": "json_schema",
+            "schema": { "type": "object" }
+        }
+    });
+    llm.outputs.push(CompiledOutput {
+        key: "structured_output".to_string(),
+        title: "结构化输出".to_string(),
+        value_type: "json".to_string(),
+        selector: Vec::new(),
+        json_schema: None,
+    });
+
+    let error = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "输出 JSON" } }),
+        &StubProviderInvoker {
+            fail: false,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: "not json".to_string(),
+        },
+    )
+    .await
+    .expect_err("invalid structured LLM output should fail the node");
+
+    assert!(error.to_string().contains("invalid structured LLM output"));
+}

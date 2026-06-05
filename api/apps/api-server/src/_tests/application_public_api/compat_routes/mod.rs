@@ -387,6 +387,7 @@ async fn test_app_with_runtime_event_stream(
         runtime_event_stream,
         api_docs: base_state.api_docs.clone(),
         cookie_name: base_state.cookie_name.clone(),
+        cookie_secure: base_state.cookie_secure,
         session_ttl_days: base_state.session_ttl_days,
         bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
     });

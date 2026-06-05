@@ -1,7 +1,7 @@
 use super::*;
 
-pub(super) fn parse_structured_llm_output(text: &str) -> Value {
-    serde_json::from_str(text).unwrap_or(Value::Null)
+pub(super) fn parse_structured_llm_output(text: &str) -> Result<Value> {
+    serde_json::from_str(text).map_err(|error| anyhow!("invalid structured LLM output: {error}"))
 }
 
 pub(super) fn strip_llm_think_tags(text: &str) -> String {

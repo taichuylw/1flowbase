@@ -87,6 +87,7 @@ pub async fn sign_in(
     let cookie = Cookie::build((state.cookie_name.clone(), result.session.session_id.clone()))
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(state.cookie_secure)
         .path("/")
         .build();
     let jar = CookieJar::new().add(cookie);

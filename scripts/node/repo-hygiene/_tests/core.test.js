@@ -185,6 +185,35 @@ test('collectRepoHygieneFindings excludes tmp sandbox tests from formal quality 
   );
 });
 
+test('collectRepoHygieneFindings reports local env generated and scratch artifacts', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-artifacts-'));
+  writeFile(
+    repoRoot,
+    'docker/middleware.env',
+    'POSTGRES_DB=1flowbase\nPOSTGRES_USER=postgres\nPOSTGRES_PASSWORD=1flowbase\n'
+  );
+  writeFile(repoRoot, 'test_dir.txt', 'scratch\n');
+  writeFile(repoRoot, 'web/app/tsconfig.tsbuildinfo', '{}\n');
+
+  const findings = collectRepoHygieneFindings({ repoRoot });
+
+  assert.equal(
+    findings.some((finding) => finding.rule === 'tracked-env-artifact'
+      && finding.file === 'docker/middleware.env'),
+    true
+  );
+  assert.equal(
+    findings.some((finding) => finding.rule === 'tracked-build-artifact'
+      && finding.file === 'web/app/tsconfig.tsbuildinfo'),
+    true
+  );
+  assert.equal(
+    findings.some((finding) => finding.rule === 'root-scratch-artifact'
+      && finding.file === 'test_dir.txt'),
+    true
+  );
+});
+
 test('main writes an advisory report and only fails on blocking findings', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-main-'));
   writeFile(

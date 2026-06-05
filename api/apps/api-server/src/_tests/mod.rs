@@ -3,6 +3,7 @@ mod application_public_api;
 mod auth_routes;
 mod config_tests;
 mod data_sources_routes;
+mod error_response_tests;
 mod file_management_routes;
 mod frontend_block_catalog_routes;
 mod frontstage_routes;

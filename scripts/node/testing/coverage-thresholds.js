@@ -21,10 +21,22 @@ const frontendThresholds = [
       branches: 50,
     },
   },
+  {
+    key: 'page-runtime',
+    prefix: 'packages/page-runtime/',
+    thresholds: {
+      lines: 60,
+      functions: 60,
+      statements: 60,
+      branches: 45,
+    },
+  },
 ];
 
 const backendThresholds = [
   { key: 'control-plane', packageName: 'control-plane', line: 70 },
+  { key: 'orchestration-runtime', packageName: 'orchestration-runtime', line: 60 },
+  { key: 'plugin-runner', packageName: 'plugin-runner', line: 55 },
   { key: 'storage-postgres', packageName: 'storage-postgres', line: 65 },
   { key: 'api-server', packageName: 'api-server', line: 60 },
 ];

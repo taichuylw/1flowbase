@@ -14,6 +14,29 @@ const {
   ensureCargoLlvmCovInstalled,
   main,
 } = require('../../verify-coverage.js');
+const {
+  backendThresholds,
+} = require('../../testing/coverage-thresholds.js');
+
+function expectedBackendCoverageCommand({ repoRoot, entry, cargoParallelism, cargoTestThreads }) {
+  return {
+    label: `backend-coverage-${entry.key}`,
+    command: 'cargo',
+    args: [
+      'llvm-cov',
+      '--package',
+      entry.packageName,
+      '--json',
+      '--summary-only',
+      '--output-path',
+      `${repoRoot}/tmp/test-governance/coverage/backend/${entry.key}.json`,
+      '--',
+      `--test-threads=${cargoTestThreads}`,
+    ],
+    cwd: 'api',
+    env: { CARGO_BUILD_JOBS: String(cargoParallelism), CARGO_INCREMENTAL: '0' },
+  };
+}
 
 test('parseCliArgs defaults to all coverage gates', () => {
   assert.deepEqual(parseCliArgs([]), { help: false, target: 'all' });
@@ -64,6 +87,12 @@ test('collectFrontendCoverageFailures only checks configured high-risk prefixes'
       statements: { pct: 10 },
       branches: { pct: 10 },
     },
+    '/repo/web/app/packages/page-runtime/src/index.ts': {
+      lines: { pct: 90 },
+      functions: { pct: 90 },
+      statements: { pct: 90 },
+      branches: { pct: 90 },
+    },
   };
 
   assert.deepEqual(collectFrontendCoverageFailures(summary), []);
@@ -72,59 +101,15 @@ test('collectFrontendCoverageFailures only checks configured high-risk prefixes'
 test('buildBackendCommands emits one cargo llvm-cov command per protected package', () => {
   const repoRoot = '/repo-root';
 
-  assert.deepEqual(buildBackendCommands({ repoRoot, cargoParallelism: 4, cargoTestThreads: 2 }), [
-    {
-      label: 'backend-coverage-control-plane',
-      command: 'cargo',
-      args: [
-        'llvm-cov',
-        '--package',
-        'control-plane',
-        '--json',
-        '--summary-only',
-        '--output-path',
-        '/repo-root/tmp/test-governance/coverage/backend/control-plane.json',
-        '--',
-        '--test-threads=2',
-      ],
-      cwd: 'api',
-      env: { CARGO_BUILD_JOBS: '4', CARGO_INCREMENTAL: '0' },
-    },
-    {
-      label: 'backend-coverage-storage-postgres',
-      command: 'cargo',
-      args: [
-        'llvm-cov',
-        '--package',
-        'storage-postgres',
-        '--json',
-        '--summary-only',
-        '--output-path',
-        '/repo-root/tmp/test-governance/coverage/backend/storage-postgres.json',
-        '--',
-        '--test-threads=2',
-      ],
-      cwd: 'api',
-      env: { CARGO_BUILD_JOBS: '4', CARGO_INCREMENTAL: '0' },
-    },
-    {
-      label: 'backend-coverage-api-server',
-      command: 'cargo',
-      args: [
-        'llvm-cov',
-        '--package',
-        'api-server',
-        '--json',
-        '--summary-only',
-        '--output-path',
-        '/repo-root/tmp/test-governance/coverage/backend/api-server.json',
-        '--',
-        '--test-threads=2',
-      ],
-      cwd: 'api',
-      env: { CARGO_BUILD_JOBS: '4', CARGO_INCREMENTAL: '0' },
-    },
-  ]);
+  assert.deepEqual(
+    buildBackendCommands({ repoRoot, cargoParallelism: 4, cargoTestThreads: 2 }),
+    backendThresholds.map((entry) => expectedBackendCoverageCommand({
+      repoRoot,
+      entry,
+      cargoParallelism: 4,
+      cargoTestThreads: 2,
+    }))
+  );
 });
 
 test('buildBackendCommands can restrict backend coverage to one package', () => {
@@ -154,9 +139,10 @@ test('buildBackendCleanupCommands emits cargo llvm-cov clean for workspace artif
 
 test('collectBackendCoverageFailures compares line coverage per package only', () => {
   const summaries = {
-    'control-plane': { data: [{ totals: { lines: { percent: 71 } } }] },
-    'storage-postgres': { data: [{ totals: { lines: { percent: 68 } } }] },
-    'api-server': { data: [{ totals: { lines: { percent: 61 } } }] },
+    ...Object.fromEntries(backendThresholds.map((entry) => [
+      entry.key,
+      { data: [{ totals: { lines: { percent: 100 } } }] },
+    ])),
   };
 
   assert.deepEqual(collectBackendCoverageFailures(summaries), []);
@@ -206,9 +192,12 @@ test('main cleans llvm-cov artifacts before and after backend coverage runs', as
     calls.map((call) => call.args),
     [
       ['llvm-cov', 'clean', '--workspace'],
-      ['llvm-cov', '--package', 'control-plane', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/control-plane.json`, '--', '--test-threads=4'],
-      ['llvm-cov', '--package', 'storage-postgres', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/storage-postgres.json`, '--', '--test-threads=4'],
-      ['llvm-cov', '--package', 'api-server', '--json', '--summary-only', '--output-path', `${repoRoot}/tmp/test-governance/coverage/backend/api-server.json`, '--', '--test-threads=4'],
+      ...backendThresholds.map((entry) => expectedBackendCoverageCommand({
+        repoRoot,
+        entry,
+        cargoParallelism: 2,
+        cargoTestThreads: 4,
+      }).args),
       ['llvm-cov', 'clean', '--workspace'],
     ]
   );
@@ -292,6 +281,12 @@ test('main writes coverage summary output under tmp/test-governance', async () =
           branches: { pct: 100 },
         },
         [`${repoRoot}/web/app/src/features/settings/components/RolePermissionPanel.tsx`]: {
+          lines: { pct: 100 },
+          functions: { pct: 100 },
+          statements: { pct: 100 },
+          branches: { pct: 100 },
+        },
+        [`${repoRoot}/web/app/packages/page-runtime/src/index.ts`]: {
           lines: { pct: 100 },
           functions: { pct: 100 },
           statements: { pct: 100 },

@@ -34,6 +34,7 @@ pub struct ApiState {
     pub runtime_event_stream: Arc<dyn RuntimeEventStream>,
     pub api_docs: Arc<ApiDocsRegistry>,
     pub cookie_name: String,
+    pub cookie_secure: bool,
     pub session_ttl_days: i64,
     pub bootstrap_workspace_name: String,
 }

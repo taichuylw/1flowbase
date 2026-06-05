@@ -25,6 +25,15 @@ test('scanRustSource flags production escape hatches while ignoring cfg test mod
       '        Some(1).unwrap();',
       '    }',
       '}',
+      '',
+      '#[cfg(all(test, unix))]',
+      'mod unix_tests {',
+      '    #[test]',
+      '    fn accepts_escape_hatches_in_cfg_all_test_module() {',
+      '        Some(1).unwrap();',
+      '        panic!("test-only failure");',
+      '    }',
+      '}',
     ].join('\n'),
   });
 
