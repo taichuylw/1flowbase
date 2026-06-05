@@ -328,7 +328,7 @@ jobs:
             -v "$PWD/$artifact_root:/workspace/out" \
             -w /workspace/api \
             rust:1-slim-bookworm \
-            bash -lc 'set -euo pipefail
+            bash -c 'set -euo pipefail
               apt-get update
               apt-get install -y --no-install-recommends build-essential ca-certificates curl pkg-config
               rm -rf /var/lib/apt/lists/*
