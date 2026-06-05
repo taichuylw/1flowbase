@@ -11,7 +11,7 @@ const GITHUB_REPOSITORY: &str = "taichuy/1flowbase";
 const GITHUB_LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/taichuy/1flowbase/releases/latest";
 const GITHUB_CONTRIBUTORS_URL: &str = "https://github.com/taichuy/1flowbase/graphs/contributors";
-const RELEASE_STATUS_CACHE_SECONDS: i64 = 20 * 60;
+const RELEASE_STATUS_CACHE_SECONDS: i64 = 60;
 const DOCKER_SHELL_UPGRADE_COMMAND: &str =
     "curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh";
 const DOCKER_POWERSHELL_UPGRADE_COMMAND: &str =
@@ -267,5 +267,10 @@ mod tests {
         assert!(release_version_is_newer("0.1.5", "v0.1.6"));
         assert!(!release_version_is_newer("0.1.6", "v0.1.6"));
         assert!(!release_version_is_newer("0.2.0", "v0.1.6"));
+    }
+
+    #[test]
+    fn release_status_cache_is_short_enough_for_manual_release_checks() {
+        assert_eq!(RELEASE_STATUS_CACHE_SECONDS, 60);
     }
 }

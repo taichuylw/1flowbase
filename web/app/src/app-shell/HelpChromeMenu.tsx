@@ -34,7 +34,9 @@ function ReleaseStatusMenuItem() {
   const releaseStatusQuery = useQuery({
     queryKey: ['console-release-status'],
     queryFn: () => fetchConsoleReleaseStatus(),
-    staleTime: 20 * 60 * 1000,
+    staleTime: 60 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     retry: false
   });
   const releaseStatus = releaseStatusQuery.data;
