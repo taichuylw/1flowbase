@@ -263,10 +263,20 @@ describe('NodeInspector core', () => {
     );
     expect(screen.getByText('Params')).toBeInTheDocument();
     expect(screen.getByText('Headers')).toBeInTheDocument();
-    expect(screen.getByText('body')).toBeInTheDocument();
+    expect(screen.getAllByText('body').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('验证 SSL 证书')).toBeChecked();
     expect(screen.getByLabelText('超时设置(ms)')).toBeInTheDocument();
-    expect(screen.getByText('body')).toBeInTheDocument();
+    const maxResponseSizeInput = screen.getByLabelText('最大响应体(MB)');
+    expect(maxResponseSizeInput).toHaveValue('6');
+    fireEvent.change(maxResponseSizeInput, { target: { value: '8' } });
+    await waitFor(() => {
+      const httpNode = latestDocument.graph.nodes.find(
+        (node) => node.id === 'node-http-request'
+      );
+
+      expect(httpNode?.config.max_response_bytes).toBe(8 * 1024 * 1024);
+    });
+    expect(screen.getAllByText('body').length).toBeGreaterThan(0);
     expect(screen.getByText('status_code')).toBeInTheDocument();
     expect(screen.getByText('headers')).toBeInTheDocument();
     expect(screen.getByText('files')).toBeInTheDocument();

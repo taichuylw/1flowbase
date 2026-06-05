@@ -23,8 +23,10 @@ import {
   HTTP_REQUEST_BODY_TYPE_OPTIONS,
   HTTP_REQUEST_DEFAULT_BINDINGS,
   HTTP_REQUEST_DEFAULT_CONFIG,
+  HTTP_REQUEST_MAX_RESPONSE_BYTES,
   HTTP_REQUEST_METHOD_OPTIONS,
-  HTTP_REQUEST_OUTPUTS
+  HTTP_REQUEST_OUTPUTS,
+  HTTP_REQUEST_RESPONSE_BYTES_STEP
 } from '../http-request/contract';
 import { i18nText } from '../../../../shared/i18n/text';
 
@@ -145,7 +147,11 @@ function panelField({
   valueType = 'string',
   required,
   description,
-  options
+  options,
+  min,
+  max,
+  step,
+  numberFormat
 }: Omit<NodeRuntimePanelFieldDocument, 'valueType'> & {
   valueType?: string;
 }) {
@@ -156,7 +162,11 @@ function panelField({
     valueType,
     required,
     description,
-    options
+    options,
+    min,
+    max,
+    step,
+    numberFormat
   } satisfies NodeRuntimePanelFieldDocument;
 }
 
@@ -610,6 +620,16 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
           title: i18nText('agentFlow', 'auto.timeout_settings'),
           renderer: 'number',
           valueType: 'number'
+        }),
+        panelField({
+          key: 'config.max_response_bytes',
+          title: i18nText('agentFlow', 'auto.max_response_size'),
+          renderer: 'number',
+          valueType: 'number',
+          min: HTTP_REQUEST_RESPONSE_BYTES_STEP,
+          max: HTTP_REQUEST_MAX_RESPONSE_BYTES,
+          step: HTTP_REQUEST_RESPONSE_BYTES_STEP,
+          numberFormat: 'bytes_as_mib'
         }),
         panelField({
           key: 'config.curl_import',

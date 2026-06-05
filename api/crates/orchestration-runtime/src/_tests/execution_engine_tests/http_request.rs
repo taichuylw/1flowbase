@@ -499,6 +499,88 @@ async fn http_request_node_projects_binary_response_file_descriptor() {
 }
 
 #[tokio::test]
+async fn http_request_node_default_response_budget_allows_six_mib() {
+    let (base_url, _captured, server) = spawn_http_fixture(vec![response(
+        "/large-default",
+        200,
+        "application/octet-stream",
+        vec![b'x'; 6 * 1024 * 1024],
+    )])
+    .await;
+    let plan = http_request_plan(
+        json!({
+            "method": "GET",
+            "url": format!("{base_url}/large-default"),
+            "body_type": "none",
+            "timeout_ms": 30000,
+            "verify_ssl": true
+        }),
+        BTreeMap::new(),
+    );
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "refund" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(
+        outcome.variable_pool["node-http"]["status_code"],
+        json!(200)
+    );
+    server.abort();
+}
+
+#[tokio::test]
+async fn http_request_node_caps_configured_response_budget_at_ten_mib() {
+    let (base_url, _captured, server) = spawn_http_fixture(vec![response(
+        "/too-large",
+        200,
+        "application/octet-stream",
+        vec![b'x'; 10 * 1024 * 1024 + 1],
+    )])
+    .await;
+    let plan = http_request_plan(
+        json!({
+            "method": "GET",
+            "url": format!("{base_url}/too-large"),
+            "body_type": "none",
+            "timeout_ms": 30000,
+            "max_response_bytes": 20 * 1024 * 1024,
+            "verify_ssl": true
+        }),
+        BTreeMap::new(),
+    );
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "refund" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(failure) => {
+            assert_eq!(failure.node_id, "node-http");
+            assert_eq!(failure.error_payload["kind"], json!("http_request_error"));
+            assert_eq!(
+                failure.error_payload["message"],
+                json!("HTTP response body exceeds max_response_bytes")
+            );
+        }
+        other => panic!("expected capped max_response_bytes failure, got {other:?}"),
+    }
+    server.abort();
+}
+
+#[tokio::test]
 async fn http_request_node_treats_error_status_as_normal_output() {
     let (base_url, _captured, server) = spawn_http_fixture(vec![response(
         "/missing",

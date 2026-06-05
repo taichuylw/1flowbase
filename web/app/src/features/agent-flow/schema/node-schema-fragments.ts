@@ -92,7 +92,11 @@ function createContractFieldBlock(
     renderer: field.renderer,
     path: field.key,
     label: field.title,
-    options: field.options as SchemaFieldBlock['options']
+    options: field.options as SchemaFieldBlock['options'],
+    min: field.min,
+    max: field.max,
+    step: field.step,
+    numberFormat: field.numberFormat
   };
 }
 
@@ -258,6 +262,7 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
           definitionSections,
           new Set([
             'config.timeout_ms',
+            'config.max_response_bytes',
             'config.curl_import',
             'config.verify_ssl'
           ])

@@ -150,6 +150,10 @@ export interface NodeRuntimePanelFieldDocument {
   required?: boolean;
   description?: string;
   options?: unknown[];
+  min?: number;
+  max?: number;
+  step?: number;
+  numberFormat?: 'bytes_as_mib';
 }
 
 export interface NodeRuntimePanelSectionDocument {

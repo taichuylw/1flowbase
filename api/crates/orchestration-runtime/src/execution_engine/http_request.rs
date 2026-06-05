@@ -12,7 +12,8 @@ use serde_json::{json, Map, Value};
 use crate::{binding_runtime::render_template, compiled_plan::CompiledNode};
 
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
-const DEFAULT_MAX_RESPONSE_BYTES: u64 = 1024 * 1024;
+const DEFAULT_MAX_RESPONSE_BYTES: u64 = 6 * 1024 * 1024;
+const MAX_RESPONSE_BYTES_LIMIT: u64 = 10 * 1024 * 1024;
 const INLINE_RESPONSE_STORAGE_ID: &str = "runtime-inline";
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,7 +110,8 @@ async fn execute_http_request_node_inner(
         &node.config,
         "max_response_bytes",
         DEFAULT_MAX_RESPONSE_BYTES,
-    );
+    )
+    .min(MAX_RESPONSE_BYTES_LIMIT);
     let verify_ssl = node
         .config
         .get("verify_ssl")

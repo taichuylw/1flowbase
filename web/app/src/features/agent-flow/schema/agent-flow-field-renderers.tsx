@@ -58,6 +58,8 @@ import { outputHasLlmContextSchema } from '../lib/output-contract/schema';
 import { createTemplateSelectorToken } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
 
+const BYTES_PER_MIB = 1024 * 1024;
+
 function getSelectorOptions(adapter: SchemaFieldRendererProps['adapter']) {
   return (
     (adapter.getDerived('selectorOptions') as
@@ -98,7 +100,25 @@ function renderTextField({ adapter, block }: SchemaFieldRendererProps) {
 
 function renderNumberField({ adapter, block }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const isCompactNumberField = block.path === 'config.timeout_ms';
+  const usesMibDisplay = block.numberFormat === 'bytes_as_mib';
+  const numberValue = typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const displayValue =
+    usesMibDisplay && numberValue !== null ? numberValue / BYTES_PER_MIB : numberValue;
+  const displayMin =
+    usesMibDisplay && typeof block.min === 'number'
+      ? block.min / BYTES_PER_MIB
+      : block.min;
+  const displayMax =
+    usesMibDisplay && typeof block.max === 'number'
+      ? block.max / BYTES_PER_MIB
+      : block.max;
+  const displayStep =
+    usesMibDisplay && typeof block.step === 'number'
+      ? block.step / BYTES_PER_MIB
+      : block.step;
+  const isCompactNumberField =
+    block.path === 'config.timeout_ms' ||
+    block.path === 'config.max_response_bytes';
 
   return (
     <InputNumber
@@ -111,8 +131,22 @@ function renderNumberField({ adapter, block }: SchemaFieldRendererProps) {
       ]
         .filter(Boolean)
         .join(' ')}
-      value={typeof value === 'number' && Number.isFinite(value) ? value : null}
-      onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
+      min={displayMin}
+      max={displayMax}
+      step={displayStep}
+      value={displayValue}
+      onChange={(nextValue) => {
+        const normalizedValue =
+          typeof nextValue === 'number' && Number.isFinite(nextValue)
+            ? nextValue
+            : null;
+        adapter.setValue(
+          block.path,
+          usesMibDisplay && normalizedValue !== null
+            ? Math.round(normalizedValue * BYTES_PER_MIB)
+            : normalizedValue
+        );
+      }}
     />
   );
 }

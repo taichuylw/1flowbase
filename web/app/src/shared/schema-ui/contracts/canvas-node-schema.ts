@@ -18,6 +18,10 @@ export interface SchemaFieldBlock extends SchemaBlockBase {
   path: string;
   label: string;
   options?: SchemaFieldOption[];
+  min?: number;
+  max?: number;
+  step?: number;
+  numberFormat?: 'bytes_as_mib';
   disabledWhen?: SchemaRule;
   requiredWhen?: SchemaRule;
 }
