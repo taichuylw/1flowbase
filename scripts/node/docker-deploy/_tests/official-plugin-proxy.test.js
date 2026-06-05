@@ -390,7 +390,7 @@ test('container image workflow records a CD quality gate artifact for Trivy repo
 
   assert.match(
     workflow,
-    /report:\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs:\n\s+- publish\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+actions: read\n\s+issues: write/u,
+    /report:\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs:\n\s+- publish\n\s+- publish-api-server\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+actions: read\n\s+issues: write/u,
   );
   assert.match(workflow, /pattern: test-governance-trivy-\*/u);
   assert.match(workflow, /path: tmp\/test-governance/u);

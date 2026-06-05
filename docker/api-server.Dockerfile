@@ -22,7 +22,7 @@ RUN --mount=type=cache,id=1flowbase-cargo-registry,sharing=locked,target=/usr/lo
       cargo build --release -p api-server --bin api-server \
     && cp /workspace/api/target-cache/release/api-server /workspace/api/api-server
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim AS runtime-base
 
 ARG APP_UID=1000
 ARG APP_GID=1000
@@ -35,7 +35,6 @@ RUN apt-get update \
   && groupadd --gid "${APP_GID}" flowbase \
   && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin flowbase
 
-COPY --from=builder /workspace/api/api-server /usr/local/bin/api-server
 COPY api/plugins /app/api/plugins
 
 RUN mkdir -p \
@@ -50,3 +49,13 @@ USER flowbase
 EXPOSE 7800
 
 ENTRYPOINT ["/usr/local/bin/api-server"]
+
+FROM runtime-base AS runtime
+
+COPY --from=builder /workspace/api/api-server /usr/local/bin/api-server
+
+FROM runtime-base AS runtime-prebuilt
+
+ARG TARGETARCH
+
+COPY --from=api_server_binaries /${TARGETARCH}/api-server /usr/local/bin/api-server

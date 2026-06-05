@@ -26,6 +26,13 @@ function readContainerImagesWorkflow() {
   );
 }
 
+function readApiServerDockerfile() {
+  return fs.readFileSync(
+    path.join(repoRoot, "docker", "api-server.Dockerfile"),
+    "utf8",
+  );
+}
+
 function readQualityGateAction() {
   return fs.readFileSync(
     path.join(repoRoot, ".github", "actions", "quality-gate", "action.yml"),
@@ -450,12 +457,35 @@ test("container image workflows keep vulnerability findings as warnings", () => 
 
 test("container image publishing avoids deprecated artifact runtime and qemu cache races", () => {
   const workflow = readContainerImagesWorkflow();
+  const apiServerDockerfile = readApiServerDockerfile();
 
   assert.doesNotMatch(workflow, /actions\/upload-artifact@v4/u);
   assert.match(workflow, /actions\/upload-artifact@v6/u);
   assert.match(
     workflow,
     /docker\/setup-qemu-action@v4[\s\S]*?with:\n\s+cache-image: false/u,
+  );
+  assert.match(workflow, /promote_official_tags:/u);
+  assert.match(
+    workflow,
+    /if: github\.event_name != 'workflow_dispatch' \|\| inputs\.promote_official_tags/u,
+  );
+  assert.match(
+    workflow,
+    /build-api-server-binary:[\s\S]*?runner: ubuntu-24\.04-arm/u,
+  );
+  assert.match(
+    workflow,
+    /docker run --rm[\s\S]*?--platform "linux\/\$\{\{ matrix\.arch \}\}"[\s\S]*?rust:1-slim-bookworm/u,
+  );
+  assert.match(
+    workflow,
+    /publish-api-server:[\s\S]*?target: runtime-prebuilt[\s\S]*?api_server_binaries=\.\/tmp\/api-server-binaries/u,
+  );
+  assert.match(apiServerDockerfile, /FROM runtime-base AS runtime-prebuilt/u);
+  assert.match(
+    apiServerDockerfile,
+    /COPY --from=api_server_binaries \/\$\{TARGETARCH\}\/api-server \/usr\/local\/bin\/api-server/u,
   );
 });
 
