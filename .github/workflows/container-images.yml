@@ -31,6 +31,11 @@ on:
         description: Image tag to publish, for example v0.1.0. Must match the component manifest version.
         required: true
         type: string
+      promote_official_tags:
+        description: Promote the scanned image to version/latest tags.
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -43,6 +48,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  select-api-server:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.select.outputs.enabled }}
+      image_tag: ${{ steps.select.outputs.image_tag }}
+      old_tag: ${{ steps.select.outputs.old_tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Select api-server
+        id: select
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          enabled=false
+          image_tag=""
+          old_tag=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.component }}" == "api-server" ]]; then
+              enabled=true
+              image_tag="${{ inputs.image_tag }}"
+            fi
+          else
+            image_tag="$(node scripts/node/cli/verify-container-version.js print-tag api-server)"
+            before_sha="${{ github.event.before }}"
+            zero_sha="0000000000000000000000000000000000000000"
+
+            if [[ "$before_sha" != "$zero_sha" ]] \
+              && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
+              && git cat-file -e "$before_sha:api/apps/api-server/Cargo.toml" 2>/dev/null; then
+              if old_version="$(git show "$before_sha:api/apps/api-server/Cargo.toml" | node scripts/node/cli/verify-container-version.js read-stdin-version api-server)"; then
+                old_tag="v${old_version}"
+              fi
+            fi
+
+            if [[ "$image_tag" != "$old_tag" ]]; then
+              enabled=true
+            fi
+          fi
+
+          {
+            echo "enabled=$enabled"
+            echo "image_tag=$image_tag"
+            echo "old_tag=$old_tag"
+          } >> "$GITHUB_OUTPUT"
+
   publish:
     runs-on: ubuntu-latest
     permissions:
@@ -79,6 +136,15 @@ jobs:
           image_tag=""
           old_tag=""
 
+          if [[ "${{ matrix.component }}" == "api-server" ]]; then
+            {
+              echo "enabled=$enabled"
+              echo "image_tag=$image_tag"
+              echo "old_tag=$old_tag"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ "${{ inputs.component }}" == "${{ matrix.component }}" ]]; then
               enabled=true
@@ -102,9 +168,11 @@ jobs:
             fi
           fi
 
-          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
-          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
-          echo "old_tag=$old_tag" >> "$GITHUB_OUTPUT"
+          {
+            echo "enabled=$enabled"
+            echo "image_tag=$image_tag"
+            echo "old_tag=$old_tag"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v4
         if: steps.select.outputs.enabled == 'true'
@@ -133,10 +201,12 @@ jobs:
           set -euo pipefail
 
           scan_tag=scan-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
-          echo "scan_tag=$scan_tag" >> "$GITHUB_OUTPUT"
-          echo "scan_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:$scan_tag" >> "$GITHUB_OUTPUT"
-          echo "version_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          echo "latest_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest" >> "$GITHUB_OUTPUT"
+          {
+            echo "scan_tag=$scan_tag"
+            echo "scan_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:$scan_tag"
+            echo "version_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}"
+            echo "latest_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push scan candidate ${{ matrix.image }}
         if: steps.select.outputs.enabled == 'true'
@@ -199,7 +269,207 @@ jobs:
           if-no-files-found: warn
 
       - name: Promote scanned image to official tags
-        if: steps.select.outputs.enabled == 'true'
+        if: steps.select.outputs.enabled == 'true' && (github.event_name != 'workflow_dispatch' || inputs.promote_official_tags)
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
+            --tag "${{ steps.image_refs.outputs.latest_image_ref }}" \
+            "${{ steps.image_refs.outputs.scan_image_ref }}"
+
+  build-api-server-binary:
+    needs:
+      - select-api-server
+    if: needs.select-api-server.outputs.enabled == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Restore api-server Rust build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            tmp/container-cache/api-server/${{ matrix.arch }}/cargo-registry
+            tmp/container-cache/api-server/${{ matrix.arch }}/cargo-git
+            tmp/container-cache/api-server/${{ matrix.arch }}/target
+          key: api-server-release-${{ matrix.arch }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          restore-keys: |
+            api-server-release-${{ matrix.arch }}-${{ hashFiles('api/Cargo.lock') }}-
+            api-server-release-${{ matrix.arch }}-
+
+      - name: Build api-server binary on native ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cache_root="tmp/container-cache/api-server/${{ matrix.arch }}"
+          artifact_root="tmp/container-artifacts/api-server/${{ matrix.arch }}"
+          mkdir -p \
+            "$cache_root/cargo-registry" \
+            "$cache_root/cargo-git" \
+            "$cache_root/target" \
+            "$artifact_root"
+
+          docker run --rm \
+            --platform "linux/${{ matrix.arch }}" \
+            -v "$PWD/api:/workspace/api" \
+            -v "$PWD/$cache_root/cargo-registry:/usr/local/cargo/registry" \
+            -v "$PWD/$cache_root/cargo-git:/usr/local/cargo/git" \
+            -v "$PWD/$cache_root/target:/workspace/target-cache" \
+            -v "$PWD/$artifact_root:/workspace/out" \
+            -w /workspace/api \
+            rust:1-slim-bookworm \
+            bash -lc 'set -euo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends build-essential ca-certificates curl pkg-config
+              rm -rf /var/lib/apt/lists/*
+              CARGO_TARGET_DIR=/workspace/target-cache cargo build --release -p api-server --bin api-server
+              install -Dm755 /workspace/target-cache/release/api-server /workspace/out/api-server'
+
+          sha256sum "$artifact_root/api-server" | tee "$artifact_root/api-server.sha256"
+          ls -lh "$artifact_root/api-server"
+
+      - name: Upload api-server binary artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: api-server-binary-${{ matrix.arch }}
+          path: tmp/container-artifacts/api-server/${{ matrix.arch }}
+          if-no-files-found: error
+
+  publish-api-server:
+    needs:
+      - select-api-server
+      - build-api-server-binary
+    if: needs.select-api-server.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-qemu-action@v4
+        with:
+          cache-image: false
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate api-server version
+        run: node scripts/node/cli/verify-container-version.js api-server ${{ needs.select-api-server.outputs.image_tag }}
+
+      - name: Download api-server binary artifacts
+        uses: actions/download-artifact@v6
+        with:
+          pattern: api-server-binary-*
+          path: tmp/api-server-binary-artifacts
+          merge-multiple: false
+
+      - name: Prepare api-server binary build context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p tmp/api-server-binaries/amd64 tmp/api-server-binaries/arm64
+          cp tmp/api-server-binary-artifacts/api-server-binary-amd64/api-server tmp/api-server-binaries/amd64/api-server
+          cp tmp/api-server-binary-artifacts/api-server-binary-arm64/api-server tmp/api-server-binaries/arm64/api-server
+          chmod 0755 tmp/api-server-binaries/amd64/api-server tmp/api-server-binaries/arm64/api-server
+          sha256sum tmp/api-server-binaries/amd64/api-server tmp/api-server-binaries/arm64/api-server
+
+      - name: Prepare api-server image references
+        id: image_refs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          scan_tag=scan-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          {
+            echo "scan_tag=$scan_tag"
+            echo "scan_image_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-api-server:$scan_tag"
+            echo "version_image_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-api-server:${{ needs.select-api-server.outputs.image_tag }}"
+            echo "latest_image_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-api-server:latest"
+            echo "buildcache_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-api-server:buildcache"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push prebuilt api-server scan candidate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/api-server.Dockerfile
+          target: runtime-prebuilt
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.image_refs.outputs.scan_image_ref }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.select-api-server.outputs.image_tag }}
+            org.opencontainers.image.title=1flowbase-api-server
+          build-contexts: |
+            api_server_binaries=./tmp/api-server-binaries
+          cache-from: |
+            type=gha,scope=1flowbase-api-server-runtime
+            type=registry,ref=${{ steps.image_refs.outputs.buildcache_ref }}
+          cache-to: |
+            type=gha,mode=max,scope=1flowbase-api-server-runtime
+            type=registry,ref=${{ steps.image_refs.outputs.buildcache_ref }},mode=max
+
+      - name: Prepare Trivy report directory
+        run: mkdir -p tmp/test-governance
+
+      - name: Generate HIGH Trivy warning report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ steps.image_refs.outputs.scan_image_ref }}
+          version: v0.70.0
+          scanners: vuln
+          severity: HIGH
+          format: json
+          output: tmp/test-governance/trivy-api-server-high.json
+          exit-code: "0"
+
+      - name: Enforce CRITICAL Trivy release gate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ steps.image_refs.outputs.scan_image_ref }}
+          version: v0.70.0
+          scanners: vuln
+          severity: CRITICAL
+          format: json
+          output: tmp/test-governance/trivy-api-server-critical.json
+          exit-code: "0"
+
+      - name: Upload Trivy reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-governance-trivy-api-server
+          path: tmp/test-governance/trivy-api-server-*.json
+          if-no-files-found: warn
+
+      - name: Promote scanned api-server image to official tags
+        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags
         run: |
           docker buildx imagetools create \
             --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
@@ -210,6 +480,7 @@ jobs:
     if: ${{ always() }}
     needs:
       - publish
+      - publish-api-server
     runs-on: ubuntu-latest
     permissions:
       contents: read
