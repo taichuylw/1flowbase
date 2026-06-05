@@ -400,6 +400,8 @@ test("quality gate workflow runs ci scope as parallel component gates before one
     /container-images-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && \(inputs\.scope == 'ci' \|\| inputs\.scope == 'container-images'\)\) \}\}/u,
   );
   assert.match(workflow, /- coverage-backend-control-plane/u);
+  assert.match(workflow, /- coverage-backend-orchestration-runtime/u);
+  assert.match(workflow, /- coverage-backend-plugin-runner/u);
   assert.match(workflow, /- coverage-backend-storage-postgres/u);
   assert.match(workflow, /- coverage-backend-api-server/u);
   assert.match(

@@ -9,31 +9,12 @@ const {
   buildGateCommand,
   buildIssueTitle,
   buildIssueLabels,
+  COVERAGE_BACKEND_COMPONENT_SCOPES,
+  REPO_BACKEND_COMPONENT_SCOPES,
   parseBooleanInput,
   runQualityGateAggregate,
   runQualityGate,
 } = require('../core.js');
-
-const REPO_BACKEND_COMPONENT_SCOPES = [
-  'repo-backend-static',
-  'repo-backend-fmt',
-  'repo-backend-clippy-core-libs',
-  'repo-backend-clippy-runtime-storage',
-  'repo-backend-clippy-apps',
-  'repo-backend-test-core-libs',
-  'repo-backend-test-runtime-storage',
-  'repo-backend-test-control-plane',
-  'repo-backend-test-api-server',
-  'repo-backend-test-plugin-runner',
-  'repo-backend-check-core-libs',
-  'repo-backend-check-runtime-storage',
-  'repo-backend-check-apps',
-];
-const COVERAGE_BACKEND_COMPONENT_SCOPES = [
-  'coverage-backend-control-plane',
-  'coverage-backend-storage-postgres',
-  'coverage-backend-api-server',
-];
 
 test('buildGateCommand maps supported scopes to repository verify scripts', () => {
   const repoRoot = '/repo';

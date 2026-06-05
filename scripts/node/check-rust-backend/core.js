@@ -109,13 +109,17 @@ function buildSkippedCfgTestLines(lines) {
       return;
     }
 
-    if (trimmed === '#[cfg(test)]') {
+    if (isCfgTestAttribute(trimmed)) {
       skipped.add(lineNumber);
       pendingCfgTest = true;
     }
   });
 
   return skipped;
+}
+
+function isCfgTestAttribute(trimmedLine) {
+  return /^#\[cfg\((?:test|(?:all|any)\([^)]*\btest\b[^)]*\))\)\]$/u.test(trimmedLine);
 }
 
 function createFinding({ severity, rule, file, line, message, snippet }) {
