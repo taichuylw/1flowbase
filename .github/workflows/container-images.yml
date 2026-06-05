@@ -504,10 +504,46 @@ jobs:
             exit 0
           fi
 
+          short_sha="${GITHUB_SHA::7}"
+          commit_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          workflow_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          cat > release-notes.md <<EOF
+          ## Upgrade
+
+          Linux/macOS:
+
+          \`\`\`bash
+          curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
+          \`\`\`
+
+          Windows PowerShell:
+
+          \`\`\`powershell
+          irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+          \`\`\`
+
+          ## Docker Images
+
+          - \`ghcr.io/${{ github.repository_owner }}/1flowbase-web:$RELEASE_TAG\`
+          - \`ghcr.io/${{ github.repository_owner }}/1flowbase-api-server:$RELEASE_TAG\`
+          - \`ghcr.io/${{ github.repository_owner }}/1flowbase-plugin-runner:$RELEASE_TAG\`
+          - \`ghcr.io/${{ github.repository_owner }}/1flowbase-*:latest\`
+
+          ## Traceability
+
+          - Target commit: [\`$short_sha\`]($commit_url)
+          - Workflow run: [container images #${GITHUB_RUN_ID}]($workflow_url)
+          - Source branch: \`latest\`
+
+          Pull requests, linked issues, commits, and contributors are generated below by GitHub when available.
+          EOF
+
           gh release create "$RELEASE_TAG" \
             --target "${{ github.sha }}" \
             --title "$RELEASE_TAG" \
-            --notes "Docker images for $RELEASE_TAG have been published from the latest branch."
+            --notes-file release-notes.md \
+            --generate-notes
 
   report:
     if: ${{ always() }}

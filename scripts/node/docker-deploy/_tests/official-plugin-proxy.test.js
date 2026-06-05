@@ -392,8 +392,18 @@ test('container image workflow publishes a GitHub release for the latest API ver
   assert.match(workflow, /permissions:\n\s+contents: write/u);
   assert.match(workflow, /RELEASE_TAG: \$\{\{ needs\.select-api-server\.outputs\.image_tag \}\}/u);
   assert.match(workflow, /gh release view "\$RELEASE_TAG"/u);
+  assert.match(workflow, /cat > release-notes\.md <<EOF/u);
+  assert.match(workflow, /## Upgrade/u);
+  assert.match(workflow, /scripts\/shell\/docker-deploy\.sh/u);
+  assert.match(workflow, /scripts\/powershell\/docker-deploy\.ps1/u);
+  assert.match(workflow, /## Docker Images/u);
+  assert.match(workflow, /ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/1flowbase-api-server:\$RELEASE_TAG/u);
+  assert.match(workflow, /## Traceability/u);
+  assert.match(workflow, /Target commit/u);
+  assert.match(workflow, /Workflow run/u);
   assert.match(workflow, /gh release create "\$RELEASE_TAG"/u);
-  assert.match(workflow, /Docker images for \$RELEASE_TAG have been published from the latest branch/u);
+  assert.match(workflow, /--notes-file release-notes\.md/u);
+  assert.match(workflow, /--generate-notes/u);
 });
 
 test('container image workflow records a CD quality gate artifact for Trivy reports', () => {
