@@ -19,5 +19,17 @@
     "en_us": "English",
     "trigger": "Switch language",
     "zh_hans": "Chinese"
+  },
+  "release_status": {
+    "contributors": "Contributors",
+    "current_version": "Current version",
+    "docker_upgrade": "Docker one-click upgrade",
+    "latest_version": "Latest version",
+    "loading": "Loading version",
+    "up_to_date": "Already up to date",
+    "update_available": "New version available",
+    "version": "Version",
+    "view_release": "View release",
+    "warning": "Latest version is temporarily unavailable"
   }
 }

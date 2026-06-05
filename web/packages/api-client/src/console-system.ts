@@ -1,5 +1,28 @@
 import { apiFetch } from './transport';
 
+export interface ConsoleReleaseInfo {
+  name: string;
+  body: string;
+  published_at: string;
+  html_url: string;
+}
+
+export interface ConsoleReleaseUpgradeCommands {
+  shell: string;
+  powershell: string;
+}
+
+export interface ConsoleReleaseStatus {
+  current_version: string;
+  latest_version: string;
+  has_update: boolean;
+  release_info: ConsoleReleaseInfo | null;
+  contributors_url: string;
+  upgrade_commands: ConsoleReleaseUpgradeCommands;
+  cached: boolean;
+  warning: string | null;
+}
+
 export interface ConsoleSystemRuntimeLocaleMeta {
   requested_locale: string | null;
   resolved_locale: string;
@@ -65,6 +88,13 @@ export interface ConsoleSystemRuntimeProfile {
 export function fetchConsoleSystemRuntimeProfile(baseUrl?: string) {
   return apiFetch<ConsoleSystemRuntimeProfile>({
     path: '/api/console/system/runtime-profile',
+    baseUrl
+  });
+}
+
+export function fetchConsoleReleaseStatus(baseUrl?: string) {
+  return apiFetch<ConsoleReleaseStatus>({
+    path: '/api/console/system/release-status',
     baseUrl
   });
 }

@@ -16,6 +16,10 @@ use crate::{
     response::ApiSuccess,
 };
 
+pub use super::release_status::{
+    ConsoleReleaseInfoResponse, ConsoleReleaseStatusResponse, ConsoleReleaseUpgradeCommandsResponse,
+};
+
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct SystemRuntimeProfileQuery {
     pub locale: Option<String>,
@@ -111,7 +115,28 @@ pub struct SystemRuntimeProfileResponse {
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
-    Router::new().route("/system/runtime-profile", get(get_runtime_profile))
+    Router::new()
+        .route("/system/runtime-profile", get(get_runtime_profile))
+        .route("/system/release-status", get(get_release_status))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/system/release-status",
+    responses(
+        (status = 200, body = ConsoleReleaseStatusResponse),
+        (status = 401, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_release_status(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<ConsoleReleaseStatusResponse>>, ApiError> {
+    require_session(&state, &headers).await?;
+
+    Ok(Json(ApiSuccess::new(
+        super::release_status::fetch_console_release_status().await,
+    )))
 }
 
 #[utoipa::path(
