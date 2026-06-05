@@ -479,62 +479,6 @@
   color: inherit;
 }
 
-.app-shell-help-popup.ant-menu .app-shell-help-popup__release-menu-item,
-.app-shell-help-popup .app-shell-help-popup__release-menu-item {
-  height: auto !important;
-  min-height: 0;
-  padding: 0 !important;
-  cursor: default;
-}
-
-.app-shell-help-popup.ant-menu
-  .app-shell-help-popup__release-menu-item
-  .ant-menu-title-content,
-.app-shell-help-popup
-  .app-shell-help-popup__release-menu-item
-  .ant-menu-title-content {
-  min-width: 0;
-  width: 100%;
-}
-
-.app-shell-help-popup.ant-menu .app-shell-help-popup__release-menu-item:hover,
-.app-shell-help-popup .app-shell-help-popup__release-menu-item:hover {
-  background: transparent;
-}
-
-.app-shell-release-status {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  padding: 6px 8px 8px;
-  color: var(--text-primary);
-  white-space: normal;
-  box-sizing: border-box;
-}
-
-.app-shell-release-status__line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 650;
-  min-height: 24px;
-  overflow-wrap: anywhere;
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-    'Courier New', monospace;
-  font-size: 14px;
-}
-
-.app-shell-release-status__latest {
-  padding-left: 23px;
-  color: #047857;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
 .app-shell-account-menu.ant-menu-horizontal {
   border-bottom: none !important;
   background: transparent !important;

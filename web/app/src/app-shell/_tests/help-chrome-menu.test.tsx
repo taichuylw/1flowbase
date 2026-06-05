@@ -47,7 +47,14 @@ describe('HelpChromeMenu', () => {
     fireEvent.mouseEnter(screen.getByLabelText('帮助'));
 
     expect(await screen.findByText('v0.1.6')).toBeInTheDocument();
-    expect(await screen.findByText('v0.1.7最新')).toBeInTheDocument();
+    const latestReleaseLink = await screen.findByRole('link', {
+      name: /v0\.1\.7/u
+    });
+    expect(latestReleaseLink).toHaveAttribute(
+      'href',
+      'https://github.com/taichuy/1flowbase/releases/tag/v0.1.7'
+    );
+    expect(screen.queryByText('v0.1.7最新')).not.toBeInTheDocument();
     expect(screen.queryByText('版本')).not.toBeInTheDocument();
     expect(screen.queryByText('当前版本')).not.toBeInTheDocument();
     expect(screen.queryByText('最新版本')).not.toBeInTheDocument();

@@ -1,5 +1,6 @@
 import {
   CloudDownloadOutlined,
+  ExportOutlined,
   FileTextOutlined,
   GithubOutlined,
   QuestionCircleOutlined
@@ -30,46 +31,40 @@ const HELP_LINKS = [
   href: string;
 }>;
 
-function ReleaseStatusMenuItem() {
-  const releaseStatusQuery = useQuery({
-    queryKey: ['console-release-status'],
-    queryFn: () => fetchConsoleReleaseStatus(),
-    staleTime: 60 * 1000,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
-    retry: false
-  });
-  const releaseStatus = releaseStatusQuery.data;
-  const currentVersion = formatReleaseVersion(releaseStatus?.current_version);
-  const latestVersion =
-    releaseStatus?.has_update && releaseStatus.latest_version
-      ? formatReleaseVersion(releaseStatus.latest_version)
-      : null;
-
+function HelpPopupLink({
+  href,
+  icon,
+  label
+}: {
+  href: string;
+  icon: ReactNode;
+  label: ReactNode;
+}) {
   return (
-    <div
-      className="app-shell-release-status"
-      onClick={(event) => event.stopPropagation()}
+    <a
+      className="app-shell-help-popup__link"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
     >
-      <div className="app-shell-release-status__line">
-        <CloudDownloadOutlined />
-        {currentVersion ? (
-          <span>{currentVersion}</span>
-        ) : (
-          <Spin size="small" />
-        )}
-        {releaseStatusQuery.isFetching && currentVersion ? (
-          <Spin size="small" />
-        ) : null}
-      </div>
+      <span className="app-shell-help-popup__link-icon">{icon}</span>
+      <span>{label}</span>
+    </a>
+  );
+}
 
-      {latestVersion ? (
-        <span className="app-shell-release-status__latest">
-          {latestVersion}
-          {i18nText("appShell", "release_status.latest_marker")}
-        </span>
-      ) : null}
-    </div>
+function HelpPopupText({
+  icon,
+  label
+}: {
+  icon: ReactNode;
+  label: ReactNode;
+}) {
+  return (
+    <span className="app-shell-help-popup__link">
+      <span className="app-shell-help-popup__link-icon">{icon}</span>
+      <span>{label}</span>
+    </span>
   );
 }
 
@@ -84,6 +79,22 @@ function formatReleaseVersion(version: string | null | undefined) {
 }
 
 export function HelpChromeMenu() {
+  const releaseStatusQuery = useQuery({
+    queryKey: ['console-release-status'],
+    queryFn: () => fetchConsoleReleaseStatus(),
+    staleTime: 60 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    retry: false
+  });
+  const releaseStatus = releaseStatusQuery.data;
+  const currentVersion = formatReleaseVersion(releaseStatus?.current_version);
+  const latestVersion =
+    releaseStatus?.has_update && releaseStatus.latest_version
+      ? formatReleaseVersion(releaseStatus.latest_version)
+      : null;
+  const latestReleaseUrl = releaseStatus?.release_info?.html_url ?? null;
+
   return (
     <Menu
       className="app-shell-help-menu"
@@ -102,24 +113,36 @@ export function HelpChromeMenu() {
             ...HELP_LINKS.map((item) => ({
               key: item.key,
               label: (
-                <a
-                  className="app-shell-help-popup__link"
+                <HelpPopupLink
                   href={item.href}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span className="app-shell-help-popup__link-icon">
-                    {item.icon}
-                  </span>
-                  <span>{item.label}</span>
-                </a>
+                  icon={item.icon}
+                  label={item.label}
+                />
               )
             })),
             {
-              key: 'release-status',
-              className: 'app-shell-help-popup__release-menu-item',
-              label: <ReleaseStatusMenuItem />
-            }
+              key: 'release-current',
+              label: (
+                <HelpPopupText
+                  icon={<CloudDownloadOutlined />}
+                  label={currentVersion ?? <Spin size="small" />}
+                />
+              )
+            },
+            ...(latestVersion && latestReleaseUrl
+              ? [
+                  {
+                    key: 'release-latest',
+                    label: (
+                      <HelpPopupLink
+                        href={latestReleaseUrl}
+                        icon={<ExportOutlined />}
+                        label={latestVersion}
+                      />
+                    )
+                  }
+                ]
+              : [])
           ]
         }
       ]}

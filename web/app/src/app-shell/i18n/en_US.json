@@ -19,8 +19,5 @@
     "en_us": "English",
     "trigger": "Switch language",
     "zh_hans": "Chinese"
-  },
-  "release_status": {
-    "latest_marker": "latest"
   }
 }
