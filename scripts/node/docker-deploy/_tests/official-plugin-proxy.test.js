@@ -396,6 +396,8 @@ test('container image workflow publishes a GitHub release for the latest API ver
   assert.match(workflow, /## Upgrade/u);
   assert.match(workflow, /scripts\/shell\/docker-deploy\.sh/u);
   assert.match(workflow, /scripts\/powershell\/docker-deploy\.ps1/u);
+  assert.match(workflow, /Windows CMD/u);
+  assert.match(workflow, /NoProfile -ExecutionPolicy Bypass/u);
   assert.match(workflow, /## Docker Images/u);
   assert.match(workflow, /ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/1flowbase-api-server:\$RELEASE_TAG/u);
   assert.match(workflow, /## Traceability/u);

@@ -523,6 +523,12 @@ jobs:
           irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
           \`\`\`
 
+          Windows CMD:
+
+          \`\`\`cmd
+          powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
+          \`\`\`
+
           ## Docker Images
 
           - \`ghcr.io/${{ github.repository_owner }}/1flowbase-web:$RELEASE_TAG\`
