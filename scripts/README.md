@@ -8,6 +8,20 @@
 - 前端依赖通过 `web/package.json` 管理，脚本内部需要前端工具时会从 `web/` 解析依赖。
 - warning 与 coverage 产物统一写入 `tmp/test-governance/`。
 
+## Git Helpers
+
+### `node scripts/node/merge-current-to-main-latest.js [选项]`
+
+将当前分支合并到 `main`，推送 `main`；成功后切到 `latest`，将 `main` 合并进 `latest` 并推送。
+任意 git 步骤失败都会立即停止，并停留在失败发生时的分支/状态。
+
+```bash
+node scripts/node/merge-current-to-main-latest.js
+```
+
+默认使用 `origin`、`main`、`latest`，可用 `--remote`、`--main`、`--latest` 覆盖。
+脚本默认要求工作区干净；确需允许未提交变更时可加 `--allow-dirty`。
+
 ## Dev Runtime
 
 ### `node scripts/node/dev-up.js [选项] [start|ensure|stop|status|restart]`
