@@ -77,6 +77,7 @@ mod callback_tasks;
 mod code_nodes;
 mod data_model_nodes;
 mod debug_lifecycle;
+mod http_request_nodes;
 mod runtime_events;
 
 async fn run_data_model_flow(
@@ -111,6 +112,7 @@ async fn run_data_model_flow(
 trait RuntimeRepositoryBounds:
     ApplicationRepository
     + ApplicationJsDependencySelectionRepository
+    + control_plane::ports::FileManagementRepository
     + FlowRepository
     + OrchestrationRuntimeRepository
     + ModelDefinitionRepository
@@ -127,6 +129,7 @@ trait RuntimeRepositoryBounds:
 impl<T> RuntimeRepositoryBounds for T where
     T: ApplicationRepository
         + ApplicationJsDependencySelectionRepository
+        + control_plane::ports::FileManagementRepository
         + FlowRepository
         + OrchestrationRuntimeRepository
         + ModelDefinitionRepository

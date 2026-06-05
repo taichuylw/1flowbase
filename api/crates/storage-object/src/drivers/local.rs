@@ -103,9 +103,17 @@ impl FileStorageDriver for LocalFileStorageDriver {
         .await
         .map_err(other_error)?;
 
+        let url = input
+            .config_json
+            .get("public_base_url")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|base| format!("{}/{}", base.trim_end_matches('/'), input.object_path));
+
         Ok(FileStoragePutResult {
             path: input.object_path.to_string(),
-            url: None,
+            url,
             metadata_json: serde_json::json!({
                 "driver_type": "local",
                 "content_type": input.content_type,

@@ -37,6 +37,8 @@ struct InMemoryOrchestrationRuntimeState {
     secret_json_by_instance_id: HashMap<Uuid, Value>,
     main_instances_by_provider: HashMap<(Uuid, String), domain::ModelProviderMainInstanceRecord>,
     scope_data_model_grants: Vec<domain::ScopeDataModelGrantRecord>,
+    file_storages_by_id: HashMap<Uuid, domain::FileStorageRecord>,
+    file_tables_by_id: HashMap<Uuid, domain::FileTableRecord>,
     status_after_next_get: Option<(Uuid, domain::FlowRunStatus)>,
 }
 
@@ -296,6 +298,27 @@ impl InMemoryOrchestrationRuntimeRepository {
 
     pub(crate) fn default_provider_instance_id(&self) -> Uuid {
         self.default_provider_instance_id
+    }
+
+    pub(crate) fn seed_file_storage(
+        &self,
+        storage: domain::FileStorageRecord,
+        file_table: domain::FileTableRecord,
+    ) {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        inner.file_storages_by_id.insert(storage.id, storage);
+        inner.file_tables_by_id.insert(file_table.id, file_table);
+    }
+
+    pub(crate) fn default_file_storage_id(&self) -> Uuid {
+        self.inner
+            .lock()
+            .expect("runtime repo mutex poisoned")
+            .file_storages_by_id
+            .values()
+            .find(|storage| storage.is_default)
+            .map(|storage| storage.id)
+            .expect("default file storage should exist")
     }
 
     pub(crate) fn events_for_flow_run(&self, flow_run_id: Uuid) -> Vec<domain::RunEventRecord> {

@@ -309,6 +309,30 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         )
     }
 
+    pub fn for_tests_with_file_storage() -> Self {
+        let repository = InMemoryOrchestrationRuntimeRepository::with_permissions(vec![
+            "application.view.all",
+            "application.create.all",
+        ]);
+        let runtime_engine =
+            std::sync::Arc::new(runtime_core::runtime_engine::RuntimeEngine::for_tests());
+        seed_default_file_storage(&repository);
+
+        Self::new(
+            repository,
+            InMemoryProviderRuntime::default(),
+            runtime_engine,
+            "test-master-key",
+        )
+        .with_file_storage_registry(std::sync::Arc::new(
+            storage_object::builtin_driver_registry(),
+        ))
+    }
+
+    pub fn default_file_storage_id_json(&self) -> serde_json::Value {
+        serde_json::json!(self.repository.default_file_storage_id().to_string())
+    }
+
     pub fn for_tests_without_data_model_scope_grant() -> Self {
         let repository =
             InMemoryOrchestrationRuntimeRepository::with_permissions_without_data_model_scope_grant(
@@ -809,6 +833,50 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
         .await
         .expect("replace application environment variables should succeed");
     }
+}
+
+fn seed_default_file_storage(repository: &InMemoryOrchestrationRuntimeRepository) {
+    let now = time::OffsetDateTime::now_utc();
+    let storage_id = Uuid::now_v7();
+    let file_table_id = Uuid::now_v7();
+    let root = std::env::temp_dir().join(format!("1flowbase-http-response-files-{storage_id}"));
+    let storage = domain::FileStorageRecord {
+        id: storage_id,
+        code: "local_default".to_string(),
+        title: "Local".to_string(),
+        driver_type: "local".to_string(),
+        enabled: true,
+        is_default: true,
+        config_json: serde_json::json!({
+            "root_path": root.to_string_lossy().to_string(),
+            "public_base_url": "https://files.test"
+        }),
+        rule_json: serde_json::json!({}),
+        health_status: domain::FileStorageHealthStatus::Unknown,
+        last_health_error: None,
+        created_by: Uuid::nil(),
+        updated_by: Uuid::nil(),
+        created_at: now,
+        updated_at: now,
+    };
+    let file_table = domain::FileTableRecord {
+        id: file_table_id,
+        code: "attachments".to_string(),
+        title: "Attachments".to_string(),
+        scope_kind: domain::FileTableScopeKind::System,
+        scope_id: domain::SYSTEM_SCOPE_ID,
+        model_definition_id: Uuid::nil(),
+        bound_storage_id: storage_id,
+        is_builtin: true,
+        is_default: true,
+        status: "active".to_string(),
+        created_by: Uuid::nil(),
+        updated_by: Uuid::nil(),
+        created_at: now,
+        updated_at: now,
+    };
+
+    repository.seed_file_storage(storage, file_table);
 }
 
 fn build_ready_provider_flow_document(flow_id: Uuid, _provider_instance_id: Uuid) -> Value {

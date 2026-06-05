@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use anyhow::{anyhow, bail, Context, Result};
+use async_trait::async_trait;
 use reqwest::{
     header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE},
     multipart::{Form, Part},
@@ -20,6 +21,21 @@ pub struct HttpRequestNodeExecution {
     pub error_payload: Option<Value>,
     pub metrics_payload: Value,
     pub debug_payload: Value,
+}
+
+pub struct HttpResponseFilePersistInput<'a> {
+    pub node_id: &'a str,
+    pub filename: &'a str,
+    pub content_type: &'a str,
+    pub bytes: &'a [u8],
+}
+
+#[async_trait]
+pub trait HttpResponseFilePersister: Send + Sync {
+    async fn persist_http_response_file(
+        &self,
+        input: HttpResponseFilePersistInput<'_>,
+    ) -> Result<Value>;
 }
 
 #[derive(Debug, Clone)]
@@ -64,8 +80,11 @@ pub async fn execute_http_request_node(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
+    file_persister: Option<&dyn HttpResponseFilePersister>,
 ) -> Result<HttpRequestNodeExecution> {
-    match execute_http_request_node_inner(node, resolved_inputs, variable_pool).await {
+    match execute_http_request_node_inner(node, resolved_inputs, variable_pool, file_persister)
+        .await
+    {
         Ok(execution) => Ok(execution),
         Err(error) => Ok(HttpRequestNodeExecution {
             output_payload: json!({}),
@@ -83,6 +102,7 @@ async fn execute_http_request_node_inner(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     variable_pool: &Map<String, Value>,
+    file_persister: Option<&dyn HttpResponseFilePersister>,
 ) -> Result<HttpRequestNodeExecution> {
     let timeout_ms = config_u64(&node.config, "timeout_ms", DEFAULT_TIMEOUT_MS);
     let max_response_bytes = config_u64(
@@ -162,7 +182,7 @@ async fn execute_http_request_node_inner(
         bail!("HTTP response body exceeds max_response_bytes");
     }
     let body = String::from_utf8_lossy(&bytes).to_string();
-    let files = response_files(node, &response_content_type, &bytes);
+    let files = response_files(node, &response_content_type, &bytes, file_persister).await?;
     let output_payload = json!({
         "body": body,
         "status_code": status_code,
@@ -329,13 +349,30 @@ async fn file_bytes_from_value(
     Ok(files)
 }
 
-fn response_files(node: &CompiledNode, content_type: &str, bytes: &[u8]) -> Value {
+async fn response_files(
+    node: &CompiledNode,
+    content_type: &str,
+    bytes: &[u8],
+    file_persister: Option<&dyn HttpResponseFilePersister>,
+) -> Result<Value> {
     if bytes.is_empty() || response_body_is_inline_text(content_type) {
-        return json!([]);
+        return Ok(json!([]));
     }
 
     let filename = "response.bin";
-    json!([
+    if let Some(file_persister) = file_persister {
+        let record = file_persister
+            .persist_http_response_file(HttpResponseFilePersistInput {
+                node_id: &node.node_id,
+                filename,
+                content_type,
+                bytes,
+            })
+            .await?;
+        return Ok(json!([record]));
+    }
+
+    Ok(json!([
         {
             "filename": filename,
             "extname": "bin",
@@ -348,7 +385,7 @@ fn response_files(node: &CompiledNode, content_type: &str, bytes: &[u8]) -> Valu
                 "persisted": false
             }
         }
-    ])
+    ]))
 }
 
 fn response_body_is_inline_text(content_type: &str) -> bool {

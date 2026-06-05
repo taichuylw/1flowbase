@@ -266,6 +266,7 @@ where
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
+        .with_file_storage_registry(background_state.file_storage_registry.clone())
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
         if let Err(runtime_error) = runtime_service
             .start_published_flow_run(StartPublishedFlowRunCommand {
@@ -369,6 +370,7 @@ where
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
+        .with_file_storage_registry(background_state.file_storage_registry.clone())
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
         match ApplicationPublishedCallbackResumeService::new(
             background_state.store.clone(),

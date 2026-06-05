@@ -6,7 +6,7 @@ use crate::{
     compiled_plan::CompiledPlan,
     execution_engine::{
         execute_code_node, execute_http_request_node, execute_llm_node, CodeInvoker,
-        ExecutionRuntimeContext, ProviderInvoker,
+        ExecutionRuntimeContext, HttpResponseFilePersister, ProviderInvoker,
     },
     node_errors::build_node_type_not_implemented_error_payload,
 };
@@ -106,6 +106,20 @@ pub async fn run_node_preview<I>(
 where
     I: ProviderInvoker + CodeInvoker + ?Sized,
 {
+    run_node_preview_with_http_file_persister(plan, target_node_id, input_payload, invoker, None)
+        .await
+}
+
+pub async fn run_node_preview_with_http_file_persister<I>(
+    plan: &CompiledPlan,
+    target_node_id: &str,
+    input_payload: &Value,
+    invoker: &I,
+    http_file_persister: Option<&dyn HttpResponseFilePersister>,
+) -> Result<NodePreviewOutcome>
+where
+    I: ProviderInvoker + CodeInvoker + ?Sized,
+{
     let node = plan
         .nodes
         .get(target_node_id)
@@ -138,64 +152,67 @@ where
         })
         .collect();
 
-    let (node_output, error_payload, metrics_payload, debug_payload, provider_events) =
-        if node.node_type == "start" {
-            (
-                start_preview_output(&resolved_inputs),
-                None,
-                json!({ "preview_mode": true }),
-                json!({}),
-                Vec::new(),
-            )
-        } else if node.node_type == "llm" {
-            let execution = execute_llm_node(
-                node,
-                &resolved_inputs,
-                &rendered_templates,
-                &variable_pool,
-                &runtime_context,
-                invoker,
-            )
-            .await?;
-            (
-                execution.output_payload,
-                execution.error_payload,
-                execution.metrics_payload,
-                execution.debug_payload,
-                execution.provider_events,
-            )
-        } else if node.node_type == "code" {
-            let execution = execute_code_node(node, &resolved_inputs, invoker).await?;
-            (
-                execution.output_payload,
-                execution.error_payload,
-                execution.metrics_payload,
-                execution.debug_payload,
-                Vec::new(),
-            )
-        } else if node.node_type == "http_request" {
-            let execution =
-                execute_http_request_node(node, &resolved_inputs, &variable_pool).await?;
-            (
-                execution.output_payload,
-                execution.error_payload,
-                execution.metrics_payload,
-                execution.debug_payload,
-                Vec::new(),
-            )
-        } else {
-            let error_payload = Some(build_node_type_not_implemented_error_payload(
-                &node.node_type,
-                "preview",
-            ));
-            (
-                json!({}),
-                error_payload,
-                json!({ "preview_mode": true }),
-                json!({}),
-                Vec::new(),
-            )
-        };
+    let (node_output, error_payload, metrics_payload, debug_payload, provider_events) = if node
+        .node_type
+        == "start"
+    {
+        (
+            start_preview_output(&resolved_inputs),
+            None,
+            json!({ "preview_mode": true }),
+            json!({}),
+            Vec::new(),
+        )
+    } else if node.node_type == "llm" {
+        let execution = execute_llm_node(
+            node,
+            &resolved_inputs,
+            &rendered_templates,
+            &variable_pool,
+            &runtime_context,
+            invoker,
+        )
+        .await?;
+        (
+            execution.output_payload,
+            execution.error_payload,
+            execution.metrics_payload,
+            execution.debug_payload,
+            execution.provider_events,
+        )
+    } else if node.node_type == "code" {
+        let execution = execute_code_node(node, &resolved_inputs, invoker).await?;
+        (
+            execution.output_payload,
+            execution.error_payload,
+            execution.metrics_payload,
+            execution.debug_payload,
+            Vec::new(),
+        )
+    } else if node.node_type == "http_request" {
+        let execution =
+            execute_http_request_node(node, &resolved_inputs, &variable_pool, http_file_persister)
+                .await?;
+        (
+            execution.output_payload,
+            execution.error_payload,
+            execution.metrics_payload,
+            execution.debug_payload,
+            Vec::new(),
+        )
+    } else {
+        let error_payload = Some(build_node_type_not_implemented_error_payload(
+            &node.node_type,
+            "preview",
+        ));
+        (
+            json!({}),
+            error_payload,
+            json!({ "preview_mode": true }),
+            json!({}),
+            Vec::new(),
+        )
+    };
 
     Ok(NodePreviewOutcome {
         target_node_id: node.node_id.clone(),

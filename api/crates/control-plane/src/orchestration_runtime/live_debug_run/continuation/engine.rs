@@ -9,6 +9,7 @@ pub(super) async fn continue_flow_debug_run_inner<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::FileManagementRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository
@@ -1034,10 +1035,15 @@ where
                     .await;
             }
             "http_request" => {
+                let http_file_persister = service.http_response_file_persister(actor.clone());
                 let execution = orchestration_runtime::execution_engine::execute_http_request_node(
                     node,
                     &resolved_inputs,
                     &variable_pool,
+                    http_file_persister.as_ref().map(|persister| {
+                        persister
+                            as &dyn orchestration_runtime::execution_engine::HttpResponseFilePersister
+                    }),
                 )
                 .await?;
                 let public_output_payload = persisted_node_output_payload(

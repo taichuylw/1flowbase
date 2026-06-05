@@ -43,6 +43,7 @@ pub(super) async fn continue_flow_debug_run<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::FileManagementRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository
@@ -67,6 +68,7 @@ pub(super) async fn continue_flow_debug_run_with_live_provider_events<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::FileManagementRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository
@@ -96,6 +98,7 @@ async fn continue_flow_debug_run_with_optional_live_provider_events<R, H>(
 ) -> Result<domain::ApplicationRunDetail>
 where
     R: crate::ports::ApplicationRepository
+        + crate::ports::FileManagementRepository
         + crate::ports::FlowRepository
         + OrchestrationRuntimeRepository
         + crate::ports::ModelDefinitionRepository

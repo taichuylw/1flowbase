@@ -35,6 +35,7 @@ mod data_model_runtime;
 pub mod debug_artifacts;
 pub mod debug_stream_events;
 mod debug_variable_cache;
+mod http_response_files;
 pub(crate) mod inputs;
 mod json_payload;
 mod live_debug_run;
@@ -263,6 +264,7 @@ pub struct OrchestrationRuntimeService<R, H> {
     repository: R,
     runtime: H,
     runtime_engine: Arc<runtime_core::runtime_engine::RuntimeEngine>,
+    file_storage_registry: Option<Arc<storage_object::FileStorageDriverRegistry>>,
     provider_secret_master_key: String,
     runtime_event_stream: Option<Arc<dyn RuntimeEventStream>>,
 }
@@ -292,9 +294,18 @@ where
             repository,
             runtime,
             runtime_engine,
+            file_storage_registry: None,
             provider_secret_master_key: provider_secret_master_key.into(),
             runtime_event_stream: None,
         }
+    }
+
+    pub fn with_file_storage_registry(
+        mut self,
+        registry: Arc<storage_object::FileStorageDriverRegistry>,
+    ) -> Self {
+        self.file_storage_registry = Some(registry);
+        self
     }
 
     pub fn with_runtime_event_stream(mut self, stream: Arc<dyn RuntimeEventStream>) -> Self {
@@ -359,7 +370,7 @@ where
         command: StartNodeDebugPreviewCommand,
     ) -> Result<domain::NodeDebugPreviewResult>
     where
-        R: ApplicationJsDependencySelectionRepository,
+        R: ApplicationJsDependencySelectionRepository + crate::ports::FileManagementRepository,
     {
         let actor = ApplicationRepository::load_actor_context_for_user(
             &self.repository,
@@ -393,11 +404,15 @@ where
         ensure_compiled_plan_runnable(&compiled_plan)?;
         let invoker = self.runtime_invoker(application.workspace_id);
         let started_at = OffsetDateTime::now_utc();
-        let preview = orchestration_runtime::preview_executor::run_node_preview(
+        let http_file_persister = self.http_response_file_persister(actor.clone());
+        let preview = orchestration_runtime::preview_executor::run_node_preview_with_http_file_persister(
             &compiled_plan,
             &command.node_id,
             &command.input_payload,
             &invoker,
+            http_file_persister.as_ref().map(|persister| {
+                persister as &dyn orchestration_runtime::execution_engine::HttpResponseFilePersister
+            }),
         )
         .await?;
         let compiled_record = self
@@ -521,14 +536,20 @@ where
     pub async fn continue_flow_debug_run(
         &self,
         command: ContinueFlowDebugRunCommand,
-    ) -> Result<domain::ApplicationRunDetail> {
+    ) -> Result<domain::ApplicationRunDetail>
+    where
+        R: crate::ports::FileManagementRepository,
+    {
         live_debug_run::continue_flow_debug_run(self, command).await
     }
 
     pub async fn start_published_flow_run(
         &self,
         command: StartPublishedFlowRunCommand,
-    ) -> Result<domain::ApplicationRunDetail> {
+    ) -> Result<domain::ApplicationRunDetail>
+    where
+        R: crate::ports::FileManagementRepository,
+    {
         let flow_run = self
             .repository
             .get_flow_run(command.application_id, command.flow_run_id)
@@ -645,7 +666,10 @@ where
         &self,
         command: ContinueFlowDebugRunCommand,
         live_provider_events: LiveProviderStreamEventSender,
-    ) -> Result<domain::ApplicationRunDetail> {
+    ) -> Result<domain::ApplicationRunDetail>
+    where
+        R: crate::ports::FileManagementRepository,
+    {
         live_debug_run::continue_flow_debug_run_with_live_provider_events(
             self,
             command,

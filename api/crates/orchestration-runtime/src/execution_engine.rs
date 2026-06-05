@@ -51,7 +51,10 @@ mod llm_parameters;
 mod tests;
 
 use branching::*;
-pub use http_request::{execute_http_request_node, HttpRequestNodeExecution};
+pub use http_request::{
+    execute_http_request_node, HttpRequestNodeExecution, HttpResponseFilePersistInput,
+    HttpResponseFilePersister,
+};
 pub use llm_callbacks::build_llm_tool_callback_wait;
 use llm_callbacks::*;
 use llm_context::*;
@@ -540,7 +543,7 @@ where
             }
             "http_request" => {
                 let execution =
-                    execute_http_request_node(node, &resolved_inputs, &variable_pool).await?;
+                    execute_http_request_node(node, &resolved_inputs, &variable_pool, None).await?;
                 node_traces.push(NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),

@@ -1,4 +1,8 @@
 use super::*;
+use crate::ports::{
+    CreateFileStorageInput, CreateFileTableRegistrationInput, FileManagementRepository,
+    UpdateFileStorageBindingInput,
+};
 fn test_data_model_definition() -> domain::ModelDefinitionRecord {
     domain::ModelDefinitionRecord {
         id: Uuid::nil(),
@@ -484,6 +488,141 @@ impl ModelDefinitionRepository for InMemoryOrchestrationRuntimeRepository {
 
     async fn append_audit_log(&self, event: &domain::AuditLogRecord) -> Result<()> {
         ApplicationRepository::append_audit_log(&self.flow, event).await
+    }
+}
+
+#[async_trait]
+impl FileManagementRepository for InMemoryOrchestrationRuntimeRepository {
+    async fn load_actor_context_for_user(
+        &self,
+        actor_user_id: Uuid,
+    ) -> Result<domain::ActorContext> {
+        ApplicationRepository::load_actor_context_for_user(&self.flow, actor_user_id).await
+    }
+
+    async fn find_file_table_by_code(&self, code: &str) -> Result<Option<domain::FileTableRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .file_tables_by_id
+            .values()
+            .find(|record| record.code == code)
+            .cloned())
+    }
+
+    async fn get_file_table(&self, file_table_id: Uuid) -> Result<Option<domain::FileTableRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.file_tables_by_id.get(&file_table_id).cloned())
+    }
+
+    async fn create_file_storage(
+        &self,
+        input: &CreateFileStorageInput,
+    ) -> Result<domain::FileStorageRecord> {
+        let now = OffsetDateTime::now_utc();
+        let record = domain::FileStorageRecord {
+            id: input.storage_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            driver_type: input.driver_type.clone(),
+            enabled: input.enabled,
+            is_default: input.is_default,
+            config_json: input.config_json.clone(),
+            rule_json: input.rule_json.clone(),
+            health_status: domain::FileStorageHealthStatus::Unknown,
+            last_health_error: None,
+            created_by: input.actor_user_id,
+            updated_by: input.actor_user_id,
+            created_at: now,
+            updated_at: now,
+        };
+        self.inner
+            .lock()
+            .expect("runtime repo mutex poisoned")
+            .file_storages_by_id
+            .insert(record.id, record.clone());
+        Ok(record)
+    }
+
+    async fn create_file_table_registration(
+        &self,
+        input: &CreateFileTableRegistrationInput,
+    ) -> Result<domain::FileTableRecord> {
+        let now = OffsetDateTime::now_utc();
+        let record = domain::FileTableRecord {
+            id: input.file_table_id,
+            code: input.code.clone(),
+            title: input.title.clone(),
+            scope_kind: input.scope_kind,
+            scope_id: input.scope_id,
+            model_definition_id: input.model_definition_id,
+            bound_storage_id: input.bound_storage_id,
+            is_builtin: input.is_builtin,
+            is_default: input.is_default,
+            status: "active".to_string(),
+            created_by: input.actor_user_id,
+            updated_by: input.actor_user_id,
+            created_at: now,
+            updated_at: now,
+        };
+        self.inner
+            .lock()
+            .expect("runtime repo mutex poisoned")
+            .file_tables_by_id
+            .insert(record.id, record.clone());
+        Ok(record)
+    }
+
+    async fn list_file_storages(&self) -> Result<Vec<domain::FileStorageRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.file_storages_by_id.values().cloned().collect())
+    }
+
+    async fn get_default_file_storage(&self) -> Result<Option<domain::FileStorageRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .file_storages_by_id
+            .values()
+            .find(|record| record.is_default)
+            .cloned())
+    }
+
+    async fn get_file_storage(
+        &self,
+        storage_id: Uuid,
+    ) -> Result<Option<domain::FileStorageRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner.file_storages_by_id.get(&storage_id).cloned())
+    }
+
+    async fn list_visible_file_tables(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::FileTableRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .file_tables_by_id
+            .values()
+            .filter(|record| {
+                matches!(record.scope_kind, domain::FileTableScopeKind::System)
+                    || record.scope_id == workspace_id
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn update_file_table_binding(
+        &self,
+        input: &UpdateFileStorageBindingInput,
+    ) -> Result<domain::FileTableRecord> {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let record = inner
+            .file_tables_by_id
+            .get_mut(&input.file_table_id)
+            .ok_or(ControlPlaneError::NotFound("file_table"))?;
+        record.bound_storage_id = input.bound_storage_id;
+        record.updated_by = input.actor_user_id;
+        record.updated_at = OffsetDateTime::now_utc();
+        Ok(record.clone())
     }
 }
 
