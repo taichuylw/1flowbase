@@ -393,7 +393,7 @@ test('container image workflow publishes a GitHub release for the latest API ver
   assert.match(workflow, /RELEASE_TAG: \$\{\{ needs\.select-api-server\.outputs\.image_tag \}\}/u);
   assert.match(workflow, /gh release view "\$RELEASE_TAG"/u);
   assert.match(workflow, /cat > release-notes\.md <<EOF/u);
-  assert.match(workflow, /## Upgrade/u);
+  assert.match(workflow, /## Installation or Upgrade/u);
   assert.match(workflow, /scripts\/shell\/docker-deploy\.sh/u);
   assert.match(workflow, /scripts\/powershell\/docker-deploy\.ps1/u);
   assert.match(workflow, /Windows CMD/u);
