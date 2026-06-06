@@ -177,7 +177,7 @@ describe('NodeInspector core', () => {
     });
   });
 
-  test('shows LLM generated outputs without exposing output contract editing', async () => {
+  test('collapses generated outputs by default and keeps output contract editing hidden', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
         <SelectionSeed nodeId="node-llm" />
@@ -186,14 +186,19 @@ describe('NodeInspector core', () => {
     );
 
     expect(await screen.findByText('输出变量')).toBeInTheDocument();
-    expect(screen.getByText('text')).toBeInTheDocument();
-    expect(screen.getByText('usage')).toBeInTheDocument();
+    expect(screen.queryByText('text')).not.toBeInTheDocument();
+    expect(screen.queryByText('usage')).not.toBeInTheDocument();
     expect(screen.queryByText('reasoning_content')).not.toBeInTheDocument();
     expect(screen.queryByText('节点产出的数据字段')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '新增输出变量' })
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('输出变量名 1')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '输出变量' }));
+
+    expect(screen.getByText('text')).toBeInTheDocument();
+    expect(screen.getByText('usage')).toBeInTheDocument();
   });
 
   test('renders field validation errors under the owning inspector field', () => {
@@ -276,6 +281,12 @@ describe('NodeInspector core', () => {
 
       expect(httpNode?.config.max_response_bytes).toBe(8 * 1024 * 1024);
     });
+    expect(screen.queryByText('status_code')).not.toBeInTheDocument();
+    expect(screen.queryByText('headers')).not.toBeInTheDocument();
+    expect(screen.queryByText('files')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '输出变量' }));
+
     expect(screen.getAllByText('body').length).toBeGreaterThan(0);
     expect(screen.getByText('status_code')).toBeInTheDocument();
     expect(screen.getByText('headers')).toBeInTheDocument();

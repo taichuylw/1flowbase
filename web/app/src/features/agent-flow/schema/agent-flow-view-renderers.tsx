@@ -115,7 +115,7 @@ function renderCardDescriptionView({ adapter }: SchemaViewRendererProps) {
 
 function OutputContractView({ adapter, block }: SchemaViewRendererProps) {
   const node = getNode(adapter);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const outputs =
     (adapter.getValue('config.output_contract') as Array<{
       key: string;
