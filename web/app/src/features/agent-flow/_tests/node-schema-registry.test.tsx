@@ -671,7 +671,7 @@ describe('agent-flow node schema registry', () => {
     const node = createNodeDocument('http_request', 'node-http-request');
 
     expect(contract).not.toBeNull();
-    expect(contract?.defaults.alias).toBe('HTTP');
+    expect(contract?.defaults.alias).toBe('HTTP Request');
     expect(contract?.defaults.config).toEqual({
       method: 'GET',
       url: '',
