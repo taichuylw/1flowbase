@@ -447,6 +447,45 @@ async fn http_request_node_posts_json_form_urlencoded_form_data_and_raw() {
 }
 
 #[tokio::test]
+async fn http_request_node_keeps_application_javascript_response_inline() {
+    let body = r#"jQuery1123({"data":{"total":5}});"#;
+    let (base_url, _captured, server) = spawn_http_fixture(vec![response(
+        "/jsonp",
+        200,
+        "application/javascript; charset=UTF-8",
+        body,
+    )])
+    .await;
+    let plan = http_request_plan(
+        json!({
+            "method": "GET",
+            "url": format!("{base_url}/jsonp"),
+            "body_type": "none",
+            "timeout_ms": 30000,
+            "max_response_bytes": 1048576,
+            "verify_ssl": true
+        }),
+        BTreeMap::new(),
+    );
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "refund" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(outcome.variable_pool["node-http"]["body"], json!(body));
+    assert_eq!(outcome.variable_pool["node-http"]["files"], json!([]));
+    server.abort();
+}
+
+#[tokio::test]
 async fn http_request_node_projects_binary_response_file_descriptor() {
     let (base_url, _captured, server) = spawn_http_fixture(vec![response(
         "/download",

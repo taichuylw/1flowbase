@@ -397,6 +397,8 @@ fn response_body_is_inline_text(content_type: &str) -> bool {
         || normalized.contains("json")
         || normalized.contains("xml")
         || normalized.contains("form-urlencoded")
+        || normalized.contains("javascript")
+        || normalized.contains("ecmascript")
 }
 
 fn build_header_map(headers: &Map<String, Value>) -> Result<HeaderMap> {

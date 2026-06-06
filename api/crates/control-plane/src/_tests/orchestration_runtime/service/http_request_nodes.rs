@@ -30,7 +30,10 @@ async fn spawn_binary_response_server() -> (String, tokio::task::JoinHandle<()>)
     (format!("http://{addr}/download"), handle)
 }
 
-async fn spawn_text_response_server() -> (String, tokio::task::JoinHandle<()>) {
+async fn spawn_text_response_server(
+    content_type: &'static str,
+    body: &'static str,
+) -> (String, tokio::task::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr: SocketAddr = listener.local_addr().unwrap();
     let handle = tokio::spawn(async move {
@@ -41,10 +44,10 @@ async fn spawn_text_response_server() -> (String, tokio::task::JoinHandle<()>) {
             tokio::spawn(async move {
                 let mut buffer = vec![0_u8; 1024];
                 let _ = stream.read(&mut buffer).await;
-                let body = "ok";
                 let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{}",
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: {}\r\nConnection: close\r\n\r\n{}",
                     body.len(),
+                    content_type,
                     body
                 );
                 stream.write_all(response.as_bytes()).await.unwrap();
@@ -169,7 +172,7 @@ fn http_request_flow_document_with_unrelated_invalid_llm(flow_id: Uuid, url: Str
 
 #[tokio::test]
 async fn http_request_node_preview_ignores_unrelated_llm_model_compile_issue() {
-    let (url, server) = spawn_text_response_server().await;
+    let (url, server) = spawn_text_response_server("text/plain", "ok").await;
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service.seed_application_with_flow("HTTP Agent").await;
 
@@ -194,6 +197,43 @@ async fn http_request_node_preview_ignores_unrelated_llm_model_compile_issue() {
     assert_eq!(outcome.node_run.status, domain::NodeRunStatus::Succeeded);
     assert_eq!(outcome.node_run.output_payload["status_code"], json!(200));
     assert_eq!(outcome.node_run.output_payload["body"], json!("ok"));
+}
+
+#[tokio::test]
+async fn http_request_javascript_response_stays_inline_with_file_storage() {
+    let body = r#"jQuery1123({"data":{"total":5}});"#;
+    let (url, server) =
+        spawn_text_response_server("application/javascript; charset=UTF-8", body).await;
+    let service = OrchestrationRuntimeService::for_tests_with_file_storage();
+    let seeded = service.seed_application_with_flow("HTTP Agent").await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(http_request_flow_document(seeded.flow_id, url)),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let http_node = node_run(&completed, "node-http");
+
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(http_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(http_node.output_payload["body"], json!(body));
+    assert_eq!(http_node.output_payload["files"], json!([]));
+
+    server.abort();
 }
 
 #[tokio::test]
