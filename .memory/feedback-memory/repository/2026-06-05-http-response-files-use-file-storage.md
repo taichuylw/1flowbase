@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: http_response_files_use_file_storage
-summary: HTTP 请求节点等 runtime 产生的业务文件，生产与控制面执行路径应优先复用既有文件表、文件上传服务和对象存储 driver，不能用 runtime-inline descriptor 作为生产边界；文本/JSON/JS 响应默认不转文件，只有显式开启“转存为文件”时才转存。
+summary: HTTP 请求节点等 runtime 产生的业务文件，生产与控制面执行路径应优先复用既有文件表、文件上传服务和对象存储 driver，不能用 runtime-inline descriptor 作为生产边界；“转存为文件”默认关闭时所有响应都进受预算保护的文本 body，开启时才允许二进制响应上传为文件。
 keywords:
   - http-request-node
   - runtime-files
@@ -15,8 +15,8 @@ match_when:
   - 设计 runtime 节点输出 `Array[File]`、文件变量或调试产物持久化边界
   - 权衡是否返回 inline descriptor、临时 URL、文件表记录或对象存储 URL
 created_at: 2026-06-05 19
-updated_at: 2026-06-06 23
-last_verified_at: 2026-06-06 23
+updated_at: 2026-06-07 06
+last_verified_at: 2026-06-07 06
 decision_policy: direct_reference
 scope:
   - api/crates/orchestration-runtime
@@ -33,7 +33,7 @@ scope:
 
 纯 runtime 单元测试或无宿主注入场景可以保留 `runtime-inline` descriptor 作为测试/降级兜底，但不能把它作为生产 contract 或完成边界。
 
-HTTP 响应正文的默认分流规则是：文本、JSON、XML、JavaScript、form-urlencoded 等字符串型响应记录在节点输出/数据库的 `body` 中，`files` 默认为空；二进制或非 inline 文本响应才默认生成文件输出。字符串型响应只有在 HTTP 节点显式开启“转存为文件”开关时，才额外持久化为文件记录；该开关默认关闭。
+HTTP 响应正文的默认分流规则是：`store_response_as_file=false` 时，文本、JSON、XML、JavaScript、form-urlencoded、二进制等所有响应都转成受预算保护的文本 `body` 写入节点输出/数据库，`files` 必须为空；响应体超过预算时应在写入前截断并记录截断元数据，不应仅因超预算让节点失败。`store_response_as_file=true` 时，只允许二进制/非文本响应走文件上传与 File descriptor 输出；文本、JSON、JavaScript 等字符串型响应仍优先写入 `body`，不自动转成文件。
 
 ## 原因
 
