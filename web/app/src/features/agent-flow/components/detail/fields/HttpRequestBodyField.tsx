@@ -9,7 +9,7 @@ import {
 } from '../../../lib/http-request/contract';
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 import { SelectorField } from '../../bindings/SelectorField';
-import { TemplatedTextField } from '../../bindings/TemplatedTextField';
+import { HttpRequestTemplateInput } from './HttpRequestTemplateInput';
 import {
   HttpRequestKeyValuesField,
   namedBindingEntriesFromValue,
@@ -138,14 +138,11 @@ export function HttpRequestBodyField({
         onChange={(event) => onBodyTypeChange(event.target.value)}
       />
       {selectedBodyType === 'json' || selectedBodyType === 'raw' ? (
-        <TemplatedTextField
+        <HttpRequestTemplateInput
           ariaLabel={i18nText('agentFlow', 'auto.request_body')}
+          displayMode="block"
           label={i18nText('agentFlow', 'auto.request_body')}
           options={options}
-          placeholder={i18nText(
-            'agentFlow',
-            'auto.support_text_variable_block_enter_left_curly_bracket_quick_reference'
-          )}
           value={getTemplatedBindingValue(bodyValue)}
           onChange={(nextValue) => onBodyChange(toTemplatedBinding(nextValue))}
         />
@@ -226,11 +223,14 @@ export function HttpRequestBodyField({
                     }
                   />
                 ) : (
-                  <TemplatedTextField
+                  <HttpRequestTemplateInput
                     ariaLabel={`${i18nText('agentFlow', 'auto.form_data')}-${index}-value`}
-                    displayMode="input"
                     label={`${i18nText('agentFlow', 'auto.form_data')}-${index}-value`}
                     options={options}
+                    placeholder={i18nText(
+                      'agentFlow',
+                      'auto.enter_template_content'
+                    )}
                     value={getFormDataTextValue(entry)}
                     onChange={(nextValue) =>
                       emitFormData(

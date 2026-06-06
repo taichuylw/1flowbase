@@ -3,7 +3,7 @@ import { Button } from 'antd';
 import type { FlowBinding, NamedBindingEntry } from '@1flowbase/flow-schema';
 
 import type { FlowSelectorOption } from '../../../lib/selector-options';
-import { TemplatedTextField } from '../../bindings/TemplatedTextField';
+import { HttpRequestTemplateInput } from './HttpRequestTemplateInput';
 import { i18nText } from '../../../../../shared/i18n/text';
 
 export type HttpRequestKeyValueEntry = Pick<
@@ -67,9 +67,8 @@ export function HttpRequestKeyValuesField({
           key={`${entry.name}-${index}`}
           className="agent-flow-http-request-key-values__row"
         >
-          <TemplatedTextField
+          <HttpRequestTemplateInput
             ariaLabel={`${ariaLabel}-${index}-key`}
-            displayMode="input"
             label={`${ariaLabel}-${index}-key`}
             options={options}
             placeholder={i18nText('agentFlow', 'auto.field_key')}
@@ -84,15 +83,10 @@ export function HttpRequestKeyValuesField({
               )
             }
           />
-          <TemplatedTextField
+          <HttpRequestTemplateInput
             ariaLabel={`${ariaLabel}-${index}-value`}
-            displayMode="input"
             label={`${ariaLabel}-${index}-value`}
             options={options}
-            placeholder={i18nText(
-              'agentFlow',
-              'auto.support_text_variable_block_enter_left_curly_bracket_quick_reference'
-            )}
             value={getTemplatedValue(entry)}
             onChange={(nextValue) =>
               emit(

@@ -33,6 +33,7 @@ import { StartModelListField } from '../components/detail/fields/StartModelListF
 import { HttpRequestBodyField } from '../components/detail/fields/HttpRequestBodyField';
 import { HttpRequestCurlImportField } from '../components/detail/fields/HttpRequestCurlImportField';
 import { HttpRequestKeyValuesField } from '../components/detail/fields/HttpRequestKeyValuesField';
+import { HttpRequestTemplateInput } from '../components/detail/fields/HttpRequestTemplateInput';
 import {
   DATA_MODEL_QUERY_DEFAULT_VALUE,
   normalizeDataModelQueryBindingValue
@@ -679,15 +680,10 @@ function renderHttpRequestEndpointField({
         value={typeof methodValue === 'string' ? methodValue : 'GET'}
         onChange={(nextValue) => adapter.setValue('config.method', nextValue)}
       />
-      <TemplatedTextField
+      <HttpRequestTemplateInput
         ariaLabel={block.label}
-        displayMode="input"
         label={block.label}
         options={getSelectorOptions(adapter)}
-        placeholder={i18nText(
-          'agentFlow',
-          'auto.support_text_variable_block_enter_left_curly_bracket_quick_reference'
-        )}
         value={typeof urlValue === 'string' ? urlValue : ''}
         onChange={(nextValue) => adapter.setValue(block.path, nextValue)}
       />
