@@ -6,6 +6,12 @@
 
 本门禁也是 AI 复用既有文案 key 的入口：新增或转换多语言资源前，先用报告定位同 owner 内可复用 key，避免制造重复 key / value。
 
+## Hard Boundary
+
+用户可见文案值是开发者已调好的产品内容。除非用户在当前任务明确要求改文案，否则不得修改 locale value、按钮 / 菜单 / 标题 / 导航 / placeholder / empty / error / help text、schema label、节点展示名或默认 alias 等任何用户能看到的字符串。
+
+i18n hygiene 的修复只能动 key、引用关系、重复 key 合并和确认失效 key 删除；必须保留原文案值。发现文案错字、语义不一致或表达问题时，只输出 finding / warning，并要求产品或开发者确认新文案。
+
 ## Command
 
 ```bash
@@ -22,7 +28,7 @@ node scripts/node/tooling.js i18n-hygiene
 ## Review Rules
 
 - 多语言 key 的每个 JSON 段必须只使用英文小写字母；多个语义单词用 `_` 连接，例如 `primary_action`，不要用驼峰、短横线、数字、中文、空格或 `key_xxx` / `k_xxx` 这类随机生成 key。
-- 同 owner 重复 value：不得修改用户前端可见文案值；优先让调用方复用已有 key，或删除确认多余的重复 key。相同文案值可保留，但 QA 报告必须说明保留原因。只有用户明确要求改文案时，才允许调整 value。
+- 同 owner 重复 value：不得修改用户前端可见文案值；优先让调用方复用已有 key，或删除确认多余的重复 key。相同文案值可保留，但 QA 报告必须说明保留原因。只有用户在当前任务明确要求改文案时，才允许调整 value。
 - 跨 owner 重复 value：默认不进入门禁；专项审计时默认保留局部 owner，不要为了消灭 advisory 抽错 common。
 - `unused-i18n-key`：优先删除已失效 key；如 key 由动态配置、路由配置或外部渲染入口使用，QA 报告必须写明保留原因。
 - 新增 common 前先确认它是短 UI 词，不是业务句子。

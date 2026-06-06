@@ -7,6 +7,7 @@ const path = require('node:path');
 const {
   parseCliArgs,
   buildFrontendCommand,
+  buildFrontendPageRuntimeCommand,
   collectFrontendCoverageFailures,
   buildBackendCleanupCommands,
   buildBackendCommands,
@@ -57,6 +58,26 @@ test('buildFrontendCommand runs Vitest coverage through the app package', () => 
     label: 'frontend-coverage',
     command: 'pnpm',
     args: ['--dir', 'web/app', 'test:coverage'],
+    cwd: repoRoot,
+  });
+});
+
+test('buildFrontendPageRuntimeCommand runs page runtime package coverage', () => {
+  const repoRoot = '/repo-root';
+
+  assert.deepEqual(buildFrontendPageRuntimeCommand({ repoRoot }), {
+    label: 'frontend-page-runtime-coverage',
+    command: 'pnpm',
+    args: [
+      '--dir',
+      'web/packages/page-runtime',
+      'exec',
+      'vitest',
+      'run',
+      '--coverage',
+      '--coverage.reporter=json-summary',
+      '--coverage.reportsDirectory=../../../tmp/test-governance/coverage/frontend/page-runtime',
+    ],
     cwd: repoRoot,
   });
 });
@@ -311,4 +332,91 @@ test('main writes coverage summary output under tmp/test-governance', async () =
   assert.match(fs.readFileSync(summaryLogPath, 'utf8'), /Coverage thresholds passed/u);
   assert.equal(fs.existsSync(warningLogPath), true);
   assert.match(fs.readFileSync(warningLogPath, 'utf8'), /coverage advisory/u);
+});
+
+test('main merges page runtime package coverage into frontend thresholds', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-verify-coverage-page-runtime-'));
+  const calls = [];
+  let stdout = '';
+
+  function writeSummary(relativePath, summary) {
+    const filePath = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+  }
+
+  const status = await main(['frontend'], {
+    repoRoot,
+    env: {},
+    runtimeConfig: {
+      backend: {
+        cargoJobs: 2,
+        cargoTestThreads: 4,
+      },
+      locks: {
+        waitTimeoutMinutes: 30,
+        waitTimeoutMs: 30 * 60 * 1000,
+        pollIntervalMs: 5000,
+      },
+    },
+    spawnSyncImpl(command, args) {
+      calls.push({ command, args });
+
+      if (args.includes('web/app')) {
+        writeSummary('tmp/test-governance/coverage/frontend/coverage-summary.json', {
+          total: {
+            lines: { pct: 100 },
+            functions: { pct: 100 },
+            statements: { pct: 100 },
+            branches: { pct: 100 },
+          },
+          [`${repoRoot}/web/app/src/features/agent-flow/pages/AgentFlowEditorPage.tsx`]: {
+            lines: { pct: 100 },
+            functions: { pct: 100 },
+            statements: { pct: 100 },
+            branches: { pct: 100 },
+          },
+          [`${repoRoot}/web/app/src/features/settings/components/RolePermissionPanel.tsx`]: {
+            lines: { pct: 100 },
+            functions: { pct: 100 },
+            statements: { pct: 100 },
+            branches: { pct: 100 },
+          },
+        });
+      }
+
+      if (args.includes('web/packages/page-runtime')) {
+        writeSummary('tmp/test-governance/coverage/frontend/page-runtime/coverage-summary.json', {
+          total: {
+            lines: { pct: 100 },
+            functions: { pct: 100 },
+            statements: { pct: 100 },
+            branches: { pct: 100 },
+          },
+          [`${repoRoot}/web/packages/page-runtime/src/index.ts`]: {
+            lines: { pct: 100 },
+            functions: { pct: 100 },
+            statements: { pct: 100 },
+            branches: { pct: 100 },
+          },
+        });
+      }
+
+      return { status: 0, stdout: '', stderr: '' };
+    },
+    writeStdout(text) {
+      stdout += text;
+    },
+    writeStderr() {},
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(
+    calls.map((call) => call.args.slice(0, 2)),
+    [
+      ['--dir', 'web/app'],
+      ['--dir', 'web/packages/page-runtime'],
+    ]
+  );
+  assert.match(stdout, /Coverage thresholds passed for frontend/u);
 });
