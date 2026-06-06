@@ -23,7 +23,6 @@ import {
   HTTP_REQUEST_BODY_TYPE_OPTIONS,
   HTTP_REQUEST_DEFAULT_BINDINGS,
   HTTP_REQUEST_DEFAULT_CONFIG,
-  HTTP_REQUEST_METHOD_OPTIONS,
   HTTP_REQUEST_OUTPUTS
 } from '../http-request/contract';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -565,7 +564,7 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
 
   return createNodeRuntimeContract({
     type: 'http_request',
-    title: 'HTTP',
+    title: 'HTTP Request',
     description: i18nText("agentFlow", "auto.request_external_http_service"),
     category: 'external',
     config: HTTP_REQUEST_DEFAULT_CONFIG,

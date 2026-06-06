@@ -263,10 +263,9 @@ describe('NodeInspector core', () => {
     );
     expect(screen.getByText('Params')).toBeInTheDocument();
     expect(screen.getByText('Headers')).toBeInTheDocument();
-    expect(screen.getByText('body')).toBeInTheDocument();
+    expect(screen.getAllByText('body').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByLabelText('验证 SSL 证书')).toBeChecked();
     expect(screen.getByLabelText('超时设置(ms)')).toBeInTheDocument();
-    expect(screen.getByText('body')).toBeInTheDocument();
     expect(screen.getByText('status_code')).toBeInTheDocument();
     expect(screen.getByText('headers')).toBeInTheDocument();
     expect(screen.getByText('files')).toBeInTheDocument();
