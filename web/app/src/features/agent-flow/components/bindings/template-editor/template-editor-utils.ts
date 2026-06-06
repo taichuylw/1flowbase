@@ -142,3 +142,81 @@ export function removeTriggerQueryBeforeSelection(
   triggerQueryNode.remove();
   return true;
 }
+
+export function removeTriggerQueryAtDocumentEnd(triggers: ReadonlySet<string>) {
+  const lastNode = $getRoot().getLastDescendant();
+
+  if (!(lastNode instanceof TextNode) || !lastNode.isSimpleText()) {
+    return false;
+  }
+
+  const text = lastNode.getTextContent();
+  const triggerMatches = Array.from(triggers)
+    .map((trigger) => ({
+      trigger,
+      index: text.lastIndexOf(trigger)
+    }))
+    .filter((match) => match.index >= 0);
+
+  if (triggerMatches.length === 0) {
+    return false;
+  }
+
+  const latestTrigger = triggerMatches.reduce((latestMatch, match) => {
+    if (!latestMatch || match.index > latestMatch.index) {
+      return match;
+    }
+
+    return latestMatch;
+  }, null as { trigger: string; index: number } | null);
+
+  if (!latestTrigger) {
+    return false;
+  }
+
+  const query = text.slice(latestTrigger.index + latestTrigger.trigger.length);
+
+  if (/\s/.test(query)) {
+    return false;
+  }
+
+  if (latestTrigger.index === 0) {
+    const parent = lastNode.getParent();
+    const textNodes = $getRoot().getAllTextNodes();
+    const lastNodeIndex = textNodes.findIndex(
+      (candidate) => candidate.getKey() === lastNode.getKey()
+    );
+    const previousTextNode =
+      lastNodeIndex > 0
+        ? textNodes
+            .slice(0, lastNodeIndex)
+            .reverse()
+            .find((candidate) => candidate.isSimpleText())
+        : null;
+
+    lastNode.remove();
+
+    if (
+      parent &&
+      parent !== $getRoot() &&
+      parent.getChildrenSize() === 0
+    ) {
+      parent.remove();
+    }
+
+    if (previousTextNode) {
+      previousTextNode.selectEnd();
+    } else {
+      $getRoot().selectEnd();
+    }
+
+    return true;
+  }
+
+  const [textBeforeTrigger, triggerQueryNode] = lastNode.splitText(
+    latestTrigger.index
+  );
+  triggerQueryNode.remove();
+  textBeforeTrigger.selectEnd();
+  return true;
+}

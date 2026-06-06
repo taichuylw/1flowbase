@@ -16,7 +16,6 @@ interface TemplateVariableTypeaheadPluginProps {
     width: number;
   } | null;
   popupRef?: RefObject<HTMLDivElement | null>;
-  onQueryChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement | HTMLInputElement>) => void;
   onSelect: (selector: string[]) => void;
 }
@@ -28,7 +27,6 @@ export function TemplateVariableTypeaheadPlugin({
   activeIndex,
   position,
   popupRef,
-  onQueryChange,
   onKeyDown,
   onSelect
 }: TemplateVariableTypeaheadPluginProps) {
@@ -55,17 +53,6 @@ export function TemplateVariableTypeaheadPlugin({
       onKeyDown={onKeyDown}
       onMouseDown={(event) => event.preventDefault()}
     >
-      <div className="agent-flow-templated-text-field__typeahead-search">
-        <input
-          aria-label={i18nText("agentFlow", "auto.search_variables")}
-          role="searchbox"
-          className="agent-flow-templated-text-field__typeahead-searchbox"
-          autoFocus
-          value={query}
-          placeholder={i18nText("agentFlow", "auto.search_node_field")}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
-      </div>
       {options.length === 0 ? (
         <div className="agent-flow-templated-text-field__typeahead-empty">
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} />

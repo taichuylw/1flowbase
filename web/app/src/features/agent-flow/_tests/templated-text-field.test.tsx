@@ -112,6 +112,16 @@ const answerOption: FlowSelectorOption = {
   displayLabel: 'Answer/answer'
 };
 
+const startHistoryOption: FlowSelectorOption = {
+  nodeId: 'node-start',
+  nodeLabel: 'Start',
+  outputKey: 'history',
+  outputLabel: 'history',
+  valueType: 'array',
+  value: ['node-start', 'history'],
+  displayLabel: 'Start/history'
+};
+
 function TemplatedTextHarness() {
   const [value, setValue] = useState('请基于 ');
 
@@ -120,7 +130,7 @@ function TemplatedTextHarness() {
       <TemplatedTextField
         label="User Prompt"
         ariaLabel="User Prompt"
-        options={[startQueryOption, answerOption]}
+        options={[startQueryOption, answerOption, startHistoryOption]}
         value={value}
         onChange={setValue}
       />
@@ -343,7 +353,7 @@ describe('TemplatedTextField', () => {
     });
   });
 
-  test('keeps the toolbar picker open after focus moves into the portal searchbox', async () => {
+  test('opens the toolbar picker without rendering a focus-stealing searchbox', async () => {
     render(<TemplatedTextHarness />);
 
     const editor = screen.getByLabelText('User Prompt');
@@ -351,13 +361,12 @@ describe('TemplatedTextField', () => {
     fireEvent.focus(editor);
     fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
 
-    const searchbox = await screen.findByRole('searchbox', {
-      name: '搜索变量'
-    });
-
-    fireEvent.focus(editor);
-    fireEvent.blur(editor);
-    searchbox.focus();
+    expect(
+      await screen.findByRole('listbox', { name: '变量建议' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('searchbox', { name: '搜索变量' })
+    ).not.toBeInTheDocument();
 
     await act(async () => {
       await new Promise((resolve) => {
@@ -370,17 +379,26 @@ describe('TemplatedTextField', () => {
     ).toBeInTheDocument();
   });
 
-  test('filters variable suggestions inside the shared picker', async () => {
+  test('filters variable suggestions from text typed in the editor', async () => {
     render(<TemplatedTextHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
+    const editor = screen.getByLabelText('User Prompt');
 
-    const searchbox = await screen.findByRole('searchbox', {
-      name: '搜索变量'
-    });
+    fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: '/' });
+    triggerEditorInput(editor, '请基于 /', '/');
 
-    fireEvent.change(searchbox, {
-      target: { value: 'answer' }
+    await screen.findByRole('listbox', { name: '变量建议' });
+
+    fireEvent.keyDown(editor, { key: 'a' });
+    triggerEditorInput(editor, '请基于 /a', 'a');
+    fireEvent.keyDown(editor, { key: 'n' });
+    triggerEditorInput(editor, '请基于 /an', 'n');
+
+    await act(async () => {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
     });
 
     await waitFor(() => {
@@ -392,14 +410,17 @@ describe('TemplatedTextField', () => {
       screen.queryByRole('option', { name: 'Start/query' })
     ).not.toBeInTheDocument();
   });
-  test('supports keyboard navigation and enter-to-insert inside the shared picker', async () => {
+
+  test('supports keyboard navigation and enter-to-insert while editor owns focus', async () => {
     render(<TemplatedTextHarness />);
+
+    const editor = screen.getByLabelText('User Prompt');
 
     fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
 
-    const listbox = await screen.findByRole('listbox', { name: '变量建议' });
+    await screen.findByRole('listbox', { name: '变量建议' });
 
-    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(editor, { key: 'ArrowDown' });
 
     await waitFor(() => {
       expect(
@@ -407,7 +428,7 @@ describe('TemplatedTextField', () => {
       ).toHaveAttribute('aria-selected', 'true');
     });
 
-    fireEvent.keyDown(listbox, { key: 'Enter' });
+    fireEvent.keyDown(editor, { key: 'Enter' });
 
     await waitFor(() => {
       expect(
@@ -421,15 +442,15 @@ describe('TemplatedTextField', () => {
     });
   });
 
-  test('does not insert twice when Enter bubbles from the searchbox', async () => {
+  test('inserts once when Enter is handled by the focused editor', async () => {
     render(<TemplatedTextHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
-    const searchbox = await screen.findByRole('searchbox', {
-      name: '搜索变量'
-    });
+    const editor = screen.getByLabelText('User Prompt');
 
-    fireEvent.keyDown(searchbox, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
+    await screen.findByRole('listbox', { name: '变量建议' });
+
+    fireEvent.keyDown(editor, { key: 'Enter' });
 
     await waitFor(() => {
       expect(
@@ -440,6 +461,60 @@ describe('TemplatedTextField', () => {
       expect(screen.getByTestId('templated-text-value')).toHaveTextContent(
         '请基于 {{node-start.query}}'
       );
+    });
+  });
+
+  test('replaces the typed trigger query when Enter inserts an inline suggestion', async () => {
+    render(<TemplatedTextHarness />);
+
+    const editor = screen.getByLabelText('User Prompt');
+
+    fireEvent.focus(editor);
+    fireEvent.keyDown(editor, { key: '/' });
+    triggerEditorInput(editor, '请基于 /', '/');
+    fireEvent.keyDown(editor, { key: 'h' });
+    triggerEditorInput(editor, '请基于 /h', 'h');
+    fireEvent.keyDown(editor, { key: 'i' });
+    triggerEditorInput(editor, '请基于 /hi', 'i');
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('option', { name: 'Start/history' })
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(editor, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('listbox', { name: '变量建议' })
+      ).not.toBeInTheDocument();
+    });
+    expect(editor.textContent).toBe('请基于 Start/history');
+    await waitFor(() => {
+      expect(screen.getByTestId('templated-text-value')).toHaveTextContent(
+        '请基于 {{node-start.history}}'
+      );
+    });
+    expect(screen.getByTestId('templated-text-value').textContent).not.toContain(
+      '/hi'
+    );
+  });
+
+  test('closes the editor-owned picker on Escape', async () => {
+    render(<TemplatedTextHarness />);
+
+    const editor = screen.getByLabelText('User Prompt');
+
+    fireEvent.click(screen.getByRole('button', { name: '插入变量' }));
+    await screen.findByRole('listbox', { name: '变量建议' });
+
+    fireEvent.keyDown(editor, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('listbox', { name: '变量建议' })
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -545,8 +620,8 @@ describe('TemplatedTextField', () => {
     const editor = screen.getByLabelText('User Prompt');
 
     fireEvent.focus(editor);
-    triggerEditorInput(editor, '请基于 /', '/');
     fireEvent.keyDown(editor, { key: '/' });
+    triggerEditorInput(editor, '请基于 /', '/');
     fireEvent.click(
       await screen.findByRole('option', { name: 'Start/query' })
     );

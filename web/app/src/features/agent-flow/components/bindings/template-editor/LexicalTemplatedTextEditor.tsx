@@ -1,5 +1,10 @@
 import type { LexicalEditor } from 'lexical';
-import type { FocusEvent, KeyboardEvent, MutableRefObject, Ref } from 'react';
+import type {
+  FocusEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MutableRefObject,
+  Ref
+} from 'react';
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -9,12 +14,19 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { mergeRegister } from '@lexical/utils';
 import {
   $getRoot,
   $getSelection,
   $insertNodes,
   $isRangeSelection,
   $setSelection,
+  COMMAND_PRIORITY_HIGH,
+  KEY_ARROW_DOWN_COMMAND,
+  KEY_ARROW_UP_COMMAND,
+  KEY_ENTER_COMMAND,
+  KEY_ESCAPE_COMMAND,
+  KEY_TAB_COMMAND,
   SKIP_DOM_SELECTION_TAG
 } from 'lexical';
 import {
@@ -37,6 +49,7 @@ import { TemplateVariableTypeaheadPlugin } from './TemplateVariableTypeaheadPlug
 import {
   editorStateToText,
   getTriggerContext,
+  removeTriggerQueryAtDocumentEnd,
   removeTriggerQueryBeforeSelection,
   textToEditorState
 } from './template-editor-utils';
@@ -60,6 +73,12 @@ interface TypeaheadPosition {
   width: number;
 }
 
+type InsertSelectorMode = 'current-selection' | 'inline-trigger';
+type TypeaheadKeyboardEvent = Pick<
+  KeyboardEvent,
+  'defaultPrevented' | 'key' | 'preventDefault'
+>;
+
 export interface LexicalTemplatedTextEditorHandle {
   focus: () => void;
   insertSelector: (selector: string[]) => void;
@@ -78,7 +97,6 @@ interface LexicalTemplatedTextEditorProps {
 
 interface EditorApiBridgeProps {
   editorRef: MutableRefObject<LexicalEditor | null>;
-  apiRef: MutableRefObject<LexicalTemplatedTextEditorHandle | null>;
   options: FlowSelectorOption[];
   forwardedRef: Ref<LexicalTemplatedTextEditorHandle>;
   onOpenVariablePicker: () => void;
@@ -114,19 +132,34 @@ function ControlledValuePlugin({
 function insertSelectorNode(
   editor: LexicalEditor,
   selector: string[],
-  options: FlowSelectorOption[]
+  options: FlowSelectorOption[],
+  mode: InsertSelectorMode = 'current-selection'
 ) {
   const label = getTemplateSelectorLabel(selector, options);
 
-  editor.focus();
+  focusEditor(editor);
   editor.update(() => {
     if (!$isRangeSelection($getSelection())) {
       $getRoot().selectEnd();
     }
 
-    removeTriggerQueryBeforeSelection(TRIGGER_CHARACTERS);
+    const removedTrigger = removeTriggerQueryBeforeSelection(TRIGGER_CHARACTERS);
+
+    if (!removedTrigger && mode === 'inline-trigger') {
+      const removedTriggerAtEnd =
+        removeTriggerQueryAtDocumentEnd(TRIGGER_CHARACTERS);
+
+      if (!removedTriggerAtEnd) {
+        $getRoot().selectEnd();
+      }
+    }
+
     $insertNodes([$createTemplateVariableNode(selector, label)]);
   });
+}
+
+function focusEditor(editor: LexicalEditor) {
+  editor.focus();
 }
 
 function getRangeRect(range: Range) {
@@ -209,7 +242,6 @@ function calculateTypeaheadPosition(container: HTMLElement) {
 
 function EditorApiBridge({
   editorRef,
-  apiRef,
   options,
   forwardedRef,
   onOpenVariablePicker
@@ -228,7 +260,7 @@ function EditorApiBridge({
     forwardedRef,
     () => ({
       focus() {
-        editor.focus();
+        focusEditor(editor);
       },
       insertSelector(selector: string[]) {
         insertSelectorNode(editor, selector, options);
@@ -240,23 +272,56 @@ function EditorApiBridge({
     [editor, onOpenVariablePicker, options]
   );
 
-  useEffect(() => {
-    apiRef.current = {
-      focus() {
-        editor.focus();
-      },
-      insertSelector(selector: string[]) {
-        insertSelectorNode(editor, selector, options);
-      },
-      openVariablePicker() {
-        onOpenVariablePicker();
-      }
-    };
+  return null;
+}
 
-    return () => {
-      apiRef.current = null;
-    };
-  }, [apiRef, editor, onOpenVariablePicker, options]);
+function TypeaheadKeyboardCommandPlugin({
+  open,
+  onKeyDown
+}: {
+  open: boolean;
+  onKeyDown: (event: TypeaheadKeyboardEvent) => void;
+}) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    function handleCommand(event: KeyboardEvent | null) {
+      if (!open || event === null) {
+        return false;
+      }
+
+      onKeyDown(event);
+      return event.defaultPrevented;
+    }
+
+    return mergeRegister(
+      editor.registerCommand(
+        KEY_ARROW_DOWN_COMMAND,
+        handleCommand,
+        COMMAND_PRIORITY_HIGH
+      ),
+      editor.registerCommand(
+        KEY_ARROW_UP_COMMAND,
+        handleCommand,
+        COMMAND_PRIORITY_HIGH
+      ),
+      editor.registerCommand(
+        KEY_ENTER_COMMAND,
+        handleCommand,
+        COMMAND_PRIORITY_HIGH
+      ),
+      editor.registerCommand(
+        KEY_ESCAPE_COMMAND,
+        handleCommand,
+        COMMAND_PRIORITY_HIGH
+      ),
+      editor.registerCommand(
+        KEY_TAB_COMMAND,
+        handleCommand,
+        COMMAND_PRIORITY_HIGH
+      )
+    );
+  }, [editor, onKeyDown, open]);
 
   return null;
 }
@@ -277,10 +342,10 @@ export const LexicalTemplatedTextEditor = forwardRef<
   ref
 ) {
   const editorRef = useRef<LexicalEditor | null>(null);
-  const apiRef = useRef<LexicalTemplatedTextEditorHandle | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const typeaheadRef = useRef<HTMLDivElement | null>(null);
   const blurCloseTimerRef = useRef<number | null>(null);
+  const inlineTriggerQueryRef = useRef<string | null>(null);
   const [typeaheadOpen, setTypeaheadOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -382,6 +447,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
   }
 
   function closeTypeahead() {
+    inlineTriggerQueryRef.current = null;
     setQuery('');
     setActiveIndex(0);
     setTypeaheadPosition(DEFAULT_TYPEAHEAD_POSITION);
@@ -429,11 +495,18 @@ export const LexicalTemplatedTextEditor = forwardRef<
   }
 
   function handleOpenVariablePicker() {
-    editorRef.current?.focus();
+    if (editorRef.current) {
+      focusEditor(editorRef.current);
+    }
+    inlineTriggerQueryRef.current = null;
     openTypeaheadAtSelection();
   }
 
-  function handleEditorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  function handleEditorKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.defaultPrevented) {
+      return;
+    }
+
     if (!typeaheadOpen && displayMode === 'input' && event.key === 'Enter') {
       event.preventDefault();
       return;
@@ -444,18 +517,33 @@ export const LexicalTemplatedTextEditor = forwardRef<
       event.key.length === 1 &&
       TRIGGER_CHARACTERS.has(event.key)
     ) {
+      inlineTriggerQueryRef.current = '';
       openTypeaheadAtSelection();
       return;
     }
 
     if (typeaheadOpen && event.key.length === 1) {
+      if (inlineTriggerQueryRef.current === null) {
+        closeTypeahead();
+        return;
+      }
+
+      if (/\s/.test(event.key)) {
+        closeTypeahead();
+        return;
+      }
+
+      const nextInlineQuery = `${inlineTriggerQueryRef.current}${event.key}`;
+      inlineTriggerQueryRef.current = nextInlineQuery;
+      setQuery(nextInlineQuery);
       window.setTimeout(() => {
         editorRef.current?.getEditorState().read(() => {
           const triggerContext = getTriggerContext(TRIGGER_CHARACTERS);
-          const nextQuery = triggerContext?.query ?? '';
 
-          setQuery(nextQuery);
           if (triggerContext) {
+            const nextQuery = triggerContext.query;
+            inlineTriggerQueryRef.current = nextQuery;
+            setQuery(nextQuery);
             openTypeaheadAtSelection(nextQuery);
           }
         });
@@ -465,9 +553,7 @@ export const LexicalTemplatedTextEditor = forwardRef<
     handleTypeaheadKeyDown(event);
   }
 
-  function handleTypeaheadKeyDown(
-    event: KeyboardEvent<HTMLDivElement | HTMLInputElement>
-  ) {
+  function handleTypeaheadKeyDown(event: TypeaheadKeyboardEvent) {
     if (!typeaheadOpen) {
       return;
     }
@@ -517,12 +603,25 @@ export const LexicalTemplatedTextEditor = forwardRef<
     if (event.key === 'Escape') {
       event.preventDefault();
       closeTypeahead();
-      editorRef.current?.focus();
+      if (editorRef.current) {
+        focusEditor(editorRef.current);
+      }
     }
   }
 
   function handleSelect(selector: string[]) {
-    apiRef.current?.insertSelector(selector);
+    const editor = editorRef.current;
+
+    if (editor) {
+      insertSelectorNode(
+        editor,
+        selector,
+        options,
+        inlineTriggerQueryRef.current === null
+          ? 'current-selection'
+          : 'inline-trigger'
+      );
+    }
     closeTypeahead();
   }
 
@@ -572,16 +671,18 @@ export const LexicalTemplatedTextEditor = forwardRef<
           query={query}
           activeIndex={activeIndex}
           position={typeaheadPosition}
-          onQueryChange={setQuery}
           onKeyDown={handleTypeaheadKeyDown}
           onSelect={handleSelect}
         />
       </div>
       <TemplateVariableReplacementPlugin options={options} />
+      <TypeaheadKeyboardCommandPlugin
+        open={typeaheadOpen}
+        onKeyDown={handleTypeaheadKeyDown}
+      />
       <ControlledValuePlugin value={value} options={options} />
       <EditorApiBridge
         editorRef={editorRef}
-        apiRef={apiRef}
         options={options}
         forwardedRef={ref}
         onOpenVariablePicker={handleOpenVariablePicker}
@@ -590,6 +691,27 @@ export const LexicalTemplatedTextEditor = forwardRef<
         ignoreSelectionChange
         onChange={(editorState) => {
           onChange(editorStateToText(editorState));
+
+          if (!typeaheadOpen) {
+            return;
+          }
+
+          let nextQuery: string | null = null;
+
+          editorState.read(() => {
+            const triggerContext = getTriggerContext(TRIGGER_CHARACTERS);
+
+            if (triggerContext) {
+              nextQuery = triggerContext.query;
+            }
+          });
+
+          if (nextQuery === null) {
+            return;
+          }
+
+          inlineTriggerQueryRef.current = nextQuery;
+          openTypeaheadAtSelection(nextQuery);
         }}
       />
       <HistoryPlugin />
