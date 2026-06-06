@@ -30,6 +30,8 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 
 没有直接证据，不得下 QA 结论。默认只报告和 warning，不直接修；任何修复、删除或重构都必须得到用户明确同意。
 
+用户可见文案是开发者已调好的产品内容，不是 QA 修复素材。除非用户在当前任务中明确要求改文案，否则 QA / i18n hygiene 不得修改任何展示给用户的字符串值；只能报告问题、复用既有 key、调整 key 引用、合并重复 key、删除确认失效 key，且必须保留原文案值。
+
 ## Quick Reference
 
 - 开发阶段默认不加载完整质量门禁；功能完成后再主动进入 `qa-evaluation`
@@ -43,7 +45,8 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - `task mode` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归
 - `project evaluation mode` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口
 - 前后端字段契约必查：接口字段名必须沿用后端 DTO / 领域语义；展示文案可本地化，但不得为展示另起业务字段别名
-- 前端用户可见文案属于用户已调好的产品内容；QA / i18n hygiene 修复不得改文案值，只能复用既有 key、合并重复 key、删除确认多余 key，或保留相同文案值并说明原因；只有用户明确要求改文案时才可调整 value
+- 用户可见文案硬边界：不得改 locale value、按钮/菜单/标题/导航/placeholder/empty/error/help text、schema label、节点展示名或默认 alias 等任何用户能看到的字符串；发现错字、不一致或表达问题时只写 finding / warning，并要求产品或开发者确认新文案
+- i18n hygiene 修复边界：不得为了消除重复 value、未引用 key 或 common 抽取 warning 改文案值；只能复用既有 key、调整 key 引用、合并重复 key、删除确认失效 key，或保留相同文案值并说明原因
 - 临时兼容旧字段必须标记 `@field-contract-compat source=... alias=... remove_by=yyyy-mm-dd`，带废弃计划和测试；QA 报告和 `repo-hygiene` 必须把它作为 warning 暴露
 - 命中过度抽象、无用代码、空转封装、死代码或无意义 helper / manager / utils 时，加载 `references/maintainability-dead-abstraction.md`；只能基于调用方、边界、运行路径或历史证据输出 finding / warning
 - 热点修改复盘必查：高频文件、提交意图、反复修改原因、缺失的前置判断规则，以及应更新的 `skills / AGENTS / scripts/node` 门禁；报告重点是预防下一次 AI 返工，不是只列业务代码修复建议
@@ -89,5 +92,6 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 小任务也直接上全量审计
 - 只挑视觉问题，不看契约和状态
 - 只看当前改动点，不看被影响的其他消费者
+- 为了通过 QA、i18n hygiene 或视觉一致性检查而改用户可见文案值
 - 把 maintainability warning 当成已授权清理，未经用户同意就删除或重构
 - 后端评估仍沿用旧术语，忽略 `workspace/system`、`SYSTEM_SCOPE_ID`、runtime `scope_id`、`HostExtension / RuntimeExtension / CapabilityPlugin`、`Resource Action Kernel` 和新质量门禁
