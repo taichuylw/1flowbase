@@ -200,6 +200,7 @@ function outputsPanelSection(outputs: FlowNodeOutputDocument[]) {
 function createNodeRuntimeContract({
   type,
   title,
+  alias,
   description,
   category,
   config,
@@ -211,6 +212,7 @@ function createNodeRuntimeContract({
 }: {
   type: BuiltinNodeRuntimeContractType;
   title: string;
+  alias?: string;
   description: string;
   category: ContractCategory;
   config: Record<string, unknown>;
@@ -227,7 +229,7 @@ function createNodeRuntimeContract({
       schemaVersion: NODE_CONTRIBUTION_SCHEMA_VERSION
     },
     defaults: createContractDefaults({
-      alias: title,
+      alias: alias ?? title,
       description,
       config,
       bindings,
@@ -565,6 +567,7 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
   return createNodeRuntimeContract({
     type: 'http_request',
     title: 'HTTP Request',
+    alias: 'HTTP',
     description: i18nText("agentFlow", "auto.request_external_http_service"),
     category: 'external',
     config: HTTP_REQUEST_DEFAULT_CONFIG,
