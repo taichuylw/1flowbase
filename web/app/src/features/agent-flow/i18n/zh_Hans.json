@@ -73,7 +73,7 @@
     "generate_transformation_results_based_templates_input_variables": "基于模板和输入变量生成转换结果。",
     "variable_names_output_contract_system_reserved_fields_use_business_field": "输出契约中的变量名是系统保留字段，请改用业务字段名。",
     "plugin_node_missing_plugin_id_plugin_version_contribution_code_node": "当前 plugin_node 缺少 plugin_id / plugin_version / contribution_code / node_shell / schema_version / plugin_unique_identifier / package_id / contribution_checksum / compiled_contribution_hash / output_schema_snapshot。",
-    "support_text_variable_block_enter_left_curly_bracket_quick_reference": "支持正文变量块，输入\"/\"或左花括号可快速引用",
+    "support_text_variable_block_enter_left_curly_bracket_quick_reference": "输入\"/\"或左花括号可快速引用",
     "saving": "正在保存",
     "total_tokens": "总 tokens",
     "execute_this_node": "执行此节点",

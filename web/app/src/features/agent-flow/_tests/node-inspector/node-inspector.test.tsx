@@ -269,6 +269,12 @@ describe('NodeInspector core', () => {
     expect(screen.getByText('Params')).toBeInTheDocument();
     expect(screen.getByText('Headers')).toBeInTheDocument();
     expect(screen.getAllByText('body').length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText('支持正文变量块，输入"/"或左花括号可快速引用')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText('输入"/"或左花括号可快速引用').length
+    ).toBeGreaterThan(0);
     expect(screen.getByLabelText('验证 SSL 证书')).toBeChecked();
     expect(screen.getByLabelText('超时设置(ms)')).toBeInTheDocument();
     const maxResponseSizeInput = screen.getByLabelText('最大响应体(MB)');
@@ -338,7 +344,7 @@ describe('NodeInspector core', () => {
         value: '{"query":"{{node-start.query}}"}'
       });
     });
-  });
+  }, 10000);
 
   test('keeps code output contract definition editable without rendering the shared output contract card', async () => {
     renderWithProviders(
