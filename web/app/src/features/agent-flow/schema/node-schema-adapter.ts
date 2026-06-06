@@ -1,5 +1,6 @@
 import type {
   FlowAuthoringDocument,
+  FlowBinding,
   FlowNodeDocument
 } from '@1flowbase/flow-schema';
 
@@ -11,6 +12,7 @@ import { getDirectDownstreamNodes } from '../lib/document/relations';
 import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getNodeDefinitionMeta } from '../lib/node-definitions';
 import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
+import { parseHttpRequestUrlParts } from '../lib/http-request/url';
 import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
 import type { AgentFlowIssue } from '../lib/validate-document';
 
@@ -47,6 +49,41 @@ function createRootValues(node: FlowNodeDocument) {
       output_contract: getDisplayOutputs(node)
     }
   };
+}
+
+function toHttpRequestParamsBinding(
+  params: Array<{ name: string; value: string }>
+): FlowBinding {
+  return {
+    kind: 'named_bindings',
+    value: params.map((param) => ({
+      name: param.name,
+      value: { kind: 'templated_text', value: param.value }
+    }))
+  };
+}
+
+function updateHttpRequestUrlField(
+  document: FlowAuthoringDocument,
+  nodeId: string,
+  value: string
+) {
+  const parsed = parseHttpRequestUrlParts(value);
+  const nextDocument = updateNodeField(document, {
+    nodeId,
+    fieldKey: 'config.url',
+    value: parsed.url
+  });
+
+  if (parsed.params.length === 0) {
+    return nextDocument;
+  }
+
+  return updateNodeField(nextDocument, {
+    nodeId,
+    fieldKey: 'bindings.params',
+    value: toHttpRequestParamsBinding(parsed.params)
+  });
 }
 
 function getDisplayOutputs(node: FlowNodeDocument) {
@@ -156,6 +193,18 @@ export function createAgentFlowNodeSchemaAdapter({
             }
           };
         });
+
+        return;
+      }
+
+      if (
+        node.type === 'http_request' &&
+        path === 'config.url' &&
+        typeof value === 'string'
+      ) {
+        setWorkingDocument((currentDocument) =>
+          updateHttpRequestUrlField(currentDocument, nodeId, value)
+        );
 
         return;
       }

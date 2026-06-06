@@ -919,6 +919,54 @@ describe('agent-flow node schema registry', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  test('splits HTTP Request URL query parameters into Params bindings', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const httpNode = createNodeDocument('http_request', 'node-http-request');
+    const httpDocument = {
+      ...document,
+      graph: {
+        ...document.graph,
+        nodes: [...document.graph.nodes, httpNode]
+      }
+    };
+    const setWorkingDocument = vi.fn();
+    const adapter = createAgentFlowNodeSchemaAdapter({
+      document: httpDocument,
+      nodeId: 'node-http-request',
+      setWorkingDocument,
+      dispatch: vi.fn()
+    });
+
+    adapter.setValue(
+      'config.url',
+      'https://api.example.com/orders?page=1&q=refund'
+    );
+
+    expect(setWorkingDocument).toHaveBeenCalledTimes(1);
+
+    const update = setWorkingDocument.mock.calls[0]?.[0] as
+      | typeof httpDocument
+      | ((currentDocument: typeof httpDocument) => typeof httpDocument);
+    const nextDocument =
+      typeof update === 'function' ? update(httpDocument) : update;
+    const nextNode = getNode(nextDocument, 'node-http-request');
+
+    expect(nextNode.config.url).toBe('https://api.example.com/orders');
+    expect(nextNode.bindings.params).toEqual({
+      kind: 'named_bindings',
+      value: [
+        {
+          name: 'page',
+          value: { kind: 'templated_text', value: '1' }
+        },
+        {
+          name: 'q',
+          value: { kind: 'templated_text', value: 'refund' }
+        }
+      ]
+    });
+  });
+
   test('fills missing fixed HTTP Request output variables for legacy nodes', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const httpNode = createNodeDocument('http_request', 'node-http-request');

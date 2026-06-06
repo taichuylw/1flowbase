@@ -1,4 +1,5 @@
 import type { HttpRequestBodyType } from './contract';
+import { parseHttpRequestUrlParts } from './url';
 
 export interface ParsedHttpRequestCurlCommand {
   method: string;
@@ -91,27 +92,6 @@ function parseHeader(value: string) {
   };
 }
 
-function parseUrlParts(rawUrl: string) {
-  try {
-    const parsed = new URL(rawUrl);
-    const params = [...parsed.searchParams.entries()].map(([name, value]) => ({
-      name,
-      value
-    }));
-
-    parsed.search = '';
-    return { url: parsed.toString(), params };
-  } catch {
-    const [url, query = ''] = rawUrl.split('?');
-    const params = new URLSearchParams(query);
-
-    return {
-      url,
-      params: [...params.entries()].map(([name, value]) => ({ name, value }))
-    };
-  }
-}
-
 function inferBodyType(
   headers: Array<{ name: string; value: string }>,
   body: string
@@ -191,7 +171,7 @@ export function parseHttpRequestCurlCommand(
     }
   }
 
-  const { url, params } = parseUrlParts(rawUrl);
+  const { url, params } = parseHttpRequestUrlParts(rawUrl);
 
   return {
     method: method || (body ? 'POST' : 'GET'),
