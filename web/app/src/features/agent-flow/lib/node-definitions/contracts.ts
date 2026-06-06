@@ -24,7 +24,6 @@ import {
   HTTP_REQUEST_DEFAULT_BINDINGS,
   HTTP_REQUEST_DEFAULT_CONFIG,
   HTTP_REQUEST_MAX_RESPONSE_BYTES,
-  HTTP_REQUEST_METHOD_OPTIONS,
   HTTP_REQUEST_OUTPUTS,
   HTTP_REQUEST_RESPONSE_BYTES_STEP
 } from '../http-request/contract';
@@ -615,6 +614,12 @@ function createHttpRequestContract(): NodeRuntimeUiContract {
         panelField({
           key: 'config.verify_ssl',
           title: i18nText('agentFlow', 'auto.verify_ssl_certificate'),
+          renderer: 'switch',
+          valueType: 'boolean'
+        }),
+        panelField({
+          key: 'config.store_response_as_file',
+          title: i18nText('agentFlow', 'auto.store_response_as_file'),
           renderer: 'switch',
           valueType: 'boolean'
         }),

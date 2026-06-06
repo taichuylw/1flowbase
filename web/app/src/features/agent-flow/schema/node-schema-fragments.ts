@@ -264,7 +264,8 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
             'config.timeout_ms',
             'config.max_response_bytes',
             'config.curl_import',
-            'config.verify_ssl'
+            'config.verify_ssl',
+            'config.store_response_as_file'
           ])
         )
       : { remainingSections: definitionSections, extractedBlocks: [] };

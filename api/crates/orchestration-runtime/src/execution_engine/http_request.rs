@@ -357,7 +357,13 @@ async fn response_files(
     bytes: &[u8],
     file_persister: Option<&dyn HttpResponseFilePersister>,
 ) -> Result<Value> {
-    if bytes.is_empty() || response_body_is_inline_text(content_type) {
+    let store_response_as_file = node
+        .config
+        .get("store_response_as_file")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    if bytes.is_empty() || (!store_response_as_file && response_body_is_inline_text(content_type)) {
         return Ok(json!([]));
     }
 

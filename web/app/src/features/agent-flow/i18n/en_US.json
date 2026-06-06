@@ -401,6 +401,7 @@
     "request_body_section": "Body",
     "request_body_type": "Request body type",
     "verify_ssl_certificate": "Verify SSL certificate",
+    "store_response_as_file": "Store as file",
     "timeout_settings": "Timeout settings",
     "max_response_size": "Max response size (MB)",
     "import_curl": "Import cURL",

@@ -36,6 +36,7 @@ export const HTTP_REQUEST_DEFAULT_CONFIG = {
   url: '',
   body_type: 'none',
   verify_ssl: true,
+  store_response_as_file: false,
   timeout_ms: HTTP_REQUEST_DEFAULT_TIMEOUT_MS,
   max_response_bytes: HTTP_REQUEST_DEFAULT_MAX_RESPONSE_BYTES
 } satisfies Record<string, unknown>;

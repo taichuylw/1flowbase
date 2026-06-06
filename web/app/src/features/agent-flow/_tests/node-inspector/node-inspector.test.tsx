@@ -276,6 +276,18 @@ describe('NodeInspector core', () => {
       screen.getAllByText('输入"/"或左花括号可快速引用').length
     ).toBeGreaterThan(0);
     expect(screen.getByLabelText('验证 SSL 证书')).toBeChecked();
+    const storeResponseAsFileSwitch = screen.getByRole('switch', {
+      name: '转存为文件'
+    });
+    expect(storeResponseAsFileSwitch).not.toBeChecked();
+    fireEvent.click(storeResponseAsFileSwitch);
+    await waitFor(() => {
+      const httpNode = latestDocument.graph.nodes.find(
+        (node) => node.id === 'node-http-request'
+      );
+
+      expect(httpNode?.config.store_response_as_file).toBe(true);
+    });
     expect(screen.getByLabelText('超时设置(ms)')).toBeInTheDocument();
     const maxResponseSizeInput = screen.getByLabelText('最大响应体(MB)');
     expect(maxResponseSizeInput).toHaveValue('6');

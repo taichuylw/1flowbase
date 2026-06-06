@@ -677,6 +677,7 @@ describe('agent-flow node schema registry', () => {
       url: '',
       body_type: 'none',
       verify_ssl: true,
+      store_response_as_file: false,
       timeout_ms: 30000,
       max_response_bytes: 6291456
     });
@@ -707,6 +708,7 @@ describe('agent-flow node schema registry', () => {
     expect(serializedConfigBlocks).toContain('"path":"bindings.headers"');
     expect(serializedConfigBlocks).toContain('"path":"config.body_type"');
     expect(serializedConfigBlocks).toContain('"path":"config.verify_ssl"');
+    expect(serializedConfigBlocks).toContain('"path":"config.store_response_as_file"');
     expect(serializedConfigBlocks).toContain('"path":"config.timeout_ms"');
     expect(serializedConfigBlocks).toContain('"path":"config.max_response_bytes"');
     expect(serializedConfigBlocks).toContain('"max":10485760');
@@ -738,6 +740,11 @@ describe('agent-flow node schema registry', () => {
       serializedConfigBlocks.indexOf('"path":"config.verify_ssl"')
     );
     expect(serializedConfigBlocks.indexOf('"path":"config.verify_ssl"')).toBeLessThan(
+      serializedConfigBlocks.indexOf('"path":"config.store_response_as_file"')
+    );
+    expect(
+      serializedConfigBlocks.indexOf('"path":"config.store_response_as_file"')
+    ).toBeLessThan(
       serializedConfigBlocks.indexOf('"renderer":"policy_group"')
     );
   });

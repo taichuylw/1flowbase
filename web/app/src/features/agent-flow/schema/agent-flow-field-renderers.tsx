@@ -60,6 +60,7 @@ import { createTemplateSelectorToken } from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
 
 const BYTES_PER_MIB = 1024 * 1024;
+const DEFAULT_ENABLED_SWITCH_PATHS = new Set(['config.verify_ssl']);
 
 function getSelectorOptions(adapter: SchemaFieldRendererProps['adapter']) {
   return (
@@ -167,11 +168,15 @@ function renderStaticSelectField({ adapter, block }: SchemaFieldRendererProps) {
 
 function renderSwitchField({ adapter, block }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
+  const checked =
+    typeof value === 'boolean'
+      ? value
+      : DEFAULT_ENABLED_SWITCH_PATHS.has(block.path);
 
   return (
     <Switch
       aria-label={block.label}
-      checked={value !== false}
+      checked={checked}
       onChange={(checked) => adapter.setValue(block.path, checked)}
     />
   );
