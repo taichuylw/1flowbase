@@ -50,7 +50,7 @@ pub mod scheduler_admission;
 pub(crate) use provider_invoker::test_support;
 
 use self::{
-    compile_context::ensure_compiled_plan_runnable,
+    compile_context::ensure_compiled_plan_runnable_for_node,
     debug_variable_cache::{persist_debug_variable_cache_entries, public_node_variable_cache},
     inputs::{
         build_compiled_plan_input, build_complete_flow_run_input, build_complete_node_run_input,
@@ -401,7 +401,7 @@ where
             &compile_context,
         )?;
         freeze_failover_queue_routes(&self.repository, &mut compiled_plan).await?;
-        ensure_compiled_plan_runnable(&compiled_plan)?;
+        ensure_compiled_plan_runnable_for_node(&compiled_plan, &command.node_id)?;
         let invoker = self.runtime_invoker(application.workspace_id);
         let started_at = OffsetDateTime::now_utc();
         let http_file_persister = self.http_response_file_persister(actor.clone());

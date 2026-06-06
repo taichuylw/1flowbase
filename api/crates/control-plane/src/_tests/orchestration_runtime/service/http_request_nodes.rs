@@ -30,6 +30,31 @@ async fn spawn_binary_response_server() -> (String, tokio::task::JoinHandle<()>)
     (format!("http://{addr}/download"), handle)
 }
 
+async fn spawn_text_response_server() -> (String, tokio::task::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = listener.local_addr().unwrap();
+    let handle = tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                break;
+            };
+            tokio::spawn(async move {
+                let mut buffer = vec![0_u8; 1024];
+                let _ = stream.read(&mut buffer).await;
+                let body = "ok";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+            });
+        }
+    });
+
+    (format!("http://{addr}/ok"), handle)
+}
+
 fn http_request_flow_document(flow_id: Uuid, url: String) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v2",
@@ -102,6 +127,73 @@ fn http_request_flow_document(flow_id: Uuid, url: String) -> Value {
             "activeContainerPath": []
         }
     })
+}
+
+fn http_request_flow_document_with_unrelated_invalid_llm(flow_id: Uuid, url: String) -> Value {
+    let mut document = http_request_flow_document(flow_id, url);
+    let nodes = document["graph"]["nodes"].as_array_mut().unwrap();
+    nodes.push(json!({
+        "id": "node-llm",
+        "type": "llm",
+        "alias": "LLM",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 480, "y": 0 },
+        "configVersion": 1,
+        "config": {
+            "model_provider": {
+                "provider_code": "fixture_provider",
+                "model_id": "not-enabled-model"
+            },
+            "temperature": 0.2
+        },
+        "bindings": {
+            "prompt_messages": {
+                "kind": "prompt_messages",
+                "value": [
+                    {
+                        "id": "user-1",
+                        "role": "user",
+                        "content": {
+                            "kind": "templated_text",
+                            "value": "{{node-start.query}}"
+                        }
+                    }
+                ]
+            }
+        },
+        "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+    }));
+    document
+}
+
+#[tokio::test]
+async fn http_request_node_preview_ignores_unrelated_llm_model_compile_issue() {
+    let (url, server) = spawn_text_response_server().await;
+    let service = OrchestrationRuntimeService::for_tests();
+    let seeded = service.seed_application_with_flow("HTTP Agent").await;
+
+    let outcome = service
+        .start_node_debug_preview(StartNodeDebugPreviewCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            node_id: "node-http".to_string(),
+            input_payload: json!({}),
+            document_snapshot: Some(http_request_flow_document_with_unrelated_invalid_llm(
+                seeded.flow_id,
+                url,
+            )),
+            debug_session_id: None,
+        })
+        .await
+        .expect("HTTP node preview should ignore unrelated LLM compile issues");
+
+    server.abort();
+
+    assert_eq!(outcome.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(outcome.node_run.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(outcome.node_run.output_payload["status_code"], json!(200));
+    assert_eq!(outcome.node_run.output_payload["body"], json!("ok"));
 }
 
 #[tokio::test]
