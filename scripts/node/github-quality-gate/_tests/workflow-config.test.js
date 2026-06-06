@@ -515,6 +515,10 @@ test("quality gate action clears stale middleware containers before starting pos
 
   assert.match(
     action,
+    /cp docker\/middleware\.env\.example docker\/middleware\.env/u,
+  );
+  assert.match(
+    action,
     /docker compose -f docker\/docker-compose\.middleware\.yaml down --remove-orphans/u,
   );
   assert.match(

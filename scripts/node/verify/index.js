@@ -581,6 +581,24 @@ function buildCoverageFrontendCommand({ repoRoot }) {
   };
 }
 
+function buildCoverageFrontendPageRuntimeCommand({ repoRoot }) {
+  return {
+    label: 'frontend-page-runtime-coverage',
+    command: 'pnpm',
+    args: [
+      '--dir',
+      'web/packages/page-runtime',
+      'exec',
+      'vitest',
+      'run',
+      '--coverage',
+      '--coverage.reporter=json-summary',
+      '--coverage.reportsDirectory=../../../tmp/test-governance/coverage/frontend/page-runtime',
+    ],
+    cwd: repoRoot,
+  };
+}
+
 function selectBackendCoverageEntries(backendKeys) {
   if (!backendKeys || backendKeys.length === 0) {
     return backendThresholds;
@@ -798,6 +816,10 @@ function cleanCoverageOutputFiles(repoRoot, target, backendKeys) {
       path.join(repoRoot, COVERAGE_ROOT, 'frontend', 'coverage-summary.json'),
       { force: true }
     );
+    fs.rmSync(
+      path.join(repoRoot, COVERAGE_ROOT, 'frontend', 'page-runtime'),
+      { recursive: true, force: true }
+    );
   }
 
   if (target === 'backend' || target === 'all') {
@@ -819,10 +841,30 @@ function readJsonFile(filePath, readFileSyncImpl = fs.readFileSync) {
 }
 
 function loadFrontendCoverageSummary(repoRoot, readFileSyncImpl = fs.readFileSync) {
-  return readJsonFile(
+  const appSummary = readJsonFile(
     path.join(repoRoot, COVERAGE_ROOT, 'frontend', 'coverage-summary.json'),
     readFileSyncImpl
   );
+  const pageRuntimeSummaryPath = path.join(
+    repoRoot,
+    COVERAGE_ROOT,
+    'frontend',
+    'page-runtime',
+    'coverage-summary.json'
+  );
+
+  if (!fs.existsSync(pageRuntimeSummaryPath)) {
+    return appSummary;
+  }
+
+  const pageRuntimeSummary = readJsonFile(pageRuntimeSummaryPath, readFileSyncImpl);
+
+  return {
+    ...appSummary,
+    ...Object.fromEntries(
+      Object.entries(pageRuntimeSummary).filter(([filePath]) => filePath !== 'total')
+    ),
+  };
 }
 
 function loadBackendCoverageSummaries(repoRoot, readFileSyncImpl = fs.readFileSync, backendKeys) {
@@ -903,6 +945,7 @@ async function runCoverage(argv = [], deps = {}) {
 
   if (options.target === 'frontend' || options.target === 'all') {
     coverageCommands.push(buildCoverageFrontendCommand({ repoRoot }));
+    coverageCommands.push(buildCoverageFrontendPageRuntimeCommand({ repoRoot }));
   }
 
   if (options.target === 'backend' || options.target === 'all') {
@@ -1180,6 +1223,7 @@ module.exports = {
   buildCoverageBackendCleanupCommands,
   buildCoverageBackendCommands,
   buildCoverageFrontendCommand,
+  buildCoverageFrontendPageRuntimeCommand,
   buildRepoCommands,
   collectBackendCoverageFailures,
   collectFrontendCoverageFailures,

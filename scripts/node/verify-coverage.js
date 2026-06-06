@@ -6,6 +6,7 @@ const path = require('node:path');
 const {
   parseCoverageCliArgs: parseCliArgs,
   buildCoverageFrontendCommand: buildFrontendCommand,
+  buildCoverageFrontendPageRuntimeCommand: buildFrontendPageRuntimeCommand,
   collectFrontendCoverageFailures,
   buildCoverageBackendCleanupCommands: buildBackendCleanupCommands,
   buildCoverageBackendCommands: buildBackendCommands,
@@ -94,6 +95,7 @@ if (require.main === module) {
 module.exports = {
   parseCliArgs,
   buildFrontendCommand,
+  buildFrontendPageRuntimeCommand,
   buildBackendCommands,
   buildBackendCleanupCommands,
   collectFrontendCoverageFailures,
