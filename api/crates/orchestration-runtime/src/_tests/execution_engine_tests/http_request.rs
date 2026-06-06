@@ -486,7 +486,7 @@ async fn http_request_node_keeps_application_javascript_response_inline() {
 }
 
 #[tokio::test]
-async fn http_request_node_stores_text_response_as_file_when_enabled() {
+async fn http_request_node_keeps_text_response_inline_when_file_storage_enabled() {
     let body = r#"jQuery1123({"data":{"total":5}});"#;
     let (base_url, _captured, server) = spawn_http_fixture(vec![response(
         "/jsonp-file",
@@ -521,19 +521,12 @@ async fn http_request_node_stores_text_response_as_file_when_enabled() {
         ExecutionStopReason::Completed
     ));
     assert_eq!(outcome.variable_pool["node-http"]["body"], json!(body));
-    assert_eq!(
-        outcome.variable_pool["node-http"]["files"][0]["filename"],
-        "response.bin"
-    );
-    assert_eq!(
-        outcome.variable_pool["node-http"]["files"][0]["mimetype"],
-        "application/javascript; charset=UTF-8"
-    );
+    assert_eq!(outcome.variable_pool["node-http"]["files"], json!([]));
     server.abort();
 }
 
 #[tokio::test]
-async fn http_request_node_projects_binary_response_file_descriptor() {
+async fn http_request_node_keeps_binary_response_inline_when_file_storage_disabled() {
     let (base_url, _captured, server) = spawn_http_fixture(vec![response(
         "/download",
         200,
@@ -549,6 +542,48 @@ async fn http_request_node_projects_binary_response_file_descriptor() {
             "timeout_ms": 30000,
             "max_response_bytes": 1048576,
             "verify_ssl": true
+        }),
+        BTreeMap::new(),
+    );
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "refund" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(
+        outcome.variable_pool["node-http"]["body"],
+        json!(String::from_utf8_lossy(&[0, 1, 2, 3]).to_string())
+    );
+    assert_eq!(outcome.variable_pool["node-http"]["files"], json!([]));
+    server.abort();
+}
+
+#[tokio::test]
+async fn http_request_node_projects_binary_response_file_descriptor_when_enabled() {
+    let (base_url, _captured, server) = spawn_http_fixture(vec![response(
+        "/download",
+        200,
+        "application/octet-stream",
+        vec![0, 1, 2, 3],
+    )])
+    .await;
+    let plan = http_request_plan(
+        json!({
+            "method": "GET",
+            "url": format!("{base_url}/download"),
+            "body_type": "none",
+            "timeout_ms": 30000,
+            "max_response_bytes": 1048576,
+            "verify_ssl": true,
+            "store_response_as_file": true
         }),
         BTreeMap::new(),
     );
@@ -624,6 +659,51 @@ async fn http_request_node_default_response_budget_allows_six_mib() {
 }
 
 #[tokio::test]
+async fn http_request_node_truncates_response_body_at_configured_budget() {
+    let (base_url, _captured, server) =
+        spawn_http_fixture(vec![response("/large-text", 200, "text/plain", "abcdef")]).await;
+    let plan = http_request_plan(
+        json!({
+            "method": "GET",
+            "url": format!("{base_url}/large-text"),
+            "body_type": "none",
+            "timeout_ms": 30000,
+            "max_response_bytes": 4,
+            "verify_ssl": true
+        }),
+        BTreeMap::new(),
+    );
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "refund" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(outcome.variable_pool["node-http"]["body"], json!("abcd"));
+    assert_eq!(outcome.variable_pool["node-http"]["files"], json!([]));
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["body_truncated"],
+        json!(true)
+    );
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["response_bytes_observed"],
+        json!(6)
+    );
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["stored_body_bytes"],
+        json!(4)
+    );
+    server.abort();
+}
+
+#[tokio::test]
 async fn http_request_node_caps_configured_response_budget_at_ten_mib() {
     let (base_url, _captured, server) = spawn_http_fixture(vec![response(
         "/too-large",
@@ -652,17 +732,25 @@ async fn http_request_node_caps_configured_response_budget_at_ten_mib() {
     .await
     .unwrap();
 
-    match outcome.stop_reason {
-        ExecutionStopReason::Failed(failure) => {
-            assert_eq!(failure.node_id, "node-http");
-            assert_eq!(failure.error_payload["kind"], json!("http_request_error"));
-            assert_eq!(
-                failure.error_payload["message"],
-                json!("HTTP response body exceeds max_response_bytes")
-            );
-        }
-        other => panic!("expected capped max_response_bytes failure, got {other:?}"),
-    }
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(
+        outcome.variable_pool["node-http"]["body"]
+            .as_str()
+            .unwrap()
+            .len(),
+        10 * 1024 * 1024
+    );
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["body_truncated"],
+        json!(true)
+    );
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["response_bytes_observed"],
+        json!(10 * 1024 * 1024 + 1)
+    );
     server.abort();
 }
 

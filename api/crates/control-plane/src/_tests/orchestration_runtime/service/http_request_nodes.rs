@@ -176,6 +176,16 @@ fn http_request_flow_document_with_store_response_as_file(flow_id: Uuid, url: St
     document
 }
 
+fn http_request_flow_document_with_max_response_bytes(
+    flow_id: Uuid,
+    url: String,
+    max_response_bytes: u64,
+) -> Value {
+    let mut document = http_request_flow_document(flow_id, url);
+    document["graph"]["nodes"][1]["config"]["max_response_bytes"] = json!(max_response_bytes);
+    document
+}
+
 #[tokio::test]
 async fn http_request_node_preview_ignores_unrelated_llm_model_compile_issue() {
     let (url, server) = spawn_text_response_server("text/plain", "ok").await;
@@ -243,10 +253,86 @@ async fn http_request_javascript_response_stays_inline_with_file_storage() {
 }
 
 #[tokio::test]
-async fn http_request_store_response_as_file_persists_text_response_with_file_storage() {
+async fn http_request_store_response_as_file_keeps_text_response_inline_with_file_storage() {
     let body = r#"jQuery1123({"data":{"total":5}});"#;
     let (url, server) =
         spawn_text_response_server("application/javascript; charset=UTF-8", body).await;
+    let service = OrchestrationRuntimeService::for_tests_with_file_storage();
+    let seeded = service.seed_application_with_flow("HTTP Agent").await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(http_request_flow_document_with_store_response_as_file(
+                seeded.flow_id,
+                url,
+            )),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let http_node = node_run(&completed, "node-http");
+
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(http_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(http_node.output_payload["body"], json!(body));
+    assert_eq!(http_node.output_payload["files"], json!([]));
+
+    server.abort();
+}
+
+#[tokio::test]
+async fn http_request_binary_response_stays_inline_when_file_storage_is_disabled() {
+    let (url, server) = spawn_binary_response_server().await;
+    let service = OrchestrationRuntimeService::for_tests_with_file_storage();
+    let seeded = service.seed_application_with_flow("HTTP Agent").await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({}),
+            document_snapshot: Some(http_request_flow_document(seeded.flow_id, url)),
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+
+    let completed = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    let http_node = node_run(&completed, "node-http");
+
+    assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
+    assert_eq!(http_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(
+        http_node.output_payload["body"],
+        json!(String::from_utf8_lossy(&[0, 1, 2, 3]).to_string())
+    );
+    assert_eq!(http_node.output_payload["files"], json!([]));
+
+    server.abort();
+}
+
+#[tokio::test]
+async fn http_request_binary_response_persists_as_file_record_when_enabled() {
+    let (url, server) = spawn_binary_response_server().await;
     let service = OrchestrationRuntimeService::for_tests_with_file_storage();
     let seeded = service.seed_application_with_flow("HTTP Agent").await;
     let started = service
@@ -277,26 +363,24 @@ async fn http_request_store_response_as_file_persists_text_response_with_file_st
 
     assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
     assert_eq!(http_node.status, domain::NodeRunStatus::Succeeded);
-    assert_eq!(http_node.output_payload["body"], json!(body));
     assert!(file["id"].as_str().is_some());
     assert_eq!(file["filename"], json!("response.bin"));
-    assert_eq!(
-        file["mimetype"],
-        json!("application/javascript; charset=UTF-8")
-    );
+    assert_eq!(file["mimetype"], json!("application/octet-stream"));
     assert_eq!(file["storage_id"], service.default_file_storage_id_json());
     assert!(file["path"].as_str().unwrap().contains("/orders/"));
     assert!(file["url"]
         .as_str()
         .unwrap()
         .starts_with("https://files.test/"));
+    assert_ne!(file["storage_id"], json!("runtime-inline"));
+    assert_ne!(file["meta"]["persisted"], json!(false));
 
     server.abort();
 }
 
 #[tokio::test]
-async fn http_request_binary_response_persists_as_file_record() {
-    let (url, server) = spawn_binary_response_server().await;
+async fn http_request_truncates_large_response_before_persisting_node_output() {
+    let (url, server) = spawn_text_response_server("text/plain", "abcdef").await;
     let service = OrchestrationRuntimeService::for_tests_with_file_storage();
     let seeded = service.seed_application_with_flow("HTTP Agent").await;
     let started = service
@@ -304,7 +388,11 @@ async fn http_request_binary_response_persists_as_file_record() {
             actor_user_id: seeded.actor_user_id,
             application_id: seeded.application_id,
             input_payload: json!({}),
-            document_snapshot: Some(http_request_flow_document(seeded.flow_id, url)),
+            document_snapshot: Some(http_request_flow_document_with_max_response_bytes(
+                seeded.flow_id,
+                url,
+                4,
+            )),
             debug_session_id: None,
         })
         .await
@@ -320,21 +408,17 @@ async fn http_request_binary_response_persists_as_file_record() {
         .unwrap();
 
     let http_node = node_run(&completed, "node-http");
-    let file = &http_node.output_payload["files"][0];
 
     assert_eq!(completed.flow_run.status, domain::FlowRunStatus::Succeeded);
     assert_eq!(http_node.status, domain::NodeRunStatus::Succeeded);
-    assert!(file["id"].as_str().is_some());
-    assert_eq!(file["filename"], json!("response.bin"));
-    assert_eq!(file["mimetype"], json!("application/octet-stream"));
-    assert_eq!(file["storage_id"], service.default_file_storage_id_json());
-    assert!(file["path"].as_str().unwrap().contains("/orders/"));
-    assert!(file["url"]
-        .as_str()
-        .unwrap()
-        .starts_with("https://files.test/"));
-    assert_ne!(file["storage_id"], json!("runtime-inline"));
-    assert_ne!(file["meta"]["persisted"], json!(false));
+    assert_eq!(http_node.output_payload["body"], json!("abcd"));
+    assert_eq!(http_node.output_payload["files"], json!([]));
+    assert_eq!(http_node.metrics_payload["body_truncated"], json!(true));
+    assert_eq!(
+        http_node.metrics_payload["response_bytes_observed"],
+        json!(6)
+    );
+    assert_eq!(http_node.metrics_payload["stored_body_bytes"], json!(4));
 
     server.abort();
 }
