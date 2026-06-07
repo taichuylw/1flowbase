@@ -223,7 +223,7 @@ fn configured_default_output_payload(node: &CompiledNode) -> Value {
     }
 }
 
-pub(crate) fn execute_environment_variable_update_node(
+pub(crate) fn execute_variable_assignment_node(
     _node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     variable_pool: &mut Map<String, Value>,
@@ -231,11 +231,9 @@ pub(crate) fn execute_environment_variable_update_node(
     let operations = resolved_inputs
         .get("operations")
         .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("environment variable update requires operations"))?;
+        .ok_or_else(|| anyhow!("variable assigner requires operations"))?;
     if operations.is_empty() {
-        return Err(anyhow!(
-            "environment variable update requires at least one operation"
-        ));
+        return Err(anyhow!("variable assigner requires at least one operation"));
     }
 
     let updates = operations
@@ -244,58 +242,60 @@ pub(crate) fn execute_environment_variable_update_node(
             let path = operation
                 .get("path")
                 .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("environment variable update path is required"))?;
+                .ok_or_else(|| anyhow!("variable assigner path is required"))?;
             let operator = operation
                 .get("operator")
                 .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("environment variable update operator is required"))?;
+                .ok_or_else(|| anyhow!("variable assigner operator is required"))?;
             let target_namespace = path.first().and_then(Value::as_str);
             let target_name = path
                 .get(1)
                 .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("environment variable update target name is required"))?;
+                .ok_or_else(|| anyhow!("variable assigner target name is required"))?;
 
-            if operator != "set" || target_namespace != Some("env") || target_name.trim().is_empty()
+            if operator != "set"
+                || target_namespace != Some("conversation")
+                || target_name.trim().is_empty()
             {
                 return Err(anyhow!(
-                    "environment variable update only supports setting env variables"
+                    "variable assigner only supports setting conversation variables"
                 ));
             }
 
-            let value = resolve_environment_variable_update_value(operation, variable_pool)?;
+            let value = resolve_variable_assignment_value(operation, variable_pool)?;
 
             Ok((target_name.to_string(), value))
         })
         .collect::<Result<Vec<_>>>()?;
     let mut updated = Map::new();
-    let env_value = variable_pool
-        .entry("env".to_string())
+    let conversation_value = variable_pool
+        .entry("conversation".to_string())
         .or_insert_with(|| Value::Object(Map::new()));
 
-    if !env_value.is_object() {
-        *env_value = Value::Object(Map::new());
+    if !conversation_value.is_object() {
+        *conversation_value = Value::Object(Map::new());
     }
 
-    let env = env_value
+    let conversation = conversation_value
         .as_object_mut()
-        .ok_or_else(|| anyhow!("environment variable pool must be an object"))?;
+        .ok_or_else(|| anyhow!("conversation variable pool must be an object"))?;
 
     for (target_name, value) in updates {
-        env.insert(target_name.clone(), value.clone());
+        conversation.insert(target_name.clone(), value.clone());
         updated.insert(target_name, value);
     }
 
     Ok(Value::Object(updated))
 }
 
-fn resolve_environment_variable_update_value(
+fn resolve_variable_assignment_value(
     operation: &Value,
     variable_pool: &Map<String, Value>,
 ) -> Result<Value> {
     let value = operation
         .get("value")
         .and_then(Value::as_object)
-        .ok_or_else(|| anyhow!("environment variable update value is required"))?;
+        .ok_or_else(|| anyhow!("variable assigner value is required"))?;
 
     match value.get("kind").and_then(Value::as_str) {
         Some("constant") => Ok(value.get("value").cloned().unwrap_or(Value::Null)),
@@ -303,28 +303,27 @@ fn resolve_environment_variable_update_value(
             let selector = value
                 .get("selector")
                 .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("environment variable update selector value is required"))?
+                .ok_or_else(|| anyhow!("variable assigner selector value is required"))?
                 .iter()
                 .map(|segment| {
-                    segment.as_str().map(str::to_string).ok_or_else(|| {
-                        anyhow!("environment variable update selector must be strings")
-                    })
+                    segment
+                        .as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| anyhow!("variable assigner selector must be strings"))
                 })
                 .collect::<Result<Vec<_>>>()?;
             lookup_selector_value(variable_pool, &selector)
         }
         Some("templated_text") => {
             let template = value.get("value").and_then(Value::as_str).ok_or_else(|| {
-                anyhow!("environment variable update templated_text value must be a string")
+                anyhow!("variable assigner templated_text value must be a string")
             })?;
             render_template(template, variable_pool).map(Value::String)
         }
         Some(kind) => Err(anyhow!(
-            "environment variable update value kind is unsupported: {kind}"
+            "variable assigner value kind is unsupported: {kind}"
         )),
-        None => Err(anyhow!(
-            "environment variable update value kind is required"
-        )),
+        None => Err(anyhow!("variable assigner value kind is required")),
     }
 }
 
@@ -619,11 +618,8 @@ where
                 );
             }
             "variable_assigner" => {
-                let output_payload = execute_environment_variable_update_node(
-                    node,
-                    &resolved_inputs,
-                    &mut variable_pool,
-                )?;
+                let output_payload =
+                    execute_variable_assignment_node(node, &resolved_inputs, &mut variable_pool)?;
                 variable_pool.insert(
                     node.node_id.clone(),
                     project_node_variable_payload(node, &output_payload)?,

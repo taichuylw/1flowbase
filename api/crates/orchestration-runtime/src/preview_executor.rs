@@ -5,9 +5,9 @@ use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
     compiled_plan::CompiledPlan,
     execution_engine::{
-        execute_code_node, execute_environment_variable_update_node, execute_http_request_node,
-        execute_llm_node, CodeInvoker, ExecutionRuntimeContext, HttpResponseFilePersister,
-        ProviderInvoker,
+        execute_code_node, execute_http_request_node, execute_llm_node,
+        execute_variable_assignment_node, CodeInvoker, ExecutionRuntimeContext,
+        HttpResponseFilePersister, ProviderInvoker,
     },
     node_errors::build_node_type_not_implemented_error_payload,
 };
@@ -192,7 +192,7 @@ where
         )
     } else if node.node_type == "variable_assigner" {
         let execution =
-            execute_environment_variable_update_node(node, &resolved_inputs, &mut variable_pool)?;
+            execute_variable_assignment_node(node, &resolved_inputs, &mut variable_pool)?;
         (
             execution,
             None,

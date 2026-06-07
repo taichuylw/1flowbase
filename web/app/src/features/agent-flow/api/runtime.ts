@@ -40,6 +40,11 @@ import {
   systemVariableNodeId
 } from '../lib/variables/system-variables';
 import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
+import {
+  conversationVariableNodeId,
+  formatConversationVariableTitle,
+  listConversationVariables
+} from '../lib/variables/conversation-variables';
 import { extractNamedBindingSelectors } from '../lib/named-binding-expressions';
 import {
   collectConditionSelectors,
@@ -172,7 +177,7 @@ export interface NodeDebugVariableConfirmationPlan {
   fields: NodeDebugPreviewVariableField[];
 }
 
-interface EnvironmentVariableUpdateOperation {
+interface VariableAssignmentOperation {
   path: string[];
   operator: 'set' | 'append' | 'clear' | 'increment';
   source?: string[] | null;
@@ -634,9 +639,9 @@ function collectUpstreamNodeIds(
   return visited;
 }
 
-function getEnvironmentVariableUpdateOperations(
+function getVariableAssignmentOperations(
   node: FlowNodeDocument
-): EnvironmentVariableUpdateOperation[] {
+): VariableAssignmentOperation[] {
   const binding = node.bindings.operations;
 
   if (node.type !== 'variable_assigner' || binding?.kind !== 'state_write') {
@@ -644,10 +649,10 @@ function getEnvironmentVariableUpdateOperations(
   }
 
   return binding.value.filter(
-    (operation): operation is EnvironmentVariableUpdateOperation =>
+    (operation): operation is VariableAssignmentOperation =>
       operation.operator === 'set' &&
       operation.path.length === 2 &&
-      operation.path[0] === 'env' &&
+      operation.path[0] === conversationVariableNodeId &&
       operation.path[1].trim().length > 0 &&
       normalizeStateWriteValueExpression(operation.value) !== null
   );
@@ -663,9 +668,27 @@ function findNodeOutput(node: FlowNodeDocument | undefined, outputKey: string) {
     : undefined;
 }
 
-function findExternalVariableOutput(nodeId: string, outputKey: string) {
+function findExternalVariableOutput(
+  document: FlowAuthoringDocument,
+  nodeId: string,
+  outputKey: string
+) {
   if (nodeId === systemVariableNodeId) {
     return agentFlowSystemVariables.find((output) => output.key === outputKey);
+  }
+
+  if (nodeId === conversationVariableNodeId) {
+    const variable = listConversationVariables(document).find(
+      (entry) => entry.name === outputKey
+    );
+
+    return variable
+      ? {
+          key: variable.name,
+          title: formatConversationVariableTitle(variable.name),
+          valueType: variable.valueType
+        }
+      : undefined;
   }
 
   return undefined;
@@ -680,13 +703,14 @@ function selectorsMatch(left: string[] | undefined, right: string[]) {
 }
 
 function findNodeOutputBySelector(
+  document: FlowAuthoringDocument,
   node: FlowNodeDocument | undefined,
   selector: string[]
 ) {
   const outputKey = selectorOutputKey(selector);
 
   if (!node) {
-    return findExternalVariableOutput(selector[0] ?? '', outputKey);
+    return findExternalVariableOutput(document, selector[0] ?? '', outputKey);
   }
 
   const selectorTail = selector.slice(1);
@@ -843,7 +867,7 @@ function buildNodePreviewVariableField({
   const output =
     sourceOutput ??
     findNodeOutput(node, outputKey) ??
-    findExternalVariableOutput(nodeId, outputKey);
+    findExternalVariableOutput(document, nodeId, outputKey);
   const inputPath =
     node?.type === 'code' && sourceOutput?.selector?.length
       ? [...sourceOutput.selector]
@@ -903,7 +927,9 @@ function hasMissingPreviewField(
   nodeId: string,
   outputKey: string
 ) {
-  return fields.some((field) => field.nodeId === nodeId && field.key === outputKey);
+  return fields.some(
+    (field) => field.nodeId === nodeId && field.key === outputKey
+  );
 }
 
 function resolvePreviewSelectorValue({
@@ -924,16 +950,15 @@ function resolvePreviewSelectorValue({
   const sourceNode = document.graph.nodes.find(
     (entry) => entry.id === sourceNodeId
   );
-  const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
+  const sourceOutput = findNodeOutputBySelector(document, sourceNode, selector);
   const previewInputValue = readPreviewInputValue(inputPayload, selector);
-  const cachedOutput =
-    previewInputValue.found
-      ? previewInputValue
-      : readCachedOutputValue(
-          variableCache[sourceNodeId],
-          sourceOutput,
-          outputKey
-        );
+  const cachedOutput = previewInputValue.found
+    ? previewInputValue
+    : readCachedOutputValue(
+        variableCache[sourceNodeId],
+        sourceOutput,
+        outputKey
+      );
   const value =
     cachedOutput.found && hasPreviewVariableValue(cachedOutput.value)
       ? cachedOutput.value
@@ -1007,10 +1032,12 @@ function renderPreviewTemplateValue({
   );
   TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
 
-  return hasMissingSelector ? { found: false } : { found: true, value: rendered };
+  return hasMissingSelector
+    ? { found: false }
+    : { found: true, value: rendered };
 }
 
-function resolveEnvironmentVariableUpdateValue({
+function resolveVariableAssignmentValue({
   expression,
   document,
   variableCache,
@@ -1046,7 +1073,7 @@ function resolveEnvironmentVariableUpdateValue({
   });
 }
 
-function applyEnvironmentVariableUpdatesToPreviewPlan({
+function applyVariableAssignmentsToPreviewPlan({
   document,
   nodeId,
   variableCache,
@@ -1066,14 +1093,14 @@ function applyEnvironmentVariableUpdatesToPreviewPlan({
       continue;
     }
 
-    for (const operation of getEnvironmentVariableUpdateOperations(node)) {
+    for (const operation of getVariableAssignmentOperations(node)) {
       const expression = normalizeStateWriteValueExpression(operation.value);
 
       if (!expression) {
         continue;
       }
 
-      const resolved = resolveEnvironmentVariableUpdateValue({
+      const resolved = resolveVariableAssignmentValue({
         expression,
         document,
         variableCache,
@@ -1085,8 +1112,9 @@ function applyEnvironmentVariableUpdatesToPreviewPlan({
         continue;
       }
 
-      inputPayload.env ??= {};
-      inputPayload.env[operation.path[1]] = resolved.value;
+      inputPayload[conversationVariableNodeId] ??= {};
+      inputPayload[conversationVariableNodeId][operation.path[1]] =
+        resolved.value;
     }
   }
 }
@@ -1105,10 +1133,7 @@ function canUseStartPreviewDefault(
   node: FlowNodeDocument | undefined,
   outputKey: string
 ) {
-  return (
-    node?.type === 'start' &&
-    !isRequiredStartPreviewKey(node, outputKey)
-  );
+  return node?.type === 'start' && !isRequiredStartPreviewKey(node, outputKey);
 }
 
 function buildStringPreviewValue(
@@ -1189,7 +1214,11 @@ export function buildNodeDebugPreviewInput(
     const sourceNode = document.graph.nodes.find(
       (entry) => entry.id === sourceNodeId
     );
-    const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
+    const sourceOutput = findNodeOutputBySelector(
+      document,
+      sourceNode,
+      selector
+    );
 
     writePreviewInputValue({
       inputPayload,
@@ -1262,7 +1291,11 @@ export function buildNodeDebugPreviewPlan(
     const sourceNode = document.graph.nodes.find(
       (entry) => entry.id === sourceNodeId
     );
-    const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
+    const sourceOutput = findNodeOutputBySelector(
+      document,
+      sourceNode,
+      selector
+    );
     const cachedOutput = readCachedOutputValue(
       variableCache[sourceNodeId],
       sourceOutput,
@@ -1304,7 +1337,7 @@ export function buildNodeDebugPreviewPlan(
     );
   }
 
-  applyEnvironmentVariableUpdatesToPreviewPlan({
+  applyVariableAssignmentsToPreviewPlan({
     document,
     nodeId,
     variableCache,
@@ -1380,7 +1413,11 @@ export function buildNodeDebugVariableConfirmationPlan(
     const sourceNode = document.graph.nodes.find(
       (entry) => entry.id === sourceNodeId
     );
-    const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
+    const sourceOutput = findNodeOutputBySelector(
+      document,
+      sourceNode,
+      selector
+    );
 
     if (visited.has(cacheKey)) {
       continue;

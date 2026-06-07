@@ -251,8 +251,7 @@
   height: 40px;
 }
 
-.agent-flow-http-request-endpoint__method.ant-select
-  .ant-select-selector {
+.agent-flow-http-request-endpoint__method.ant-select .ant-select-selector {
   height: 40px;
   align-items: center;
 }
@@ -670,20 +669,20 @@
   justify-self: end;
 }
 
-.agent-flow-environment-variable-update-row {
+.agent-flow-variable-assignment-row {
   display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(180px, 1.1fr) 28px;
+  grid-template-columns: minmax(140px, 0.9fr) 88px minmax(180px, 1.1fr) 28px;
   align-items: center;
   gap: 8px;
   width: 100%;
   min-width: 0;
 }
 
-.agent-flow-environment-variable-update-row .ant-select,
-.agent-flow-environment-variable-update-row .ant-cascader,
-.agent-flow-environment-variable-update-row .ant-input,
-.agent-flow-environment-variable-update-row .ant-input-number,
-.agent-flow-environment-variable-update-row .agent-flow-templated-text-field {
+.agent-flow-variable-assignment-row .ant-select,
+.agent-flow-variable-assignment-row .ant-cascader,
+.agent-flow-variable-assignment-row .ant-input,
+.agent-flow-variable-assignment-row .ant-input-number,
+.agent-flow-variable-assignment-row .agent-flow-templated-text-field {
   width: 100%;
 }
 
@@ -768,7 +767,10 @@
 
 .agent-flow-templated-binding-row {
   display: grid;
-  grid-template-columns: minmax(88px, 0.7fr) minmax(96px, 0.65fr) minmax(168px, 1.5fr) 28px;
+  grid-template-columns: minmax(88px, 0.7fr) minmax(96px, 0.65fr) minmax(
+      168px,
+      1.5fr
+    ) 28px;
   align-items: start;
   min-width: 0;
   gap: 8px;

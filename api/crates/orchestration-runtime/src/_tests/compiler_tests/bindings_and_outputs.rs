@@ -133,7 +133,7 @@ fn compile_state_write_extracts_templated_value_dependencies() {
     document["graph"]["nodes"][1] = json!({
         "id": "node-env-update",
         "type": "variable_assigner",
-        "alias": "Environment Variable Update",
+        "alias": "变量赋值",
         "description": "",
         "containerId": null,
         "position": { "x": 240, "y": 0 },
@@ -144,7 +144,7 @@ fn compile_state_write_extracts_templated_value_dependencies() {
                 "kind": "state_write",
                 "value": [
                     {
-                        "path": ["env", "ApiBaseUrl"],
+                        "path": ["conversation", "ApiBaseUrl"],
                         "operator": "set",
                         "value": {
                             "kind": "templated_text",
@@ -157,7 +157,7 @@ fn compile_state_write_extracts_templated_value_dependencies() {
         "outputs": [
             {
                 "key": "ApiBaseUrl",
-                "title": "env.ApiBaseUrl",
+                "title": "conversation.ApiBaseUrl",
                 "valueType": "string"
             }
         ]

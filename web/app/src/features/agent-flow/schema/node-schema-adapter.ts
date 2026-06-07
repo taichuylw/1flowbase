@@ -14,10 +14,12 @@ import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getNodeDefinitionMeta } from '../lib/node-definitions';
 import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
 import { parseHttpRequestUrlParts } from '../lib/http-request/url';
+import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
 import {
-  formatEnvironmentVariableTitle,
-  type AgentFlowEnvironmentVariable
-} from '../lib/variables/application-environment-variables';
+  formatConversationVariableTitle,
+  listConversationVariables,
+  type AgentFlowConversationVariable
+} from '../lib/variables/conversation-variables';
 import type { AgentFlowIssue } from '../lib/validate-document';
 
 import type { SchemaAdapter } from '../../../shared/schema-ui/registry/create-renderer-registry';
@@ -97,7 +99,9 @@ function getDisplayOutputs(node: FlowNodeDocument) {
 
   const contractOutputs =
     getBuiltinNodeRuntimeContract(node.type)?.defaults.outputs ?? [];
-  const outputsByKey = new Map(node.outputs.map((output) => [output.key, output]));
+  const outputsByKey = new Map(
+    node.outputs.map((output) => [output.key, output])
+  );
 
   return [
     ...node.outputs,
@@ -105,10 +109,9 @@ function getDisplayOutputs(node: FlowNodeDocument) {
   ];
 }
 
-function isStateWriteBinding(value: unknown): value is Extract<
-  FlowBinding,
-  { kind: 'state_write' }
-> {
+function isStateWriteBinding(
+  value: unknown
+): value is Extract<FlowBinding, { kind: 'state_write' }> {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -117,12 +120,12 @@ function isStateWriteBinding(value: unknown): value is Extract<
   );
 }
 
-function deriveEnvironmentVariableUpdateOutputs(
+function deriveVariableAssignmentOutputs(
   binding: Extract<FlowBinding, { kind: 'state_write' }>,
-  environmentVariables: AgentFlowEnvironmentVariable[]
+  conversationVariables: AgentFlowConversationVariable[]
 ): FlowNodeOutputDocument[] {
   const variablesByName = new Map(
-    environmentVariables.map((variable) => [variable.name, variable])
+    conversationVariables.map((variable) => [variable.name, variable])
   );
   const selectedNames = new Set<string>();
   const outputs: FlowNodeOutputDocument[] = [];
@@ -131,7 +134,7 @@ function deriveEnvironmentVariableUpdateOutputs(
     const [namespace, targetName] = operation.path;
 
     if (
-      namespace !== 'env' ||
+      namespace !== 'conversation' ||
       !targetName ||
       !operation.value ||
       selectedNames.has(targetName)
@@ -148,8 +151,8 @@ function deriveEnvironmentVariableUpdateOutputs(
     selectedNames.add(targetName);
     outputs.push({
       key: targetName,
-      title: formatEnvironmentVariableTitle(targetName),
-      valueType: variable.value_type
+      title: formatConversationVariableTitle(targetName),
+      valueType: variable.valueType
     });
   }
 
@@ -160,12 +163,12 @@ function updateVariableAssignerOperationsField({
   document,
   nodeId,
   binding,
-  environmentVariables
+  conversationVariables
 }: {
   document: FlowAuthoringDocument;
   nodeId: string;
   binding: Extract<FlowBinding, { kind: 'state_write' }>;
-  environmentVariables: AgentFlowEnvironmentVariable[];
+  conversationVariables: AgentFlowConversationVariable[];
 }) {
   return replaceNodeOutputs(
     updateNodeField(document, {
@@ -174,7 +177,7 @@ function updateVariableAssignerOperationsField({
       value: binding
     }),
     nodeId,
-    deriveEnvironmentVariableUpdateOutputs(binding, environmentVariables)
+    deriveVariableAssignmentOutputs(binding, conversationVariables)
   );
 }
 
@@ -201,11 +204,13 @@ export function createAgentFlowNodeSchemaAdapter({
   setWorkingDocument,
   dispatch,
   environmentVariables = [],
+  conversationVariables,
   issues = []
 }: {
   document: FlowAuthoringDocument;
   nodeId: string;
   environmentVariables?: AgentFlowEnvironmentVariable[];
+  conversationVariables?: AgentFlowConversationVariable[];
   issues?: AgentFlowIssue[];
   setWorkingDocument: (
     update:
@@ -215,6 +220,8 @@ export function createAgentFlowNodeSchemaAdapter({
   dispatch: (actionKey: string, payload?: unknown) => void;
 }): SchemaAdapter {
   const node = getNode(document, nodeId);
+  const availableConversationVariables =
+    conversationVariables ?? listConversationVariables(document);
 
   return {
     getValue(path: string) {
@@ -296,7 +303,7 @@ export function createAgentFlowNodeSchemaAdapter({
             document: currentDocument,
             nodeId,
             binding: value,
-            environmentVariables
+            conversationVariables: availableConversationVariables
           })
         );
 
@@ -338,6 +345,10 @@ export function createAgentFlowNodeSchemaAdapter({
 
       if (key === 'environmentVariables') {
         return environmentVariables;
+      }
+
+      if (key === 'conversationVariables') {
+        return availableConversationVariables;
       }
 
       if (key === 'downstreamNodes') {

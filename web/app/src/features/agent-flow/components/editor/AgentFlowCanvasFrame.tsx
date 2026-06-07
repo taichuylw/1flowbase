@@ -40,6 +40,10 @@ import {
   environmentVariableNodeId,
   type AgentFlowEnvironmentVariable
 } from '../../lib/variables/application-environment-variables';
+import {
+  listConversationVariables,
+  replaceConversationVariables
+} from '../../lib/variables/conversation-variables';
 import { systemVariableNodeId } from '../../lib/variables/system-variables';
 import {
   fetchModelProviderOptions,
@@ -77,6 +81,7 @@ import { AgentFlowCanvas } from './AgentFlowCanvas';
 import { AgentFlowOverlay } from './AgentFlowOverlay';
 import { AgentFlowSideDock } from './AgentFlowSideDock';
 import { ApplicationEnvironmentVariablesPanel } from './ApplicationEnvironmentVariablesPanel';
+import { ConversationVariablesPanel } from './ConversationVariablesPanel';
 import { SystemVariablesPanel } from './SystemVariablesPanel';
 import { i18nText } from '../../../../shared/i18n/text';
 import {
@@ -123,6 +128,9 @@ export function AgentFlowCanvasFrame({
   );
   const workingDocument = useAgentFlowEditorStore(selectWorkingDocument);
   const lastSavedDocument = useAgentFlowEditorStore(selectLastSavedDocument);
+  const setWorkingDocument = useAgentFlowEditorStore(
+    (state) => state.setWorkingDocument
+  );
   const autosaveStatus = useAgentFlowEditorStore(selectAutosaveStatus);
   const versions = useAgentFlowEditorStore(selectVersions);
   const draftMeta = useAgentFlowEditorStore((state) => state.draftMeta);
@@ -187,15 +195,23 @@ export function AgentFlowCanvasFrame({
   const [systemVariablesOpen, setSystemVariablesOpen] = useState(false);
   const [environmentVariablesOpen, setEnvironmentVariablesOpen] =
     useState(false);
+  const [conversationVariablesOpen, setConversationVariablesOpen] =
+    useState(false);
   const [systemVariablesDockWidth, setSystemVariablesDockWidth] = useState(
     SYSTEM_VARIABLES_DOCK_WIDTH
   );
   const [environmentVariablesDockWidth, setEnvironmentVariablesDockWidth] =
     useState(ENVIRONMENT_VARIABLES_DOCK_WIDTH);
+  const [conversationVariablesDockWidth, setConversationVariablesDockWidth] =
+    useState(ENVIRONMENT_VARIABLES_DOCK_WIDTH);
   const [historyDockWidth, setHistoryDockWidth] = useState(HISTORY_DOCK_WIDTH);
   const [environmentVariables, setEnvironmentVariables] = useState<
     AgentFlowEnvironmentVariable[]
   >(initialEnvironmentVariables);
+  const conversationVariables = useMemo(
+    () => listConversationVariables(workingDocument),
+    [workingDocument]
+  );
   const [selectedVariable, setSelectedVariable] =
     useState<SelectedVariableInfo | null>(null);
   const [variableCacheHeight, setVariableCacheHeight] = useState(
@@ -229,10 +245,14 @@ export function AgentFlowCanvasFrame({
         applicationEnvironmentVariablesQueryKey(applicationId),
         nextVariables
       );
-      message.success(i18nText("agentFlow", "auto.environment_variables_saved"));
+      message.success(
+        i18nText('agentFlow', 'auto.environment_variables_saved')
+      );
     },
     onError() {
-      message.error(i18nText("agentFlow", "auto.failed_save_environment_variables"));
+      message.error(
+        i18nText('agentFlow', 'auto.failed_save_environment_variables')
+      );
     }
   });
   const publishMutation = useMutation({
@@ -251,10 +271,10 @@ export function AgentFlowCanvasFrame({
       void queryClient.invalidateQueries({
         queryKey: applicationDetailQueryKey(applicationId)
       });
-      message.success(i18nText("agentFlow", "auto.posted_successfully"));
+      message.success(i18nText('agentFlow', 'auto.posted_successfully'));
     },
     onError() {
-      message.error(i18nText("agentFlow", "auto.publishing_failed"));
+      message.error(i18nText('agentFlow', 'auto.publishing_failed'));
     }
   });
   const versionMetadataMutation = useMutation({
@@ -274,10 +294,12 @@ export function AgentFlowCanvasFrame({
     onSuccess(nextState) {
       syncSavedServerState(nextState);
       queryClient.setQueryData(orchestrationQueryKey(applicationId), nextState);
-      message.success(i18nText("agentFlow", "auto.historical_version_updated"));
+      message.success(i18nText('agentFlow', 'auto.historical_version_updated'));
     },
     onError() {
-      message.error(i18nText("agentFlow", "auto.historical_version_update_failed"));
+      message.error(
+        i18nText('agentFlow', 'auto.historical_version_update_failed')
+      );
     }
   });
 
@@ -381,7 +403,7 @@ export function AgentFlowCanvasFrame({
       message.error(
         error instanceof Error && error.message
           ? error.message
-          : i18nText("agentFlow", "auto.debug_run_failed")
+          : i18nText('agentFlow', 'auto.debug_run_failed')
       );
     }
   });
@@ -483,12 +505,20 @@ export function AgentFlowCanvasFrame({
   }, [conversationLogMessage]);
 
   useEffect(() => {
-    if (systemVariablesOpen || environmentVariablesOpen) {
+    if (
+      systemVariablesOpen ||
+      environmentVariablesOpen ||
+      conversationVariablesOpen
+    ) {
       return;
     }
 
     stopVariablesDockResizeRef.current?.();
-  }, [environmentVariablesOpen, systemVariablesOpen]);
+  }, [
+    conversationVariablesOpen,
+    environmentVariablesOpen,
+    systemVariablesOpen
+  ]);
 
   useEffect(() => {
     if (historyOpen) {
@@ -542,16 +572,21 @@ export function AgentFlowCanvasFrame({
     Math.max(conversationLogWidth, CONVERSATION_LOG_MIN_WIDTH),
     maxConversationLogWidth
   );
-  const variablesDockOpen = systemVariablesOpen || environmentVariablesOpen;
+  const variablesDockOpen =
+    systemVariablesOpen ||
+    environmentVariablesOpen ||
+    conversationVariablesOpen;
   const maxVariablesDockWidth = Math.max(
     canvasFrameWidth -
       (selectedNodeId ? nodeDetailWidth : 0) -
       NODE_DETAIL_MIN_CANVAS_WIDTH,
     VARIABLES_DOCK_MIN_WIDTH
   );
-  const rawVariablesDockWidth = environmentVariablesOpen
-    ? environmentVariablesDockWidth
-    : systemVariablesDockWidth;
+  const rawVariablesDockWidth = conversationVariablesOpen
+    ? conversationVariablesDockWidth
+    : environmentVariablesOpen
+      ? environmentVariablesDockWidth
+      : systemVariablesDockWidth;
   const boundedVariablesDockWidth = Math.min(
     Math.max(rawVariablesDockWidth, VARIABLES_DOCK_MIN_WIDTH),
     maxVariablesDockWidth
@@ -737,7 +772,9 @@ export function AgentFlowCanvasFrame({
         )
       );
 
-      if (environmentVariablesOpen) {
+      if (conversationVariablesOpen) {
+        setConversationVariablesDockWidth(nextWidth);
+      } else if (environmentVariablesOpen) {
         setEnvironmentVariablesDockWidth(nextWidth);
       } else {
         setSystemVariablesDockWidth(nextWidth);
@@ -852,7 +889,7 @@ export function AgentFlowCanvasFrame({
   function handleResetVariableCache() {
     debugSession.resetVariableCache();
     setSelectedVariable(null);
-    message.success(i18nText("agentFlow", "auto.variable_cache_reset"));
+    message.success(i18nText('agentFlow', 'auto.variable_cache_reset'));
   }
 
   function handleVariableCacheValueChange(key: string, value: unknown) {
@@ -996,6 +1033,7 @@ export function AgentFlowCanvasFrame({
   function openDebugConsole() {
     setEnvironmentVariablesOpen(false);
     setSystemVariablesOpen(false);
+    setConversationVariablesOpen(false);
     setPanelState({
       debugConsoleOpen: true,
       debugConsoleWidth: debugConsoleWidth || DEBUG_CONSOLE_DEFAULT_WIDTH,
@@ -1007,19 +1045,30 @@ export function AgentFlowCanvasFrame({
     setConversationLogMessageId(null);
     setPanelState({ debugConsoleOpen: false, historyOpen: false });
     setSystemVariablesOpen(false);
+    setConversationVariablesOpen(false);
     setEnvironmentVariablesOpen(true);
+  }
+
+  function openConversationVariables() {
+    setConversationLogMessageId(null);
+    setPanelState({ debugConsoleOpen: false, historyOpen: false });
+    setSystemVariablesOpen(false);
+    setEnvironmentVariablesOpen(false);
+    setConversationVariablesOpen(true);
   }
 
   function openSystemVariables() {
     setConversationLogMessageId(null);
     setPanelState({ debugConsoleOpen: false, historyOpen: false });
     setEnvironmentVariablesOpen(false);
+    setConversationVariablesOpen(false);
     setSystemVariablesOpen(true);
   }
 
   function openHistory() {
     setEnvironmentVariablesOpen(false);
     setSystemVariablesOpen(false);
+    setConversationVariablesOpen(false);
     setConversationLogMessageId(null);
     setPanelState({ debugConsoleOpen: false, historyOpen: true });
   }
@@ -1036,7 +1085,11 @@ export function AgentFlowCanvasFrame({
     >
       <AgentFlowOverlay
         applicationName={applicationName}
-        autosaveLabel={i18nText("agentFlow", "auto.automatically_save_seconds", { value1: Math.round(autosaveIntervalMs / 1000) })}
+        autosaveLabel={i18nText(
+          'agentFlow',
+          'auto.automatically_save_seconds',
+          { value1: Math.round(autosaveIntervalMs / 1000) }
+        )}
         autosaveStatus={autosaveStatus}
         onSaveDraft={() => {
           void draftSync.saveNow();
@@ -1046,6 +1099,7 @@ export function AgentFlowCanvasFrame({
         onOpenDebugConsole={openDebugConsole}
         onOpenIssues={() => setPanelState({ issuesOpen: true })}
         onOpenHistory={openHistory}
+        onOpenConversationVariables={openConversationVariables}
         onOpenEnvironmentVariables={openEnvironmentVariables}
         onOpenSystemVariables={openSystemVariables}
         onOpenPublish={() => publishMutation.mutate()}
@@ -1054,9 +1108,11 @@ export function AgentFlowCanvasFrame({
       />
       {activeContainerId ? (
         <div className="agent-flow-editor__breadcrumb">
-          <Button onClick={navigation.returnToRoot}>{i18nText("agentFlow", "auto.return_main_canvas")}</Button>
+          <Button onClick={navigation.returnToRoot}>
+            {i18nText('agentFlow', 'auto.return_main_canvas')}
+          </Button>
           <Typography.Text type="secondary">
-            {i18nText("agentFlow", "auto.currently_located_container_node")}{' '}
+            {i18nText('agentFlow', 'auto.currently_located_container_node')}{' '}
             {
               workingDocument.graph.nodes.find(
                 (node) => node.id === activeContainerId
@@ -1088,14 +1144,25 @@ export function AgentFlowCanvasFrame({
           style={{ left: variableCacheCenterLeft }}
           onClick={() => setVariableCacheOpen(true)}
         >
-          {i18nText("agentFlow", "auto.view_cache")}</Button>
+          {i18nText('agentFlow', 'auto.view_cache')}
+        </Button>
         {variablesDockOpen ? (
           <AgentFlowSideDock
             className="agent-flow-editor__variables-dock"
             data-testid="agent-flow-editor-variables-dock"
             isResizing={isResizingVariablesDock}
             resizeLabel={
-              environmentVariablesOpen ? i18nText("agentFlow", "auto.adjust_environment_variable_width") : i18nText("agentFlow", "auto.adjust_system_variable_width")
+              conversationVariablesOpen
+                ? i18nText(
+                    'agentFlow',
+                    'auto.adjust_conversation_variable_width'
+                  )
+                : environmentVariablesOpen
+                  ? i18nText(
+                      'agentFlow',
+                      'auto.adjust_environment_variable_width'
+                    )
+                  : i18nText('agentFlow', 'auto.adjust_system_variable_width')
             }
             width={boundedVariablesDockWidth}
             onResizeStart={handleVariablesDockResizeStart}
@@ -1103,6 +1170,19 @@ export function AgentFlowCanvasFrame({
             {systemVariablesOpen ? (
               <SystemVariablesPanel
                 onClose={() => setSystemVariablesOpen(false)}
+              />
+            ) : conversationVariablesOpen ? (
+              <ConversationVariablesPanel
+                variables={conversationVariables}
+                onClose={() => setConversationVariablesOpen(false)}
+                onSave={(nextVariables) => {
+                  setWorkingDocument((currentDocument) =>
+                    replaceConversationVariables(currentDocument, nextVariables)
+                  );
+                  message.success(
+                    i18nText('agentFlow', 'auto.conversation_variables_saved')
+                  );
+                }}
               />
             ) : (
               <ApplicationEnvironmentVariablesPanel
@@ -1130,7 +1210,10 @@ export function AgentFlowCanvasFrame({
             }}
           >
             <div
-              aria-label={i18nText("agentFlow", "auto.adjust_node_detail_width")}
+              aria-label={i18nText(
+                'agentFlow',
+                'auto.adjust_node_detail_width'
+              )}
               aria-orientation="vertical"
               className="agent-flow-editor__detail-resize-handle"
               onMouseDown={handleNodeDetailResizeStart}
@@ -1176,7 +1259,10 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__conversation-log-dock"
             data-testid="agent-flow-editor-conversation-log-dock"
             isResizing={isResizingConversationLog}
-            resizeLabel={i18nText("agentFlow", "auto.adjust_conversation_log_width")}
+            resizeLabel={i18nText(
+              'agentFlow',
+              'auto.adjust_conversation_log_width'
+            )}
             style={{
               right: `${16 + boundedDebugConsoleWidth + DEBUG_CONSOLE_GAP}px`
             }}
@@ -1197,7 +1283,7 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__debug-console-dock"
             data-testid="agent-flow-editor-debug-console-dock"
             isResizing={isResizingDebugConsole}
-            resizeLabel={i18nText("agentFlow", "auto.adjust_preview_width")}
+            resizeLabel={i18nText('agentFlow', 'auto.adjust_preview_width')}
             width={boundedDebugConsoleWidth}
             onResizeStart={handleDebugConsoleResizeStart}
           >
@@ -1235,7 +1321,10 @@ export function AgentFlowCanvasFrame({
             className="agent-flow-editor__history-dock"
             data-testid="agent-flow-editor-history-dock"
             isResizing={isResizingHistoryDock}
-            resizeLabel={i18nText("agentFlow", "auto.adjust_historical_version_width")}
+            resizeLabel={i18nText(
+              'agentFlow',
+              'auto.adjust_historical_version_width'
+            )}
             width={boundedHistoryDockWidth}
             onResizeStart={handleHistoryDockResizeStart}
           >
@@ -1258,7 +1347,11 @@ export function AgentFlowCanvasFrame({
       </div>
       {issues.some((issue) => issue.scope === 'global') ? (
         <Typography.Text type="danger">
-          {i18nText("agentFlow", "auto.global_issues_draft_check_issues_panel_first_deal")}</Typography.Text>
+          {i18nText(
+            'agentFlow',
+            'auto.global_issues_draft_check_issues_panel_first_deal'
+          )}
+        </Typography.Text>
       ) : null}
       <NodePreviewVariablesModal
         confirmLoading={nodePreviewMutation.isPending}

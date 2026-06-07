@@ -23,6 +23,9 @@ pub(super) fn template_output_payload(
         if let Some(env) = variable_pool.get("env") {
             payload.insert("env".to_string(), env.clone());
         }
+        if let Some(conversation) = variable_pool.get("conversation") {
+            payload.insert("conversation".to_string(), conversation.clone());
+        }
     }
 
     Value::Object(payload)

@@ -5,9 +5,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { NodePickerPopover } from '../components/node-picker/NodePickerPopover';
-import {
-  calculateNodePickerMaxHeight
-} from '../components/node-picker/node-picker-layout';
+import { calculateNodePickerMaxHeight } from '../components/node-picker/node-picker-layout';
 import {
   BUILTIN_NODE_PICKER_OPTIONS,
   type NodePickerOption
@@ -113,11 +111,8 @@ describe('NodePickerPopover', () => {
       screen.getByRole('menuitem', { name: /Knowledge Retrieval/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitem', { name: /Environment Variable Update/i })
+      screen.getByRole('menuitem', { name: /变量赋值/i })
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('menuitem', { name: /Variable Assigner/i })
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('menuitem', { name: /Parameter Extractor/i })
     ).not.toBeInTheDocument();
@@ -150,7 +145,9 @@ describe('NodePickerPopover', () => {
       screen.getByRole('menuitem', { name: /HTTP Request/i })
     ).toBeInTheDocument();
     expect(screen.getByText('外部能力')).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /LLM/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /LLM/i })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('模型与生成')).not.toBeInTheDocument();
   });
 
@@ -201,7 +198,9 @@ describe('NodePickerPopover', () => {
     expect(
       screen.getByRole('menuitem', { name: /OpenAI Prompt/i })
     ).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /LLM/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /LLM/i })
+    ).not.toBeInTheDocument();
   });
 
   test('lets mousedown bubble so the surrounding handle can start a connection drag', () => {
@@ -239,9 +238,7 @@ describe('NodePickerPopover', () => {
       </div>
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: '在 LLM 后新增节点' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: '在 LLM 后新增节点' }));
 
     expect(handleClick).not.toHaveBeenCalled();
   });

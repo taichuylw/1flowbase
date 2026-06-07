@@ -1,42 +1,48 @@
 import { Button, Input, InputNumber, Select, Switch } from 'antd';
 
 import type { FlowSelectorOption } from '../../lib/selector-options';
-import type { AgentFlowEnvironmentVariable } from '../../lib/variables/application-environment-variables';
+import type { AgentFlowConversationVariable } from '../../lib/variables/conversation-variables';
+import {
+  conversationVariableNodeId,
+  formatConversationVariableTitle
+} from '../../lib/variables/conversation-variables';
 import { createTemplateSelectorToken } from '../../lib/template-binding';
 import { TemplatedTextField } from './TemplatedTextField';
 import { i18nText } from '../../../../shared/i18n/text';
 
-export type EnvironmentVariableUpdateExpression =
+export type VariableAssignmentExpression =
   | { kind: 'selector'; selector: string[] }
   | { kind: 'constant'; value: unknown }
   | { kind: 'templated_text'; value: string };
 
-export interface EnvironmentVariableUpdateValue {
+export interface VariableAssignmentValue {
   path: string[];
   operator: 'set' | 'append' | 'clear' | 'increment';
   source?: string[] | null;
-  value?: EnvironmentVariableUpdateExpression | null;
+  value?: VariableAssignmentExpression | null;
 }
 
-interface EnvironmentVariableUpdateFieldProps {
+interface VariableAssignmentFieldProps {
   ariaLabel: string;
-  value: EnvironmentVariableUpdateValue[];
-  environmentVariables: AgentFlowEnvironmentVariable[];
+  value: VariableAssignmentValue[];
+  conversationVariables: AgentFlowConversationVariable[];
   selectorOptions: FlowSelectorOption[];
-  onChange: (value: EnvironmentVariableUpdateValue[]) => void;
+  onChange: (value: VariableAssignmentValue[]) => void;
 }
 
-function getTargetName(entry: EnvironmentVariableUpdateValue) {
-  return entry.path[0] === 'env' ? entry.path[1] ?? '' : '';
+function getTargetName(entry: VariableAssignmentValue) {
+  return entry.path[0] === conversationVariableNodeId
+    ? (entry.path[1] ?? '')
+    : '';
 }
 
-function findEnvironmentVariable(
-  environmentVariables: AgentFlowEnvironmentVariable[],
-  entry: EnvironmentVariableUpdateValue
+function findConversationVariable(
+  conversationVariables: AgentFlowConversationVariable[],
+  entry: VariableAssignmentValue
 ) {
   const targetName = getTargetName(entry);
 
-  return environmentVariables.find((variable) => variable.name === targetName);
+  return conversationVariables.find((variable) => variable.name === targetName);
 }
 
 function isNumberValueType(valueType: string) {
@@ -52,28 +58,28 @@ function isStringValueType(valueType: string) {
 }
 
 function createDefaultValueExpression(
-  variable: AgentFlowEnvironmentVariable | undefined
-): EnvironmentVariableUpdateExpression | null {
+  variable: AgentFlowConversationVariable | undefined
+): VariableAssignmentExpression | null {
   if (!variable) {
     return null;
   }
 
-  if (isStringValueType(variable.value_type)) {
+  if (isStringValueType(variable.valueType)) {
     return { kind: 'templated_text', value: '' };
   }
 
-  if (isNumberValueType(variable.value_type)) {
+  if (isNumberValueType(variable.valueType)) {
     return { kind: 'constant', value: 0 };
   }
 
-  if (isBooleanValueType(variable.value_type)) {
+  if (isBooleanValueType(variable.valueType)) {
     return { kind: 'constant', value: false };
   }
 
   return null;
 }
 
-function getTemplatedTextValue(entry: EnvironmentVariableUpdateValue) {
+function getTemplatedTextValue(entry: VariableAssignmentValue) {
   if (entry.value?.kind === 'templated_text') {
     return entry.value.value;
   }
@@ -91,37 +97,35 @@ function getTemplatedTextValue(entry: EnvironmentVariableUpdateValue) {
   return entry.source ? createTemplateSelectorToken(entry.source) : '';
 }
 
-function getNumberValue(entry: EnvironmentVariableUpdateValue) {
+function getNumberValue(entry: VariableAssignmentValue) {
   return entry.value?.kind === 'constant' &&
     typeof entry.value.value === 'number'
     ? entry.value.value
     : null;
 }
 
-function getBooleanValue(entry: EnvironmentVariableUpdateValue) {
+function getBooleanValue(entry: VariableAssignmentValue) {
   return entry.value?.kind === 'constant' &&
     typeof entry.value.value === 'boolean'
     ? entry.value.value
     : false;
 }
 
-export function EnvironmentVariableUpdateField({
+export function VariableAssignmentField({
   ariaLabel,
   value,
-  environmentVariables,
+  conversationVariables,
   selectorOptions,
   onChange
-}: EnvironmentVariableUpdateFieldProps) {
-  const targetOptions = environmentVariables.map((variable) => ({
-    label: `env.${variable.name}`,
+}: VariableAssignmentFieldProps) {
+  const targetOptions = conversationVariables.map((variable) => ({
+    label: formatConversationVariableTitle(variable.name),
     value: variable.name
   }));
 
   function updateEntry(
     index: number,
-    updater: (
-      entry: EnvironmentVariableUpdateValue
-    ) => EnvironmentVariableUpdateValue
+    updater: (entry: VariableAssignmentValue) => VariableAssignmentValue
   ) {
     onChange(
       value.map((item, itemIndex) =>
@@ -130,11 +134,8 @@ export function EnvironmentVariableUpdateField({
     );
   }
 
-  function renderValueEditor(
-    entry: EnvironmentVariableUpdateValue,
-    index: number
-  ) {
-    const variable = findEnvironmentVariable(environmentVariables, entry);
+  function renderValueEditor(entry: VariableAssignmentValue, index: number) {
+    const variable = findConversationVariable(conversationVariables, entry);
 
     if (!variable) {
       return (
@@ -142,21 +143,24 @@ export function EnvironmentVariableUpdateField({
           aria-label={`${ariaLabel}-${index}-value`}
           disabled
           value=""
-          placeholder={i18nText("agentFlow", "auto.select_environment_variable")}
+          placeholder={i18nText(
+            'agentFlow',
+            'auto.select_conversation_variable'
+          )}
         />
       );
     }
 
-    if (isStringValueType(variable.value_type)) {
+    if (isStringValueType(variable.valueType)) {
       return (
         <TemplatedTextField
           ariaLabel={`${ariaLabel}-${index}-value`}
           displayMode="input"
-          label={`env.${variable.name}`}
+          label={formatConversationVariableTitle(variable.name)}
           options={selectorOptions}
           placeholder={i18nText(
-            "agentFlow",
-            "auto.support_text_variable_block_enter_left_curly_bracket_quick_reference"
+            'agentFlow',
+            'auto.support_text_variable_block_enter_left_curly_bracket_quick_reference'
           )}
           value={getTemplatedTextValue(entry)}
           onChange={(nextValue) =>
@@ -171,7 +175,7 @@ export function EnvironmentVariableUpdateField({
       );
     }
 
-    if (isNumberValueType(variable.value_type)) {
+    if (isNumberValueType(variable.valueType)) {
       return (
         <InputNumber
           aria-label={`${ariaLabel}-${index}-value`}
@@ -188,7 +192,7 @@ export function EnvironmentVariableUpdateField({
       );
     }
 
-    if (isBooleanValueType(variable.value_type)) {
+    if (isBooleanValueType(variable.valueType)) {
       return (
         <Switch
           aria-label={`${ariaLabel}-${index}-value`}
@@ -211,8 +215,8 @@ export function EnvironmentVariableUpdateField({
         disabled
         value=""
         placeholder={i18nText(
-          "agentFlow",
-          "auto.environment_variable_update_type_not_available"
+          'agentFlow',
+          'auto.conversation_variable_assignment_type_not_available'
         )}
       />
     );
@@ -223,28 +227,39 @@ export function EnvironmentVariableUpdateField({
       {value.map((entry, index) => (
         <div
           key={`${getTargetName(entry)}-${index}`}
-          className="agent-flow-environment-variable-update-row"
+          className="agent-flow-variable-assignment-row"
         >
           <Select
             aria-label={`${ariaLabel}-${index}-target`}
             options={targetOptions}
-            placeholder={i18nText("agentFlow", "auto.select_environment_variable")}
+            placeholder={i18nText(
+              'agentFlow',
+              'auto.select_conversation_variable'
+            )}
             value={getTargetName(entry) || undefined}
             onChange={(targetName) =>
               updateEntry(index, (item) => {
-                const variable = environmentVariables.find(
+                const variable = conversationVariables.find(
                   (candidate) => candidate.name === targetName
                 );
 
                 return {
                   ...item,
-                  path: ['env', targetName],
+                  path: [conversationVariableNodeId, targetName],
                   operator: 'set',
                   source: null,
                   value: createDefaultValueExpression(variable)
                 };
               })
             }
+          />
+          <Select
+            aria-label={`${ariaLabel}-${index}-operator`}
+            disabled
+            options={[
+              { label: i18nText('agentFlow', 'auto.overwrite'), value: 'set' }
+            ]}
+            value="set"
           />
           {renderValueEditor(entry, index)}
           <Button
@@ -254,7 +269,8 @@ export function EnvironmentVariableUpdateField({
               onChange(value.filter((_, itemIndex) => itemIndex !== index))
             }
           >
-            {i18nText("agentFlow", "auto.delete")}</Button>
+            {i18nText('agentFlow', 'auto.delete')}
+          </Button>
         </div>
       ))}
       <Button
@@ -263,7 +279,7 @@ export function EnvironmentVariableUpdateField({
           onChange([
             ...value,
             {
-              path: ['env', ''],
+              path: [conversationVariableNodeId, ''],
               operator: 'set',
               source: null,
               value: null
@@ -271,7 +287,8 @@ export function EnvironmentVariableUpdateField({
           ])
         }
       >
-        {i18nText("agentFlow", "auto.add_environment_variable_update")}</Button>
+        {i18nText('agentFlow', 'auto.add_variable_assignment')}
+      </Button>
     </div>
   );
 }

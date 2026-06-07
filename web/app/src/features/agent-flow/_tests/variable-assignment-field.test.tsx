@@ -1,17 +1,24 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
-import { EnvironmentVariableUpdateField } from '../components/bindings/EnvironmentVariableUpdateField';
+import { VariableAssignmentField } from '../components/bindings/VariableAssignmentField';
 import type { FlowSelectorOption } from '../lib/selector-options';
 
 vi.mock('../components/bindings/TemplatedTextField', () => ({
   TemplatedTextField: ({
     ariaLabel,
+    label,
     value
   }: {
     ariaLabel: string;
+    label: string;
     value: string;
-  }) => <input aria-label={ariaLabel} readOnly value={value} />
+  }) => (
+    <label>
+      {label}
+      <input aria-label={ariaLabel} readOnly value={value} />
+    </label>
+  )
 }));
 
 const selectorOptions: FlowSelectorOption[] = [
@@ -26,23 +33,22 @@ const selectorOptions: FlowSelectorOption[] = [
   }
 ];
 
-describe('EnvironmentVariableUpdateField', () => {
-  test('uses templated text value editing for string environment variables', () => {
+describe('VariableAssignmentField', () => {
+  test('uses templated text value editing for string conversation variables', () => {
     render(
-      <EnvironmentVariableUpdateField
-        ariaLabel="Environment Variable Update"
-        environmentVariables={[
+      <VariableAssignmentField
+        ariaLabel="变量赋值"
+        conversationVariables={[
           {
             name: 'ApiBaseUrl',
-            value_type: 'string',
-            value: '',
+            valueType: 'string',
             description: ''
           }
         ]}
         selectorOptions={selectorOptions}
         value={[
           {
-            path: ['env', 'ApiBaseUrl'],
+            path: ['conversation', 'ApiBaseUrl'],
             operator: 'set',
             value: {
               kind: 'templated_text',
@@ -54,11 +60,12 @@ describe('EnvironmentVariableUpdateField', () => {
       />
     );
 
+    expect(screen.getByLabelText('变量赋值-0-value')).toHaveValue(
+      'https://{{node-start.query}}/v1'
+    );
     expect(
-      screen.getByLabelText('Environment Variable Update-0-value')
-    ).toHaveValue('https://{{node-start.query}}/v1');
-    expect(
-      screen.queryByLabelText('Environment Variable Update-0-source')
-    ).not.toBeInTheDocument();
+      screen.getAllByText('conversation.ApiBaseUrl').length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText('env.ApiBaseUrl')).not.toBeInTheDocument();
   });
 });

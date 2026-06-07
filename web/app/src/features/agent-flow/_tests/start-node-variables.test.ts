@@ -241,7 +241,11 @@ describe('start node variables', () => {
       points: []
     });
 
-    expect(toCascaderSelectorOptions(listVisibleSelectorOptions(document, 'node-llm'))).toEqual(
+    expect(
+      toCascaderSelectorOptions(
+        listVisibleSelectorOptions(document, 'node-llm')
+      )
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           value: 'node-code',
@@ -346,14 +350,50 @@ describe('start node variables', () => {
     );
   });
 
-  test('exposes environment update node outputs from the selected variable type', () => {
+  test('exposes conversation variables to any node', () => {
+    const document = {
+      ...createDefaultAgentFlowDocument({ flowId: 'flow-1' }),
+      variables: {
+        conversation: [
+          {
+            name: 'ApiBaseUrl',
+            valueType: 'string',
+            description: '本轮会话 API 地址'
+          }
+        ]
+      }
+    } as ReturnType<typeof createDefaultAgentFlowDocument>;
+
+    document.graph.edges = document.graph.edges.filter(
+      (edge) => edge.target !== 'node-answer'
+    );
+
+    expect(
+      listVisibleSelectorOptions(document, 'node-answer').map((option) => ({
+        value: option.value,
+        label: option.displayLabel
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          value: ['conversation', 'ApiBaseUrl'],
+          label: 'conversation.ApiBaseUrl'
+        }
+      ])
+    );
+  });
+
+  test('exposes variable assignment node outputs from the selected variable type', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+    const variableNode = createNodeDocument(
+      'variable_assigner',
+      'node-env-update'
+    );
 
     variableNode.outputs = [
       {
         key: 'ApiBaseUrl',
-        title: 'env.ApiBaseUrl',
+        title: 'conversation.ApiBaseUrl',
         valueType: 'string'
       }
     ];
@@ -389,7 +429,7 @@ describe('start node variables', () => {
       expect.arrayContaining([
         {
           value: ['node-env-update', 'ApiBaseUrl'],
-          label: 'Environment Variable Update/env.ApiBaseUrl',
+          label: '变量赋值/conversation.ApiBaseUrl',
           valueType: 'string'
         }
       ])

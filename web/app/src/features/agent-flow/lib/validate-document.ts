@@ -53,6 +53,10 @@ import {
   environmentVariableNodeId,
   type AgentFlowEnvironmentVariable
 } from './variables/application-environment-variables';
+import {
+  conversationVariableNodeId,
+  listConversationVariables
+} from './variables/conversation-variables';
 import { systemVariableNodeId } from './variables/system-variables';
 import { i18nText } from '../../../shared/i18n/text';
 
@@ -128,6 +132,18 @@ function isMissingRequiredField(
     case 'if_else_branches':
       return ifElseBranchesMissingRequiredInput(binding.value.branches);
     case 'state_write':
+      if (node.type === 'variable_assigner') {
+        return (
+          binding.value.length === 0 ||
+          binding.value.some(
+            (entry) =>
+              entry.path.length < 2 ||
+              entry.path.some((segment) => segment.trim().length === 0) ||
+              !entry.value
+          )
+        );
+      }
+
       return (
         binding.value.length === 0 ||
         binding.value.some(
@@ -152,7 +168,9 @@ function conditionGroupHasCompleteRules(
         return conditionGroupHasCompleteRules(condition);
       }
 
-      return isConditionRule(condition) && conditionRuleHasRequiredInput(condition);
+      return (
+        isConditionRule(condition) && conditionRuleHasRequiredInput(condition)
+      );
     })
   );
 }
@@ -319,8 +337,48 @@ function pushFieldIssue(
 
 function isRuntimeSelectorSource(source: string) {
   return (
-    source === systemVariableNodeId || source === environmentVariableNodeId
+    source === systemVariableNodeId ||
+    source === environmentVariableNodeId ||
+    source === conversationVariableNodeId
   );
+}
+
+function validateVariableAssignmentOperations(
+  issues: AgentFlowIssue[],
+  node: FlowNodeDocument,
+  document: FlowAuthoringDocument
+) {
+  const binding = node.bindings.operations;
+
+  if (node.type !== 'variable_assigner' || binding?.kind !== 'state_write') {
+    return;
+  }
+
+  const conversationVariableNames = new Set(
+    listConversationVariables(document).map((variable) => variable.name)
+  );
+
+  for (const operation of binding.value) {
+    const [namespace, targetName] = operation.path;
+
+    if (
+      namespace !== conversationVariableNodeId ||
+      !targetName ||
+      !conversationVariableNames.has(targetName)
+    ) {
+      pushFieldIssue(
+        issues,
+        node,
+        'bindings.operations',
+        i18nText('agentFlow', 'auto.variable_assignment_target_invalid'),
+        i18nText(
+          'agentFlow',
+          'auto.variable_assignment_target_must_be_defined_conversation'
+        )
+      );
+      return;
+    }
+  }
 }
 
 function getAllowedPublicOutputKeysForNode(
@@ -473,11 +531,12 @@ function validateAnswerPresentationReferences(
       issues,
       answerNode,
       'bindings.answer_template',
-      i18nText("agentFlow", "auto.answer_repeated_reference_output_variable"),
-      i18nText("agentFlow", "auto.same_output_variable_referenced_answer_template", { value1: formatAnswerPresentationReference(
-        reference,
-        nodeById
-      ) })
+      i18nText('agentFlow', 'auto.answer_repeated_reference_output_variable'),
+      i18nText(
+        'agentFlow',
+        'auto.same_output_variable_referenced_answer_template',
+        { value1: formatAnswerPresentationReference(reference, nodeById) }
+      )
     );
   }
 
@@ -492,14 +551,18 @@ function validateAnswerPresentationReferences(
         issues,
         answerNode,
         'bindings.answer_template',
-        i18nText("agentFlow", "auto.answer_display_order_violates_execution_dependencies"),
-        i18nText("agentFlow", "auto.template_puts_front_former_depends_execution_result_latter_adjust_answer", { value1: formatAnswerPresentationReference(
-          current,
-          nodeById
-        ), value2: formatAnswerPresentationReference(
-          later,
-          nodeById
-        ) })
+        i18nText(
+          'agentFlow',
+          'auto.answer_display_order_violates_execution_dependencies'
+        ),
+        i18nText(
+          'agentFlow',
+          'auto.template_puts_front_former_depends_execution_result_latter_adjust_answer',
+          {
+            value1: formatAnswerPresentationReference(current, nodeById),
+            value2: formatAnswerPresentationReference(later, nodeById)
+          }
+        )
       );
       break;
     }
@@ -579,8 +642,8 @@ function pushCodeNamedBindingValueTypeIssue(
     issues,
     node,
     'bindings.named_bindings',
-    i18nText("agentFlow", "auto.variable_value_match_type"),
-    i18nText("agentFlow", "auto.variable_value_match_type")
+    i18nText('agentFlow', 'auto.variable_value_match_type'),
+    i18nText('agentFlow', 'auto.variable_value_match_type')
   );
 }
 
@@ -611,8 +674,8 @@ function validateCodeNamedBindings(
         issues,
         node,
         'bindings.named_bindings',
-        i18nText("agentFlow", "auto.code_input_variable_name_empty"),
-        i18nText("agentFlow", "auto.enter_variable_name")
+        i18nText('agentFlow', 'auto.code_input_variable_name_empty'),
+        i18nText('agentFlow', 'auto.enter_variable_name')
       );
       continue;
     }
@@ -622,8 +685,8 @@ function validateCodeNamedBindings(
         issues,
         node,
         'bindings.named_bindings',
-        i18nText("agentFlow", "auto.code_input_variable_name_format_invalid"),
-        i18nText("agentFlow", "auto.code_input_variable_name_format_message")
+        i18nText('agentFlow', 'auto.code_input_variable_name_format_invalid'),
+        i18nText('agentFlow', 'auto.code_input_variable_name_format_message')
       );
       continue;
     }
@@ -633,8 +696,8 @@ function validateCodeNamedBindings(
         issues,
         node,
         'bindings.named_bindings',
-        i18nText("agentFlow", "auto.code_input_variable_name_duplicate"),
-        i18nText("agentFlow", "auto.code_input_variable_name_duplicate_message")
+        i18nText('agentFlow', 'auto.code_input_variable_name_duplicate'),
+        i18nText('agentFlow', 'auto.code_input_variable_name_duplicate_message')
       );
       continue;
     }
@@ -711,8 +774,11 @@ export function validateDocument(
       nodeId: null,
       sectionKey: null,
       fieldKey: null,
-      title: i18nText("agentFlow", "auto.number_start_nodes_illegal"),
-      message: i18nText("agentFlow", "auto.each_draft_must_retain_exactly_one_start_node")
+      title: i18nText('agentFlow', 'auto.number_start_nodes_illegal'),
+      message: i18nText(
+        'agentFlow',
+        'auto.each_draft_must_retain_exactly_one_start_node'
+      )
     });
   }
 
@@ -724,8 +790,11 @@ export function validateDocument(
       nodeId: null,
       sectionKey: null,
       fieldKey: null,
-      title: i18nText("agentFlow", "auto.missing_answer_node"),
-      message: i18nText("agentFlow", "auto.first_version_agentflow_requires_least_one_answer_node_dialogue_output")
+      title: i18nText('agentFlow', 'auto.missing_answer_node'),
+      message: i18nText(
+        'agentFlow',
+        'auto.first_version_agentflow_requires_least_one_answer_node_dialogue_output'
+      )
     });
   }
 
@@ -751,7 +820,10 @@ export function validateDocument(
           sectionKey: 'policy',
           fieldKey: 'config.error_policy',
           title: i18nText('agentFlow', 'auto.branch_connection_invalid'),
-          message: i18nText('agentFlow', 'auto.branch_connection_invalid_message')
+          message: i18nText(
+            'agentFlow',
+            'auto.branch_connection_invalid_message'
+          )
         });
       }
 
@@ -768,8 +840,11 @@ export function validateDocument(
             nodeId: edge.source,
             sectionKey: 'inputs',
             fieldKey: 'bindings.branches',
-            title: i18nText("agentFlow", "auto.branch_connection_invalid"),
-            message: i18nText("agentFlow", "auto.branch_connection_invalid_message")
+            title: i18nText('agentFlow', 'auto.branch_connection_invalid'),
+            message: i18nText(
+              'agentFlow',
+              'auto.branch_connection_invalid_message'
+            )
           });
         }
       }
@@ -785,8 +860,11 @@ export function validateDocument(
         nodeId: edge.source,
         sectionKey: 'basics',
         fieldKey: null,
-        title: i18nText("agentFlow", "auto.node_connection_points_invalid_target"),
-        message: i18nText("agentFlow", "auto.connection_node_deleted_node")
+        title: i18nText(
+          'agentFlow',
+          'auto.node_connection_points_invalid_target'
+        ),
+        message: i18nText('agentFlow', 'auto.connection_node_deleted_node')
       });
     }
   }
@@ -811,8 +889,12 @@ export function validateDocument(
                 issues,
                 node,
                 field.key,
-                providerMissing ? i18nText("agentFlow", "auto.llm_missing_model_supplier") : i18nText("agentFlow", "auto.llm_missing_model"),
-                providerMissing ? i18nText("agentFlow", "auto.select_model_supplier_first") : i18nText("agentFlow", "auto.select_model_first")
+                providerMissing
+                  ? i18nText('agentFlow', 'auto.llm_missing_model_supplier')
+                  : i18nText('agentFlow', 'auto.llm_missing_model'),
+                providerMissing
+                  ? i18nText('agentFlow', 'auto.select_model_supplier_first')
+                  : i18nText('agentFlow', 'auto.select_model_first')
               );
               continue;
             }
@@ -821,8 +903,12 @@ export function validateDocument(
               issues,
               node,
               field.key,
-              i18nText("agentFlow", "auto.not_configured", { value1: field.label }),
-              i18nText("agentFlow", "auto.please_complete_first", { value1: field.label })
+              i18nText('agentFlow', 'auto.not_configured', {
+                value1: field.label
+              }),
+              i18nText('agentFlow', 'auto.please_complete_first', {
+                value1: field.label
+              })
             );
           }
         }
@@ -842,8 +928,8 @@ export function validateDocument(
             issues,
             node,
             'config.model_provider',
-            i18nText("agentFlow", "auto.llm_model_provider_unavailable"),
-            i18nText("agentFlow", "auto.model_provider_exist_ready_access"),
+            i18nText('agentFlow', 'auto.llm_model_provider_unavailable'),
+            i18nText('agentFlow', 'auto.model_provider_exist_ready_access'),
             'inputs'
           );
         } else if (model.length > 0) {
@@ -856,16 +942,22 @@ export function validateDocument(
               issues,
               node,
               'config.model_provider',
-              i18nText("agentFlow", "auto.llm_model_available"),
-              i18nText("agentFlow", "auto.model_belong_selected_supplier_s_list_active_models")
+              i18nText('agentFlow', 'auto.llm_model_available'),
+              i18nText(
+                'agentFlow',
+                'auto.model_belong_selected_supplier_s_list_active_models'
+              )
             );
           } else if (matchingModelGroups.length > 1) {
             pushFieldIssue(
               issues,
               node,
               'config.model_provider',
-              i18nText("agentFlow", "auto.llm_model_analysis_unique"),
-              i18nText("agentFlow", "auto.multiple_master_instances_supplier_provide_same_model_close_supplier_configuration")
+              i18nText('agentFlow', 'auto.llm_model_analysis_unique'),
+              i18nText(
+                'agentFlow',
+                'auto.multiple_master_instances_supplier_provide_same_model_close_supplier_configuration'
+              )
             );
           }
         }
@@ -880,11 +972,18 @@ export function validateDocument(
         nodeId: node.id,
         sectionKey: 'basics',
         fieldKey: null,
-        title: i18nText("agentFlow", "auto.plugin_node_missing_contribution_identity"),
-        message:
-          i18nText("agentFlow", "auto.plugin_node_missing_plugin_id_plugin_version_contribution_code_node")
+        title: i18nText(
+          'agentFlow',
+          'auto.plugin_node_missing_contribution_identity'
+        ),
+        message: i18nText(
+          'agentFlow',
+          'auto.plugin_node_missing_plugin_id_plugin_version_contribution_code_node'
+        )
       });
     }
+
+    validateVariableAssignmentOperations(issues, node, document);
 
     if (node.type === 'answer') {
       validateAnswerPresentationReferences(
@@ -917,8 +1016,10 @@ export function validateDocument(
             issues,
             node,
             `bindings.${bindingKey}`,
-            i18nText("agentFlow", "auto.binding_reference_node_exist"),
-            i18nText("agentFlow", "auto.binding_refers_output_deleted_node", { value1: sourceNodeId })
+            i18nText('agentFlow', 'auto.binding_reference_node_exist'),
+            i18nText('agentFlow', 'auto.binding_refers_output_deleted_node', {
+              value1: sourceNodeId
+            })
           );
           continue;
         }
@@ -927,8 +1028,11 @@ export function validateDocument(
           issues,
           node,
           `bindings.${bindingKey}`,
-          i18nText("agentFlow", "auto.binding_reference_visible"),
-          i18nText("agentFlow", "auto.binding_refers_output_connected_upstream_link")
+          i18nText('agentFlow', 'auto.binding_reference_visible'),
+          i18nText(
+            'agentFlow',
+            'auto.binding_refers_output_connected_upstream_link'
+          )
         );
       }
     }
@@ -947,8 +1051,8 @@ export function validateDocument(
           issues,
           node,
           'config.language',
-          i18nText("agentFlow", "auto.unsupported_runtime_language"),
-          i18nText("agentFlow", "auto.version_supports_javascript")
+          i18nText('agentFlow', 'auto.unsupported_runtime_language'),
+          i18nText('agentFlow', 'auto.version_supports_javascript')
         );
       }
 
@@ -960,8 +1064,11 @@ export function validateDocument(
         issues,
         node,
         'config.output_contract',
-        i18nText("agentFlow", "auto.code_output_contract_empty"),
-        i18nText("agentFlow", "auto.code_node_needs_retain_least_one_output_variable_downstream_reference")
+        i18nText('agentFlow', 'auto.code_output_contract_empty'),
+        i18nText(
+          'agentFlow',
+          'auto.code_node_needs_retain_least_one_output_variable_downstream_reference'
+        )
       );
     }
 
@@ -974,8 +1081,8 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.output_variable_name_configured"),
-          i18nText("agentFlow", "auto.variable_names_output_contracts_empty")
+          i18nText('agentFlow', 'auto.output_variable_name_configured'),
+          i18nText('agentFlow', 'auto.variable_names_output_contracts_empty')
         );
         continue;
       }
@@ -985,8 +1092,11 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.duplicate_output_contract"),
-          i18nText("agentFlow", "auto.variable_names_output_contracts_must_unique")
+          i18nText('agentFlow', 'auto.duplicate_output_contract'),
+          i18nText(
+            'agentFlow',
+            'auto.variable_names_output_contracts_must_unique'
+          )
         );
         continue;
       }
@@ -1000,22 +1110,22 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.output_variable_names_reserved"),
-          i18nText("agentFlow", "auto.variable_names_output_contract_system_reserved_fields_use_business_field")
+          i18nText('agentFlow', 'auto.output_variable_names_reserved'),
+          i18nText(
+            'agentFlow',
+            'auto.variable_names_output_contract_system_reserved_fields_use_business_field'
+          )
         );
         continue;
       }
 
-      if (
-        node.type === 'code' &&
-        !isOutputVariableKeyAllowed(outputKey)
-      ) {
+      if (node.type === 'code' && !isOutputVariableKeyAllowed(outputKey)) {
         pushFieldIssue(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.output_variable_name_format_invalid"),
-          i18nText("agentFlow", "auto.output_variable_name_format_message")
+          i18nText('agentFlow', 'auto.output_variable_name_format_invalid'),
+          i18nText('agentFlow', 'auto.output_variable_name_format_message')
         );
       }
 
@@ -1024,8 +1134,11 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.output_variable_title_mismatch"),
-          i18nText("agentFlow", "auto.code_output_variable_title_must_match_name")
+          i18nText('agentFlow', 'auto.output_variable_title_mismatch'),
+          i18nText(
+            'agentFlow',
+            'auto.code_output_variable_title_must_match_name'
+          )
         );
       }
 
@@ -1034,8 +1147,11 @@ export function validateDocument(
           issues,
           node,
           'config.output_contract',
-          i18nText("agentFlow", "auto.output_variable_name_unknown"),
-          i18nText("agentFlow", "auto.variable_name_output_contract_belong_node_runtime_contract")
+          i18nText('agentFlow', 'auto.output_variable_name_unknown'),
+          i18nText(
+            'agentFlow',
+            'auto.variable_name_output_contract_belong_node_runtime_contract'
+          )
         );
       }
 
@@ -1066,8 +1182,10 @@ export function validateDocument(
         nodeId: node.id,
         sectionKey: 'basics',
         fieldKey: null,
-        title: i18nText("agentFlow", "auto.yet_connected_main_link", { value1: node.alias }),
-        message: i18nText("agentFlow", "auto.node_any_valid_incoming_edges")
+        title: i18nText('agentFlow', 'auto.yet_connected_main_link', {
+          value1: node.alias
+        }),
+        message: i18nText('agentFlow', 'auto.node_any_valid_incoming_edges')
       });
     }
   }

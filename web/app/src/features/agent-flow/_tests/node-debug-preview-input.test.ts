@@ -166,16 +166,19 @@ describe('node debug preview input', () => {
     });
   });
 
-  test('applies upstream environment variable update nodes to downstream preview input', () => {
+  test('applies upstream variable assignment nodes to downstream preview input', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+    const variableNode = createNodeDocument(
+      'variable_assigner',
+      'node-env-update'
+    );
 
     variableNode.bindings = {
       operations: {
         kind: 'state_write',
         value: [
           {
-            path: ['env', 'ApiBaseUrl'],
+            path: ['conversation', 'ApiBaseUrl'],
             operator: 'set',
             value: {
               kind: 'templated_text',
@@ -193,7 +196,7 @@ describe('node debug preview input', () => {
             bindings: {
               answer_template: {
                 kind: 'templated_text',
-                value: '{{env.ApiBaseUrl}}'
+                value: '{{conversation.ApiBaseUrl}}'
               }
             }
           }
@@ -223,7 +226,7 @@ describe('node debug preview input', () => {
 
     expect(
       buildNodeDebugPreviewPlan(document, 'node-answer', {
-        env: {
+        conversation: {
           ApiBaseUrl: 'https://old.example.com'
         },
         'node-start': {
@@ -232,7 +235,7 @@ describe('node debug preview input', () => {
       })
     ).toEqual({
       input_payload: {
-        env: {
+        conversation: {
           ApiBaseUrl: 'https://new.example.com/v1'
         }
       },
@@ -240,16 +243,19 @@ describe('node debug preview input', () => {
     });
   });
 
-  test('asks for templated values required by upstream environment variable updates', () => {
+  test('asks for templated values required by upstream variable assignments', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+    const variableNode = createNodeDocument(
+      'variable_assigner',
+      'node-env-update'
+    );
 
     variableNode.bindings = {
       operations: {
         kind: 'state_write',
         value: [
           {
-            path: ['env', 'ApiBaseUrl'],
+            path: ['conversation', 'ApiBaseUrl'],
             operator: 'set',
             value: {
               kind: 'templated_text',
@@ -267,7 +273,7 @@ describe('node debug preview input', () => {
             bindings: {
               answer_template: {
                 kind: 'templated_text',
-                value: '{{env.ApiBaseUrl}}'
+                value: '{{conversation.ApiBaseUrl}}'
               }
             }
           }
@@ -297,13 +303,13 @@ describe('node debug preview input', () => {
 
     expect(
       buildNodeDebugPreviewPlan(document, 'node-answer', {
-        env: {
+        conversation: {
           ApiBaseUrl: 'https://old.example.com'
         }
       })
     ).toEqual({
       input_payload: {
-        env: {
+        conversation: {
           ApiBaseUrl: 'https://old.example.com'
         }
       },

@@ -3,6 +3,7 @@ import {
   GlobalOutlined,
   HistoryOutlined,
   IssuesCloseOutlined,
+  MessageOutlined,
   PlayCircleOutlined,
   SaveOutlined
 } from '@ant-design/icons';
@@ -19,6 +20,7 @@ interface AgentFlowOverlayProps {
   onOpenDebugConsole: () => void;
   onOpenIssues: () => void;
   onOpenHistory: () => void;
+  onOpenConversationVariables: () => void;
   onOpenEnvironmentVariables: () => void;
   onOpenSystemVariables: () => void;
   onOpenPublish: () => void;
@@ -36,6 +38,7 @@ export function AgentFlowOverlay({
   onOpenDebugConsole,
   onOpenIssues,
   onOpenHistory,
+  onOpenConversationVariables,
   onOpenEnvironmentVariables,
   onOpenSystemVariables,
   onOpenPublish,
@@ -43,15 +46,15 @@ export function AgentFlowOverlay({
   publishDisabled
 }: AgentFlowOverlayProps) {
   const statusTag = {
-    idle: { color: 'default', label: i18nText("agentFlow", "auto.free") },
-    saving: { color: 'blue', label: i18nText("agentFlow", "auto.saving") },
-    saved: { color: 'green', label: i18nText("agentFlow", "auto.saved") },
-    error: { color: 'red', label: i18nText("agentFlow", "auto.save_failed") }
+    idle: { color: 'default', label: i18nText('agentFlow', 'auto.free') },
+    saving: { color: 'blue', label: i18nText('agentFlow', 'auto.saving') },
+    saved: { color: 'green', label: i18nText('agentFlow', 'auto.saved') },
+    error: { color: 'red', label: i18nText('agentFlow', 'auto.save_failed') }
   }[autosaveStatus];
 
   return (
     <div
-      aria-label={i18nText("agentFlow", "auto.agent_flow_action_bar")}
+      aria-label={i18nText('agentFlow', 'auto.agent_flow_action_bar')}
       className="agent-flow-editor__overlay"
       role="region"
     >
@@ -63,13 +66,14 @@ export function AgentFlowOverlay({
       </Space>
       <Space size="small">
         <Button
-          aria-label={i18nText("agentFlow", "auto.preview")}
+          aria-label={i18nText('agentFlow', 'auto.preview')}
           autoInsertSpace={false}
           icon={<PlayCircleOutlined />}
           onClick={onOpenDebugConsole}
-          title={i18nText("agentFlow", "auto.preview")}
+          title={i18nText('agentFlow', 'auto.preview')}
         >
-          {i18nText("agentFlow", "auto.preview")}</Button>
+          {i18nText('agentFlow', 'auto.preview')}
+        </Button>
         <Badge count={issueErrorCount} size="small">
           <Button
             aria-label="Issues"
@@ -79,22 +83,29 @@ export function AgentFlowOverlay({
           />
         </Badge>
         <Button
-          aria-label={i18nText("agentFlow", "auto.system_variables")}
+          aria-label={i18nText('agentFlow', 'auto.system_variables')}
           autoInsertSpace={false}
           icon={<GlobalOutlined />}
           onClick={onOpenSystemVariables}
-          title={i18nText("agentFlow", "auto.system_variables")}
+          title={i18nText('agentFlow', 'auto.system_variables')}
         />
         <Button
-          aria-label={i18nText("agentFlow", "auto.environment_variables")}
+          aria-label={i18nText('agentFlow', 'auto.environment_variables')}
           autoInsertSpace={false}
           icon={<CodeOutlined />}
           onClick={onOpenEnvironmentVariables}
-          title={i18nText("agentFlow", "auto.environment_variables")}
+          title={i18nText('agentFlow', 'auto.environment_variables')}
+        />
+        <Button
+          aria-label={i18nText('agentFlow', 'auto.conversation_variables')}
+          autoInsertSpace={false}
+          icon={<MessageOutlined />}
+          onClick={onOpenConversationVariables}
+          title={i18nText('agentFlow', 'auto.conversation_variables')}
         />
         <Tooltip title={autosaveLabel}>
           <Button
-            aria-label={i18nText("agentFlow", "auto.save")}
+            aria-label={i18nText('agentFlow', 'auto.save')}
             autoInsertSpace={false}
             disabled={saveDisabled}
             icon={<SaveOutlined />}
@@ -108,12 +119,13 @@ export function AgentFlowOverlay({
           disabled={publishDisabled}
           onClick={onOpenPublish}
         >
-          {i18nText("agentFlow", "auto.publish")}</Button>
+          {i18nText('agentFlow', 'auto.publish')}
+        </Button>
         <Button
-          aria-label={i18nText("agentFlow", "auto.historical_version")}
+          aria-label={i18nText('agentFlow', 'auto.historical_version')}
           icon={<HistoryOutlined />}
           onClick={onOpenHistory}
-          title={i18nText("agentFlow", "auto.historical_version")}
+          title={i18nText('agentFlow', 'auto.historical_version')}
         />
       </Space>
     </div>

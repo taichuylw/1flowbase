@@ -10,6 +10,11 @@ import {
   formatEnvironmentVariableTitle,
   type AgentFlowEnvironmentVariable
 } from './variables/application-environment-variables';
+import {
+  conversationVariableNodeId,
+  formatConversationVariableTitle,
+  listConversationVariables
+} from './variables/conversation-variables';
 import { outputHasLlmContextSchema } from './output-contract/schema';
 import { formatNodeVariableLabel } from './variables/variable-labels';
 import { i18nText } from '../../../shared/i18n/text';
@@ -31,7 +36,10 @@ interface CascaderSelectorOption {
   children?: CascaderSelectorOption[];
 }
 
-function outputSelectorValue(nodeId: string, output: { key: string; selector?: string[] }) {
+function outputSelectorValue(
+  nodeId: string,
+  output: { key: string; selector?: string[] }
+) {
   return [
     nodeId,
     ...(output.selector && output.selector.length > 0
@@ -75,7 +83,7 @@ export function listVisibleSelectorOptions(
   const visibleNodeIds = collectUpstreamNodeIds(document, nodeId);
   const systemOptions = agentFlowSystemVariables.map((variable) => ({
     nodeId: systemVariableNodeId,
-    nodeLabel: i18nText("agentFlow", "auto.system_variables"),
+    nodeLabel: i18nText('agentFlow', 'auto.system_variables'),
     outputKey: variable.key,
     outputLabel: variable.title,
     valueType: variable.valueType,
@@ -85,13 +93,24 @@ export function listVisibleSelectorOptions(
   }));
   const environmentOptions = environmentVariables.map((variable) => ({
     nodeId: environmentVariableNodeId,
-    nodeLabel: i18nText("agentFlow", "auto.environment_variables"),
+    nodeLabel: i18nText('agentFlow', 'auto.environment_variables'),
     outputKey: variable.name,
     outputLabel: formatEnvironmentVariableTitle(variable.name),
     valueType: variable.value_type,
     value: [environmentVariableNodeId, variable.name],
     displayLabel: formatEnvironmentVariableTitle(variable.name)
   }));
+  const conversationOptions = listConversationVariables(document).map(
+    (variable) => ({
+      nodeId: conversationVariableNodeId,
+      nodeLabel: i18nText('agentFlow', 'auto.conversation_variables'),
+      outputKey: variable.name,
+      outputLabel: formatConversationVariableTitle(variable.name),
+      valueType: variable.valueType,
+      value: [conversationVariableNodeId, variable.name],
+      displayLabel: formatConversationVariableTitle(variable.name)
+    })
+  );
 
   const nodeOptions = document.graph.nodes
     .filter((node) => visibleNodeIds.has(node.id))
@@ -113,7 +132,12 @@ export function listVisibleSelectorOptions(
       })
     );
 
-  return [...systemOptions, ...environmentOptions, ...nodeOptions];
+  return [
+    ...systemOptions,
+    ...environmentOptions,
+    ...conversationOptions,
+    ...nodeOptions
+  ];
 }
 
 export function listLlmContextSelectorOptions(
@@ -121,9 +145,11 @@ export function listLlmContextSelectorOptions(
   nodeId: string,
   environmentVariables: AgentFlowEnvironmentVariable[] = []
 ) {
-  return listVisibleSelectorOptions(document, nodeId, environmentVariables).filter(
-    (option) => outputHasLlmContextSchema(option)
-  );
+  return listVisibleSelectorOptions(
+    document,
+    nodeId,
+    environmentVariables
+  ).filter((option) => outputHasLlmContextSchema(option));
 }
 
 export function toCascaderSelectorOptions(options: FlowSelectorOption[]) {

@@ -652,9 +652,7 @@ describe('validateDocument', () => {
             sourceHandle: 'if',
             condition: {
               operator: 'and',
-              conditions: [
-                { kind: 'rule', left: [], comparator: 'exists' }
-              ]
+              conditions: [{ kind: 'rule', left: [], comparator: 'exists' }]
             }
           },
           {
@@ -1129,7 +1127,9 @@ describe('validateDocument', () => {
     const document = createCodeDocumentWithOutputs([
       { key: 'result', title: 'result', valueType: 'string' }
     ]);
-    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+    const codeNode = document.graph.nodes.find(
+      (node) => node.id === 'node-code'
+    );
 
     if (!codeNode) {
       throw new Error('expected code node');
@@ -1171,7 +1171,9 @@ describe('validateDocument', () => {
     const document = createCodeDocumentWithOutputs([
       { key: 'result', title: 'result', valueType: 'string' }
     ]);
-    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+    const codeNode = document.graph.nodes.find(
+      (node) => node.id === 'node-code'
+    );
 
     if (!codeNode) {
       throw new Error('expected code node');
@@ -1206,7 +1208,9 @@ describe('validateDocument', () => {
     const document = createCodeDocumentWithOutputs([
       { key: 'result', title: 'result', valueType: 'string' }
     ]);
-    const codeNode = document.graph.nodes.find((node) => node.id === 'node-code');
+    const codeNode = document.graph.nodes.find(
+      (node) => node.id === 'node-code'
+    );
 
     if (!codeNode) {
       throw new Error('expected code node');
@@ -1232,6 +1236,61 @@ describe('validateDocument', () => {
           nodeId: 'node-code',
           fieldKey: 'bindings.named_bindings',
           title: '变量值与类型不匹配'
+        })
+      ])
+    );
+  });
+
+  test('requires variable assignment targets to be defined conversation variables', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const variableNode = createNodeDocument(
+      'variable_assigner',
+      'node-variable-assigner'
+    );
+
+    variableNode.bindings.operations = {
+      kind: 'state_write',
+      value: [
+        {
+          path: ['env', 'ApiBaseUrl'],
+          operator: 'set',
+          source: null,
+          value: { kind: 'constant', value: 'https://api.example.com' }
+        }
+      ]
+    };
+    document.graph.nodes.splice(1, 0, variableNode);
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-variable-assigner',
+          fieldKey: 'bindings.operations',
+          title: '变量赋值目标无效'
+        })
+      ])
+    );
+
+    document.variables = {
+      conversation: [
+        {
+          name: 'ApiBaseUrl',
+          valueType: 'string',
+          description: ''
+        }
+      ]
+    };
+    variableNode.bindings.operations.value[0].path = [
+      'conversation',
+      'ApiBaseUrl'
+    ];
+
+    expect(validateDocument(document)).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-variable-assigner',
+          fieldKey: 'bindings.operations',
+          title: '变量赋值目标无效'
         })
       ])
     );

@@ -432,6 +432,16 @@ export interface FlowAnnotationDocument {
   position: { x: number; y: number };
 }
 
+export interface FlowConversationVariableDocument {
+  name: string;
+  valueType: string;
+  description?: string;
+}
+
+export interface FlowVariableRegistryDocument {
+  conversation: FlowConversationVariableDocument[];
+}
+
 export interface FlowAuthoringDocument {
   schemaVersion: typeof FLOW_SCHEMA_VERSION;
   meta: {
@@ -444,6 +454,7 @@ export interface FlowAuthoringDocument {
     nodes: FlowNodeDocument[];
     edges: FlowEdgeDocument[];
   };
+  variables?: FlowVariableRegistryDocument;
   editor: {
     viewport: { x: number; y: number; zoom: number };
     annotations: FlowAnnotationDocument[];
@@ -573,6 +584,9 @@ export function createDefaultAgentFlowDocument({
           points: []
         }
       ]
+    },
+    variables: {
+      conversation: []
     },
     editor: {
       viewport: { x: 0, y: 0, zoom: 1 },

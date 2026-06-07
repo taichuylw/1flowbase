@@ -37,23 +37,21 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   condition_group: 'condition_group',
   if_else_branches: 'if_else_branches',
   state_write: 'state_write',
-  environment_variable_update: 'environment_variable_update',
+  variable_assignment: 'variable_assignment',
   output_contract_definition: 'output_contract_definition',
   start_input_fields: 'start_input_fields',
   start_model_list: 'start_model_list'
 };
 
-const CONTRACT_FIELD_RENDERER_ALLOWLIST = new Set(
-  [
-    ...Object.values(FIELD_RENDERER_BY_EDITOR),
-    'switch',
-    'environment_variable_update',
-    'http_request_endpoint',
-    'http_request_key_values',
-    'http_request_body',
-    'http_request_curl_import'
-  ]
-);
+const CONTRACT_FIELD_RENDERER_ALLOWLIST = new Set([
+  ...Object.values(FIELD_RENDERER_BY_EDITOR),
+  'switch',
+  'variable_assignment',
+  'http_request_endpoint',
+  'http_request_key_values',
+  'http_request_body',
+  'http_request_curl_import'
+]);
 
 function createFieldBlock(field: NodeDefinitionField): SchemaFieldBlock {
   const block: SchemaFieldBlock = {
@@ -141,16 +139,13 @@ function buildSharedOutputVariableBlocks(
     {
       kind: 'view',
       renderer: 'output_contract',
-      title: i18nText("agentFlow", "auto.output_variable"),
+      title: i18nText('agentFlow', 'auto.output_variable'),
       key: `${nodeType}-generated-outputs`
     }
   ];
 }
 
-function splitBlocksByPath(
-  sections: SchemaSectionBlock[],
-  paths: Set<string>
-) {
+function splitBlocksByPath(sections: SchemaSectionBlock[], paths: Set<string>) {
   const extractedBlocksByPath = new Map<string, SchemaFieldBlock>();
   const remainingSections = sections
     .map((section) => {
@@ -180,13 +175,13 @@ export function buildNodeDetailHeaderBlocks(): SchemaBlock[] {
       kind: 'field',
       renderer: 'header_alias',
       path: 'alias',
-      label: i18nText("agentFlow", "auto.node_alias")
+      label: i18nText('agentFlow', 'auto.node_alias')
     },
     {
       kind: 'field',
       renderer: 'header_description',
       path: 'description',
-      label: i18nText("agentFlow", "auto.node_introduction")
+      label: i18nText('agentFlow', 'auto.node_introduction')
     }
   ];
 }
@@ -275,7 +270,13 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
   const policyBlocks: SchemaBlock[] =
     nodeType === 'start'
       ? []
-      : [{ kind: 'view', renderer: 'policy_group', title: i18nText("agentFlow", "auto.strategy") }];
+      : [
+          {
+            kind: 'view',
+            renderer: 'policy_group',
+            title: i18nText('agentFlow', 'auto.strategy')
+          }
+        ];
 
   return [
     ...remainingSections,
@@ -290,15 +291,31 @@ export function buildCommonConfigBlocks(nodeType: FlowNodeType): SchemaBlock[] {
         ]
       : []),
     ...policyBlocks,
-    { kind: 'view', renderer: 'relations', title: i18nText("agentFlow", "auto.next_step") }
+    {
+      kind: 'view',
+      renderer: 'relations',
+      title: i18nText('agentFlow', 'auto.next_step')
+    }
   ];
 }
 
 export function buildCommonLastRunBlocks(): SchemaBlock[] {
   return [
-    { kind: 'view', renderer: 'runtime_summary', title: i18nText("agentFlow", "auto.running_summary") },
-    { kind: 'view', renderer: 'runtime_io', title: i18nText("agentFlow", "auto.run_input_output") },
-    { kind: 'view', renderer: 'runtime_metadata', title: i18nText("agentFlow", "auto.run_metadata") }
+    {
+      kind: 'view',
+      renderer: 'runtime_summary',
+      title: i18nText('agentFlow', 'auto.running_summary')
+    },
+    {
+      kind: 'view',
+      renderer: 'runtime_io',
+      title: i18nText('agentFlow', 'auto.run_input_output')
+    },
+    {
+      kind: 'view',
+      renderer: 'runtime_metadata',
+      title: i18nText('agentFlow', 'auto.run_metadata')
+    }
   ];
 }
 

@@ -107,9 +107,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.start_model_list).toBeTypeOf(
       'function'
     );
-    expect(
-      agentFlowRendererRegistry.fields.environment_variable_update
-    ).toBeTypeOf('function');
+    expect(agentFlowRendererRegistry.fields.variable_assignment).toBeTypeOf(
+      'function'
+    );
     expect(agentFlowRendererRegistry.fields.data_model_query).toBeTypeOf(
       'function'
     );
@@ -120,27 +120,39 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.views.relations).toBeTypeOf('function');
   });
 
-  test('uses a narrow environment variable update editor for Variable Assigner', () => {
+  test('uses a narrow variable assignment editor for Variable Assigner', () => {
     const configBlocks = buildCommonConfigBlocks('variable_assigner');
     const operationsField = findFieldBlock(configBlocks, 'bindings.operations');
     const contract = getBuiltinNodeRuntimeContract('variable_assigner');
 
-    expect(contract?.meta.title).toBe('Environment Variable Update');
-    expect(contract?.defaults.alias).toBe('Environment Variable Update');
+    expect(contract?.meta.title).toBe('变量赋值');
+    expect(contract?.defaults.alias).toBe('变量赋值');
     expect(contract?.defaults.outputs).toEqual([]);
     expect(operationsField).toEqual(
       expect.objectContaining({
         path: 'bindings.operations',
-        renderer: 'environment_variable_update'
+        renderer: 'variable_assignment'
       })
     );
   });
 
-  test('syncs Variable Assigner outputs from selected environment variables', () => {
+  test('syncs Variable Assigner outputs from selected conversation variables', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+    const variableNode = createNodeDocument(
+      'variable_assigner',
+      'node-env-update'
+    );
     const variableDocument = {
       ...document,
+      variables: {
+        conversation: [
+          {
+            name: 'ApiBaseUrl',
+            valueType: 'string',
+            description: ''
+          }
+        ]
+      },
       graph: {
         ...document.graph,
         nodes: [variableNode]
@@ -150,14 +162,7 @@ describe('agent-flow node schema registry', () => {
     const adapter = createAgentFlowNodeSchemaAdapter({
       document: variableDocument,
       nodeId: 'node-env-update',
-      environmentVariables: [
-        {
-          name: 'ApiBaseUrl',
-          value_type: 'string',
-          value: 'https://api.example.com',
-          description: ''
-        }
-      ],
+      conversationVariables: variableDocument.variables.conversation,
       setWorkingDocument,
       dispatch: vi.fn()
     });
@@ -166,7 +171,7 @@ describe('agent-flow node schema registry', () => {
       kind: 'state_write',
       value: [
         {
-          path: ['env', 'ApiBaseUrl'],
+          path: ['conversation', 'ApiBaseUrl'],
           operator: 'set',
           value: { kind: 'templated_text', value: '{{node-start.query}}' }
         }
@@ -183,7 +188,7 @@ describe('agent-flow node schema registry', () => {
     expect(nextNode.outputs).toEqual([
       {
         key: 'ApiBaseUrl',
-        title: 'env.ApiBaseUrl',
+        title: 'conversation.ApiBaseUrl',
         valueType: 'string'
       }
     ]);
@@ -780,9 +785,13 @@ describe('agent-flow node schema registry', () => {
     expect(serializedConfigBlocks).toContain('"path":"bindings.headers"');
     expect(serializedConfigBlocks).toContain('"path":"config.body_type"');
     expect(serializedConfigBlocks).toContain('"path":"config.verify_ssl"');
-    expect(serializedConfigBlocks).toContain('"path":"config.store_response_as_file"');
+    expect(serializedConfigBlocks).toContain(
+      '"path":"config.store_response_as_file"'
+    );
     expect(serializedConfigBlocks).toContain('"path":"config.timeout_ms"');
-    expect(serializedConfigBlocks).toContain('"path":"config.max_response_bytes"');
+    expect(serializedConfigBlocks).toContain(
+      '"path":"config.max_response_bytes"'
+    );
     expect(serializedConfigBlocks).toContain('"max":10485760');
     expect(serializedConfigBlocks).toContain(
       '"renderer":"http_request_endpoint"'
@@ -790,9 +799,7 @@ describe('agent-flow node schema registry', () => {
     expect(serializedConfigBlocks).toContain(
       '"renderer":"http_request_key_values"'
     );
-    expect(serializedConfigBlocks).toContain(
-      '"renderer":"http_request_body"'
-    );
+    expect(serializedConfigBlocks).toContain('"renderer":"http_request_body"');
     expect(serializedConfigBlocks).toContain(
       '"renderer":"http_request_curl_import"'
     );
@@ -801,24 +808,32 @@ describe('agent-flow node schema registry', () => {
     );
     expect(
       serializedConfigBlocks.indexOf('"renderer":"output_contract"')
-    ).toBeLessThan(serializedConfigBlocks.indexOf('"path":"config.timeout_ms"'));
-    expect(serializedConfigBlocks.indexOf('"path":"config.timeout_ms"')).toBeLessThan(
+    ).toBeLessThan(
+      serializedConfigBlocks.indexOf('"path":"config.timeout_ms"')
+    );
+    expect(
+      serializedConfigBlocks.indexOf('"path":"config.timeout_ms"')
+    ).toBeLessThan(
       serializedConfigBlocks.indexOf('"path":"config.max_response_bytes"')
     );
-    expect(serializedConfigBlocks.indexOf('"path":"config.max_response_bytes"')).toBeLessThan(
+    expect(
+      serializedConfigBlocks.indexOf('"path":"config.max_response_bytes"')
+    ).toBeLessThan(
       serializedConfigBlocks.indexOf('"path":"config.curl_import"')
     );
-    expect(serializedConfigBlocks.indexOf('"path":"config.curl_import"')).toBeLessThan(
+    expect(
+      serializedConfigBlocks.indexOf('"path":"config.curl_import"')
+    ).toBeLessThan(
       serializedConfigBlocks.indexOf('"path":"config.verify_ssl"')
     );
-    expect(serializedConfigBlocks.indexOf('"path":"config.verify_ssl"')).toBeLessThan(
+    expect(
+      serializedConfigBlocks.indexOf('"path":"config.verify_ssl"')
+    ).toBeLessThan(
       serializedConfigBlocks.indexOf('"path":"config.store_response_as_file"')
     );
     expect(
       serializedConfigBlocks.indexOf('"path":"config.store_response_as_file"')
-    ).toBeLessThan(
-      serializedConfigBlocks.indexOf('"renderer":"policy_group"')
-    );
+    ).toBeLessThan(serializedConfigBlocks.indexOf('"renderer":"policy_group"'));
   });
 
   test('Data Model Delete defaults to deleted_id and affected_count outputs', () => {

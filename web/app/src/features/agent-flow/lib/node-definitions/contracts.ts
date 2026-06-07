@@ -701,8 +701,8 @@ function createVariableAssignerContract(): NodeRuntimeUiContract {
 
   return createNodeRuntimeContract({
     type: 'variable_assigner',
-    title: 'Environment Variable Update',
-    description: i18nText("agentFlow", "auto.update_environment_variable_current_run"),
+    title: '变量赋值',
+    description: i18nText("agentFlow", "auto.assign_conversation_variable_current_run"),
     category: 'data',
     config: {},
     bindings: {
@@ -717,8 +717,8 @@ function createVariableAssignerContract(): NodeRuntimeUiContract {
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.operations',
-          title: i18nText("agentFlow", "auto.environment_variable_update"),
-          renderer: 'environment_variable_update',
+          title: i18nText("agentFlow", "auto.variable_alt"),
+          renderer: 'variable_assignment',
           valueType: 'array',
           required: true
         })

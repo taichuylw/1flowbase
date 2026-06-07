@@ -14,15 +14,15 @@ import type {
 import type { AgentFlowDataModelFieldOption } from '../api/data-model-options';
 import { ConditionGroupField } from '../components/bindings/ConditionGroupField';
 import { DataModelQueryField } from '../components/bindings/DataModelQueryField';
-import {
-  EnvironmentVariableUpdateField,
-  type EnvironmentVariableUpdateValue
-} from '../components/bindings/EnvironmentVariableUpdateField';
 import { IfElseBranchesField } from '../components/bindings/IfElseBranchesField';
 import { NamedBindingsField } from '../components/bindings/NamedBindingsField';
 import { SelectorField } from '../components/bindings/SelectorField';
 import { StateWriteField } from '../components/bindings/StateWriteField';
 import { TemplatedTextField } from '../components/bindings/TemplatedTextField';
+import {
+  VariableAssignmentField,
+  type VariableAssignmentValue
+} from '../components/bindings/VariableAssignmentField';
 import {
   TemplatedNamedBindingsField,
   type TemplatedNamedBindingValue
@@ -59,7 +59,7 @@ import {
   decodeSelectorValue,
   type FlowSelectorOption
 } from '../lib/selector-options';
-import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
+import type { AgentFlowConversationVariable } from '../lib/variables/conversation-variables';
 import { codeOutputSelector } from '../lib/output-contract/code-output';
 import { outputHasLlmContextSchema } from '../lib/output-contract/schema';
 import { createTemplateSelectorToken } from '../lib/template-binding';
@@ -113,9 +113,12 @@ function renderTextField({ adapter, block }: SchemaFieldRendererProps) {
 function renderNumberField({ adapter, block }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
   const usesMibDisplay = block.numberFormat === 'bytes_as_mib';
-  const numberValue = typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const numberValue =
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
   const displayValue =
-    usesMibDisplay && numberValue !== null ? numberValue / BYTES_PER_MIB : numberValue;
+    usesMibDisplay && numberValue !== null
+      ? numberValue / BYTES_PER_MIB
+      : numberValue;
   const displayMin =
     usesMibDisplay && typeof block.min === 'number'
       ? block.min / BYTES_PER_MIB
@@ -137,9 +140,7 @@ function renderNumberField({ adapter, block }: SchemaFieldRendererProps) {
       aria-label={block.label}
       className={[
         'agent-flow-editor__number-field',
-        isCompactNumberField
-          ? 'agent-flow-editor__number-field--compact'
-          : null
+        isCompactNumberField ? 'agent-flow-editor__number-field--compact' : null
       ]
         .filter(Boolean)
         .join(' ')}
@@ -308,7 +309,9 @@ function renderLlmContextPolicyField({
   const selectedSelector =
     contextPolicy.context_selector ?? contextOptions[0]?.value ?? [];
   const selectedValue =
-    selectedSelector.length > 0 ? encodeSelectorValue(selectedSelector) : undefined;
+    selectedSelector.length > 0
+      ? encodeSelectorValue(selectedSelector)
+      : undefined;
   const hasSelectedOption = contextOptions.some(
     (option) => encodeSelectorValue(option.value) === selectedValue
   );
@@ -401,17 +404,20 @@ function renderNamedBindingsField({
       | undefined) ?? [];
   const isDataModelPayload = block.path === 'bindings.payload';
   const nameOptions = isDataModelPayload
-    ? fields.reduce<Array<{ value: string; label: string }>>((options, field) => {
-        if (field.writable === false) {
-          return options;
-        }
+    ? fields.reduce<Array<{ value: string; label: string }>>(
+        (options, field) => {
+          if (field.writable === false) {
+            return options;
+          }
 
-        options.push({
-          value: field.code,
-          label: field.title || field.code
-        });
-        return options;
-      }, [])
+          options.push({
+            value: field.code,
+            label: field.title || field.code
+          });
+          return options;
+        },
+        []
+      )
     : undefined;
 
   return (
@@ -593,26 +599,26 @@ function renderStateWriteField({ adapter, block }: SchemaFieldRendererProps) {
   );
 }
 
-function renderEnvironmentVariableUpdateField({
+function renderVariableAssignmentField({
   adapter,
   block
 }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const binding = getBindingValue<EnvironmentVariableUpdateValue[]>(
+  const binding = getBindingValue<VariableAssignmentValue[]>(
     value,
     'state_write',
     []
   );
-  const environmentVariables =
-    (adapter.getDerived('environmentVariables') as
-      | AgentFlowEnvironmentVariable[]
+  const conversationVariables =
+    (adapter.getDerived('conversationVariables') as
+      | AgentFlowConversationVariable[]
       | null
       | undefined) ?? [];
 
   return (
-    <EnvironmentVariableUpdateField
+    <VariableAssignmentField
       ariaLabel={block.label}
-      environmentVariables={environmentVariables}
+      conversationVariables={conversationVariables}
       selectorOptions={getSelectorOptions(adapter)}
       value={binding}
       onChange={(nextValue) =>
@@ -770,11 +776,17 @@ function renderHttpRequestBodyField({
       formDataValue={adapter.getValue('bindings.form_data')}
       options={getSelectorOptions(adapter)}
       urlencodedValue={adapter.getValue('bindings.urlencoded')}
-      onBinaryChange={(nextValue) => adapter.setValue('bindings.binary', nextValue)}
+      onBinaryChange={(nextValue) =>
+        adapter.setValue('bindings.binary', nextValue)
+      }
       onBodyChange={(nextValue) => adapter.setValue('bindings.body', nextValue)}
       onBodyTypeChange={(nextValue) => adapter.setValue(block.path, nextValue)}
-      onFormDataChange={(nextValue) => adapter.setValue('bindings.form_data', nextValue)}
-      onUrlencodedChange={(nextValue) => adapter.setValue('bindings.urlencoded', nextValue)}
+      onFormDataChange={(nextValue) =>
+        adapter.setValue('bindings.form_data', nextValue)
+      }
+      onUrlencodedChange={(nextValue) =>
+        adapter.setValue('bindings.urlencoded', nextValue)
+      }
     />
   );
 }
@@ -785,10 +797,18 @@ function renderHttpRequestCurlImportField({
   return (
     <HttpRequestCurlImportField
       onBodyChange={(nextValue) => adapter.setValue('bindings.body', nextValue)}
-      onBodyTypeChange={(nextValue) => adapter.setValue('config.body_type', nextValue)}
-      onHeadersChange={(nextValue) => adapter.setValue('bindings.headers', nextValue)}
-      onMethodChange={(nextValue) => adapter.setValue('config.method', nextValue)}
-      onParamsChange={(nextValue) => adapter.setValue('bindings.params', nextValue)}
+      onBodyTypeChange={(nextValue) =>
+        adapter.setValue('config.body_type', nextValue)
+      }
+      onHeadersChange={(nextValue) =>
+        adapter.setValue('bindings.headers', nextValue)
+      }
+      onMethodChange={(nextValue) =>
+        adapter.setValue('config.method', nextValue)
+      }
+      onParamsChange={(nextValue) =>
+        adapter.setValue('bindings.params', nextValue)
+      }
       onUrlChange={(nextValue) => adapter.setValue('config.url', nextValue)}
     />
   );
@@ -815,7 +835,7 @@ export const agentFlowFieldRenderers = {
   condition_group: renderConditionGroupField,
   if_else_branches: renderIfElseBranchesField,
   state_write: renderStateWriteField,
-  environment_variable_update: renderEnvironmentVariableUpdateField,
+  variable_assignment: renderVariableAssignmentField,
   output_contract_definition: renderOutputContractDefinitionField,
   start_input_fields: renderStartInputFieldsField,
   start_model_list: renderStartModelListField,
