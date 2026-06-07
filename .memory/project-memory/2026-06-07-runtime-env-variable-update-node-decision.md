@@ -16,4 +16,6 @@ source_issue: "#775"
 
 2026-06-07 22 已按反馈修正实现：`state_write` 环境变量更新使用 typed `value` 表达，`string` 使用 templated text，`number` / `boolean` 使用 constant，复杂 object / array 第一版禁用；节点输出按选中环境变量生成，不再固定 `env json`。
 
-实现前以 GitHub issue #775 为边界。若实现中发现必须修改后端持久化、历史流程迁移、权限审计或泛化变量系统，必须停止并回到 problem-framing。
+2026-06-07 22 用户进一步否定 env-only 方向，并确认重新拆分变量模型：`env.xxx` 是应用级初始固定环境变量，运行中只读；`conversation.xxx` 是单次运行 / 单次会话内可读写会话变量；`sys.xxx` 是系统只读变量。#775 已关闭，后续实现依据改为 #781「新增会话变量与变量赋值节点」。
+
+后续实现以 GitHub issue #781 为边界。若实现中发现必须新增持久化会话变量表、权限审计、跨运行状态存储，或需要重新允许变量赋值节点写 `env.xxx`，必须停止并回到 problem-framing。
