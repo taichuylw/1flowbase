@@ -143,10 +143,20 @@ export function NodePickerPopover({
       return document.body;
     }
 
+    const editorBody = triggerNode.closest<HTMLElement>(
+      '.agent-flow-editor__body'
+    );
+    const bottomControlBoundary = editorBody
+      ?.querySelector<HTMLElement>('.agent-flow-editor__variable-cache-trigger')
+      ?.getBoundingClientRect().bottom;
     const canvasRect = canvas.getBoundingClientRect();
     const triggerRect = triggerNode.getBoundingClientRect();
     const anchorY = placement === 'bottom' ? triggerRect.bottom : triggerRect.top;
-    const maxHeight = calculateNodePickerMaxHeight(canvasRect.bottom, anchorY);
+    const maxHeight = calculateNodePickerMaxHeight({
+      canvasBottom: canvasRect.bottom,
+      anchorY,
+      bottomBoundary: bottomControlBoundary
+    });
 
     canvas.style.setProperty(
       '--agent-flow-node-picker-max-height',
