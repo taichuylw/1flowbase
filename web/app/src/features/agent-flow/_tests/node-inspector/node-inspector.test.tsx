@@ -358,6 +358,34 @@ describe('NodeInspector core', () => {
     });
   }, 10000);
 
+  test('renders repeated HTTP Request sections without duplicate React keys', async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider
+        initialState={createInitialStateWithHttpRequestNode()}
+      >
+        <SelectionSeed nodeId="node-http-request" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(
+      await screen.findByRole('combobox', { name: '请求方法' })
+    ).toBeInTheDocument();
+    expect(
+      consoleErrorSpy.mock.calls
+        .flat()
+        .some((message) =>
+          String(message).includes('Encountered two children with the same key')
+        )
+    ).toBe(false);
+
+    consoleErrorSpy.mockRestore();
+  });
+
   test('keeps code output contract definition editable without rendering the shared output contract card', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider

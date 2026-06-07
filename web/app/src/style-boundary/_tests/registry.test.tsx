@@ -232,6 +232,32 @@ describe('style boundary registry', () => {
     ).toBeInTheDocument();
   }, 15000);
 
+  test('seeds settings catalog and shell release fetches without backend proxy fallback', async () => {
+    const scene = getRuntimeScene('page.settings');
+
+    render(
+      <AppProviders>
+        <StyleBoundaryHarness scene={scene} />
+      </AppProviders>
+    );
+
+    const catalogResponse = await fetch(
+      'http://127.0.0.1:7800/api/console/model-providers/catalog?locale=en_US'
+    );
+    const releaseResponse = await fetch(
+      'http://127.0.0.1:7800/api/console/system/release-status'
+    );
+    const catalogPayload = await catalogResponse.json();
+    const releasePayload = await releaseResponse.json();
+
+    expect(catalogPayload.data.entries.length).toBeGreaterThan(0);
+    expect(releasePayload.data).toMatchObject({
+      current_version: '0.1.0',
+      latest_version: '0.1.0',
+      has_update: false
+    });
+  });
+
   test('seeds model provider instances with enabled model ids instead of validation history', async () => {
     const scene = getRuntimeScene('page.settings');
 
