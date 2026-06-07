@@ -166,6 +166,77 @@ describe('node debug preview input', () => {
     });
   });
 
+  test('applies upstream environment variable update nodes to downstream preview input', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+
+    variableNode.bindings = {
+      operations: {
+        kind: 'state_write',
+        value: [
+          {
+            path: ['env', 'ApiBaseUrl'],
+            operator: 'set',
+            source: ['node-start', 'query']
+          }
+        ]
+      }
+    };
+
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-answer'
+        ? {
+            ...node,
+            bindings: {
+              answer_template: {
+                kind: 'templated_text',
+                value: '{{env.ApiBaseUrl}}'
+              }
+            }
+          }
+        : node
+    );
+    document.graph.nodes.splice(2, 0, variableNode);
+    document.graph.edges = [
+      {
+        id: 'edge-start-env-update',
+        source: 'node-start',
+        target: 'node-env-update',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      },
+      {
+        id: 'edge-env-update-answer',
+        source: 'node-env-update',
+        target: 'node-answer',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      }
+    ];
+
+    expect(
+      buildNodeDebugPreviewPlan(document, 'node-answer', {
+        env: {
+          ApiBaseUrl: 'https://old.example.com'
+        },
+        'node-start': {
+          query: 'https://new.example.com'
+        }
+      })
+    ).toEqual({
+      input_payload: {
+        env: {
+          ApiBaseUrl: 'https://new.example.com'
+        }
+      },
+      missing_fields: []
+    });
+  });
+
   test('reports missing node preview variables instead of using placeholders', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 

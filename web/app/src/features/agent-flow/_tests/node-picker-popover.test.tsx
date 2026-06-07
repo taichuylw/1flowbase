@@ -113,6 +113,15 @@ describe('NodePickerPopover', () => {
       screen.getByRole('menuitem', { name: /Knowledge Retrieval/i })
     ).toBeInTheDocument();
     expect(
+      screen.getByRole('menuitem', { name: /Environment Variable Update/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /Variable Assigner/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /Parameter Extractor/i })
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByRole('menuitem', { name: /Human Input/i })
     ).not.toBeInTheDocument();
     expect(

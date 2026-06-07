@@ -242,6 +242,10 @@ export function createAgentFlowNodeSchemaAdapter({
         );
       }
 
+      if (key === 'environmentVariables') {
+        return environmentVariables;
+      }
+
       if (key === 'downstreamNodes') {
         return getDirectDownstreamNodes(document, nodeId);
       }

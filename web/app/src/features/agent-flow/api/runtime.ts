@@ -39,6 +39,7 @@ import {
   agentFlowSystemVariables,
   systemVariableNodeId
 } from '../lib/variables/system-variables';
+import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
 import { extractNamedBindingSelectors } from '../lib/named-binding-expressions';
 import {
   collectConditionSelectors,
@@ -168,6 +169,12 @@ export interface NodeDebugVariableConfirmationPlan {
   fields: NodeDebugPreviewVariableField[];
 }
 
+interface EnvironmentVariableUpdateOperation {
+  path: string[];
+  operator: 'set' | 'append' | 'clear' | 'increment';
+  source: string[] | null;
+}
+
 export const nodeLastRunQueryKey = (applicationId: string, nodeId: string) =>
   [
     'applications',
@@ -293,10 +300,14 @@ export function extractNodePreviewVariableOutput(
 
 export function buildFlowDebugRunInput(
   document: FlowAuthoringDocument,
-  inputValues?: Record<string, unknown>
+  inputValues?: Record<string, unknown>,
+  environmentVariables: AgentFlowEnvironmentVariable[] = []
 ) {
   const startNode = document.graph.nodes.find((node) => node.type === 'start');
   const startPayload: Record<string, unknown> = {};
+  const inputPayload: Record<string, Record<string, unknown>> = {
+    [startNode?.id ?? 'node-start']: startPayload
+  };
 
   for (const output of startNode ? getNodeVariableOutputs(startNode) : []) {
     startPayload[output.key] =
@@ -306,10 +317,18 @@ export function buildFlowDebugRunInput(
         : buildPreviewValue(startNode, output.key);
   }
 
+  if (environmentVariables.length > 0) {
+    inputPayload.env = environmentVariables.reduce<Record<string, unknown>>(
+      (payload, variable) => {
+        payload[variable.name] = variable.value;
+        return payload;
+      },
+      {}
+    );
+  }
+
   return {
-    input_payload: {
-      [startNode?.id ?? 'node-start']: startPayload
-    }
+    input_payload: inputPayload
   };
 }
 
@@ -526,6 +545,53 @@ function collectNodeReferenceSelectors(node: FlowNodeDocument) {
   ];
 }
 
+function collectUpstreamNodeIds(
+  document: FlowAuthoringDocument,
+  nodeId: string
+) {
+  const visited = new Set<string>();
+  const queue = [nodeId];
+
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+
+    if (!currentNodeId) {
+      continue;
+    }
+
+    for (const edge of document.graph.edges) {
+      if (edge.target !== currentNodeId || visited.has(edge.source)) {
+        continue;
+      }
+
+      visited.add(edge.source);
+      queue.push(edge.source);
+    }
+  }
+
+  return visited;
+}
+
+function getEnvironmentVariableUpdateOperations(
+  node: FlowNodeDocument
+): EnvironmentVariableUpdateOperation[] {
+  const binding = node.bindings.operations;
+
+  if (node.type !== 'variable_assigner' || binding?.kind !== 'state_write') {
+    return [];
+  }
+
+  return binding.value.filter(
+    (operation): operation is EnvironmentVariableUpdateOperation =>
+      operation.operator === 'set' &&
+      operation.path.length === 2 &&
+      operation.path[0] === 'env' &&
+      operation.path[1].trim().length > 0 &&
+      Array.isArray(operation.source) &&
+      operation.source.length >= 2
+  );
+}
+
 function hasPreviewVariableValue(value: unknown) {
   return value !== undefined && value !== null && value !== '';
 }
@@ -670,6 +736,32 @@ function readCachedOutputValue(
   return { found: true, value: current };
 }
 
+function readPreviewInputValue(
+  inputPayload: Record<string, Record<string, unknown>>,
+  selector: string[]
+): { found: true; value: unknown } | { found: false } {
+  const [nodeId, ...path] = selector;
+
+  if (!nodeId || path.length === 0) {
+    return { found: false };
+  }
+
+  let current: unknown = inputPayload[nodeId];
+
+  for (const segment of path) {
+    if (
+      !isRecord(current) ||
+      !Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
+      return { found: false };
+    }
+
+    current = current[segment];
+  }
+
+  return { found: true, value: current };
+}
+
 function buildNodePreviewVariableField({
   document,
   nodeId,
@@ -743,6 +835,78 @@ function buildMissingPreviewField(
     sourceOutput: findNodeOutput(node, outputKey),
     value: buildPreviewValue(node, outputKey)
   });
+}
+
+function hasMissingPreviewField(
+  fields: NodeDebugPreviewVariableField[],
+  nodeId: string,
+  outputKey: string
+) {
+  return fields.some((field) => field.nodeId === nodeId && field.key === outputKey);
+}
+
+function applyEnvironmentVariableUpdatesToPreviewPlan({
+  document,
+  nodeId,
+  variableCache,
+  inputPayload,
+  missingFields
+}: {
+  document: FlowAuthoringDocument;
+  nodeId: string;
+  variableCache: NodeDebugPreviewVariableCache;
+  inputPayload: Record<string, Record<string, unknown>>;
+  missingFields: NodeDebugPreviewVariableField[];
+}) {
+  const upstreamNodeIds = collectUpstreamNodeIds(document, nodeId);
+
+  for (const node of document.graph.nodes) {
+    if (!upstreamNodeIds.has(node.id)) {
+      continue;
+    }
+
+    for (const operation of getEnvironmentVariableUpdateOperations(node)) {
+      const source = operation.source;
+
+      if (!source) {
+        continue;
+      }
+
+      const sourceNodeId = source[0] ?? '';
+      const outputKey = selectorOutputKey(source);
+      const sourceNode = document.graph.nodes.find(
+        (entry) => entry.id === sourceNodeId
+      );
+      const sourceOutput = findNodeOutputBySelector(sourceNode, source);
+      const previewInputValue = readPreviewInputValue(inputPayload, source);
+      const cachedOutput =
+        previewInputValue.found
+          ? previewInputValue
+          : readCachedOutputValue(
+              variableCache[sourceNodeId],
+              sourceOutput,
+              outputKey
+            );
+      const value =
+        cachedOutput.found && hasPreviewVariableValue(cachedOutput.value)
+          ? cachedOutput.value
+          : canUseStartPreviewDefault(sourceNode, outputKey)
+            ? buildPreviewValue(sourceNode, outputKey)
+            : undefined;
+
+      if (value === undefined) {
+        if (!hasMissingPreviewField(missingFields, sourceNodeId, outputKey)) {
+          missingFields.push(
+            buildMissingPreviewField(document, sourceNodeId, outputKey)
+          );
+        }
+        continue;
+      }
+
+      inputPayload.env ??= {};
+      inputPayload.env[operation.path[1]] = value;
+    }
+  }
 }
 
 function isRequiredStartPreviewKey(node: FlowNodeDocument, outputKey: string) {
@@ -957,6 +1121,14 @@ export function buildNodeDebugPreviewPlan(
       buildMissingPreviewField(document, sourceNodeId, outputKey)
     );
   }
+
+  applyEnvironmentVariableUpdatesToPreviewPlan({
+    document,
+    nodeId,
+    variableCache,
+    inputPayload,
+    missingFields
+  });
 
   return { input_payload: inputPayload, missing_fields: missingFields };
 }

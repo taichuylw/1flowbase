@@ -525,6 +525,29 @@ describe('start node variables', () => {
     });
   });
 
+  test('adds application environment variables to flow debug input', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    expect(
+      buildFlowDebugRunInput(document, undefined, [
+        {
+          name: 'ApiBaseUrl',
+          value_type: 'string',
+          value: 'https://api.example.com',
+          description: ''
+        }
+      ])
+    ).toEqual(
+      expect.objectContaining({
+        input_payload: expect.objectContaining({
+          env: {
+            ApiBaseUrl: 'https://api.example.com'
+          }
+        })
+      })
+    );
+  });
+
   test('normalizes rich start input field configuration', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const startNode = document.graph.nodes.find(

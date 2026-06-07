@@ -697,22 +697,28 @@ function createPluginNodeContract(): NodeRuntimeUiContract {
 }
 
 function createVariableAssignerContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'state', title: i18nText("agentFlow", "auto.status_result"), valueType: 'json' }];
+  const outputs = [{ key: 'env', title: i18nText("agentFlow", "auto.environment_variables"), valueType: 'json' }];
 
   return createNodeRuntimeContract({
     type: 'variable_assigner',
-    title: 'Variable Assigner',
-    description: i18nText("agentFlow", "auto.set_update_process_variables"),
+    title: 'Environment Variable Update',
+    description: i18nText("agentFlow", "auto.update_environment_variable_current_run"),
     category: 'data',
-    config: { writes: [] },
+    config: {},
+    bindings: {
+      operations: {
+        kind: 'state_write',
+        value: []
+      }
+    },
     outputs,
     panelSections: [
       basicsPanelSection,
       panelSection('inputs', 'Inputs', [
         panelField({
           key: 'bindings.operations',
-          title: i18nText("agentFlow", "auto.variable_manipulation"),
-          renderer: 'state_write',
+          title: i18nText("agentFlow", "auto.environment_variable_update"),
+          renderer: 'environment_variable_update',
           valueType: 'array',
           required: true
         })

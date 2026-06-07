@@ -670,6 +670,20 @@
   justify-self: end;
 }
 
+.agent-flow-environment-variable-update-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) minmax(180px, 1.1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.agent-flow-environment-variable-update-row .ant-select,
+.agent-flow-environment-variable-update-row .ant-cascader {
+  width: 100%;
+}
+
 .agent-flow-http-request-key-values,
 .agent-flow-http-request-body {
   display: flex;

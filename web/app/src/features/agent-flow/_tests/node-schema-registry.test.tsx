@@ -107,6 +107,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.start_model_list).toBeTypeOf(
       'function'
     );
+    expect(
+      agentFlowRendererRegistry.fields.environment_variable_update
+    ).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.fields.data_model_query).toBeTypeOf(
       'function'
     );
@@ -115,6 +118,21 @@ describe('agent-flow node schema registry', () => {
     );
     expect(agentFlowRendererRegistry.views.summary).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.views.relations).toBeTypeOf('function');
+  });
+
+  test('uses a narrow environment variable update editor for Variable Assigner', () => {
+    const configBlocks = buildCommonConfigBlocks('variable_assigner');
+    const operationsField = findFieldBlock(configBlocks, 'bindings.operations');
+    const contract = getBuiltinNodeRuntimeContract('variable_assigner');
+
+    expect(contract?.meta.title).toBe('Environment Variable Update');
+    expect(contract?.defaults.alias).toBe('Environment Variable Update');
+    expect(operationsField).toEqual(
+      expect.objectContaining({
+        path: 'bindings.operations',
+        renderer: 'environment_variable_update'
+      })
+    );
   });
 
   test('renders start input fields before the relations section', () => {

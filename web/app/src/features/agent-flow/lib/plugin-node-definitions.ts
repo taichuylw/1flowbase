@@ -40,7 +40,8 @@ const HIDDEN_BUILTIN_NODE_PICKER_TYPES = new Set<BuiltinFlowNodeType>([
   // These nodes are incomplete and not available to users yet.
   'human_input',
   'iteration',
-  'loop'
+  'loop',
+  'parameter_extractor'
 ]);
 
 export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] =

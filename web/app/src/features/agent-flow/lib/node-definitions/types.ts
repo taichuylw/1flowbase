@@ -31,6 +31,7 @@ export type NodeEditorKind =
   | 'condition_group'
   | 'if_else_branches'
   | 'state_write'
+  | 'environment_variable_update'
   | 'output_contract_definition'
   | 'start_input_fields'
   | 'start_model_list';

@@ -223,6 +223,85 @@ fn configured_default_output_payload(node: &CompiledNode) -> Value {
     }
 }
 
+pub(crate) fn execute_environment_variable_update_node(
+    _node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &mut Map<String, Value>,
+) -> Result<Value> {
+    let operations = resolved_inputs
+        .get("operations")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("environment variable update requires operations"))?;
+    if operations.is_empty() {
+        return Err(anyhow!(
+            "environment variable update requires at least one operation"
+        ));
+    }
+
+    let updates = operations
+        .iter()
+        .map(|operation| {
+            let path = operation
+                .get("path")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("environment variable update path is required"))?;
+            let operator = operation
+                .get("operator")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("environment variable update operator is required"))?;
+            let target_namespace = path.first().and_then(Value::as_str);
+            let target_name = path
+                .get(1)
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("environment variable update target name is required"))?;
+
+            if operator != "set" || target_namespace != Some("env") || target_name.trim().is_empty()
+            {
+                return Err(anyhow!(
+                    "environment variable update only supports setting env variables"
+                ));
+            }
+
+            let source = operation
+                .get("source")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("environment variable update source is required"))?
+                .iter()
+                .map(|segment| {
+                    segment.as_str().map(str::to_string).ok_or_else(|| {
+                        anyhow!("environment variable update source must be strings")
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let value = lookup_selector_value(variable_pool, &source)?;
+
+            Ok((target_name.to_string(), value))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut updated = Map::new();
+    let env_value = variable_pool
+        .entry("env".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+
+    if !env_value.is_object() {
+        *env_value = Value::Object(Map::new());
+    }
+
+    let env = env_value
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("environment variable pool must be an object"))?;
+
+    for (target_name, value) in updates {
+        env.insert(target_name.clone(), value.clone());
+        updated.insert(target_name, value);
+    }
+
+    Ok(json!({
+        "env": env.clone(),
+        "updated": updated
+    }))
+}
+
 fn apply_node_error_policy(
     plan: &CompiledPlan,
     failed_node_index: usize,
@@ -512,6 +591,28 @@ where
                     node.node_id.clone(),
                     project_node_variable_payload(node, &execution.output_payload)?,
                 );
+            }
+            "variable_assigner" => {
+                let output_payload = execute_environment_variable_update_node(
+                    node,
+                    &resolved_inputs,
+                    &mut variable_pool,
+                )?;
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, &output_payload)?,
+                );
+                node_traces.push(NodeExecutionTrace {
+                    node_id: node.node_id.clone(),
+                    node_type: node.node_type.clone(),
+                    node_alias: node.alias.clone(),
+                    input_payload: Value::Object(resolved_inputs),
+                    output_payload,
+                    error_payload: None,
+                    metrics_payload: json!({ "preview_mode": true }),
+                    debug_payload: json!({}),
+                    provider_events: Vec::new(),
+                });
             }
             "template_transform" | "answer" => {
                 let output_key = first_output_key(node);
