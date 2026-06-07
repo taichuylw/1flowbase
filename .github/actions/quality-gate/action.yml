@@ -121,6 +121,10 @@ runs:
 
         if [ -n "${RUNNER_TEMP:-}" ] && [ -n "${POSTGRES_DATA_DIR:-}" ]; then
           case "$POSTGRES_DATA_DIR" in
-            "$RUNNER_TEMP"/*) rm -rf "$POSTGRES_DATA_DIR" ;;
+            "$RUNNER_TEMP"/*)
+              rm -rf "$POSTGRES_DATA_DIR" 2>/dev/null \
+                || { command -v sudo >/dev/null 2>&1 && sudo rm -rf "$POSTGRES_DATA_DIR"; } \
+                || true
+              ;;
           esac
         fi

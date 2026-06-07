@@ -558,6 +558,10 @@ test("quality gate action isolates middleware postgres per gate scope", () => {
     /quality-gate-postgres-cleanup/u,
   );
   assert.match(
+    action,
+    /sudo rm -rf "\$POSTGRES_DATA_DIR"/u,
+  );
+  assert.match(
     middlewareCompose,
     /\$\{POSTGRES_DATA_DIR:-\.\/volumes\/postgres\}:\/var\/lib\/postgresql\/data/u,
   );
