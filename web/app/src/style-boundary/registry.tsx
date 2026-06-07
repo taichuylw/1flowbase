@@ -274,6 +274,7 @@ function seedStyleBoundaryAuth() {
 }
 
 let styleBoundaryOriginalFetch: typeof globalThis.fetch | null = null;
+const STYLE_BOUNDARY_URL_BASE = 'https://style-boundary.local';
 
 function createStyleBoundaryJsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -308,7 +309,7 @@ function getStyleBoundaryCommonResponse(
         latest_version: '0.1.0',
         has_update: false,
         release_info: null,
-        contributors_url: 'https://github.com/taichuy/1flowbase/graphs/contributors',
+        contributors_url: '/contributors',
         upgrade_commands: {
           shell: '',
           powershell: ''
@@ -333,7 +334,7 @@ function seedStyleBoundaryCommonFetch() {
   globalThis.fetch = async (input, init) => {
     const url = getStyleBoundaryRequestUrl(input);
     const method = getStyleBoundaryMethod(input, init);
-    const requestUrl = new URL(url, 'http://127.0.0.1:7800');
+    const requestUrl = new URL(url, STYLE_BOUNDARY_URL_BASE);
     const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
 
     if (commonResponse) {
@@ -385,7 +386,7 @@ function seedStyleBoundarySettingsFetch() {
   globalThis.fetch = async (input, init) => {
     const url = getStyleBoundaryRequestUrl(input);
     const method = getStyleBoundaryMethod(input, init);
-    const requestUrl = new URL(url, 'http://127.0.0.1:7800');
+    const requestUrl = new URL(url, STYLE_BOUNDARY_URL_BASE);
     const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
 
     if (commonResponse) {
@@ -590,7 +591,7 @@ function seedStyleBoundaryApplicationFetch() {
   globalThis.fetch = async (input, init) => {
     const url = getStyleBoundaryRequestUrl(input);
     const method = getStyleBoundaryMethod(input, init);
-    const requestUrl = new URL(url, 'http://127.0.0.1:7800');
+    const requestUrl = new URL(url, STYLE_BOUNDARY_URL_BASE);
     const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
 
     if (commonResponse) {
@@ -1125,7 +1126,7 @@ function seedStyleBoundaryFrontstageFetch() {
   globalThis.fetch = async (input, init) => {
     const url = getStyleBoundaryRequestUrl(input);
     const method = getStyleBoundaryMethod(input, init);
-    const requestUrl = new URL(url, 'http://127.0.0.1:7800');
+    const requestUrl = new URL(url, STYLE_BOUNDARY_URL_BASE);
     const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
 
     if (commonResponse) {
