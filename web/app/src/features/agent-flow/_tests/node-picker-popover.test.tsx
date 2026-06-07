@@ -115,6 +115,12 @@ describe('NodePickerPopover', () => {
     expect(
       screen.queryByRole('menuitem', { name: /Human Input/i })
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /Iteration/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /Loop/i })
+    ).not.toBeInTheDocument();
   });
 
   test('filters node groups through the picker search', () => {

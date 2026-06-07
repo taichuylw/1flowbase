@@ -37,8 +37,10 @@ export type NodePickerOption =
   | PluginContributionPickerOption;
 
 const HIDDEN_BUILTIN_NODE_PICKER_TYPES = new Set<BuiltinFlowNodeType>([
-  // Human Input is incomplete and not available to users yet.
-  'human_input'
+  // These nodes are incomplete and not available to users yet.
+  'human_input',
+  'iteration',
+  'loop'
 ]);
 
 export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] =
