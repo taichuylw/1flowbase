@@ -3,6 +3,30 @@ import { getNodeById, getOutgoingEdges } from '../selectors';
 
 const NODE_WIDTH = 196;
 const NODE_HEIGHT = 96;
+const ARRANGE_ORIGIN_X = 120;
+const ARRANGE_ORIGIN_Y = 160;
+const ARRANGE_GAP_X = 280;
+const ARRANGE_GAP_Y = 40;
+const GRID_SIZE = 20;
+
+function snapToGrid(value: number) {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
+function compareNodesByCanvasOrder(
+  left: { id: string; position: { x: number; y: number } },
+  right: { id: string; position: { x: number; y: number } }
+) {
+  if (left.position.y !== right.position.y) {
+    return left.position.y - right.position.y;
+  }
+
+  if (left.position.x !== right.position.x) {
+    return left.position.x - right.position.x;
+  }
+
+  return left.id.localeCompare(right.id);
+}
 
 /**
  * 2D AABB 碰撞检测与 Y 轴最小平移向量 (MTV) 垂直消解算法
@@ -77,9 +101,9 @@ function applyLocalPhysicsRelaxation(
 ) {
   if (activeIds.size === 0) return;
 
-  const kr = 30000;  // 库仑斥力系数
-  const ka = 0.04;   // 弹簧引力系数
-  const L0 = 280;    // 弹簧自然长度
+  const kr = 30000; // 库仑斥力系数
+  const ka = 0.04; // 弹簧引力系数
+  const L0 = 280; // 弹簧自然长度
   const damping = 0.7;
 
   // 仅对发生移动的活跃节点应用受控力学松弛
@@ -276,6 +300,150 @@ export function shiftDownstreamNodesBFS(
   }
 
   // 7. 返回包含更新位置的新文档对象
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      nodes: document.graph.nodes.map((node) =>
+        finalPositions[node.id]
+          ? {
+              ...node,
+              position: finalPositions[node.id]
+            }
+          : node
+      )
+    }
+  };
+}
+
+export function arrangeCanvasLeftToRight(
+  document: FlowAuthoringDocument,
+  containerId: string | null
+): FlowAuthoringDocument {
+  const containerNodes = document.graph.nodes
+    .filter((node) => node.containerId === containerId)
+    .sort(compareNodesByCanvasOrder);
+
+  if (containerNodes.length === 0) {
+    return document;
+  }
+
+  const containerNodeIds = new Set(containerNodes.map((node) => node.id));
+  const containerEdges = document.graph.edges
+    .filter(
+      (edge) =>
+        edge.containerId === containerId &&
+        containerNodeIds.has(edge.source) &&
+        containerNodeIds.has(edge.target)
+    )
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const incomingCountByNodeId = new Map<string, number>();
+  const outgoingTargetsByNodeId = new Map<string, string[]>();
+  const layerByNodeId = new Map<string, number>();
+
+  for (const node of containerNodes) {
+    incomingCountByNodeId.set(node.id, 0);
+    outgoingTargetsByNodeId.set(node.id, []);
+  }
+
+  for (const edge of containerEdges) {
+    incomingCountByNodeId.set(
+      edge.target,
+      (incomingCountByNodeId.get(edge.target) ?? 0) + 1
+    );
+    outgoingTargetsByNodeId.get(edge.source)?.push(edge.target);
+  }
+
+  const queue = containerNodes
+    .filter((node) => (incomingCountByNodeId.get(node.id) ?? 0) === 0)
+    .map((node) => node.id);
+  const remainingIncomingCountByNodeId = new Map(incomingCountByNodeId);
+  let visitedCount = 0;
+
+  for (const nodeId of queue) {
+    layerByNodeId.set(nodeId, 0);
+  }
+
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+
+    if (!currentNodeId) {
+      continue;
+    }
+
+    visitedCount += 1;
+    const currentLayer = layerByNodeId.get(currentNodeId) ?? 0;
+
+    for (const targetNodeId of outgoingTargetsByNodeId.get(currentNodeId) ??
+      []) {
+      layerByNodeId.set(
+        targetNodeId,
+        Math.max(layerByNodeId.get(targetNodeId) ?? 0, currentLayer + 1)
+      );
+
+      const nextIncomingCount =
+        (remainingIncomingCountByNodeId.get(targetNodeId) ?? 0) - 1;
+      remainingIncomingCountByNodeId.set(targetNodeId, nextIncomingCount);
+
+      if (nextIncomingCount === 0) {
+        queue.push(targetNodeId);
+      }
+    }
+  }
+
+  if (visitedCount < containerNodes.length) {
+    const fallbackLayer = Math.max(0, ...layerByNodeId.values()) + 1;
+
+    for (const node of containerNodes) {
+      if (!layerByNodeId.has(node.id)) {
+        layerByNodeId.set(node.id, fallbackLayer);
+      }
+    }
+  }
+
+  const nodesByLayer = new Map<number, typeof containerNodes>();
+
+  for (const node of containerNodes) {
+    const layer = layerByNodeId.get(node.id) ?? 0;
+    nodesByLayer.set(layer, [...(nodesByLayer.get(layer) ?? []), node]);
+  }
+
+  const positions: Record<string, { x: number; y: number }> = {};
+
+  for (const [layer, layerNodes] of [...nodesByLayer.entries()].sort(
+    ([leftLayer], [rightLayer]) => leftLayer - rightLayer
+  )) {
+    const sortedLayerNodes = layerNodes.sort(compareNodesByCanvasOrder);
+    const layerHeight =
+      sortedLayerNodes.length * NODE_HEIGHT +
+      Math.max(0, sortedLayerNodes.length - 1) * ARRANGE_GAP_Y;
+    const layerTop = ARRANGE_ORIGIN_Y - (layerHeight - NODE_HEIGHT) / 2;
+
+    sortedLayerNodes.forEach((node, index) => {
+      positions[node.id] = {
+        x: snapToGrid(ARRANGE_ORIGIN_X + layer * ARRANGE_GAP_X),
+        y: snapToGrid(layerTop + index * (NODE_HEIGHT + ARRANGE_GAP_Y))
+      };
+    });
+  }
+
+  resolveAABBCollisions(
+    positions,
+    containerNodes,
+    NODE_WIDTH,
+    NODE_HEIGHT,
+    ARRANGE_GAP_Y,
+    8
+  );
+
+  const finalPositions: Record<string, { x: number; y: number }> = {};
+  for (const nodeId of Object.keys(positions)) {
+    finalPositions[nodeId] = {
+      x: snapToGrid(positions[nodeId].x),
+      y: snapToGrid(positions[nodeId].y)
+    };
+  }
+
   return {
     ...document,
     graph: {

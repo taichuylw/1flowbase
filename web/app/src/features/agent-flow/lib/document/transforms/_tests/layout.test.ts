@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
-import { shiftDownstreamNodesBFS } from '../layout';
+import { arrangeCanvasLeftToRight, shiftDownstreamNodesBFS } from '../layout';
 
 describe('Topological BFS Downstream Shifting', () => {
   test('shifts downstream nodes when parent moves forward', () => {
@@ -189,5 +189,83 @@ describe('Topological BFS Downstream Shifting', () => {
     // Verify they are separated vertically: difference in Y must be at least NODE_HEIGHT (96) + gapY (40) = 136px
     const yDiff = Math.abs(llmNode.position.y - siblingNode.position.y);
     expect(yDiff).toBeGreaterThanOrEqual(136);
+  });
+});
+
+describe('Canvas left-to-right arrangement', () => {
+  test('arranges the whole root canvas by graph layers', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.nodes = document.graph.nodes.map((node) => {
+      if (node.id === 'node-start') {
+        return { ...node, position: { x: 900, y: 420 } };
+      }
+      if (node.id === 'node-llm') {
+        return { ...node, position: { x: 120, y: 120 } };
+      }
+      if (node.id === 'node-answer') {
+        return { ...node, position: { x: 360, y: 130 } };
+      }
+      return node;
+    });
+
+    const arranged = arrangeCanvasLeftToRight(document, null);
+
+    const startNode = arranged.graph.nodes.find(
+      (node) => node.id === 'node-start'
+    );
+    const llmNode = arranged.graph.nodes.find((node) => node.id === 'node-llm');
+    const answerNode = arranged.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    expect(startNode?.position).toEqual({ x: 120, y: 160 });
+    expect(llmNode?.position).toEqual({ x: 400, y: 160 });
+    expect(answerNode?.position).toEqual({ x: 680, y: 160 });
+  });
+
+  test('separates sibling nodes and returns a stable layout on repeated arrangement', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.nodes.push({
+      id: 'node-sibling',
+      type: 'llm',
+      alias: 'Sibling',
+      containerId: null,
+      position: { x: 380, y: 110 },
+      configVersion: 1,
+      config: {},
+      bindings: {},
+      outputs: []
+    });
+    document.graph.edges.push({
+      id: 'edge-start-sibling',
+      source: 'node-start',
+      target: 'node-sibling',
+      sourceHandle: null,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    const arranged = arrangeCanvasLeftToRight(document, null);
+    const arrangedAgain = arrangeCanvasLeftToRight(arranged, null);
+    const llmNode = arranged.graph.nodes.find((node) => node.id === 'node-llm');
+    const siblingNode = arranged.graph.nodes.find(
+      (node) => node.id === 'node-sibling'
+    );
+
+    if (!llmNode || !siblingNode) {
+      throw new Error('expected sibling layer nodes to exist');
+    }
+
+    expect(llmNode.position.x).toBe(400);
+    expect(siblingNode.position.x).toBe(400);
+    expect(
+      Math.abs(llmNode.position.y - siblingNode.position.y)
+    ).toBeGreaterThanOrEqual(136);
+    expect(
+      arrangedAgain.graph.nodes.map((node) => [node.id, node.position])
+    ).toEqual(arranged.graph.nodes.map((node) => [node.id, node.position]));
   });
 });

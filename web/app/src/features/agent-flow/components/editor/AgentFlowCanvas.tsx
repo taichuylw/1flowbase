@@ -1,6 +1,11 @@
 import '@xyflow/react/dist/style.css';
 
-import { AimOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  AimOutlined,
+  ApartmentOutlined,
+  MinusOutlined,
+  PlusOutlined
+} from '@ant-design/icons';
 import { Button } from 'antd';
 import {
   Background,
@@ -47,7 +52,7 @@ interface AgentFlowCanvasProps {
   ) => void;
 }
 
-function ZoomToolbar() {
+function ZoomToolbar({ onArrangeCanvas }: { onArrangeCanvas: () => void }) {
   const reactFlow = useReactFlow();
   const { zoom } = useViewport();
 
@@ -55,12 +60,12 @@ function ZoomToolbar() {
     <Panel position="bottom-left" style={{ left: 0, bottom: 0 }}>
       <div className="agent-flow-zoom-toolbar">
         <div
-          aria-label={i18nText("agentFlow", "auto.canvas_zoom_toolbar")}
+          aria-label={i18nText('agentFlow', 'auto.canvas_zoom_toolbar')}
           className="agent-flow-zoom-toolbar__actions"
           role="toolbar"
         >
           <Button
-            aria-label={i18nText("agentFlow", "auto.reduce_canvas")}
+            aria-label={i18nText('agentFlow', 'auto.reduce_canvas')}
             className="agent-flow-zoom-toolbar__button"
             icon={<MinusOutlined />}
             onClick={() => {
@@ -70,7 +75,7 @@ function ZoomToolbar() {
             type="text"
           />
           <Button
-            aria-label={i18nText("agentFlow", "auto.enlarge_canvas")}
+            aria-label={i18nText('agentFlow', 'auto.enlarge_canvas')}
             className="agent-flow-zoom-toolbar__button"
             icon={<PlusOutlined />}
             onClick={() => {
@@ -80,7 +85,7 @@ function ZoomToolbar() {
             type="text"
           />
           <Button
-            aria-label={i18nText("agentFlow", "auto.adapt_to_canvas")}
+            aria-label={i18nText('agentFlow', 'auto.adapt_to_canvas')}
             className="agent-flow-zoom-toolbar__button"
             icon={<AimOutlined />}
             onClick={() => {
@@ -89,8 +94,19 @@ function ZoomToolbar() {
             size="small"
             type="text"
           />
+          <Button
+            aria-label={i18nText('agentFlow', 'auto.arrange_canvas')}
+            className="agent-flow-zoom-toolbar__button"
+            icon={<ApartmentOutlined />}
+            onClick={onArrangeCanvas}
+            size="small"
+            type="text"
+          />
         </div>
-        <div aria-label={i18nText("agentFlow", "auto.current_zoom")} className="agent-flow-zoom-display">
+        <div
+          aria-label={i18nText('agentFlow', 'auto.current_zoom')}
+          className="agent-flow-zoom-display"
+        >
           {Math.round(zoom * 100)}%
         </div>
       </div>
@@ -103,7 +119,9 @@ function ViewportObserver({
   onViewportSnapshotChange,
   onViewportGetterReady
 }: {
-  onViewportEnd: (viewport: FlowAuthoringDocument['editor']['viewport']) => void;
+  onViewportEnd: (
+    viewport: FlowAuthoringDocument['editor']['viewport']
+  ) => void;
   onViewportSnapshotChange?: (
     viewport: FlowAuthoringDocument['editor']['viewport']
   ) => void;
@@ -316,7 +334,7 @@ function AgentFlowCanvasInner({
           onViewportSnapshotChange={onViewportSnapshotChange}
           onViewportGetterReady={onViewportGetterReady}
         />
-        <ZoomToolbar />
+        <ZoomToolbar onArrangeCanvas={canvasInteractions.arrangeCanvas} />
       </ReactFlow>
       {nodePickerState.open &&
       nodePickerState.anchorNodeId &&
@@ -333,7 +351,10 @@ function AgentFlowCanvasInner({
           }}
         >
           <NodePickerPopover
-            ariaLabel={i18nText("agentFlow", "auto.insert_node_connection_position")}
+            ariaLabel={i18nText(
+              'agentFlow',
+              'auto.insert_node_connection_position'
+            )}
             buttonClassName="agent-flow-floating-picker-anchor__button"
             open
             options={nodePickerOptions}

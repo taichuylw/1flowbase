@@ -3,6 +3,7 @@ import type {
   FlowNodeDocument,
   IfElseBranchDocument
 } from '@1flowbase/flow-schema';
+import type { ReactNode } from 'react';
 import { Input, InputNumber, Select, Switch } from 'antd';
 
 import type {
@@ -69,6 +70,10 @@ function getSelectorOptions(adapter: SchemaFieldRendererProps['adapter']) {
       | null
       | undefined) ?? []
   );
+}
+
+function formatUnavailableSelectorLabel(selector: string[]) {
+  return selector.at(-1) ?? '';
 }
 
 function hasBindingKind(
@@ -299,6 +304,29 @@ function renderLlmContextPolicyField({
     contextPolicy.context_selector ?? contextOptions[0]?.value ?? [];
   const selectedValue =
     selectedSelector.length > 0 ? encodeSelectorValue(selectedSelector) : undefined;
+  const hasSelectedOption = contextOptions.some(
+    (option) => encodeSelectorValue(option.value) === selectedValue
+  );
+  const selectOptions: Array<{
+    label: ReactNode;
+    value: string;
+    disabled?: boolean;
+  }> = contextOptions.map((option) => ({
+    label: option.displayLabel,
+    value: encodeSelectorValue(option.value)
+  }));
+
+  if (selectedValue && !hasSelectedOption) {
+    selectOptions.push({
+      label: (
+        <span className="agent-flow-node-detail__context-select-missing-value">
+          {formatUnavailableSelectorLabel(selectedSelector)}
+        </span>
+      ),
+      value: selectedValue,
+      disabled: true
+    });
+  }
 
   return (
     <div className="agent-flow-node-detail__context-policy">
@@ -306,10 +334,7 @@ function renderLlmContextPolicyField({
         aria-label="上下文变量"
         className="agent-flow-node-detail__context-select"
         disabled={contextPolicy.integration_context === 'disabled'}
-        options={contextOptions.map((option) => ({
-          label: option.displayLabel,
-          value: encodeSelectorValue(option.value)
-        }))}
+        options={selectOptions}
         placeholder="选择上下文变量"
         value={selectedValue}
         onChange={(nextValue) =>

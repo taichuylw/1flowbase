@@ -402,6 +402,31 @@ describe('LLM prompt messages field', () => {
     ).toBeInTheDocument();
   });
 
+  test('renders disconnected context selector references with the missing value style', async () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.edges = document.graph.edges.filter(
+      (edge) => !(edge.source === 'node-start' && edge.target === 'node-llm')
+    );
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={createInitialState(document)}>
+        <SelectionSeed nodeId="node-llm" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const missingValue = await screen.findByText('history');
+
+    expect(missingValue).toHaveClass(
+      'agent-flow-node-detail__context-select-missing-value'
+    );
+    expect(screen.queryByText('node-start.history')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('["node-start","history"]')
+    ).not.toBeInTheDocument();
+  });
+
   test('normalizes existing prompt messages so system remains the first fixed row', async () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     document.graph.nodes = document.graph.nodes.map((node) =>

@@ -105,7 +105,9 @@ let latestViewportChangeOptions: {
   onEnd?: (viewport: MockViewport) => void;
 } | null = null;
 
-function createInitialState(document = createDefaultAgentFlowDocument({ flowId: 'flow-1' })) {
+function createInitialState(
+  document = createDefaultAgentFlowDocument({ flowId: 'flow-1' })
+) {
   return {
     flow_id: 'flow-1',
     draft: {
@@ -137,9 +139,15 @@ function StoreObserver({
   onChange: (state: ObservedEditorState) => void;
 }) {
   const workingDocument = useAgentFlowEditorStore(selectWorkingDocument);
-  const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
-  const selectedEdgeId = useAgentFlowEditorStore((state) => state.selectedEdgeId);
-  const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
+  const nodePickerState = useAgentFlowEditorStore(
+    (state) => state.nodePickerState
+  );
+  const selectedEdgeId = useAgentFlowEditorStore(
+    (state) => state.selectedEdgeId
+  );
+  const selectedNodeId = useAgentFlowEditorStore(
+    (state) => state.selectedNodeId
+  );
 
   useEffect(() => {
     onChange({
@@ -148,7 +156,13 @@ function StoreObserver({
       selectedNodeId,
       workingDocument
     });
-  }, [nodePickerState, onChange, selectedEdgeId, selectedNodeId, workingDocument]);
+  }, [
+    nodePickerState,
+    onChange,
+    selectedEdgeId,
+    selectedNodeId,
+    workingDocument
+  ]);
 
   return null;
 }
@@ -183,7 +197,8 @@ function renderCanvas(
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
   Controls: () => null,
-  EdgeLabelRenderer: ({ children }: { children?: ReactNode }) => children ?? null,
+  EdgeLabelRenderer: ({ children }: { children?: ReactNode }) =>
+    children ?? null,
   Handle: () => null,
   MarkerType: {
     ArrowClosed: 'arrowclosed'
@@ -242,7 +257,8 @@ vi.mock('@xyflow/react', () => ({
       </div>
     );
   },
-  ReactFlowProvider: ({ children }: { children?: ReactNode }) => children ?? null,
+  ReactFlowProvider: ({ children }: { children?: ReactNode }) =>
+    children ?? null,
   getBezierPath: () => ['M0,0', 0, 0],
   useOnViewportChange: (options: {
     onStart?: (viewport: MockViewport) => void;
@@ -324,7 +340,11 @@ describe('AgentFlowCanvas interactions', () => {
   test('opens with the document viewport and shows a plain percentage label', () => {
     renderCanvas();
 
-    expect(latestReactFlowProps?.defaultViewport).toEqual({ x: 0, y: 0, zoom: 1 });
+    expect(latestReactFlowProps?.defaultViewport).toEqual({
+      x: 0,
+      y: 0,
+      zoom: 1
+    });
     expect(latestReactFlowProps?.viewport).toBeUndefined();
     expect(screen.getByLabelText('当前缩放')).toHaveTextContent('100%');
   });
@@ -353,13 +373,51 @@ describe('AgentFlowCanvas interactions', () => {
     });
   });
 
+  test('arranges the whole canvas from left to right through the canvas toolbar', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    document.graph.nodes = document.graph.nodes.map((node) => {
+      if (node.id === 'node-start') {
+        return { ...node, position: { x: 900, y: 420 } };
+      }
+      if (node.id === 'node-llm') {
+        return { ...node, position: { x: 120, y: 120 } };
+      }
+      if (node.id === 'node-answer') {
+        return { ...node, position: { x: 360, y: 130 } };
+      }
+      return node;
+    });
+
+    const { getState } = renderCanvas(document);
+
+    fireEvent.click(screen.getByRole('button', { name: '自动整理' }));
+
+    expect(getState().workingDocument.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-start',
+          position: { x: 120, y: 160 }
+        }),
+        expect.objectContaining({
+          id: 'node-llm',
+          position: { x: 400, y: 160 }
+        }),
+        expect.objectContaining({
+          id: 'node-answer',
+          position: { x: 680, y: 160 }
+        })
+      ])
+    );
+  });
+
   test('inserts a node through the edge action callback', () => {
     const { getState } = renderCanvas();
 
     expect(latestReactFlowProps).not.toBeNull();
-    const insertOnEdge = latestReactFlowProps?.edges
-      ?.find((edge) => edge.id === 'edge-llm-answer')
-      ?.data?.onInsertNode;
+    const insertOnEdge = latestReactFlowProps?.edges?.find(
+      (edge) => edge.id === 'edge-llm-answer'
+    )?.data?.onInsertNode;
 
     expect(insertOnEdge).toBeTypeOf('function');
 
@@ -548,7 +606,9 @@ describe('AgentFlowCanvas interactions', () => {
   test('does not close node detail when clicking the pane after a node is selected', () => {
     renderCanvas();
 
-    const llmNode = latestReactFlowProps?.nodes?.find((node) => node.id === 'node-llm');
+    const llmNode = latestReactFlowProps?.nodes?.find(
+      (node) => node.id === 'node-llm'
+    );
     expect(llmNode?.data?.onSelectNode).toBeTypeOf('function');
 
     act(() => {
