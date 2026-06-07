@@ -1,5 +1,10 @@
 use super::repository::MemoryPluginManagementRepository;
 use super::*;
+use flate2::GzBuilder;
+use std::io::Cursor;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+use tar::{EntryType, Header};
 
 #[derive(Serialize)]
 struct OfficialReleaseDocument<'a> {
@@ -585,7 +590,9 @@ pub(crate) fn build_signed_openai_upload_package(version: &str) -> SignedUploadP
 }
 
 fn pack_tar_gz(root: &Path) -> Vec<u8> {
-    let encoder = GzEncoder::new(Vec::new(), Compression::default());
+    let encoder = GzBuilder::new()
+        .mtime(0)
+        .write(Vec::new(), Compression::default());
     let mut builder = Builder::new(encoder);
     append_dir_to_tar(&mut builder, root, root);
     builder.finish().unwrap();
@@ -635,12 +642,42 @@ fn append_dir_to_tar(builder: &mut Builder<GzEncoder<Vec<u8>>>, root: &Path, cur
         let path = entry.path();
         let relative = path.strip_prefix(root).unwrap();
         if path.is_dir() {
-            builder.append_dir(relative, &path).unwrap();
+            let mut header = Header::new_gnu();
+            header.set_entry_type(EntryType::Directory);
+            header.set_size(0);
+            header.set_mode(0o755);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mtime(0);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, relative, std::io::empty())
+                .unwrap();
             append_dir_to_tar(builder, root, &path);
             continue;
         }
-        builder.append_path_with_name(&path, relative).unwrap();
+        let bytes = fs::read(&path).unwrap();
+        let mut header = Header::new_gnu();
+        header.set_size(bytes.len() as u64);
+        header.set_mode(file_mode(&path));
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(0);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, relative, Cursor::new(bytes))
+            .unwrap();
     }
+}
+
+#[cfg(unix)]
+fn file_mode(path: &Path) -> u32 {
+    fs::metadata(path).unwrap().permissions().mode() & 0o777
+}
+
+#[cfg(not(unix))]
+fn file_mode(_path: &Path) -> u32 {
+    0o644
 }
 
 pub(crate) async fn seed_test_installation(

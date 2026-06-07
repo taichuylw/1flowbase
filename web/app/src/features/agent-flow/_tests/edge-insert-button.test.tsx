@@ -22,7 +22,7 @@ describe('EdgeInsertButton', () => {
     });
 
     expect(
-      button.querySelector('.agent-flow-connector-add-icon')
+      within(button).getByTestId('agent-flow-connector-add-icon')
     ).toBeInTheDocument();
     expect(within(button).queryByText('+')).not.toBeInTheDocument();
   });

@@ -203,7 +203,7 @@ export function NodeInspector({
 
         return (
           <div
-            key={block.title}
+            key={`section-${blockIndex}-${block.title}`}
             className="agent-flow-node-detail__section agent-flow-node-detail__inspector-section"
             data-section-key={block.title}
           >

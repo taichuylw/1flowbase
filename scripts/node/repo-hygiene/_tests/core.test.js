@@ -185,6 +185,32 @@ test('collectRepoHygieneFindings excludes tmp sandbox tests from formal quality 
   );
 });
 
+test('collectRepoHygieneFindings skips unreadable runtime artifact directories', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-permission-'));
+  const unreadableDirectory = path.join(repoRoot, 'docker', 'volumes', 'postgres');
+  writeFile(
+    repoRoot,
+    'web/app/src/features/example/_tests/example.test.ts',
+    "test('formal test stays visible', () => {});\n"
+  );
+  fs.mkdirSync(unreadableDirectory, { recursive: true });
+
+  let restored = false;
+  try {
+    fs.chmodSync(unreadableDirectory, 0);
+    const findings = collectRepoHygieneFindings({ repoRoot });
+    assert.equal(
+      findings.some((finding) => finding.file.startsWith('docker/volumes/postgres')),
+      false
+    );
+  } finally {
+    fs.chmodSync(unreadableDirectory, 0o700);
+    restored = true;
+  }
+
+  assert.equal(restored, true);
+});
+
 test('collectRepoHygieneFindings reports local env generated and scratch artifacts', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-artifacts-'));
   writeFile(

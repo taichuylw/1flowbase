@@ -490,15 +490,13 @@ describe('TemplatedTextField', () => {
         screen.queryByRole('listbox', { name: '变量建议' })
       ).not.toBeInTheDocument();
     });
-    expect(editor.textContent).toBe('请基于 Start/history');
+    expect(editor).toHaveTextContent('请基于 Start/history');
     await waitFor(() => {
       expect(screen.getByTestId('templated-text-value')).toHaveTextContent(
         '请基于 {{node-start.history}}'
       );
     });
-    expect(screen.getByTestId('templated-text-value').textContent).not.toContain(
-      '/hi'
-    );
+    expect(screen.getByTestId('templated-text-value')).not.toHaveTextContent('/hi');
   });
 
   test('closes the editor-owned picker on Escape', async () => {

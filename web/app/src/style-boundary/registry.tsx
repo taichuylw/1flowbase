@@ -275,6 +275,81 @@ function seedStyleBoundaryAuth() {
 
 let styleBoundaryOriginalFetch: typeof globalThis.fetch | null = null;
 
+function createStyleBoundaryJsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function getStyleBoundaryRequestUrl(input: RequestInfo | URL) {
+  return typeof input === 'string'
+    ? input
+    : input instanceof Request
+      ? input.url
+      : String(input);
+}
+
+function getStyleBoundaryMethod(input: RequestInfo | URL, init?: RequestInit) {
+  return init?.method ?? (input instanceof Request ? input.method : 'GET');
+}
+
+function parseStyleBoundaryRequestUrl(url: string) {
+  const baseUrl = globalThis.document?.baseURI ?? globalThis.location?.href;
+
+  return baseUrl ? new URL(url, baseUrl) : new URL(url);
+}
+
+function getStyleBoundaryCommonResponse(
+  requestUrl: URL,
+  method: string
+): Response | null {
+  if (
+    method.toUpperCase() === 'GET' &&
+    requestUrl.pathname === '/api/console/system/release-status'
+  ) {
+    return createStyleBoundaryJsonResponse({
+      data: {
+        current_version: '0.1.0',
+        latest_version: '0.1.0',
+        has_update: false,
+        release_info: null,
+        contributors_url: '/contributors',
+        upgrade_commands: {
+          shell: '',
+          powershell: ''
+        },
+        cached: true,
+        warning: null
+      },
+      meta: null
+    });
+  }
+
+  return null;
+}
+
+function seedStyleBoundaryCommonFetch() {
+  if (typeof globalThis.fetch !== 'function') {
+    return;
+  }
+
+  const fallbackFetch = globalThis.fetch.bind(globalThis);
+
+  globalThis.fetch = async (input, init) => {
+    const url = getStyleBoundaryRequestUrl(input);
+    const method = getStyleBoundaryMethod(input, init);
+    const requestUrl = parseStyleBoundaryRequestUrl(url);
+    const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
+
+    if (commonResponse) {
+      return commonResponse;
+    }
+
+    return fallbackFetch(input as RequestInfo, init);
+  };
+}
+
 function createStyleBoundaryAgentFlowDocument() {
   const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
   const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
@@ -314,14 +389,15 @@ function seedStyleBoundarySettingsFetch() {
   const originalFetch = styleBoundaryOriginalFetch;
 
   globalThis.fetch = async (input, init) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof Request
-          ? input.url
-          : String(input);
-    const method =
-      init?.method ?? (input instanceof Request ? input.method : 'GET');
+    const url = getStyleBoundaryRequestUrl(input);
+    const method = getStyleBoundaryMethod(input, init);
+    const requestUrl = parseStyleBoundaryRequestUrl(url);
+    const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
+
+    if (commonResponse) {
+      return commonResponse;
+    }
+
     if (url.includes('/api/console/docs/catalog')) {
       return new Response(
         JSON.stringify({
@@ -411,7 +487,7 @@ function seedStyleBoundarySettingsFetch() {
 
     if (
       method.toUpperCase() === 'GET' &&
-      url.endsWith('/api/console/model-providers/options')
+      requestUrl.pathname === '/api/console/model-providers/options'
     ) {
       return new Response(
         JSON.stringify({
@@ -427,7 +503,7 @@ function seedStyleBoundarySettingsFetch() {
 
     if (
       method.toUpperCase() === 'GET' &&
-      url.endsWith('/api/console/model-providers/catalog')
+      requestUrl.pathname === '/api/console/model-providers/catalog'
     ) {
       return new Response(
         JSON.stringify({
@@ -494,12 +570,14 @@ function seedStyleBoundarySettingsFetch() {
 }
 
 function renderShellScene(pathname: string, page: ReactNode) {
+  seedStyleBoundaryCommonFetch();
   seedStyleBoundaryAuth();
 
   return <AppShellFrame pathname={pathname}>{page}</AppShellFrame>;
 }
 
 function renderRouterScene(pathname: string) {
+  seedStyleBoundaryCommonFetch();
   seedStyleBoundaryAuth();
   window.history.replaceState({}, '', pathname);
 
@@ -516,19 +594,18 @@ function seedStyleBoundaryApplicationFetch() {
   let currentDraftDocument = createStyleBoundaryAgentFlowDocument();
 
   globalThis.fetch = async (input, init) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof Request
-          ? input.url
-          : String(input);
-    const method =
-      init?.method ?? (input instanceof Request ? input.method : 'GET');
-    const requestUrl = new URL(url, 'http://127.0.0.1:7800');
+    const url = getStyleBoundaryRequestUrl(input);
+    const method = getStyleBoundaryMethod(input, init);
+    const requestUrl = parseStyleBoundaryRequestUrl(url);
+    const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
+
+    if (commonResponse) {
+      return commonResponse;
+    }
 
     if (
       method.toUpperCase() === 'GET' &&
-      url.endsWith('/api/console/model-providers/options')
+      requestUrl.pathname === '/api/console/model-providers/options'
     ) {
       return new Response(
         JSON.stringify({
@@ -1052,14 +1129,16 @@ function seedStyleBoundaryFrontstageFetch() {
   const originalFetch = styleBoundaryOriginalFetch;
 
   globalThis.fetch = async (input, init) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof Request
-          ? input.url
-          : String(input);
+    const url = getStyleBoundaryRequestUrl(input);
+    const method = getStyleBoundaryMethod(input, init);
+    const requestUrl = parseStyleBoundaryRequestUrl(url);
+    const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
 
-    if (url.endsWith('/api/console/frontend-blocks')) {
+    if (commonResponse) {
+      return commonResponse;
+    }
+
+    if (requestUrl.pathname === '/api/console/frontend-blocks') {
       return new Response(JSON.stringify({ data: [], meta: null }), {
         status: 200,
         headers: { 'content-type': 'application/json' }
