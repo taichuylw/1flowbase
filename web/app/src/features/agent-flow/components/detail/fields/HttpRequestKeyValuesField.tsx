@@ -1,6 +1,7 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 import type { FlowBinding, NamedBindingEntry } from '@1flowbase/flow-schema';
+import { useRef } from 'react';
 
 import type { FlowSelectorOption } from '../../../lib/selector-options';
 import { HttpRequestTemplateInput } from './HttpRequestTemplateInput';
@@ -55,16 +56,32 @@ export function HttpRequestKeyValuesField({
   onChange: (value: FlowBinding) => void;
 }) {
   const entries = namedBindingEntriesFromValue(value);
+  const rowKeysRef = useRef<string[]>([]);
+  const nextRowKeyRef = useRef(0);
+
+  while (rowKeysRef.current.length < entries.length) {
+    rowKeysRef.current.push(`http-request-key-value-${nextRowKeyRef.current}`);
+    nextRowKeyRef.current += 1;
+  }
+
+  if (rowKeysRef.current.length > entries.length) {
+    rowKeysRef.current.length = entries.length;
+  }
 
   function emit(nextEntries: HttpRequestKeyValueEntry[]) {
     onChange(toNamedBinding(nextEntries));
+  }
+
+  function deleteEntry(index: number) {
+    rowKeysRef.current.splice(index, 1);
+    emit(entries.filter((_, candidateIndex) => candidateIndex !== index));
   }
 
   return (
     <div className="agent-flow-http-request-key-values">
       {entries.map((entry, index) => (
         <div
-          key={`${entry.name}-${index}`}
+          key={rowKeysRef.current[index]}
           className="agent-flow-http-request-key-values__row"
         >
           <HttpRequestTemplateInput
@@ -108,9 +125,7 @@ export function HttpRequestKeyValuesField({
             danger
             icon={<DeleteOutlined />}
             type="text"
-            onClick={() =>
-              emit(entries.filter((_, candidateIndex) => candidateIndex !== index))
-            }
+            onClick={() => deleteEntry(index)}
           />
         </div>
       ))}

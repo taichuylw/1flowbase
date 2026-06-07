@@ -1,6 +1,7 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Input, Radio, Select } from 'antd';
 import type { FlowBinding } from '@1flowbase/flow-schema';
+import { useRef } from 'react';
 
 import {
   HTTP_REQUEST_BODY_TYPE_OPTIONS,
@@ -123,9 +124,29 @@ export function HttpRequestBodyField({
   const selectedBodyType = getBodyType(bodyType);
   const formDataEntries = namedBindingEntriesFromValue(formDataValue);
   const fileOptions = options.filter(isFileSelectorOption);
+  const formDataRowKeysRef = useRef<string[]>([]);
+  const nextFormDataRowKeyRef = useRef(0);
+
+  while (formDataRowKeysRef.current.length < formDataEntries.length) {
+    formDataRowKeysRef.current.push(
+      `http-request-form-data-${nextFormDataRowKeyRef.current}`
+    );
+    nextFormDataRowKeyRef.current += 1;
+  }
+
+  if (formDataRowKeysRef.current.length > formDataEntries.length) {
+    formDataRowKeysRef.current.length = formDataEntries.length;
+  }
 
   function emitFormData(nextEntries: HttpRequestKeyValueEntry[]) {
     onFormDataChange(formDataBinding(nextEntries));
+  }
+
+  function deleteFormDataEntry(index: number) {
+    formDataRowKeysRef.current.splice(index, 1);
+    emitFormData(
+      formDataEntries.filter((_, candidateIndex) => candidateIndex !== index)
+    );
   }
 
   return (
@@ -163,7 +184,7 @@ export function HttpRequestBodyField({
 
             return (
               <div
-                key={`${entry.name}-${index}`}
+                key={formDataRowKeysRef.current[index]}
                 className="agent-flow-http-request-key-values__row agent-flow-http-request-key-values__row--form-data"
               >
                 <Input
@@ -256,13 +277,7 @@ export function HttpRequestBodyField({
                   danger
                   icon={<DeleteOutlined />}
                   type="text"
-                  onClick={() =>
-                    emitFormData(
-                      formDataEntries.filter(
-                        (_, candidateIndex) => candidateIndex !== index
-                      )
-                    )
-                  }
+                  onClick={() => deleteFormDataEntry(index)}
                 />
               </div>
             );
