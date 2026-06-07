@@ -51,18 +51,45 @@ runs:
       if: ${{ inputs.start_postgres == 'true' }}
       shell: bash
       env:
+        INPUT_SCOPE: ${{ inputs.scope }}
         POSTGRES_MAX_CONNECTIONS: "300"
       run: |
         if [ ! -f docker/middleware.env ]; then
           cp docker/middleware.env.example docker/middleware.env
         fi
 
+        scope_slug="$(
+          printf '%s' "${INPUT_SCOPE:-quality-gate}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g' \
+            | cut -c 1-40
+        )"
+        if [ -z "$scope_slug" ]; then
+          scope_slug="quality-gate"
+        fi
+        scope_hash="$(printf '%s' "$scope_slug" | cksum | awk '{ print $1 }')"
+        postgres_port="${QUALITY_GATE_POSTGRES_PORT:-$((36000 + (scope_hash % 2000)))}"
+        compose_project_name="${QUALITY_GATE_COMPOSE_PROJECT_NAME:-qg-${scope_slug}-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}}"
+        postgres_data_dir="${POSTGRES_DATA_DIR:-${RUNNER_TEMP:-$PWD/tmp}/1flowbase-postgres-${compose_project_name}}"
+
+        export POSTGRES_PORT="$postgres_port"
+        export POSTGRES_DATA_DIR="$postgres_data_dir"
+        export COMPOSE_PROJECT_NAME="$compose_project_name"
+
+        {
+          echo "QUALITY_GATE_POSTGRES_PORT=$postgres_port"
+          echo "QUALITY_GATE_COMPOSE_PROJECT_NAME=$compose_project_name"
+          echo "POSTGRES_PORT=$postgres_port"
+          echo "POSTGRES_DATA_DIR=$postgres_data_dir"
+          echo "COMPOSE_PROJECT_NAME=$compose_project_name"
+        } >> "$GITHUB_ENV"
+
         if docker compose version >/dev/null 2>&1; then
-          docker compose -f docker/docker-compose.middleware.yaml down --remove-orphans || true
-          docker compose -f docker/docker-compose.middleware.yaml up -d --wait db
+          docker compose -p "$compose_project_name" -f docker/docker-compose.middleware.yaml down --remove-orphans || true
+          docker compose -p "$compose_project_name" -f docker/docker-compose.middleware.yaml up -d --wait db
         elif docker-compose version >/dev/null 2>&1; then
-          docker-compose -f docker/docker-compose.middleware.yaml down --remove-orphans || true
-          docker-compose -f docker/docker-compose.middleware.yaml up -d --wait db
+          docker-compose -p "$compose_project_name" -f docker/docker-compose.middleware.yaml down --remove-orphans || true
+          docker-compose -p "$compose_project_name" -f docker/docker-compose.middleware.yaml up -d --wait db
         else
           echo "docker compose or docker-compose v2 is required for the quality gate database" >&2
           exit 1
@@ -70,11 +97,30 @@ runs:
     - id: quality-gate
       shell: bash
       env:
-        API_DATABASE_URL: postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase
         INPUT_SCOPE: ${{ inputs.scope }}
         INPUT_REPORT_TYPE: ${{ inputs.report_type }}
         INPUT_PUBLISH_ISSUE: ${{ inputs.publish_issue }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
         INPUT_ENVIRONMENT: ${{ inputs.environment }}
         TURBO_TELEMETRY_DISABLED: "1"
-      run: node scripts/node/cli/github-quality-gate.js
+      run: |
+        export API_DATABASE_URL="${API_DATABASE_URL:-postgres://postgres:1flowbase@127.0.0.1:${QUALITY_GATE_POSTGRES_PORT:-35432}/1flowbase}"
+        node scripts/node/cli/github-quality-gate.js
+    - id: quality-gate-postgres-cleanup
+      if: ${{ always() && inputs.start_postgres == 'true' }}
+      shell: bash
+      run: |
+        compose_project_name="${QUALITY_GATE_COMPOSE_PROJECT_NAME:-${COMPOSE_PROJECT_NAME:-}}"
+        if [ -n "$compose_project_name" ]; then
+          if docker compose version >/dev/null 2>&1; then
+            docker compose -p "$compose_project_name" -f docker/docker-compose.middleware.yaml down --remove-orphans --volumes || true
+          elif docker-compose version >/dev/null 2>&1; then
+            docker-compose -p "$compose_project_name" -f docker/docker-compose.middleware.yaml down --remove-orphans --volumes || true
+          fi
+        fi
+
+        if [ -n "${RUNNER_TEMP:-}" ] && [ -n "${POSTGRES_DATA_DIR:-}" ]; then
+          case "$POSTGRES_DATA_DIR" in
+            "$RUNNER_TEMP"/*) rm -rf "$POSTGRES_DATA_DIR" ;;
+          esac
+        fi

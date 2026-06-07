@@ -40,6 +40,13 @@ function readQualityGateAction() {
   );
 }
 
+function readMiddlewareCompose() {
+  return fs.readFileSync(
+    path.join(repoRoot, "docker", "docker-compose.middleware.yaml"),
+    "utf8",
+  );
+}
+
 function readGitHubAutomationDocs() {
   return fs.readFileSync(
     path.join(repoRoot, ".github", "GITHUB_AUTOMATION.md"),
@@ -510,8 +517,9 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
   assert.match(workflow, /publish_issue: "true"/u);
 });
 
-test("quality gate action clears stale middleware containers before starting postgres", () => {
+test("quality gate action isolates middleware postgres per gate scope", () => {
   const action = readQualityGateAction();
+  const middlewareCompose = readMiddlewareCompose();
 
   assert.match(
     action,
@@ -519,10 +527,38 @@ test("quality gate action clears stale middleware containers before starting pos
   );
   assert.match(
     action,
-    /docker compose -f docker\/docker-compose\.middleware\.yaml down --remove-orphans/u,
+    /scope_hash="\$\(printf '%s' "\$scope_slug" \| cksum \| awk '\{ print \$1 \}'\)"/u,
   );
   assert.match(
     action,
-    /docker-compose -f docker\/docker-compose\.middleware\.yaml down --remove-orphans/u,
+    /postgres_port="\$\{QUALITY_GATE_POSTGRES_PORT:-\$\(\(36000 \+ \(scope_hash % 2000\)\)\)\}"/u,
+  );
+  assert.match(
+    action,
+    /compose_project_name="\$\{QUALITY_GATE_COMPOSE_PROJECT_NAME:-qg-\$\{scope_slug\}-\$\{GITHUB_RUN_ID:-local\}-\$\{GITHUB_RUN_ATTEMPT:-0\}\}"/u,
+  );
+  assert.match(
+    action,
+    /POSTGRES_DATA_DIR="\$postgres_data_dir"/u,
+  );
+  assert.match(
+    action,
+    /docker compose -p "\$compose_project_name" -f docker\/docker-compose\.middleware\.yaml down --remove-orphans/u,
+  );
+  assert.match(
+    action,
+    /docker-compose -p "\$compose_project_name" -f docker\/docker-compose\.middleware\.yaml down --remove-orphans/u,
+  );
+  assert.match(
+    action,
+    /API_DATABASE_URL:-postgres:\/\/postgres:1flowbase@127\.0\.0\.1:\$\{QUALITY_GATE_POSTGRES_PORT:-35432\}\/1flowbase/u,
+  );
+  assert.match(
+    action,
+    /quality-gate-postgres-cleanup/u,
+  );
+  assert.match(
+    middlewareCompose,
+    /\$\{POSTGRES_DATA_DIR:-\.\/volumes\/postgres\}:\/var\/lib\/postgresql\/data/u,
   );
 });
