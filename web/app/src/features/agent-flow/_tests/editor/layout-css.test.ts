@@ -52,7 +52,7 @@ describe('AgentFlow editor layout CSS', () => {
     );
   });
 
-  test('centers the source connector icon without glyph baseline offsets', () => {
+  test('centers connector add icons without glyph baseline offsets', () => {
     const controlsCss = fs.readFileSync(
       path.resolve(
         import.meta.dirname,
@@ -61,7 +61,13 @@ describe('AgentFlow editor layout CSS', () => {
       'utf8'
     );
     const iconBlock = controlsCss.match(
+      /\.agent-flow-connector-add-icon\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const nodeHandleIconBlock = controlsCss.match(
       /\.agent-flow-node-handle__icon\s*\{[\s\S]*?\n\}/
+    )?.[0];
+    const edgeButtonBlock = controlsCss.match(
+      /\.agent-flow-edge-add-button\.ant-btn\s*\{[\s\S]*?\n\}/
     )?.[0];
 
     expect(iconBlock).toContain('display: inline-flex;');
@@ -69,5 +75,12 @@ describe('AgentFlow editor layout CSS', () => {
     expect(iconBlock).toContain('justify-content: center;');
     expect(iconBlock).toContain('line-height: 0;');
     expect(iconBlock).not.toContain('transform:');
+    expect(nodeHandleIconBlock).not.toContain('transform:');
+    expect(edgeButtonBlock).toContain('display: inline-flex;');
+    expect(edgeButtonBlock).toContain('align-items: center;');
+    expect(edgeButtonBlock).toContain('justify-content: center;');
+    expect(controlsCss).not.toContain(
+      '.agent-flow-edge-add-button-wrapper .ant-btn'
+    );
   });
 });

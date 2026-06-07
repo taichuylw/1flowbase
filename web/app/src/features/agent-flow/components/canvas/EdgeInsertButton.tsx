@@ -1,9 +1,9 @@
-import { PlusOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import { i18nText } from '../../../../shared/i18n/text';
+import { ConnectorAddIcon } from './ConnectorAddIcon';
 
 export function EdgeInsertButton({
   open,
@@ -16,9 +16,11 @@ export function EdgeInsertButton({
   onPickNode: (option: NodePickerOption) => void;
   options: NodePickerOption[];
 }) {
+  const ariaLabel = i18nText("agentFlow", "auto.add_new_node_connection");
+
   return (
     <NodePickerPopover
-      ariaLabel={i18nText("agentFlow", "auto.add_new_node_connection")}
+      ariaLabel={ariaLabel}
       open={open}
       options={options}
       onOpenChange={onOpenChange}
@@ -26,21 +28,12 @@ export function EdgeInsertButton({
       placement="rightTop"
     >
       <Button
+        aria-label={ariaLabel}
+        className="agent-flow-edge-add-button"
         type="primary"
         shape="circle"
         size="small"
-        icon={<PlusOutlined style={{ fontSize: 12, fontWeight: 'bold' }} />}
-        style={{
-          width: 20,
-          height: 20,
-          minWidth: 20,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 2px 8px rgba(22, 119, 255, 0.3)',
-          border: 'none',
-          zIndex: 30
-        }}
+        icon={<ConnectorAddIcon />}
         onClick={(e) => {
           e.stopPropagation();
           onOpenChange(!open);

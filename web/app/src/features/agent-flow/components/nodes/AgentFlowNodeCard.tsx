@@ -2,7 +2,6 @@ import {
   DeleteOutlined,
   MoreOutlined,
   PlayCircleOutlined,
-  PlusOutlined,
   SwapOutlined
 } from '@ant-design/icons';
 import { Button, Dropdown, Tooltip, type MenuProps } from 'antd';
@@ -16,6 +15,7 @@ import {
 
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { CanvasHandle } from '../canvas/CanvasHandle';
+import { ConnectorAddIcon } from '../canvas/ConnectorAddIcon';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
@@ -283,10 +283,7 @@ export function AgentFlowNodeCard({
                 }
               }}
             >
-              <PlusOutlined
-                aria-hidden="true"
-                className="agent-flow-node-handle__icon"
-              />
+              <ConnectorAddIcon className="agent-flow-node-handle__icon" />
             </CanvasHandle>
           </Tooltip>
         </NodePickerPopover>
