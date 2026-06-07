@@ -28,8 +28,8 @@ describe('NodeInspector code schema', () => {
     );
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
-    expect(inspectorStyles).toContain(
-      'grid-template-columns: minmax(88px, 0.7fr) minmax(96px, 0.65fr) minmax(168px, 1.5fr) 28px;'
+    expect(inspectorStyles).toMatch(
+      /\.agent-flow-templated-binding-row\s*\{[^}]*grid-template-columns:\s*minmax\(88px,\s*0\.7fr\)\s*minmax\(96px,\s*0\.65fr\)\s*minmax\(\s*168px,\s*1\.5fr\s*\)\s*28px;/su
     );
 
     renderWithProviders(

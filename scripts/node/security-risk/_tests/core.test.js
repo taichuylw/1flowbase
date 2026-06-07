@@ -45,6 +45,24 @@ test('scanDiffText reports newly added network and execution risks', () => {
   assert.equal(findings[0].file, 'web/app/src/api.ts');
 });
 
+test('scanDiffText limits remote dependency findings to dependency manifests', () => {
+  const findings = scanDiffText([
+    '+++ b/web/app/src/features/agent-flow/_tests/runtime.test.ts',
+    '+const fixture = { "ApiBaseUrl": "https://example.test/v1" };',
+    '+++ b/web/app/package.json',
+    '+    "internal-tool": "https://example.test/internal-tool.tgz",',
+  ].join('\n'));
+
+  assert.deepEqual(
+    findings.map((finding) => `${finding.file}:${finding.kind}`),
+    [
+      'web/app/src/features/agent-flow/_tests/runtime.test.ts:external-url',
+      'web/app/package.json:external-url',
+      'web/app/package.json:remote-dependency',
+    ]
+  );
+});
+
 test('main writes a security-risk report and returns advisory status to CI', async () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-security-risk-'));
   const outputDir = path.join(repoRoot, 'tmp', 'test-governance');
