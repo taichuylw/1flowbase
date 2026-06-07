@@ -84,16 +84,14 @@ export function AgentFlowOverlay({
           icon={<GlobalOutlined />}
           onClick={onOpenSystemVariables}
           title={i18nText("agentFlow", "auto.system_variables")}
-        >
-          {i18nText("agentFlow", "auto.system_variables")}</Button>
+        />
         <Button
           aria-label={i18nText("agentFlow", "auto.environment_variables")}
           autoInsertSpace={false}
           icon={<CodeOutlined />}
           onClick={onOpenEnvironmentVariables}
           title={i18nText("agentFlow", "auto.environment_variables")}
-        >
-          {i18nText("agentFlow", "auto.environment_variables")}</Button>
+        />
         <Tooltip title={autosaveLabel}>
           <Button
             aria-label={i18nText("agentFlow", "auto.save")}
