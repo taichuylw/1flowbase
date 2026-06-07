@@ -36,9 +36,15 @@ export type NodePickerOption =
   | BuiltinNodePickerOption
   | PluginContributionPickerOption;
 
+const HIDDEN_BUILTIN_NODE_PICKER_TYPES = new Set<BuiltinFlowNodeType>([
+  // Human Input is incomplete and not available to users yet.
+  'human_input'
+]);
+
 export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] =
   builtinNodeRuntimeContractTypes
     .filter((nodeType): nodeType is BuiltinFlowNodeType => nodeType !== 'plugin_node')
+    .filter((nodeType) => !HIDDEN_BUILTIN_NODE_PICKER_TYPES.has(nodeType))
     .map((nodeType) => {
       const contract = getBuiltinNodeRuntimeContract(nodeType);
 

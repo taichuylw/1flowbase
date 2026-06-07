@@ -112,6 +112,9 @@ describe('NodePickerPopover', () => {
     expect(
       screen.getByRole('menuitem', { name: /Knowledge Retrieval/i })
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /Human Input/i })
+    ).not.toBeInTheDocument();
   });
 
   test('filters node groups through the picker search', () => {
