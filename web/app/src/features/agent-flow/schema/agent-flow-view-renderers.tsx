@@ -214,7 +214,7 @@ function OutputContractView({ adapter, block }: SchemaViewRendererProps) {
   );
 }
 
-function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
+function PolicyGroupView({ adapter }: SchemaViewRendererProps) {
   const node = getNode(adapter);
   const retryEnabled = Boolean(adapter.getValue('config.retry_enabled'));
   const errorPolicy =
@@ -507,7 +507,7 @@ export const agentFlowViewRenderers = {
   card_description: renderCardDescriptionView,
   summary: renderSummaryView,
   output_contract: OutputContractView,
-  policy_group: renderPolicyGroupView,
+  policy_group: PolicyGroupView,
   relations: renderRelationsView,
   runtime_summary: renderRuntimeSummaryView,
   runtime_io: renderRuntimeIoView,

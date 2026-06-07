@@ -61,6 +61,10 @@ function isSkippedDirectory(entryName) {
   return SKIPPED_DIRS.has(entryName);
 }
 
+function isPermissionDeniedError(error) {
+  return error && (error.code === 'EACCES' || error.code === 'EPERM');
+}
+
 function shouldScanFile(relativePath) {
   if (SKIPPED_FILES.has(relativePath)) {
     return false;
@@ -90,13 +94,32 @@ function walkFiles(rootPath, collected = []) {
     return collected;
   }
 
-  const stat = fs.statSync(rootPath);
+  let stat;
+  try {
+    stat = fs.statSync(rootPath);
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      return collected;
+    }
+    throw error;
+  }
+
   if (stat.isFile()) {
     collected.push(rootPath);
     return collected;
   }
 
-  for (const entry of fs.readdirSync(rootPath, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = fs.readdirSync(rootPath, { withFileTypes: true });
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      return collected;
+    }
+    throw error;
+  }
+
+  for (const entry of entries) {
     if (entry.isDirectory() && isSkippedDirectory(entry.name)) {
       continue;
     }

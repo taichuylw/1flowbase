@@ -5,6 +5,7 @@ export function ConnectorAddIcon({ className }: { className?: string }) {
     <PlusOutlined
       aria-hidden="true"
       className={`agent-flow-connector-add-icon${className ? ` ${className}` : ''}`}
+      data-testid="agent-flow-connector-add-icon"
     />
   );
 }
