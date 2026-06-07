@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
+import { ERROR_BRANCH_SOURCE_HANDLE } from '../../lib/node-error-policy';
 import { listLlmProviderOptions } from '../../lib/model-options';
 import { validateDocument } from '../../lib/validate-document';
 import {
@@ -797,6 +798,49 @@ describe('validateDocument', () => {
         expect.objectContaining({
           nodeId: 'node-if-else',
           fieldKey: 'bindings.branches'
+        })
+      ])
+    );
+  });
+
+  test('allows the fixed exception source handle only when the source node uses exception branch policy', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+    const answerNode = document.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+
+    if (!llmNode || !answerNode) {
+      throw new Error('expected default llm and answer nodes');
+    }
+
+    llmNode.config.error_policy = 'error_branch';
+    document.graph.edges.push({
+      id: 'edge-llm-error-answer',
+      source: llmNode.id,
+      target: answerNode.id,
+      sourceHandle: ERROR_BRANCH_SOURCE_HANDLE,
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(validateDocument(document)).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-llm-error-answer-invalid-source-handle'
+        })
+      ])
+    );
+
+    llmNode.config.error_policy = 'none';
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-llm-error-answer-invalid-source-handle',
+          nodeId: 'node-llm',
+          fieldKey: 'config.error_policy'
         })
       ])
     );

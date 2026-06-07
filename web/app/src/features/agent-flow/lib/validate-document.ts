@@ -18,6 +18,10 @@ import {
   getActiveNodeBindings
 } from './data-model-query-binding';
 import { getLlmModelProvider } from './llm-node-config';
+import {
+  ERROR_BRANCH_SOURCE_HANDLE,
+  nodeUsesErrorBranch
+} from './node-error-policy';
 import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
 import {
   extractNamedBindingSelectors,
@@ -703,8 +707,26 @@ export function validateDocument(
         sourceNode?.type === 'if_else'
           ? getIfElseBranchesFromBindings(sourceNode.bindings)
           : null;
+      const usesErrorBranchSourceHandle =
+        edge.sourceHandle === ERROR_BRANCH_SOURCE_HANDLE;
 
-      if (sourceBranches) {
+      if (
+        usesErrorBranchSourceHandle &&
+        (!sourceNode || !nodeUsesErrorBranch(sourceNode))
+      ) {
+        issues.push({
+          id: `${edge.id}-invalid-source-handle`,
+          scope: 'node',
+          level: 'error',
+          nodeId: edge.source,
+          sectionKey: 'policy',
+          fieldKey: 'config.error_policy',
+          title: i18nText('agentFlow', 'auto.branch_connection_invalid'),
+          message: i18nText('agentFlow', 'auto.branch_connection_invalid_message')
+        });
+      }
+
+      if (sourceBranches && !usesErrorBranchSourceHandle) {
         const branchHandles = new Set(
           sourceBranches.map((branch) => branch.sourceHandle)
         );

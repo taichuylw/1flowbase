@@ -1,4 +1,5 @@
 use super::*;
+use orchestration_runtime::node_error_policy::ERROR_BRANCH_SOURCE_HANDLE;
 
 fn branch_document(flow_id: Uuid) -> Value {
     let if_condition = json!({
@@ -261,6 +262,95 @@ fn compile_if_else_rejects_invalid_branch_contract_without_outgoing_edges() {
     assert!(error
         .to_string()
         .contains("if_else node node-if branch if must include a complete condition"));
+}
+
+#[test]
+fn compile_allows_error_branch_source_handle_for_nodes_with_error_branch_policy() {
+    let flow_id = Uuid::nil();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["error_policy"] = json!("error_branch");
+    document["graph"]["nodes"]
+        .as_array_mut()
+        .expect("sample graph nodes should be an array")
+        .push(json!({
+            "id": "node-answer",
+            "type": "answer",
+            "alias": "Answer",
+            "description": "",
+            "containerId": null,
+            "position": { "x": 480, "y": 0 },
+            "configVersion": 1,
+            "config": {},
+            "bindings": {
+                "answer_template": { "kind": "templated_text", "value": "handled" }
+            },
+            "outputs": [{ "key": "answer", "title": "对话输出", "valueType": "string" }]
+        }));
+    document["graph"]["edges"]
+        .as_array_mut()
+        .expect("sample graph edges should be an array")
+        .push(json!({
+            "id": "edge-llm-error-answer",
+            "source": "node-llm",
+            "target": "node-answer",
+            "sourceHandle": ERROR_BRANCH_SOURCE_HANDLE,
+            "targetHandle": null,
+            "containerId": null,
+            "points": []
+        }));
+
+    let plan = FlowCompiler::compile(flow_id, "draft-error-branch", &document, &compile_context())
+        .expect("error branch source handle should compile when policy is enabled");
+
+    assert_eq!(
+        plan.edges
+            .iter()
+            .find(|edge| edge.edge_id == "edge-llm-error-answer")
+            .and_then(|edge| edge.source_handle.as_deref()),
+        Some(ERROR_BRANCH_SOURCE_HANDLE)
+    );
+}
+
+#[test]
+fn compile_rejects_error_branch_source_handle_without_error_branch_policy() {
+    let flow_id = Uuid::nil();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"]
+        .as_array_mut()
+        .expect("sample graph nodes should be an array")
+        .push(json!({
+            "id": "node-answer",
+            "type": "answer",
+            "alias": "Answer",
+            "description": "",
+            "containerId": null,
+            "position": { "x": 480, "y": 0 },
+            "configVersion": 1,
+            "config": {},
+            "bindings": {
+                "answer_template": { "kind": "templated_text", "value": "handled" }
+            },
+            "outputs": [{ "key": "answer", "title": "对话输出", "valueType": "string" }]
+        }));
+    document["graph"]["edges"]
+        .as_array_mut()
+        .expect("sample graph edges should be an array")
+        .push(json!({
+            "id": "edge-llm-error-answer",
+            "source": "node-llm",
+            "target": "node-answer",
+            "sourceHandle": ERROR_BRANCH_SOURCE_HANDLE,
+            "targetHandle": null,
+            "containerId": null,
+            "points": []
+        }));
+
+    let error = FlowCompiler::compile(flow_id, "draft-error-branch", &document, &compile_context())
+        .expect_err("error branch source handle should require error_branch policy");
+
+    assert!(error
+        .to_string()
+        .contains("edge edge-llm-error-answer uses error sourceHandle on node node-llm without error_branch policy"));
 }
 
 #[test]

@@ -436,6 +436,49 @@ describe('NodeDetailPanel', () => {
   );
 
   test(
+    'opens a default output form when selecting the default value exception strategy',
+    async () => {
+      let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+      renderWithProviders(
+        <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <DocumentObserver
+            onChange={(document) => {
+              latestDocument = document;
+            }}
+          />
+          <SelectionSeed nodeId="node-llm" />
+          <NodeConfigTab />
+        </AgentFlowEditorStoreProvider>
+      );
+
+      fireEvent.mouseDown(screen.getByRole('combobox', { name: '异常处理' }));
+      fireEvent.click(await screen.findByText('默认值'));
+
+      expect(
+        await screen.findByRole('dialog', { name: '默认输出' })
+      ).toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole('textbox', { name: '默认输出' }), {
+        target: { value: '{"text":"兜底回复"}' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+
+      await waitFor(() => {
+        expect(getLlmNodeConfig(latestDocument)).toEqual(
+          expect.objectContaining({
+            error_policy: 'default_value',
+            error_default_output: {
+              text: '兜底回复'
+            }
+          })
+        );
+      });
+    },
+    NODE_DETAIL_PANEL_TEST_TIMEOUT
+  );
+
+  test(
     'writes the reasoning effort strategy from the policy group',
     async () => {
       let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

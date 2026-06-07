@@ -1,4 +1,5 @@
 use super::*;
+use crate::node_error_policy::ERROR_BRANCH_SOURCE_HANDLE;
 
 pub fn initial_active_node_ids(plan: &CompiledPlan) -> BTreeSet<String> {
     if plan.edges.is_empty() {
@@ -24,19 +25,34 @@ pub fn activate_downstream_nodes(
     active_node_ids: &mut BTreeSet<String>,
     node: &CompiledNode,
     selected_source_handle: Option<&str>,
-) {
+) -> bool {
     if plan.edges.is_empty() {
         active_node_ids.extend(node.downstream_node_ids.iter().cloned());
-        return;
+        return !node.downstream_node_ids.is_empty();
     }
+
+    let mut activated = false;
 
     for edge in outgoing_edges(plan, &node.node_id) {
         if node.node_type == "if_else" && edge.source_handle.as_deref() != selected_source_handle {
             continue;
         }
 
+        if node.node_type != "if_else" {
+            if let Some(selected_source_handle) = selected_source_handle {
+                if edge.source_handle.as_deref() != Some(selected_source_handle) {
+                    continue;
+                }
+            } else if edge.source_handle.as_deref() == Some(ERROR_BRANCH_SOURCE_HANDLE) {
+                continue;
+            }
+        }
+
         active_node_ids.insert(edge.target.clone());
+        activated = true;
     }
+
+    activated
 }
 
 pub fn checkpoint_active_node_ids(active_node_ids: &BTreeSet<String>) -> Vec<String> {
