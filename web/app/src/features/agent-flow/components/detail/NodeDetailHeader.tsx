@@ -8,6 +8,7 @@ import type { SchemaAdapter } from '../../../../shared/schema-ui/registry/create
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
 import { useNodeDetailActions } from '../../hooks/interactions/use-node-detail-actions';
 import { NodeActionMenu } from './NodeActionMenu';
+import { NodeDebugButton } from './NodeDebugButton';
 import { NodeRunButton } from './NodeRunButton';
 import { getAgentFlowNodeTypeIcon } from '../../lib/node-type-icons';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -25,12 +26,14 @@ export function NodeDetailHeader({
   schema,
   adapter,
   onClose,
+  onDebugNode,
   onRunNode,
   runLoading = false
 }: {
   schema: CanvasNodeSchema;
   adapter: SchemaAdapter;
   onClose: () => void;
+  onDebugNode?: (() => void) | undefined;
   onRunNode?: (() => void) | undefined;
   runLoading?: boolean;
 }) {
@@ -67,6 +70,7 @@ export function NodeDetailHeader({
         </div>
         <Space className="agent-flow-node-detail__actions" size={4}>
           <NodeRunButton onRunNode={onRunNode} loading={runLoading} />
+          <NodeDebugButton onDebugNode={onDebugNode} loading={runLoading} />
           {definitionMeta?.helpHref ? (
             <Button
               aria-label={i18nText("agentFlow", "auto.help_documentation")}

@@ -22,6 +22,7 @@ export function createTemplateSelectorToken(selector: string[]) {
 export function parseTemplateSelectorTokens(value: string): string[][] {
   const selectors: string[][] = [];
 
+  TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
   for (const match of value.matchAll(TEMPLATE_SELECTOR_REGEX)) {
     const selector = selectorFromTemplateMatch(match);
 
@@ -29,6 +30,7 @@ export function parseTemplateSelectorTokens(value: string): string[][] {
       selectors.push(selector);
     }
   }
+  TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
 
   return selectors;
 }
@@ -77,7 +79,10 @@ export function remapTemplateSelectorTokens(
 export function getTemplateSelectorTokenMatch(value: string) {
   TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
 
-  return TEMPLATE_SELECTOR_REGEX.exec(value);
+  const match = TEMPLATE_SELECTOR_REGEX.exec(value);
+
+  TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
+  return match;
 }
 
 export function isTemplateSelectorToken(value: string) {

@@ -17,11 +17,13 @@ import { useAgentFlowDebugSession } from '../../hooks/runtime/useAgentFlowDebugS
 import {
   applicationRunNodeLastRunQueryKey,
   buildNodeDebugPreviewPlan,
+  buildNodeDebugVariableConfirmationPlan,
   fetchRuntimeDebugArtifact,
   nodeLastRunToFlowDebugRunDetail,
   nodeLastRunQueryKey,
   startNodeDebugPreview,
-  type NodeDebugPreviewPlan
+  type NodeDebugPreviewPlan,
+  type NodeDebugPreviewVariableCache
 } from '../../api/runtime';
 import { orchestrationQueryKey, updateVersion } from '../../api/orchestration';
 import {
@@ -34,7 +36,11 @@ import {
   fetchApplicationApiMapping,
   publishApplicationApiVersion
 } from '../../../applications/api/public-api';
-import type { AgentFlowEnvironmentVariable } from '../../lib/variables/application-environment-variables';
+import {
+  environmentVariableNodeId,
+  type AgentFlowEnvironmentVariable
+} from '../../lib/variables/application-environment-variables';
+import { systemVariableNodeId } from '../../lib/variables/system-variables';
 import {
   fetchModelProviderOptions,
   modelProviderOptionsQueryKey
@@ -110,6 +116,9 @@ export function AgentFlowCanvasFrame({
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
+  const actorUserId = useAuthStore(
+    (state) => state.actor?.id ?? state.me?.id ?? null
+  );
   const workingDocument = useAgentFlowEditorStore(selectWorkingDocument);
   const lastSavedDocument = useAgentFlowEditorStore(selectLastSavedDocument);
   const autosaveStatus = useAgentFlowEditorStore(selectAutosaveStatus);
@@ -168,7 +177,8 @@ export function AgentFlowCanvasFrame({
   const [isResizingHistoryDock, setIsResizingHistoryDock] = useState(false);
   const [pendingNodePreview, setPendingNodePreview] = useState<{
     nodeId: string;
-    plan: NodeDebugPreviewPlan;
+    inputPayload: NodeDebugPreviewPlan['input_payload'];
+    fields: NodeDebugPreviewPlan['missing_fields'];
   } | null>(null);
   const [variableCacheOpen, setVariableCacheOpen] = useState(false);
   const [systemVariablesOpen, setSystemVariablesOpen] = useState(false);
@@ -860,6 +870,38 @@ export function AgentFlowCanvasFrame({
     );
     debugSession.setVariableCacheValue(key, value);
   }
+
+  function buildNodeDebugRuntimeVariableCache(): NodeDebugPreviewVariableCache {
+    const cache = debugSession.getNodePreviewVariableCache();
+    const environmentPayload = environmentVariables.reduce<
+      Record<string, unknown>
+    >((payload, variable) => {
+      payload[variable.name] = variable.value;
+      return payload;
+    }, {});
+    const systemPayload: Record<string, unknown> = {
+      conversation_id: debugSession.debugSessionId,
+      dialog_count: 0,
+      user_id: actorUserId ?? '',
+      application_id: applicationId,
+      workflow_id: draftMeta.flowId,
+      workflow_run_id: debugSession.activeRunId ?? '',
+      model_parameters: {}
+    };
+
+    return {
+      ...cache,
+      [environmentVariableNodeId]: {
+        ...environmentPayload,
+        ...(cache[environmentVariableNodeId] ?? {})
+      },
+      [systemVariableNodeId]: {
+        ...systemPayload,
+        ...(cache[systemVariableNodeId] ?? {})
+      }
+    };
+  }
+
   function runNodePreview(
     nodeId: string,
     inputPayload: Record<string, Record<string, unknown>>
@@ -872,11 +914,34 @@ export function AgentFlowCanvasFrame({
     const plan = buildNodeDebugPreviewPlan(
       documentRef.current,
       nodeId,
-      debugSession.getNodePreviewVariableCache()
+      buildNodeDebugRuntimeVariableCache()
     );
 
     if (plan.missing_fields.length > 0) {
-      setPendingNodePreview({ nodeId, plan });
+      setPendingNodePreview({
+        nodeId,
+        inputPayload: plan.input_payload,
+        fields: plan.missing_fields
+      });
+      return;
+    }
+
+    runNodePreview(nodeId, plan.input_payload);
+  }
+
+  function handleDebugNode(nodeId: string) {
+    const plan = buildNodeDebugVariableConfirmationPlan(
+      documentRef.current,
+      nodeId,
+      buildNodeDebugRuntimeVariableCache()
+    );
+
+    if (plan.fields.length > 0) {
+      setPendingNodePreview({
+        nodeId,
+        inputPayload: plan.input_payload,
+        fields: plan.fields
+      });
       return;
     }
 
@@ -890,7 +955,7 @@ export function AgentFlowCanvasFrame({
       return;
     }
 
-    const mergedInputPayload = { ...pendingNodePreview.plan.input_payload };
+    const mergedInputPayload = { ...pendingNodePreview.inputPayload };
 
     for (const [nodeId, payload] of Object.entries(inputPayload)) {
       mergedInputPayload[nodeId] = {
@@ -911,6 +976,14 @@ export function AgentFlowCanvasFrame({
     }
 
     handleRunNode(selectedNodeId);
+  }
+
+  function handleDebugSelectedNode() {
+    if (!selectedNodeId) {
+      return;
+    }
+
+    handleDebugNode(selectedNodeId);
   }
 
   function openDebugConsole() {
@@ -1058,6 +1131,7 @@ export function AgentFlowCanvasFrame({
               environmentVariables={environmentVariables}
               issues={issues}
               onClose={detailActions.closeDetail}
+              onDebugNode={selectedNodeId ? handleDebugSelectedNode : undefined}
               onResolveRunScope={debugSession.selectRunScope}
               onRunNode={selectedNodeId ? handleRunSelectedNode : undefined}
               runLoading={nodePreviewMutation.isPending}
@@ -1175,7 +1249,7 @@ export function AgentFlowCanvasFrame({
       ) : null}
       <NodePreviewVariablesModal
         confirmLoading={nodePreviewMutation.isPending}
-        fields={pendingNodePreview?.plan.missing_fields ?? []}
+        fields={pendingNodePreview?.fields ?? []}
         open={Boolean(pendingNodePreview)}
         onCancel={() => setPendingNodePreview(null)}
         onSubmit={handleSubmitNodePreviewVariables}

@@ -427,6 +427,7 @@
     "time_taken_ms": "Time taken(ms)",
     "think": "think",
     "run_current_node": "Run current node",
+    "debug_current_node": "Debug current node",
     "edit_alt": "Edit",
     "drag_drop_sort_messages": "Drag and drop sort {{value1}} messages",
     "start_stop_output": "Start and stop output",

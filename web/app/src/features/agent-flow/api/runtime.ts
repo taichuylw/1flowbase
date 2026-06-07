@@ -35,6 +35,10 @@ import {
   getNodeVariableOutputs,
   getStartInputFields
 } from '../lib/variables/start-node-variables';
+import {
+  agentFlowSystemVariables,
+  systemVariableNodeId
+} from '../lib/variables/system-variables';
 import { extractNamedBindingSelectors } from '../lib/named-binding-expressions';
 import {
   collectConditionSelectors,
@@ -146,6 +150,7 @@ export interface NodeDebugPreviewVariableField {
   title: string;
   valueType: FlowNodeDocument['outputs'][number]['valueType'];
   value: unknown;
+  inputPath?: string[];
 }
 
 export type NodeDebugPreviewVariableCache = Record<
@@ -156,6 +161,11 @@ export type NodeDebugPreviewVariableCache = Record<
 export interface NodeDebugPreviewPlan {
   input_payload: Record<string, Record<string, unknown>>;
   missing_fields: NodeDebugPreviewVariableField[];
+}
+
+export interface NodeDebugVariableConfirmationPlan {
+  input_payload: Record<string, Record<string, unknown>>;
+  fields: NodeDebugPreviewVariableField[];
 }
 
 export const nodeLastRunQueryKey = (applicationId: string, nodeId: string) =>
@@ -403,6 +413,72 @@ function extractTemplateSelectors(template: string) {
   return parseTemplateSelectorTokens(template);
 }
 
+function normalizeConfigSelectorPath(value: unknown) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const selector = value.filter(
+    (segment): segment is string => typeof segment === 'string'
+  );
+
+  return selector.length >= 2 ? selector : null;
+}
+
+function configKeyCarriesSelector(key: string | undefined) {
+  return (
+    key === 'selector' ||
+    Boolean(key?.endsWith('_selector')) ||
+    Boolean(key?.endsWith('Selector'))
+  );
+}
+
+function extractConfigReferenceSelectors(
+  value: unknown,
+  key?: string
+): string[][] {
+  const selectors: string[][] = [];
+
+  if (typeof value === 'string') {
+    selectors.push(...extractTemplateSelectors(value));
+    return selectors;
+  }
+
+  if (configKeyCarriesSelector(key)) {
+    const selector = normalizeConfigSelectorPath(value);
+
+    if (selector) {
+      selectors.push(selector);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return [
+      ...selectors,
+      ...value.flatMap((entry) => extractConfigReferenceSelectors(entry))
+    ];
+  }
+
+  if (!isRecord(value)) {
+    return selectors;
+  }
+
+  if (value.kind === 'selector') {
+    const selector = normalizeConfigSelectorPath(value.selector);
+
+    if (selector) {
+      selectors.push(selector);
+    }
+  }
+
+  return [
+    ...selectors,
+    ...Object.entries(value).flatMap(([entryKey, entryValue]) =>
+      extractConfigReferenceSelectors(entryValue, entryKey)
+    )
+  ];
+}
+
 function extractSelectors(binding: FlowBinding): string[][] {
   switch (binding.kind) {
     case 'selector': {
@@ -441,6 +517,15 @@ function extractSelectors(binding: FlowBinding): string[][] {
   }
 }
 
+function collectNodeReferenceSelectors(node: FlowNodeDocument) {
+  return [
+    ...getActiveNodeBindings(node).flatMap(([, binding]) =>
+      extractSelectors(binding)
+    ),
+    ...extractConfigReferenceSelectors(node.config)
+  ];
+}
+
 function hasPreviewVariableValue(value: unknown) {
   return value !== undefined && value !== null && value !== '';
 }
@@ -449,6 +534,14 @@ function findNodeOutput(node: FlowNodeDocument | undefined, outputKey: string) {
   return node
     ? getNodeVariableOutputs(node).find((output) => output.key === outputKey)
     : undefined;
+}
+
+function findExternalVariableOutput(nodeId: string, outputKey: string) {
+  if (nodeId === systemVariableNodeId) {
+    return agentFlowSystemVariables.find((output) => output.key === outputKey);
+  }
+
+  return undefined;
 }
 
 function selectorsMatch(left: string[] | undefined, right: string[]) {
@@ -463,12 +556,13 @@ function findNodeOutputBySelector(
   node: FlowNodeDocument | undefined,
   selector: string[]
 ) {
+  const outputKey = selectorOutputKey(selector);
+
   if (!node) {
-    return undefined;
+    return findExternalVariableOutput(selector[0] ?? '', outputKey);
   }
 
   const selectorTail = selector.slice(1);
-  const outputKey = selectorOutputKey(selector);
   const outputs = getNodeVariableOutputs(node);
 
   return (
@@ -509,34 +603,38 @@ function writeNestedPreviewValue(
 
 function writePreviewInputValue({
   inputPayload,
+  sourceNodeId,
   sourceNode,
   sourceOutput,
   outputKey,
   value
 }: {
   inputPayload: Record<string, Record<string, unknown>>;
+  sourceNodeId: string;
   sourceNode: FlowNodeDocument | undefined;
   sourceOutput: FlowNodeOutputDocument | undefined;
   outputKey: string;
   value: unknown;
 }) {
-  if (!sourceNode) {
+  const inputNodeId = sourceNode?.id ?? sourceNodeId;
+
+  if (!inputNodeId) {
     return;
   }
 
-  inputPayload[sourceNode.id] ??= {};
+  inputPayload[inputNodeId] ??= {};
 
-  if (sourceNode.type === 'code' && sourceOutput?.selector?.length) {
+  if (sourceNode?.type === 'code' && sourceOutput?.selector?.length) {
     writeNestedPreviewValue(
-      inputPayload[sourceNode.id],
+      inputPayload[inputNodeId],
       sourceOutput.selector,
       value
     );
-    inputPayload[sourceNode.id].error ??= null;
+    inputPayload[inputNodeId].error ??= null;
     return;
   }
 
-  inputPayload[sourceNode.id][outputKey] = value;
+  inputPayload[inputNodeId][outputKey] = value;
 }
 
 function readCachedOutputValue(
@@ -572,22 +670,79 @@ function readCachedOutputValue(
   return { found: true, value: current };
 }
 
-function buildMissingPreviewField(
-  document: FlowAuthoringDocument,
-  nodeId: string,
-  outputKey: string
-): NodeDebugPreviewVariableField {
-  const node = document.graph.nodes.find((entry) => entry.id === nodeId);
-  const output = findNodeOutput(node, outputKey);
+function buildNodePreviewVariableField({
+  document,
+  nodeId,
+  outputKey,
+  sourceNode,
+  sourceOutput,
+  value
+}: {
+  document: FlowAuthoringDocument;
+  nodeId: string;
+  outputKey: string;
+  sourceNode?: FlowNodeDocument;
+  sourceOutput?: FlowNodeOutputDocument;
+  value: unknown;
+}): NodeDebugPreviewVariableField {
+  const node =
+    sourceNode ?? document.graph.nodes.find((entry) => entry.id === nodeId);
+  const output =
+    sourceOutput ??
+    findNodeOutput(node, outputKey) ??
+    findExternalVariableOutput(nodeId, outputKey);
+  const inputPath =
+    node?.type === 'code' && sourceOutput?.selector?.length
+      ? [...sourceOutput.selector]
+      : undefined;
 
   return {
     nodeId,
     nodeLabel: node?.alias ?? nodeId,
     key: outputKey,
     title: output?.title ?? `${node?.alias ?? nodeId}.${outputKey}`,
-    valueType: output?.valueType ?? 'unknown',
-    value: buildPreviewValue(node, outputKey)
+    valueType: output?.valueType ?? inferPreviewValueType(value),
+    value,
+    inputPath
   };
+}
+
+function inferPreviewValueType(
+  value: unknown
+): FlowNodeDocument['outputs'][number]['valueType'] {
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+
+  switch (typeof value) {
+    case 'boolean':
+      return 'boolean';
+    case 'number':
+      return 'number';
+    case 'string':
+      return 'string';
+    case 'object':
+      return value === null ? 'unknown' : 'json';
+    default:
+      return 'unknown';
+  }
+}
+
+function buildMissingPreviewField(
+  document: FlowAuthoringDocument,
+  nodeId: string,
+  outputKey: string
+): NodeDebugPreviewVariableField {
+  const node = document.graph.nodes.find((entry) => entry.id === nodeId);
+
+  return buildNodePreviewVariableField({
+    document,
+    nodeId,
+    outputKey,
+    sourceNode: node,
+    sourceOutput: findNodeOutput(node, outputKey),
+    value: buildPreviewValue(node, outputKey)
+  });
 }
 
 function isRequiredStartPreviewKey(node: FlowNodeDocument, outputKey: string) {
@@ -680,9 +835,7 @@ export function buildNodeDebugPreviewInput(
     return { input_payload: inputPayload };
   }
 
-  const selectors = getActiveNodeBindings(node).flatMap(([, binding]) =>
-    extractSelectors(binding)
-  );
+  const selectors = collectNodeReferenceSelectors(node);
 
   for (const selector of selectors) {
     const sourceNodeId = selector[0] ?? '';
@@ -694,6 +847,7 @@ export function buildNodeDebugPreviewInput(
 
     writePreviewInputValue({
       inputPayload,
+      sourceNodeId,
       sourceNode,
       sourceOutput,
       outputKey,
@@ -752,9 +906,7 @@ export function buildNodeDebugPreviewPlan(
     return { input_payload: inputPayload, missing_fields: missingFields };
   }
 
-  const selectors = getActiveNodeBindings(node).flatMap(([, binding]) =>
-    extractSelectors(binding)
-  );
+  const selectors = collectNodeReferenceSelectors(node);
   const visited = new Set<string>();
 
   for (const selector of selectors) {
@@ -780,6 +932,7 @@ export function buildNodeDebugPreviewPlan(
     if (cachedOutput.found && hasPreviewVariableValue(cachedOutput.value)) {
       writePreviewInputValue({
         inputPayload,
+        sourceNodeId,
         sourceNode,
         sourceOutput,
         outputKey,
@@ -791,6 +944,7 @@ export function buildNodeDebugPreviewPlan(
     if (canUseStartPreviewDefault(sourceNode, outputKey)) {
       writePreviewInputValue({
         inputPayload,
+        sourceNodeId,
         sourceNode,
         sourceOutput,
         outputKey,
@@ -805,4 +959,109 @@ export function buildNodeDebugPreviewPlan(
   }
 
   return { input_payload: inputPayload, missing_fields: missingFields };
+}
+
+export function buildNodeDebugVariableConfirmationPlan(
+  document: FlowAuthoringDocument,
+  nodeId: string,
+  variableCache: NodeDebugPreviewVariableCache = {}
+): NodeDebugVariableConfirmationPlan {
+  const node = document.graph.nodes.find((entry) => entry.id === nodeId);
+  const inputPayload: Record<string, Record<string, unknown>> = {};
+  const fields: NodeDebugPreviewVariableField[] = [];
+
+  if (!node) {
+    return { input_payload: inputPayload, fields };
+  }
+
+  if (node.type === 'start') {
+    const visitedStartKeys = new Set<string>();
+
+    for (const output of getNodeVariableOutputs(node)) {
+      if (visitedStartKeys.has(output.key)) {
+        continue;
+      }
+
+      visitedStartKeys.add(output.key);
+
+      const cachedOutput = readCachedOutputValue(
+        variableCache[node.id],
+        output,
+        output.key
+      );
+      const value = cachedOutput.found
+        ? cachedOutput.value
+        : buildPreviewValue(node, output.key);
+
+      writePreviewInputValue({
+        inputPayload,
+        sourceNodeId: node.id,
+        sourceNode: node,
+        sourceOutput: output,
+        outputKey: output.key,
+        value
+      });
+      fields.push(
+        buildNodePreviewVariableField({
+          document,
+          nodeId: node.id,
+          outputKey: output.key,
+          sourceNode: node,
+          sourceOutput: output,
+          value
+        })
+      );
+    }
+
+    return { input_payload: inputPayload, fields };
+  }
+
+  const selectors = collectNodeReferenceSelectors(node);
+  const visited = new Set<string>();
+
+  for (const selector of selectors) {
+    const sourceNodeId = selector[0] ?? '';
+    const outputKey = selectorOutputKey(selector);
+    const cacheKey = selector.join('.');
+    const sourceNode = document.graph.nodes.find(
+      (entry) => entry.id === sourceNodeId
+    );
+    const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
+
+    if (visited.has(cacheKey)) {
+      continue;
+    }
+
+    visited.add(cacheKey);
+
+    const cachedOutput = readCachedOutputValue(
+      variableCache[sourceNodeId],
+      sourceOutput,
+      outputKey
+    );
+    const value = cachedOutput.found
+      ? cachedOutput.value
+      : buildPreviewValue(sourceNode, outputKey);
+
+    writePreviewInputValue({
+      inputPayload,
+      sourceNodeId,
+      sourceNode,
+      sourceOutput,
+      outputKey,
+      value
+    });
+    fields.push(
+      buildNodePreviewVariableField({
+        document,
+        nodeId: sourceNodeId,
+        outputKey,
+        sourceNode,
+        sourceOutput,
+        value
+      })
+    );
+  }
+
+  return { input_payload: inputPayload, fields };
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
   createTemplateSelectorToken,
+  isTemplateSelectorToken,
   parseTemplateSelectorTokens,
   remapTemplateSelectorTokens
 } from '../lib/template-binding';
@@ -32,5 +33,12 @@ describe('template binding selectors', () => {
         new Map([['node-code', 'node-code-copy']])
       )
     ).toBe('{{node-code-copy.result.chat_history}}');
+  });
+
+  test('parses template selectors after checking a token match', () => {
+    expect(isTemplateSelectorToken('{{node-start.query}}')).toBe(true);
+    expect(parseTemplateSelectorTokens('Use {{node-start.query}}')).toEqual([
+      ['node-start', 'query']
+    ]);
   });
 });

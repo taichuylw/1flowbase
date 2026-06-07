@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 
 import {
+  buildNodeDebugVariableConfirmationPlan,
   buildNodeDebugPreviewPlan,
   extractNodePreviewVariableOutput
 } from '../api/runtime';
@@ -75,6 +76,7 @@ describe('node debug preview input', () => {
     ).toEqual({
       input_payload: {
         'node-start': {
+          history: [],
           query: '请总结退款政策'
         }
       },
@@ -82,11 +84,97 @@ describe('node debug preview input', () => {
     });
   });
 
+  test('builds debug confirmation fields for all referenced variables with cached values', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    expect(
+      buildNodeDebugVariableConfirmationPlan(document, 'node-llm', {
+        'node-start': {
+          query: '请总结退款政策'
+        }
+      })
+    ).toEqual({
+      input_payload: {
+        'node-start': {
+          history: [],
+          query: '请总结退款政策'
+        }
+      },
+      fields: [
+        expect.objectContaining({
+          nodeId: 'node-start',
+          key: 'query',
+          title: 'userinput.query',
+          valueType: 'string',
+          value: '请总结退款政策'
+        }),
+        expect.objectContaining({
+          nodeId: 'node-start',
+          key: 'history',
+          title: 'userinput.history',
+          valueType: 'array',
+          value: []
+        })
+      ]
+    });
+  });
+
+  test('builds debug confirmation fields from config templates and environment variables', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const httpNode = createNodeDocument('http_request', 'node-http');
+
+    httpNode.config = {
+      ...httpNode.config,
+      url: '{{env.ApiBaseUrl}}/orders?q={{node-start.query}}'
+    };
+    document.graph.nodes.push(httpNode);
+
+    expect(
+      buildNodeDebugVariableConfirmationPlan(document, 'node-http', {
+        env: {
+          ApiBaseUrl: 'https://api.example.com'
+        },
+        'node-start': {
+          query: '退款'
+        }
+      })
+    ).toEqual({
+      input_payload: {
+        env: {
+          ApiBaseUrl: 'https://api.example.com'
+        },
+        'node-start': {
+          query: '退款'
+        }
+      },
+      fields: [
+        expect.objectContaining({
+          nodeId: 'env',
+          key: 'ApiBaseUrl',
+          title: 'env.ApiBaseUrl',
+          valueType: 'string',
+          value: 'https://api.example.com'
+        }),
+        expect.objectContaining({
+          nodeId: 'node-start',
+          key: 'query',
+          title: 'userinput.query',
+          valueType: 'string',
+          value: '退款'
+        })
+      ]
+    });
+  });
+
   test('reports missing node preview variables instead of using placeholders', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
     expect(buildNodeDebugPreviewPlan(document, 'node-llm')).toEqual({
-      input_payload: {},
+      input_payload: {
+        'node-start': {
+          history: []
+        }
+      },
       missing_fields: [
         expect.objectContaining({
           nodeId: 'node-start',

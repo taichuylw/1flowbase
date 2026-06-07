@@ -293,7 +293,12 @@ describe('node last run runtime', () => {
     await waitFor(() => {
       expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalled();
     });
-    expectNodePreviewRequest('node-llm', {});
+    expectNodePreviewRequest('node-llm', {
+      'node-start': {
+        history: [],
+        query: '总结退款政策'
+      }
+    });
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
     await waitFor(() => {
@@ -328,6 +333,70 @@ describe('node last run runtime', () => {
     );
     expect(within(variableSidebar).getByText('Start/query')).toBeInTheDocument();
     expect(within(variableSidebar).getByText('LLM/text')).toBeInTheDocument();
+  }, 30_000);
+
+  test('opens all referenced variables before running node debug preview', async () => {
+    vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
+      .mockResolvedValueOnce({
+        variable_cache: {
+          'node-start': {
+            query: '总结退款政策'
+          }
+        }
+      })
+      .mockResolvedValue({
+        variable_cache: {
+          'node-start': {
+            query: '改后的调试输入'
+          }
+        }
+      });
+
+    renderReactFlowScene(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialState()}
+      />
+    );
+
+    await selectLlmNode();
+
+    const debugButton = await screen.findByRole('button', {
+      name: '调试当前节点'
+    });
+
+    expect(debugButton).toBeEnabled();
+    fireEvent.click(debugButton);
+
+    const variableDialog = await screen.findByRole('dialog', {
+      name: '输入节点引用变量'
+    });
+    const queryInput = within(variableDialog).getByRole('textbox', {
+      name: 'Start/query'
+    });
+    const historyInput = within(variableDialog).getByRole('textbox', {
+      name: 'Start/history'
+    });
+
+    expect(queryInput).toHaveValue('总结退款政策');
+    expect(historyInput).toHaveValue('[]');
+    fireEvent.change(queryInput, {
+      target: { value: '改后的调试输入' }
+    });
+    fireEvent.click(
+      within(variableDialog).getByRole('button', { name: /运\s*行/ })
+    );
+
+    await waitFor(() => {
+      expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalled();
+    });
+    expectNodePreviewRequest('node-llm', {
+      'node-start': {
+        history: [],
+        query: '改后的调试输入'
+      }
+    });
   }, 30_000);
 
   test('runs Code node preview with legacy result output document shape', async () => {
@@ -379,7 +448,7 @@ describe('node last run runtime', () => {
     expect(await screen.findByText('Code 输出契约不兼容')).toBeInTheDocument();
   }, 30_000);
 
-  test('runs node preview without cached referenced variables', async () => {
+  test('opens missing referenced variables before running node preview', async () => {
     renderReactFlowScene(
       <AgentFlowEditorShell
         applicationId="app-1"
@@ -392,13 +461,34 @@ describe('node last run runtime', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
 
-    await waitFor(() => {
-      expect(screen.queryByText('输入节点引用变量')).not.toBeInTheDocument();
+    const variableDialog = await screen.findByRole('dialog', {
+      name: '输入节点引用变量'
     });
+    const queryInput = within(variableDialog).getByRole('textbox', {
+      name: 'Start/query'
+    });
+
+    expect(queryInput).toHaveValue('');
+    expect(
+      within(variableDialog).queryByRole('textbox', {
+        name: 'Start/history'
+      })
+    ).not.toBeInTheDocument();
+    fireEvent.change(queryInput, {
+      target: { value: '手动输入' }
+    });
+    fireEvent.click(
+      within(variableDialog).getByRole('button', { name: /运\s*行/ })
+    );
 
     await waitFor(() => {
       expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalled();
     });
-    expectNodePreviewRequest('node-llm', {});
+    expectNodePreviewRequest('node-llm', {
+      'node-start': {
+        history: [],
+        query: '手动输入'
+      }
+    });
   }, 30_000);
 });

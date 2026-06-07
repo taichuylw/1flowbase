@@ -48,6 +48,44 @@ function renderField(field: NodeDebugPreviewVariableField) {
   }
 }
 
+function writeNestedPayloadValue(
+  target: Record<string, unknown>,
+  path: string[],
+  value: unknown
+) {
+  let current = target;
+
+  for (const [index, segment] of path.entries()) {
+    if (index === path.length - 1) {
+      current[segment] = value;
+      return;
+    }
+
+    const next = current[segment];
+
+    if (!next || typeof next !== 'object' || Array.isArray(next)) {
+      current[segment] = {};
+    }
+
+    current = current[segment] as Record<string, unknown>;
+  }
+}
+
+function writePayloadFieldValue(
+  payload: Record<string, Record<string, unknown>>,
+  field: NodeDebugPreviewVariableField,
+  value: unknown
+) {
+  payload[field.nodeId] ??= {};
+
+  if (field.inputPath?.length) {
+    writeNestedPayloadValue(payload[field.nodeId], field.inputPath, value);
+    return;
+  }
+
+  payload[field.nodeId][field.key] = value;
+}
+
 export function NodePreviewVariablesModal({
   open,
   fields,
@@ -88,10 +126,10 @@ export function NodePreviewVariablesModal({
           const payload: Record<string, Record<string, unknown>> = {};
 
           for (const field of fields) {
-            payload[field.nodeId] ??= {};
-            payload[field.nodeId][field.key] = parseFieldValue(
+            writePayloadFieldValue(
+              payload,
               field,
-              values[fieldName(field)]
+              parseFieldValue(field, values[fieldName(field)])
             );
           }
 

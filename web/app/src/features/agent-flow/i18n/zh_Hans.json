@@ -427,6 +427,7 @@
     "time_taken_ms": "耗时(ms)",
     "think": "思考",
     "run_current_node": "运行当前节点",
+    "debug_current_node": "调试当前节点",
     "edit_alt": "编辑",
     "drag_drop_sort_messages": "拖拽排序 {{value1}} 消息",
     "start_stop_output": "起止输出",

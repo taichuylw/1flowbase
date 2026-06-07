@@ -21,6 +21,7 @@ const nodeDetailShellSchema = {
 
 export function NodeDetailPanel({
   onClose,
+  onDebugNode,
   onRunNode,
   applicationId,
   activeRunId,
@@ -30,6 +31,7 @@ export function NodeDetailPanel({
   runLoading = false
 }: {
   onClose: () => void;
+  onDebugNode?: (() => void) | undefined;
   onRunNode?: (() => void) | undefined;
   applicationId?: string;
   activeRunId?: string | null;
@@ -110,6 +112,7 @@ export function NodeDetailPanel({
         <NodeDetailHeader
           adapter={runtime.adapter}
           onClose={onClose}
+          onDebugNode={onDebugNode}
           onRunNode={onRunNode}
           runLoading={runLoading}
           schema={runtime.schema}
