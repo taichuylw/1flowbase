@@ -50,15 +50,18 @@ async fn variable_assigner_updates_env_for_current_run_only() {
                         {
                             "path": ["env", "ApiBaseUrl"],
                             "operator": "set",
-                            "source": ["node-start", "query"]
+                            "value": {
+                                "kind": "templated_text",
+                                "value": "https://{{node-start.query}}/v1"
+                            }
                         }
                     ]),
                 },
             )]),
             outputs: vec![CompiledOutput {
-                key: "env".to_string(),
-                title: "Environment Variables".to_string(),
-                value_type: "json".to_string(),
+                key: "ApiBaseUrl".to_string(),
+                title: "env.ApiBaseUrl".to_string(),
+                value_type: "string".to_string(),
                 selector: Vec::new(),
                 json_schema: None,
             }],
@@ -90,7 +93,7 @@ async fn variable_assigner_updates_env_for_current_run_only() {
                 "ApiBaseUrl": "https://old.example.com"
             },
             "node-start": {
-                "query": "https://new.example.com"
+                "query": "new.example.com"
             }
         }),
         &successful_invoker(),
@@ -101,7 +104,20 @@ async fn variable_assigner_updates_env_for_current_run_only() {
     assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
     assert_eq!(
         outcome.variable_pool["env"]["ApiBaseUrl"],
-        json!("https://new.example.com")
+        json!("https://new.example.com/v1")
+    );
+    assert_eq!(
+        outcome.variable_pool["node-env-update"]["ApiBaseUrl"],
+        json!("https://new.example.com/v1")
+    );
+    assert_eq!(
+        outcome
+            .node_traces
+            .iter()
+            .find(|trace| trace.node_id == "node-env-update")
+            .expect("environment update trace should exist")
+            .output_payload,
+        json!({ "ApiBaseUrl": "https://new.example.com/v1" })
     );
     assert_eq!(
         outcome
@@ -110,6 +126,6 @@ async fn variable_assigner_updates_env_for_current_run_only() {
             .find(|trace| trace.node_id == "node-answer")
             .expect("answer trace should exist")
             .output_payload["answer"],
-        json!("https://new.example.com")
+        json!("https://new.example.com/v1")
     );
 }

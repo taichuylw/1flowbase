@@ -15,8 +15,8 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::{
     binding_runtime::{
-        lookup_selector_value, render_templated_bindings, resolve_answer_node_inputs,
-        resolve_node_inputs, BindingResolutionIssue,
+        lookup_selector_value, render_template, render_templated_bindings,
+        resolve_answer_node_inputs, resolve_node_inputs, BindingResolutionIssue,
     },
     compiled_plan::{
         CompiledEdge, CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime,
@@ -262,18 +262,7 @@ pub(crate) fn execute_environment_variable_update_node(
                 ));
             }
 
-            let source = operation
-                .get("source")
-                .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("environment variable update source is required"))?
-                .iter()
-                .map(|segment| {
-                    segment.as_str().map(str::to_string).ok_or_else(|| {
-                        anyhow!("environment variable update source must be strings")
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let value = lookup_selector_value(variable_pool, &source)?;
+            let value = resolve_environment_variable_update_value(operation, variable_pool)?;
 
             Ok((target_name.to_string(), value))
         })
@@ -296,10 +285,47 @@ pub(crate) fn execute_environment_variable_update_node(
         updated.insert(target_name, value);
     }
 
-    Ok(json!({
-        "env": env.clone(),
-        "updated": updated
-    }))
+    Ok(Value::Object(updated))
+}
+
+fn resolve_environment_variable_update_value(
+    operation: &Value,
+    variable_pool: &Map<String, Value>,
+) -> Result<Value> {
+    let value = operation
+        .get("value")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("environment variable update value is required"))?;
+
+    match value.get("kind").and_then(Value::as_str) {
+        Some("constant") => Ok(value.get("value").cloned().unwrap_or(Value::Null)),
+        Some("selector") => {
+            let selector = value
+                .get("selector")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("environment variable update selector value is required"))?
+                .iter()
+                .map(|segment| {
+                    segment.as_str().map(str::to_string).ok_or_else(|| {
+                        anyhow!("environment variable update selector must be strings")
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            lookup_selector_value(variable_pool, &selector)
+        }
+        Some("templated_text") => {
+            let template = value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                anyhow!("environment variable update templated_text value must be a string")
+            })?;
+            render_template(template, variable_pool).map(Value::String)
+        }
+        Some(kind) => Err(anyhow!(
+            "environment variable update value kind is unsupported: {kind}"
+        )),
+        None => Err(anyhow!(
+            "environment variable update value kind is required"
+        )),
+    }
 }
 
 fn apply_node_error_policy(

@@ -25,7 +25,7 @@ export const variableAssignerNodeDefinition: NodeDefinition = {
     {
       key: 'outputs',
       title: 'Outputs',
-      fields: [{ key: 'outputs.env', label: i18nText("agentFlow", "auto.environment_variables"), editor: 'text', required: true }]
+      fields: []
     }
   ]
 };

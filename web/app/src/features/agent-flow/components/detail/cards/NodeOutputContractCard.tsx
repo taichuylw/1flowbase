@@ -34,6 +34,8 @@ export function NodeOutputContractCard({
     (adapter?.getValue('config.output_contract') as
       | FlowNodeDocument['outputs']
       | undefined) ?? selectedNode.outputs;
+  const getOutputDisplayName = (output: FlowNodeDocument['outputs'][number]) =>
+    selectedNode.type === 'variable_assigner' ? output.title : output.key;
 
   return (
     <div className="agent-flow-node-detail__section">
@@ -55,7 +57,7 @@ export function NodeOutputContractCard({
                   {'{x}'}
                 </span>
                 <span className="agent-flow-node-detail__list-item-name">
-                  {output.key}
+                  {getOutputDisplayName(output)}
                 </span>
               </div>
               <span className="agent-flow-node-detail__list-item-type">

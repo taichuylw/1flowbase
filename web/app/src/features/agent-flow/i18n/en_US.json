@@ -78,6 +78,7 @@
     "variable_names_output_contract_system_reserved_fields_use_business_field": "The variable names in the output contract are system reserved fields, please use business field names instead.",
     "plugin_node_missing_plugin_id_plugin_version_contribution_code_node": "The current plugin_node is missing plugin_id / plugin_version / contribution_code / node_shell / schema_version / plugin_unique_identifier / package_id / contribution_checksum / compiled_contribution_hash / output_schema_snapshot.",
     "support_text_variable_block_enter_left_curly_bracket_quick_reference": "Enter \"/\" or left curly bracket for quick reference",
+    "environment_variable_update_type_not_available": "This type is not available for updates yet",
     "saving": "Saving",
     "total_tokens": "total tokens",
     "execute_this_node": "Execute this node",

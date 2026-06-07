@@ -12,4 +12,8 @@ source_issue: "#775"
 
 已批准方向是 Balanced：第一版只更新本次运行 / 本地调试变量上下文中的 `env.xxx` 值，不写回应用级环境变量配置，不修改 `application_environment_variables`，也不新增持久化 API、权限、审计、并发覆盖或发布态持久化语义。
 
+用户在 2026-06-07 19 追加验收反馈：环境变量更新节点的值输入不能只支持选择上游输出。选中 `string` 环境变量后，值输入应支持类似 HTTP 节点的 templated text，即普通文本混合 `{{node.xxx}}` 变量引用。节点输出也不能固定为 `env json`，应跟随选中的环境变量名与 `value_type`，例如 `env.hi string`。
+
+2026-06-07 22 已按反馈修正实现：`state_write` 环境变量更新使用 typed `value` 表达，`string` 使用 templated text，`number` / `boolean` 使用 constant，复杂 object / array 第一版禁用；节点输出按选中环境变量生成，不再固定 `env json`。
+
 实现前以 GitHub issue #775 为边界。若实现中发现必须修改后端持久化、历史流程迁移、权限审计或泛化变量系统，必须停止并回到 problem-framing。

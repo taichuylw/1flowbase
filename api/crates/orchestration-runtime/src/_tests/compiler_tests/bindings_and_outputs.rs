@@ -126,6 +126,58 @@ fn compile_outputs_preserve_declared_json_schema() {
 }
 
 #[test]
+fn compile_state_write_extracts_templated_value_dependencies() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+
+    document["graph"]["nodes"][1] = json!({
+        "id": "node-env-update",
+        "type": "variable_assigner",
+        "alias": "Environment Variable Update",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": {},
+        "bindings": {
+            "operations": {
+                "kind": "state_write",
+                "value": [
+                    {
+                        "path": ["env", "ApiBaseUrl"],
+                        "operator": "set",
+                        "value": {
+                            "kind": "templated_text",
+                            "value": "https://{{node-start.query}}/v1"
+                        }
+                    }
+                ]
+            }
+        },
+        "outputs": [
+            {
+                "key": "ApiBaseUrl",
+                "title": "env.ApiBaseUrl",
+                "valueType": "string"
+            }
+        ]
+    });
+    document["graph"]["edges"][0]["target"] = json!("node-env-update");
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert_eq!(
+        plan.nodes["node-env-update"].bindings["operations"].selector_paths,
+        vec![vec!["node-start".to_string(), "query".to_string()]]
+    );
+    assert_eq!(plan.nodes["node-env-update"].outputs[0].key, "ApiBaseUrl");
+    assert_eq!(
+        plan.nodes["node-env-update"].outputs[0].value_type,
+        "string"
+    );
+}
+
+#[test]
 fn compile_rejects_unsupported_flow_schema_version() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);

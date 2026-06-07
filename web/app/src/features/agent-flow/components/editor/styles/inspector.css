@@ -680,7 +680,10 @@
 }
 
 .agent-flow-environment-variable-update-row .ant-select,
-.agent-flow-environment-variable-update-row .ant-cascader {
+.agent-flow-environment-variable-update-row .ant-cascader,
+.agent-flow-environment-variable-update-row .ant-input,
+.agent-flow-environment-variable-update-row .ant-input-number,
+.agent-flow-environment-variable-update-row .agent-flow-templated-text-field {
   width: 100%;
 }
 

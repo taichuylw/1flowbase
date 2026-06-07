@@ -14,7 +14,10 @@ import type {
 import type { AgentFlowDataModelFieldOption } from '../api/data-model-options';
 import { ConditionGroupField } from '../components/bindings/ConditionGroupField';
 import { DataModelQueryField } from '../components/bindings/DataModelQueryField';
-import { EnvironmentVariableUpdateField } from '../components/bindings/EnvironmentVariableUpdateField';
+import {
+  EnvironmentVariableUpdateField,
+  type EnvironmentVariableUpdateValue
+} from '../components/bindings/EnvironmentVariableUpdateField';
 import { IfElseBranchesField } from '../components/bindings/IfElseBranchesField';
 import { NamedBindingsField } from '../components/bindings/NamedBindingsField';
 import { SelectorField } from '../components/bindings/SelectorField';
@@ -595,13 +598,11 @@ function renderEnvironmentVariableUpdateField({
   block
 }: SchemaFieldRendererProps) {
   const value = adapter.getValue(block.path);
-  const binding = getBindingValue<
-    Array<{
-      path: string[];
-      operator: 'set' | 'append' | 'clear' | 'increment';
-      source: string[] | null;
-    }>
-  >(value, 'state_write', []);
+  const binding = getBindingValue<EnvironmentVariableUpdateValue[]>(
+    value,
+    'state_write',
+    []
+  );
   const environmentVariables =
     (adapter.getDerived('environmentVariables') as
       | AgentFlowEnvironmentVariable[]

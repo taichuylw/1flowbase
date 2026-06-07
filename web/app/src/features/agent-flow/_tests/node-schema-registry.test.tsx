@@ -127,12 +127,66 @@ describe('agent-flow node schema registry', () => {
 
     expect(contract?.meta.title).toBe('Environment Variable Update');
     expect(contract?.defaults.alias).toBe('Environment Variable Update');
+    expect(contract?.defaults.outputs).toEqual([]);
     expect(operationsField).toEqual(
       expect.objectContaining({
         path: 'bindings.operations',
         renderer: 'environment_variable_update'
       })
     );
+  });
+
+  test('syncs Variable Assigner outputs from selected environment variables', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+    const variableDocument = {
+      ...document,
+      graph: {
+        ...document.graph,
+        nodes: [variableNode]
+      }
+    };
+    const setWorkingDocument = vi.fn();
+    const adapter = createAgentFlowNodeSchemaAdapter({
+      document: variableDocument,
+      nodeId: 'node-env-update',
+      environmentVariables: [
+        {
+          name: 'ApiBaseUrl',
+          value_type: 'string',
+          value: 'https://api.example.com',
+          description: ''
+        }
+      ],
+      setWorkingDocument,
+      dispatch: vi.fn()
+    });
+
+    adapter.setValue('bindings.operations', {
+      kind: 'state_write',
+      value: [
+        {
+          path: ['env', 'ApiBaseUrl'],
+          operator: 'set',
+          value: { kind: 'templated_text', value: '{{node-start.query}}' }
+        }
+      ]
+    });
+
+    const update = setWorkingDocument.mock.calls[0]?.[0] as
+      | typeof variableDocument
+      | ((currentDocument: typeof variableDocument) => typeof variableDocument);
+    const nextDocument =
+      typeof update === 'function' ? update(variableDocument) : update;
+    const nextNode = getNode(nextDocument, 'node-env-update');
+
+    expect(nextNode.outputs).toEqual([
+      {
+        key: 'ApiBaseUrl',
+        title: 'env.ApiBaseUrl',
+        valueType: 'string'
+      }
+    ]);
   });
 
   test('renders start input fields before the relations section', () => {

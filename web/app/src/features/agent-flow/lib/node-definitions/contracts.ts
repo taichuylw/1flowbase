@@ -697,7 +697,7 @@ function createPluginNodeContract(): NodeRuntimeUiContract {
 }
 
 function createVariableAssignerContract(): NodeRuntimeUiContract {
-  const outputs = [{ key: 'env', title: i18nText("agentFlow", "auto.environment_variables"), valueType: 'json' }];
+  const outputs: FlowNodeOutputDocument[] = [];
 
   return createNodeRuntimeContract({
     type: 'variable_assigner',

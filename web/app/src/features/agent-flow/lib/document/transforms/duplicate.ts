@@ -114,6 +114,31 @@ function remapConditionGroup(
   };
 }
 
+function remapStateWriteValue(
+  value: Extract<FlowBinding, { kind: 'state_write' }>['value'][number]['value'],
+  idMap: Map<string, string>
+) {
+  if (!value) {
+    return value;
+  }
+
+  if (value.kind === 'selector') {
+    return {
+      ...value,
+      selector: remapSelector(value.selector, idMap)
+    };
+  }
+
+  if (value.kind === 'templated_text') {
+    return {
+      ...value,
+      value: remapTemplateSelectorTokens(value.value, idMap)
+    };
+  }
+
+  return value;
+}
+
 function remapBinding(
   binding: FlowBinding,
   idMap: Map<string, string>
@@ -174,7 +199,8 @@ function remapBinding(
         ...binding,
         value: binding.value.map((entry) => ({
           ...entry,
-          source: entry.source ? remapSelector(entry.source, idMap) : null
+          source: entry.source ? remapSelector(entry.source, idMap) : null,
+          value: remapStateWriteValue(entry.value, idMap)
         }))
       };
     case 'data_model_query':

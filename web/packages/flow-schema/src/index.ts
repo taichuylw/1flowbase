@@ -301,6 +301,8 @@ export type NamedBindingExpression =
   | { kind: 'constant'; value: unknown }
   | { kind: 'templated_text'; value: string };
 
+export type StateWriteValueExpression = NamedBindingExpression;
+
 export interface NamedBindingEntry {
   name: string;
   valueType?: string;
@@ -385,7 +387,8 @@ export type FlowBinding =
       value: Array<{
         path: string[];
         operator: 'set' | 'append' | 'clear' | 'increment';
-        source: string[] | null;
+        source?: string[] | null;
+        value?: StateWriteValueExpression | null;
       }>;
     };
 

@@ -177,7 +177,10 @@ describe('node debug preview input', () => {
           {
             path: ['env', 'ApiBaseUrl'],
             operator: 'set',
-            source: ['node-start', 'query']
+            value: {
+              kind: 'templated_text',
+              value: 'https://{{node-start.query}}/v1'
+            }
           }
         ]
       }
@@ -224,16 +227,94 @@ describe('node debug preview input', () => {
           ApiBaseUrl: 'https://old.example.com'
         },
         'node-start': {
-          query: 'https://new.example.com'
+          query: 'new.example.com'
         }
       })
     ).toEqual({
       input_payload: {
         env: {
-          ApiBaseUrl: 'https://new.example.com'
+          ApiBaseUrl: 'https://new.example.com/v1'
         }
       },
       missing_fields: []
+    });
+  });
+
+  test('asks for templated values required by upstream environment variable updates', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+
+    variableNode.bindings = {
+      operations: {
+        kind: 'state_write',
+        value: [
+          {
+            path: ['env', 'ApiBaseUrl'],
+            operator: 'set',
+            value: {
+              kind: 'templated_text',
+              value: 'https://{{node-start.query}}/v1'
+            }
+          }
+        ]
+      }
+    };
+
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-answer'
+        ? {
+            ...node,
+            bindings: {
+              answer_template: {
+                kind: 'templated_text',
+                value: '{{env.ApiBaseUrl}}'
+              }
+            }
+          }
+        : node
+    );
+    document.graph.nodes.splice(2, 0, variableNode);
+    document.graph.edges = [
+      {
+        id: 'edge-start-env-update',
+        source: 'node-start',
+        target: 'node-env-update',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      },
+      {
+        id: 'edge-env-update-answer',
+        source: 'node-env-update',
+        target: 'node-answer',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      }
+    ];
+
+    expect(
+      buildNodeDebugPreviewPlan(document, 'node-answer', {
+        env: {
+          ApiBaseUrl: 'https://old.example.com'
+        }
+      })
+    ).toEqual({
+      input_payload: {
+        env: {
+          ApiBaseUrl: 'https://old.example.com'
+        }
+      },
+      missing_fields: [
+        expect.objectContaining({
+          nodeId: 'node-start',
+          key: 'query',
+          title: 'userinput.query',
+          valueType: 'string'
+        })
+      ]
     });
   });
 

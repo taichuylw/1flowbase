@@ -270,12 +270,31 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
     case 'if_else_branches':
       return collectIfElseBranchSelectors(binding.value.branches);
     case 'state_write':
-      return binding.value.flatMap((entry) =>
-        entry.source ? [entry.source] : []
-      );
+      return binding.value.flatMap((entry) => [
+        ...(entry.source ? [entry.source] : []),
+        ...collectStateWriteValueSelectors(entry.value)
+      ]);
     case 'data_model_query':
       return extractDataModelQuerySelectors(binding.value);
   }
+}
+
+function collectStateWriteValueSelectors(
+  value: Extract<FlowBinding, { kind: 'state_write' }>['value'][number]['value']
+): string[][] {
+  if (!value) {
+    return [];
+  }
+
+  if (value.kind === 'selector') {
+    return [value.selector];
+  }
+
+  if (value.kind === 'templated_text') {
+    return parseTemplateSelectorTokens(value.value);
+  }
+
+  return [];
 }
 
 function pushFieldIssue(

@@ -1,14 +1,21 @@
-import { Button, Select } from 'antd';
+import { Button, Input, InputNumber, Select, Switch } from 'antd';
 
 import type { FlowSelectorOption } from '../../lib/selector-options';
 import type { AgentFlowEnvironmentVariable } from '../../lib/variables/application-environment-variables';
-import { SelectorField } from './SelectorField';
+import { createTemplateSelectorToken } from '../../lib/template-binding';
+import { TemplatedTextField } from './TemplatedTextField';
 import { i18nText } from '../../../../shared/i18n/text';
 
-interface EnvironmentVariableUpdateValue {
+export type EnvironmentVariableUpdateExpression =
+  | { kind: 'selector'; selector: string[] }
+  | { kind: 'constant'; value: unknown }
+  | { kind: 'templated_text'; value: string };
+
+export interface EnvironmentVariableUpdateValue {
   path: string[];
   operator: 'set' | 'append' | 'clear' | 'increment';
-  source: string[] | null;
+  source?: string[] | null;
+  value?: EnvironmentVariableUpdateExpression | null;
 }
 
 interface EnvironmentVariableUpdateFieldProps {
@@ -23,6 +30,81 @@ function getTargetName(entry: EnvironmentVariableUpdateValue) {
   return entry.path[0] === 'env' ? entry.path[1] ?? '' : '';
 }
 
+function findEnvironmentVariable(
+  environmentVariables: AgentFlowEnvironmentVariable[],
+  entry: EnvironmentVariableUpdateValue
+) {
+  const targetName = getTargetName(entry);
+
+  return environmentVariables.find((variable) => variable.name === targetName);
+}
+
+function isNumberValueType(valueType: string) {
+  return valueType === 'number';
+}
+
+function isBooleanValueType(valueType: string) {
+  return valueType === 'boolean';
+}
+
+function isStringValueType(valueType: string) {
+  return valueType === 'string';
+}
+
+function createDefaultValueExpression(
+  variable: AgentFlowEnvironmentVariable | undefined
+): EnvironmentVariableUpdateExpression | null {
+  if (!variable) {
+    return null;
+  }
+
+  if (isStringValueType(variable.value_type)) {
+    return { kind: 'templated_text', value: '' };
+  }
+
+  if (isNumberValueType(variable.value_type)) {
+    return { kind: 'constant', value: 0 };
+  }
+
+  if (isBooleanValueType(variable.value_type)) {
+    return { kind: 'constant', value: false };
+  }
+
+  return null;
+}
+
+function getTemplatedTextValue(entry: EnvironmentVariableUpdateValue) {
+  if (entry.value?.kind === 'templated_text') {
+    return entry.value.value;
+  }
+
+  if (entry.value?.kind === 'constant') {
+    return entry.value.value === null || entry.value.value === undefined
+      ? ''
+      : String(entry.value.value);
+  }
+
+  if (entry.value?.kind === 'selector') {
+    return createTemplateSelectorToken(entry.value.selector);
+  }
+
+  return entry.source ? createTemplateSelectorToken(entry.source) : '';
+}
+
+function getNumberValue(entry: EnvironmentVariableUpdateValue) {
+  return entry.value?.kind === 'constant' &&
+    typeof entry.value.value === 'number'
+    ? entry.value.value
+    : null;
+}
+
+function getBooleanValue(entry: EnvironmentVariableUpdateValue) {
+  return entry.value?.kind === 'constant' &&
+    typeof entry.value.value === 'boolean'
+    ? entry.value.value
+    : false;
+}
+
 export function EnvironmentVariableUpdateField({
   ariaLabel,
   value,
@@ -34,6 +116,107 @@ export function EnvironmentVariableUpdateField({
     label: `env.${variable.name}`,
     value: variable.name
   }));
+
+  function updateEntry(
+    index: number,
+    updater: (
+      entry: EnvironmentVariableUpdateValue
+    ) => EnvironmentVariableUpdateValue
+  ) {
+    onChange(
+      value.map((item, itemIndex) =>
+        itemIndex === index ? updater(item) : item
+      )
+    );
+  }
+
+  function renderValueEditor(
+    entry: EnvironmentVariableUpdateValue,
+    index: number
+  ) {
+    const variable = findEnvironmentVariable(environmentVariables, entry);
+
+    if (!variable) {
+      return (
+        <Input
+          aria-label={`${ariaLabel}-${index}-value`}
+          disabled
+          value=""
+          placeholder={i18nText("agentFlow", "auto.select_environment_variable")}
+        />
+      );
+    }
+
+    if (isStringValueType(variable.value_type)) {
+      return (
+        <TemplatedTextField
+          ariaLabel={`${ariaLabel}-${index}-value`}
+          displayMode="input"
+          label={`env.${variable.name}`}
+          options={selectorOptions}
+          placeholder={i18nText(
+            "agentFlow",
+            "auto.support_text_variable_block_enter_left_curly_bracket_quick_reference"
+          )}
+          value={getTemplatedTextValue(entry)}
+          onChange={(nextValue) =>
+            updateEntry(index, (item) => ({
+              ...item,
+              operator: 'set',
+              source: null,
+              value: { kind: 'templated_text', value: nextValue }
+            }))
+          }
+        />
+      );
+    }
+
+    if (isNumberValueType(variable.value_type)) {
+      return (
+        <InputNumber
+          aria-label={`${ariaLabel}-${index}-value`}
+          value={getNumberValue(entry)}
+          onChange={(nextValue) =>
+            updateEntry(index, (item) => ({
+              ...item,
+              operator: 'set',
+              source: null,
+              value: { kind: 'constant', value: nextValue ?? 0 }
+            }))
+          }
+        />
+      );
+    }
+
+    if (isBooleanValueType(variable.value_type)) {
+      return (
+        <Switch
+          aria-label={`${ariaLabel}-${index}-value`}
+          checked={getBooleanValue(entry)}
+          onChange={(checked) =>
+            updateEntry(index, (item) => ({
+              ...item,
+              operator: 'set',
+              source: null,
+              value: { kind: 'constant', value: checked }
+            }))
+          }
+        />
+      );
+    }
+
+    return (
+      <Input
+        aria-label={`${ariaLabel}-${index}-value`}
+        disabled
+        value=""
+        placeholder={i18nText(
+          "agentFlow",
+          "auto.environment_variable_update_type_not_available"
+        )}
+      />
+    );
+  }
 
   return (
     <div className="agent-flow-binding-list">
@@ -48,40 +231,22 @@ export function EnvironmentVariableUpdateField({
             placeholder={i18nText("agentFlow", "auto.select_environment_variable")}
             value={getTargetName(entry) || undefined}
             onChange={(targetName) =>
-              onChange(
-                value.map((item, itemIndex) =>
-                  itemIndex === index
-                    ? {
-                        ...item,
-                        path: ['env', targetName],
-                        operator: 'set'
-                      }
-                    : item
-                )
-              )
+              updateEntry(index, (item) => {
+                const variable = environmentVariables.find(
+                  (candidate) => candidate.name === targetName
+                );
+
+                return {
+                  ...item,
+                  path: ['env', targetName],
+                  operator: 'set',
+                  source: null,
+                  value: createDefaultValueExpression(variable)
+                };
+              })
             }
           />
-          <SelectorField
-            ariaLabel={`${ariaLabel}-${index}-source`}
-            options={selectorOptions}
-            value={entry.source ?? []}
-            onChange={(nextValue) =>
-              onChange(
-                value.map((item, itemIndex) =>
-                  itemIndex === index
-                    ? {
-                        ...item,
-                        operator: 'set',
-                        source:
-                          (nextValue as string[]).length > 0
-                            ? (nextValue as string[])
-                            : null
-                      }
-                    : item
-                )
-              )
-            }
-          />
+          {renderValueEditor(entry, index)}
           <Button
             danger
             type="text"
@@ -100,7 +265,8 @@ export function EnvironmentVariableUpdateField({
             {
               path: ['env', ''],
               operator: 'set',
-              source: null
+              source: null,
+              value: null
             }
           ])
         }

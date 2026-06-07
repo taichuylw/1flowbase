@@ -240,6 +240,10 @@ export function getNodeVariableOutputs(
     return node.outputs.filter((output) => isValidPublicOutputKey(output.key));
   }
 
+  if (node.type === 'variable_assigner') {
+    return node.outputs.filter((output) => isValidPublicOutputKey(output.key));
+  }
+
   const contract = getBuiltinNodeRuntimeContract(node.type);
   if (contract) {
     return contract.defaults.outputs.filter((output) =>
