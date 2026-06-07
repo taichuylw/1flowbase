@@ -151,6 +151,7 @@
     "delete_model": "Delete model {{value1}}",
     "plugin_node_unavailable": "The current plug-in node is unavailable",
     "adapt_to_canvas": "Adapt to canvas",
+    "arrange_canvas": "Arrange canvas",
     "binding_reference_node_exist": "Binding reference node does not exist",
     "close_historical_version": "Close historical version",
     "tool_call": "Tool call",

@@ -1,9 +1,11 @@
 import type { NodeChange } from '@xyflow/react';
 import { useCallback, useMemo, useState } from 'react';
 
+import { arrangeCanvasLeftToRight } from '../../lib/document/transforms/layout';
 import { moveNodes } from '../../lib/document/transforms/node';
 import { setViewport } from '../../lib/document/transforms/viewport';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
+import { selectActiveContainerId } from '../../store/editor/selectors';
 
 type NodePositions = Record<string, { x: number; y: number }>;
 
@@ -55,6 +57,7 @@ function removePositions(current: NodePositions, nodeIds: string[]) {
 export function useCanvasInteractions() {
   const [transientNodePositions, setTransientNodePositions] =
     useState<NodePositions>({});
+  const activeContainerId = useAgentFlowEditorStore(selectActiveContainerId);
   const setWorkingDocument = useAgentFlowEditorStore(
     (state) => state.setWorkingDocument
   );
@@ -112,12 +115,20 @@ export function useCanvasInteractions() {
     [setWorkingDocument]
   );
 
+  const arrangeCanvas = useCallback(() => {
+    setTransientNodePositions({});
+    setWorkingDocument((currentDocument) =>
+      arrangeCanvasLeftToRight(currentDocument, activeContainerId)
+    );
+  }, [activeContainerId, setWorkingDocument]);
+
   return useMemo(
     () => ({
       transientNodePositions,
       onNodesChange,
-      commitViewportChange
+      commitViewportChange,
+      arrangeCanvas
     }),
-    [commitViewportChange, onNodesChange, transientNodePositions]
+    [arrangeCanvas, commitViewportChange, onNodesChange, transientNodePositions]
   );
 }

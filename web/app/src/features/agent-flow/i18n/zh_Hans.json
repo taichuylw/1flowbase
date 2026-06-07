@@ -151,6 +151,7 @@
     "delete_model": "删除模型 {{value1}}",
     "plugin_node_unavailable": "当前插件节点不可用",
     "adapt_to_canvas": "适应画布",
+    "arrange_canvas": "自动整理",
     "binding_reference_node_exist": "绑定引用节点不存在",
     "close_historical_version": "关闭历史版本",
     "tool_call": "工具调用",

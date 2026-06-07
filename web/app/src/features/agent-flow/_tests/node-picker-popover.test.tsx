@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -244,8 +247,105 @@ describe('NodePickerPopover', () => {
     ).toBeDisabled();
   });
 
+  test('keeps final picker items clear of the clipped popup edge', () => {
+    const canvasControlsCss = fs.readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        '../components/editor/styles/canvas-controls.css'
+      ),
+      'utf8'
+    );
+    const listBlock = canvasControlsCss.match(
+      /\.agent-flow-node-picker__list\s*\{[\s\S]*?\n\}/
+    )?.[0];
+
+    expect(listBlock).toContain(
+      'padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);'
+    );
+    expect(listBlock).toContain(
+      'scroll-padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);'
+    );
+  });
+
+  test('sets picker height from the canvas bottom control boundary', async () => {
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const baseRect = {
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          toJSON: () => ({})
+        };
+
+        if (this.classList.contains('agent-flow-canvas')) {
+          return { ...baseRect, bottom: 900 };
+        }
+
+        if (
+          this.classList.contains('agent-flow-editor__variable-cache-trigger')
+        ) {
+          return { ...baseRect, bottom: 760 };
+        }
+
+        if (this.getAttribute('aria-label') === '在 LLM 后新增节点') {
+          return { ...baseRect, top: 260, bottom: 300 };
+        }
+
+        return baseRect;
+      });
+
+    try {
+      render(
+        <div className="agent-flow-editor__body">
+          <div className="agent-flow-canvas" data-testid="node-picker-canvas">
+            <NodePickerPopover
+              ariaLabel="在 LLM 后新增节点"
+              open
+              placement="bottom"
+              onOpenChange={vi.fn()}
+              onPickNode={vi.fn()}
+            />
+          </div>
+          <button
+            className="agent-flow-editor__variable-cache-trigger"
+            type="button"
+          >
+            查看缓存
+          </button>
+        </div>
+      );
+
+      expect(await screen.findByRole('menu')).toBeInTheDocument();
+      expect(screen.getByTestId('node-picker-canvas')).toHaveStyle(
+        '--agent-flow-node-picker-max-height: 450px'
+      );
+    } finally {
+      getRectSpy.mockRestore();
+    }
+  });
+
   test('calculates picker height with a 10px canvas bottom gap', () => {
-    expect(calculateNodePickerMaxHeight(500, 360)).toBe(130);
-    expect(calculateNodePickerMaxHeight(500, 460)).toBe(120);
+    expect(
+      calculateNodePickerMaxHeight({ canvasBottom: 500, anchorY: 360 })
+    ).toBe(130);
+    expect(
+      calculateNodePickerMaxHeight({ canvasBottom: 500, anchorY: 460 })
+    ).toBe(120);
+  });
+
+  test('caps picker height at the canvas bottom control boundary', () => {
+    expect(
+      calculateNodePickerMaxHeight({
+        canvasBottom: 900,
+        anchorY: 260,
+        bottomBoundary: 760
+      })
+    ).toBe(490);
   });
 });
