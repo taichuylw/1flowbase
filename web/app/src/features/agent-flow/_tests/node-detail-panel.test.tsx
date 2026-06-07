@@ -195,6 +195,64 @@ describe('NodeDetailPanel', () => {
   );
 
   test(
+    'keeps run loading state from leaking into the debug action',
+    () => {
+      renderWithProviders(
+        <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
+          <NodeDetailPanel
+            onClose={vi.fn()}
+            onDebugNode={vi.fn()}
+            onRunNode={vi.fn()}
+            runLoading
+          />
+        </AgentFlowEditorStoreProvider>
+      );
+
+      const header = screen.getByTestId('node-detail-header');
+      const runButton = within(header).getByRole('button', {
+        name: '运行当前节点'
+      });
+      const debugButton = within(header).getByRole('button', {
+        name: '调试当前节点'
+      });
+
+      expect(runButton).toHaveClass('ant-btn-loading');
+      expect(debugButton).not.toHaveClass('ant-btn-loading');
+    },
+    NODE_DETAIL_PANEL_TEST_TIMEOUT
+  );
+
+  test(
+    'keeps debug loading state from leaking into the run action',
+    () => {
+      renderWithProviders(
+        <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+          <SelectionSeed nodeId="node-llm" />
+          <NodeDetailPanel
+            debugLoading
+            onClose={vi.fn()}
+            onDebugNode={vi.fn()}
+            onRunNode={vi.fn()}
+          />
+        </AgentFlowEditorStoreProvider>
+      );
+
+      const header = screen.getByTestId('node-detail-header');
+      const runButton = within(header).getByRole('button', {
+        name: '运行当前节点'
+      });
+      const debugButton = within(header).getByRole('button', {
+        name: '调试当前节点'
+      });
+
+      expect(debugButton).toHaveClass('ant-btn-loading');
+      expect(runButton).not.toHaveClass('ant-btn-loading');
+    },
+    NODE_DETAIL_PANEL_TEST_TIMEOUT
+  );
+
+  test(
     'uses the same node type icon in detail header as the canvas card',
     () => {
       renderWithProviders(

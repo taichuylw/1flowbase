@@ -105,6 +105,8 @@ import {
 } from './canvas-frame-document';
 import type { AgentFlowCanvasFrameProps } from './canvas-frame-types';
 
+type NodePreviewAction = 'run' | 'debug';
+
 export function AgentFlowCanvasFrame({
   applicationId,
   applicationName,
@@ -176,6 +178,7 @@ export function AgentFlowCanvasFrame({
   const [isResizingVariablesDock, setIsResizingVariablesDock] = useState(false);
   const [isResizingHistoryDock, setIsResizingHistoryDock] = useState(false);
   const [pendingNodePreview, setPendingNodePreview] = useState<{
+    action: NodePreviewAction;
     nodeId: string;
     inputPayload: NodeDebugPreviewPlan['input_payload'];
     fields: NodeDebugPreviewPlan['missing_fields'];
@@ -331,6 +334,7 @@ export function AgentFlowCanvasFrame({
       nodeId,
       inputPayload
     }: {
+      action: NodePreviewAction;
       nodeId: string;
       inputPayload: Record<string, Record<string, unknown>>;
     }) => {
@@ -903,11 +907,12 @@ export function AgentFlowCanvasFrame({
   }
 
   function runNodePreview(
+    action: NodePreviewAction,
     nodeId: string,
     inputPayload: Record<string, Record<string, unknown>>
   ) {
     debugSession.rememberNodePreviewInputs(inputPayload);
-    nodePreviewMutation.mutate({ nodeId, inputPayload });
+    nodePreviewMutation.mutate({ action, nodeId, inputPayload });
   }
 
   function handleRunNode(nodeId: string) {
@@ -919,6 +924,7 @@ export function AgentFlowCanvasFrame({
 
     if (plan.missing_fields.length > 0) {
       setPendingNodePreview({
+        action: 'run',
         nodeId,
         inputPayload: plan.input_payload,
         fields: plan.missing_fields
@@ -926,7 +932,7 @@ export function AgentFlowCanvasFrame({
       return;
     }
 
-    runNodePreview(nodeId, plan.input_payload);
+    runNodePreview('run', nodeId, plan.input_payload);
   }
 
   function handleDebugNode(nodeId: string) {
@@ -938,6 +944,7 @@ export function AgentFlowCanvasFrame({
 
     if (plan.fields.length > 0) {
       setPendingNodePreview({
+        action: 'debug',
         nodeId,
         inputPayload: plan.input_payload,
         fields: plan.fields
@@ -945,7 +952,7 @@ export function AgentFlowCanvasFrame({
       return;
     }
 
-    runNodePreview(nodeId, plan.input_payload);
+    runNodePreview('debug', nodeId, plan.input_payload);
   }
 
   function handleSubmitNodePreviewVariables(
@@ -964,10 +971,10 @@ export function AgentFlowCanvasFrame({
       };
     }
 
-    const nodeId = pendingNodePreview.nodeId;
+    const { action, nodeId } = pendingNodePreview;
 
     setPendingNodePreview(null);
-    runNodePreview(nodeId, mergedInputPayload);
+    runNodePreview(action, nodeId, mergedInputPayload);
   }
 
   function handleRunSelectedNode() {
@@ -1016,6 +1023,10 @@ export function AgentFlowCanvasFrame({
     setConversationLogMessageId(null);
     setPanelState({ debugConsoleOpen: false, historyOpen: true });
   }
+
+  const nodePreviewAction = nodePreviewMutation.isPending
+    ? (nodePreviewMutation.variables?.action ?? null)
+    : null;
 
   return (
     <section
@@ -1128,13 +1139,15 @@ export function AgentFlowCanvasFrame({
             <NodeDetailPanel
               activeRunId={debugSession.activeRunId}
               applicationId={applicationId}
+              debugLoading={nodePreviewAction === 'debug'}
               environmentVariables={environmentVariables}
               issues={issues}
               onClose={detailActions.closeDetail}
               onDebugNode={selectedNodeId ? handleDebugSelectedNode : undefined}
               onResolveRunScope={debugSession.selectRunScope}
               onRunNode={selectedNodeId ? handleRunSelectedNode : undefined}
-              runLoading={nodePreviewMutation.isPending}
+              previewActionsDisabled={nodePreviewMutation.isPending}
+              runLoading={nodePreviewAction === 'run'}
             />
           </div>
         ) : null}

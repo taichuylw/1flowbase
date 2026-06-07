@@ -28,6 +28,8 @@ export function NodeDetailHeader({
   onClose,
   onDebugNode,
   onRunNode,
+  debugLoading = false,
+  previewActionsDisabled = false,
   runLoading = false
 }: {
   schema: CanvasNodeSchema;
@@ -35,6 +37,8 @@ export function NodeDetailHeader({
   onClose: () => void;
   onDebugNode?: (() => void) | undefined;
   onRunNode?: (() => void) | undefined;
+  debugLoading?: boolean;
+  previewActionsDisabled?: boolean;
   runLoading?: boolean;
 }) {
   const definitionMeta = adapter.getDerived('definitionMeta') as
@@ -69,8 +73,16 @@ export function NodeDetailHeader({
           ) : null}
         </div>
         <Space className="agent-flow-node-detail__actions" size={4}>
-          <NodeRunButton onRunNode={onRunNode} loading={runLoading} />
-          <NodeDebugButton onDebugNode={onDebugNode} loading={runLoading} />
+          <NodeRunButton
+            disabled={previewActionsDisabled}
+            onRunNode={onRunNode}
+            loading={runLoading}
+          />
+          <NodeDebugButton
+            disabled={previewActionsDisabled}
+            onDebugNode={onDebugNode}
+            loading={debugLoading}
+          />
           {definitionMeta?.helpHref ? (
             <Button
               aria-label={i18nText("agentFlow", "auto.help_documentation")}
