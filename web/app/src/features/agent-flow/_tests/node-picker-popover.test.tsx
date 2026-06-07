@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -242,6 +245,26 @@ describe('NodePickerPopover', () => {
     expect(
       screen.getByRole('menuitem', { name: /SQL Exporter/i })
     ).toBeDisabled();
+  });
+
+  test('keeps final picker items clear of the clipped popup edge', () => {
+    const canvasControlsCss = fs.readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        '../components/editor/styles/canvas-controls.css'
+      ),
+      'utf8'
+    );
+    const listBlock = canvasControlsCss.match(
+      /\.agent-flow-node-picker__list\s*\{[\s\S]*?\n\}/
+    )?.[0];
+
+    expect(listBlock).toContain(
+      'padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);'
+    );
+    expect(listBlock).toContain(
+      'scroll-padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);'
+    );
   });
 
   test('sets picker height from the canvas bottom control boundary', async () => {

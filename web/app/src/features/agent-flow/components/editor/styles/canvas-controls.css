@@ -241,8 +241,10 @@
   flex-direction: column;
   min-height: 0;
   gap: 10px;
+  padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  scroll-padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);
 }
 
 .agent-flow-node-picker__section {
