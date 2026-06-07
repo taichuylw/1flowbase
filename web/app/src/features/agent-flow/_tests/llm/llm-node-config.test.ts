@@ -3,12 +3,16 @@ import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_LLM_PARAMETERS,
   DEFAULT_LLM_CONTEXT_POLICY,
+  DEFAULT_LLM_EXECUTION_ROLE,
   DEFAULT_LLM_EXTERNAL_REASONING_POLICY,
+  DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS,
   getLlmContextPolicy,
+  getLlmExecutionRole,
   getLlmExternalReasoningPolicy,
   getLlmParameterDefaultValue,
   getLlmModelProvider,
-  getLlmParameters
+  getLlmParameters,
+  getLlmVisibleInternalTools
 } from '../../lib/llm-node-config';
 
 describe('llm-node-config', () => {
@@ -91,6 +95,53 @@ describe('llm-node-config', () => {
     ).toEqual({
       follow_external_reasoning: true
     });
+  });
+
+  test('getLlmExecutionRole defaults to standard and accepts internal tool role', () => {
+    expect(getLlmExecutionRole({})).toBe(DEFAULT_LLM_EXECUTION_ROLE);
+    expect(
+      getLlmExecutionRole({ execution_role: 'visible_internal_llm_tool' })
+    ).toBe('visible_internal_llm_tool');
+    expect(getLlmExecutionRole({ execution_role: 'legacy-tool' })).toBe(
+      'standard'
+    );
+  });
+
+  test('getLlmVisibleInternalTools keeps only stable internal attachment contract', () => {
+    expect(getLlmVisibleInternalTools({})).toEqual(
+      DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS
+    );
+    expect(
+      getLlmVisibleInternalTools({
+        visible_internal_llm_tools: [
+          {
+            type: 'visible_internal_llm_tool',
+            tool_name: ' inspect_visible_context ',
+            target_node_id: ' node-mounted-llm ',
+            description: ' Read visible context ',
+            input_schema: { type: 'object' }
+          },
+          {
+            type: 'external_tool',
+            tool_name: 'leak_external',
+            target_node_id: 'node-other'
+          },
+          {
+            type: 'visible_internal_llm_tool',
+            tool_name: '',
+            target_node_id: 'node-empty'
+          }
+        ]
+      })
+    ).toEqual([
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_visible_context',
+        target_node_id: 'node-mounted-llm',
+        description: 'Read visible context',
+        input_schema: { type: 'object' }
+      }
+    ]);
   });
 
   test('getLlmParameterDefaultValue derives stable defaults when schema omits them', () => {

@@ -25,6 +25,7 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   llm_model: 'llm_model',
   llm_context_policy: 'llm_context_policy',
   llm_external_reasoning_policy: 'llm_external_reasoning_policy',
+  llm_internal_tool_attachments: 'llm_internal_tool_attachments',
   llm_prompt_messages: 'llm_prompt_messages',
   llm_response_format: 'llm_response_format',
   code_source: 'code_source',

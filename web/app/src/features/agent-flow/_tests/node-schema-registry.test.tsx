@@ -97,6 +97,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.llm_response_format).toBeTypeOf(
       'function'
     );
+    expect(
+      agentFlowRendererRegistry.fields.llm_internal_tool_attachments
+    ).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.fields.code_source).toBeTypeOf('function');
     expect(
       agentFlowRendererRegistry.fields.output_contract_definition
@@ -279,6 +282,40 @@ describe('agent-flow node schema registry', () => {
           key: 'llm-generated-outputs'
         })
       ])
+    );
+  });
+
+  test('exposes LLM internal attachment authoring fields without topology edges', () => {
+    const schema = resolveAgentFlowNodeSchema('llm');
+    const contract = getBuiltinNodeRuntimeContract('llm');
+    const executionRoleField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.execution_role'
+    );
+    const internalToolsField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.visible_internal_llm_tools'
+    );
+
+    expect(contract?.defaults.config).toEqual(
+      expect.objectContaining({
+        execution_role: 'standard',
+        visible_internal_llm_tools: []
+      })
+    );
+    expect(executionRoleField).toEqual(
+      expect.objectContaining({
+        renderer: 'static_select',
+        options: expect.arrayContaining([
+          expect.objectContaining({ value: 'standard' }),
+          expect.objectContaining({ value: 'visible_internal_llm_tool' })
+        ])
+      })
+    );
+    expect(internalToolsField).toEqual(
+      expect.objectContaining({
+        renderer: 'llm_internal_tool_attachments'
+      })
     );
   });
 
@@ -1010,6 +1047,58 @@ describe('agent-flow node schema registry', () => {
     expect(nextNode.outputs).toEqual(nextOutputs);
     expect(nextNode.config).not.toHaveProperty('output_contract');
     expect(nextNode.alias).toBe('LLM');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  test('writes LLM internal tool attachments into node config without graph edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const mountedLlm = {
+      ...createNodeDocument('llm', 'node-mounted-llm'),
+      config: {
+        ...createNodeDocument('llm', 'node-mounted-llm').config,
+        execution_role: 'visible_internal_llm_tool'
+      }
+    };
+    const documentWithMountedLlm = {
+      ...document,
+      graph: {
+        ...document.graph,
+        nodes: [...document.graph.nodes, mountedLlm]
+      }
+    };
+    const setWorkingDocument = vi.fn();
+    const dispatch = vi.fn();
+    const adapter = createAgentFlowNodeSchemaAdapter({
+      document: documentWithMountedLlm,
+      nodeId: 'node-llm',
+      setWorkingDocument,
+      dispatch
+    });
+    const nextTools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_visible_context',
+        target_node_id: 'node-mounted-llm',
+        input_schema: { type: 'object' }
+      }
+    ];
+
+    adapter.setValue('config.visible_internal_llm_tools', nextTools);
+
+    const update = setWorkingDocument.mock.calls[0]?.[0] as
+      | typeof documentWithMountedLlm
+      | ((
+          currentDocument: typeof documentWithMountedLlm
+        ) => typeof documentWithMountedLlm);
+    const nextDocument =
+      typeof update === 'function' ? update(documentWithMountedLlm) : update;
+
+    expect(getNode(nextDocument, 'node-llm').config).toEqual(
+      expect.objectContaining({
+        visible_internal_llm_tools: nextTools
+      })
+    );
+    expect(nextDocument.graph.edges).toEqual(document.graph.edges);
     expect(dispatch).not.toHaveBeenCalled();
   });
 

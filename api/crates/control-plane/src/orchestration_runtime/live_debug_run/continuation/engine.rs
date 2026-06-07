@@ -248,6 +248,7 @@ where
                     persist_sender,
                 );
                 let execution_result = orchestration_runtime::execution_engine::execute_llm_node(
+                    &compiled_plan,
                     node,
                     &resolved_inputs,
                     &rendered_templates,

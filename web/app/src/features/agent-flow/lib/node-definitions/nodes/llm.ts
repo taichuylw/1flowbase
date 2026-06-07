@@ -21,6 +21,27 @@ export const llmNodeDefinition: NodeDefinition = {
           required: true
         },
         {
+          key: 'config.execution_role',
+          label: i18nText('agentFlow', 'auto.llm_execution_role'),
+          editor: 'static_select',
+          required: true,
+          options: [
+            {
+              label: i18nText('agentFlow', 'auto.standard_llm'),
+              value: 'standard'
+            },
+            {
+              label: i18nText('agentFlow', 'auto.internal_llm_tool'),
+              value: 'visible_internal_llm_tool'
+            }
+          ]
+        },
+        {
+          key: 'config.visible_internal_llm_tools',
+          label: i18nText('agentFlow', 'auto.internal_llm_tool_attachments'),
+          editor: 'llm_internal_tool_attachments'
+        },
+        {
           key: 'config.context_policy',
           label: '上下文',
           editor: 'llm_context_policy'

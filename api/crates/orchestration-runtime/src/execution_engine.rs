@@ -52,6 +52,7 @@ mod llm_node_outputs;
 mod llm_parameters;
 #[cfg(test)]
 mod tests;
+mod visible_internal_llm_tools;
 
 use branching::*;
 pub use http_request::{
@@ -67,6 +68,7 @@ use llm_invocation::*;
 use llm_metrics::*;
 use llm_node_outputs::*;
 use llm_parameters::*;
+use visible_internal_llm_tools::*;
 
 const LLM_TOOL_CALLBACK_KIND: &str = "llm_tool_calls";
 const LLM_TOOL_CALLBACK_STATE_KEY: &str = "__llm_tool_callback";
@@ -423,6 +425,9 @@ where
         if !active_node_ids.contains(node_id) {
             continue;
         }
+        if node_is_visible_internal_llm_tool(node) {
+            continue;
+        }
 
         let (resolved_inputs, answer_binding_error_payload) =
             match resolve_node_inputs(node, &variable_pool) {
@@ -498,6 +503,7 @@ where
             }
             "llm" => {
                 let execution = execute_llm_node(
+                    plan,
                     node,
                     &resolved_inputs,
                     &rendered_templates,
@@ -877,6 +883,30 @@ where
 }
 
 pub async fn execute_llm_node<I>(
+    plan: &CompiledPlan,
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    rendered_templates: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
+    invoker: &I,
+) -> Result<LlmNodeExecution>
+where
+    I: ProviderInvoker + ?Sized,
+{
+    execute_llm_node_with_visible_internal_tools(
+        plan,
+        node,
+        resolved_inputs,
+        rendered_templates,
+        variable_pool,
+        runtime_context,
+        invoker,
+    )
+    .await
+}
+
+pub(super) async fn execute_llm_node_provider_round<I>(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,

@@ -47,6 +47,69 @@ fn openai_response_projects_native_tool_calls() {
 }
 
 #[test]
+fn openai_response_filters_internal_visible_llm_tool_calls() {
+    let callback_task_id = Uuid::from_u128(0xabababababababababababababababab);
+    let run = NativeRunResult {
+        id: Uuid::nil(),
+        application_id: Uuid::nil(),
+        api_key_id: Uuid::nil(),
+        publication_version_id: Uuid::nil(),
+        status: NativeRunStatus::Waiting,
+        node_input_payload: json!({}),
+        metadata: json!({}),
+        answer: Some("visible internal LLM output".to_string()),
+        required_action: Some(NativeRequiredAction {
+            action_type: "submit_tool_outputs".to_string(),
+            payload: json!({
+                "callback_task_id": callback_task_id,
+                "callback_kind": "llm_tool_calls"
+            }),
+        }),
+        tool_calls: Some(json!([
+            {
+                "id": "call_internal",
+                "type": "visible_internal_llm_tool",
+                "name": "inspect_visible_context",
+                "arguments": {"query": "visible"}
+            }
+        ])),
+        usage: None,
+        error: None,
+        created_at: OffsetDateTime::UNIX_EPOCH,
+    };
+
+    let chat_payload = serde_json::to_value(to_openai_response(
+        run.clone(),
+        "provider/model".into(),
+        "chatcmpl-internal".to_string(),
+    ))
+    .expect("openai chat response serializes");
+    let responses_payload = serde_json::to_value(to_openai_responses_response(
+        run,
+        "provider/model".into(),
+        None,
+    ))
+    .expect("openai responses object serializes");
+
+    assert_eq!(chat_payload["choices"][0]["finish_reason"], json!("stop"));
+    assert_eq!(
+        chat_payload["choices"][0]["message"]["content"],
+        json!("visible internal LLM output")
+    );
+    assert!(chat_payload["choices"][0]["message"]["tool_calls"].is_null());
+    assert_eq!(
+        responses_payload["output_text"],
+        json!("visible internal LLM output")
+    );
+    assert_eq!(responses_payload["output"][0]["type"], json!("message"));
+    assert!(responses_payload["output"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|item| item["type"] != json!("function_call")));
+}
+
+#[test]
 fn openai_response_encodes_callback_task_id_into_tool_call_ids() {
     let callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
     let run = NativeRunResult {

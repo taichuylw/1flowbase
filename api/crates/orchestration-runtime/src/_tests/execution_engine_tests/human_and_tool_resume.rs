@@ -745,6 +745,200 @@ async fn resume_llm_tool_results_preserves_media_content_blocks() {
 }
 
 #[tokio::test]
+async fn visible_internal_llm_tool_outputs_visible_text_and_recalls_main_llm() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({ "query": "image?" }),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        final_llm_response("mounted-visible "),
+        final_llm_response("main-after"),
+    ]);
+    let plan = visible_internal_llm_tool_plan();
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "describe the picture",
+                "history": [
+                    {
+                        "role": "user",
+                        "content": "describe the picture",
+                        "content_blocks": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": "aW1hZ2U="
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(
+        outcome.variable_pool["node-answer"]["answer"],
+        json!("main-before mounted-visible main-after")
+    );
+    assert!(outcome
+        .node_traces
+        .iter()
+        .all(|trace| trace.node_id != "node-mounted-llm"));
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 3);
+    assert_eq!(
+        captured[0].tools[0]["function"]["name"],
+        json!("inspect_visible_context")
+    );
+    assert_eq!(
+        captured[1].messages[0]
+            .content_blocks
+            .as_ref()
+            .expect("mounted llm should receive media content blocks")[0]["type"],
+        json!("image")
+    );
+    assert!(captured[2].messages.iter().any(|message| {
+        message
+            .tool_calls
+            .as_ref()
+            .and_then(|tool_calls| tool_calls.get(0))
+            .and_then(|tool_call| tool_call.get("id"))
+            == Some(&json!("call_visible"))
+    }));
+    let tool_result = captured[2]
+        .messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_visible")
+        })
+        .expect("main llm recall should include the internal tool result");
+    assert_eq!(tool_result.content, "mounted-visible ");
+}
+
+#[tokio::test]
+async fn visible_internal_llm_tool_failure_fails_main_llm_run() {
+    let failing_internal_result = ProviderInvocationResult {
+        final_content: Some("partial mounted output".to_string()),
+        finish_reason: Some(ProviderFinishReason::Error),
+        ..ProviderInvocationResult::default()
+    };
+    let (invoker, _captured_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some(String::new()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({}),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        failing_internal_result,
+    ]);
+
+    let outcome = start_flow_debug_run(
+        &visible_internal_llm_tool_plan(),
+        &json!({ "node-start": { "query": "describe the picture" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_code"],
+                json!("visible_internal_llm_tool_failed")
+            );
+            assert_eq!(
+                failure.error_payload["target_node_id"],
+                json!("node-mounted-llm")
+            );
+        }
+        other => panic!("expected failed visible internal llm tool run, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn external_tool_calls_still_wait_for_client_when_internal_tools_are_configured() {
+    let (invoker, captured_inputs) =
+        sequential_tool_invoker(vec![tool_call_response(vec![ProviderToolCall {
+            id: "call_external".to_string(),
+            name: "lookup_weather".to_string(),
+            arguments: json!({ "city": "Shanghai" }),
+            provider_metadata: json!({}),
+        }])]);
+
+    let outcome = start_flow_debug_run(
+        &visible_internal_llm_tool_plan(),
+        &json!({
+            "node-start": {
+                "query": "weather?",
+                "tools": [
+                    {
+                        "name": "lookup_weather",
+                        "description": "Lookup weather",
+                        "input_schema": { "type": "object" }
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(pending.callback_kind, "llm_tool_calls");
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["name"],
+                json!("lookup_weather")
+            );
+        }
+        other => panic!("expected external llm tool callback wait, got {other:?}"),
+    }
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    let tool_names = captured[0]
+        .tools
+        .iter()
+        .filter_map(|tool| tool["function"]["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(tool_names.contains(&"inspect_visible_context"));
+    assert!(tool_names.contains(&"lookup_weather"));
+}
+
+#[tokio::test]
 async fn multi_round_llm_tool_callbacks_keep_previous_round_debug_evidence() {
     let first_call = ProviderToolCall {
         id: "call_weather".to_string(),
@@ -821,6 +1015,96 @@ async fn multi_round_llm_tool_callbacks_keep_previous_round_debug_evidence() {
         llm_trace.debug_payload["llm_rounds"][1]["assistant"]["tool_calls"][0]["id"],
         json!("call_time")
     );
+}
+
+fn visible_internal_llm_tool_plan() -> CompiledPlan {
+    let mut plan = llm_answer_plan();
+    plan.topological_order = vec![
+        "node-start".to_string(),
+        "node-llm".to_string(),
+        "node-mounted-llm".to_string(),
+        "node-answer".to_string(),
+    ];
+    let main_llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("main llm node should exist");
+    main_llm.config["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "inspect_visible_context",
+            "description": "Inspect the current user content with a mounted LLM",
+            "target_node_id": "node-mounted-llm",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string" }
+                }
+            }
+        }
+    ]);
+
+    plan.nodes.insert(
+        "node-mounted-llm".to_string(),
+        CompiledNode {
+            node_id: "node-mounted-llm".to_string(),
+            node_type: "llm".to_string(),
+            alias: "Mounted LLM".to_string(),
+            container_id: None,
+            dependency_node_ids: Vec::new(),
+            downstream_node_ids: Vec::new(),
+            bindings: BTreeMap::from([(
+                "prompt_messages".to_string(),
+                CompiledBinding {
+                    kind: "prompt_messages".to_string(),
+                    selector_paths: vec![vec![
+                        "visible_internal_llm_tool".to_string(),
+                        "arguments".to_string(),
+                        "query".to_string(),
+                    ]],
+                    raw_value: json!([
+                        {
+                            "id": "mounted-user",
+                            "role": "user",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": "Inspect {{ visible_internal_llm_tool.arguments.query }}"
+                            }
+                        }
+                    ]),
+                },
+            )]),
+            outputs: vec![CompiledOutput {
+                key: "text".to_string(),
+                title: "模型输出".to_string(),
+                value_type: "string".to_string(),
+                selector: Vec::new(),
+                json_schema: None,
+            }],
+            config: json!({
+                "execution_role": "visible_internal_llm_tool",
+                "model_provider": {
+                    "provider_code": "fixture_provider",
+                    "model_id": "gpt-5.4-mini"
+                },
+                "context_policy": {
+                    "integration_context": "enabled",
+                    "context_selector": ["node-start", "history"]
+                }
+            }),
+            plugin_runtime: None,
+            llm_runtime: Some(CompiledLlmRuntime {
+                provider_instance_id: "provider-ready".to_string(),
+                provider_code: "fixture_provider".to_string(),
+                protocol: "openai_compatible".to_string(),
+                model: "gpt-5.4-mini".to_string(),
+                routing: None,
+            }),
+            code_runtime: None,
+        },
+    );
+
+    plan
 }
 
 #[tokio::test]

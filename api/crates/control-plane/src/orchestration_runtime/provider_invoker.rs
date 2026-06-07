@@ -55,6 +55,14 @@ where
             package_load_ms = package_load_started.elapsed().as_millis() as u64,
             "package load finished"
         );
+        ensure_model_supports_content_blocks(
+            &self.repository,
+            &instance,
+            &package,
+            &runtime.model,
+            &input,
+        )
+        .await?;
 
         let runtime_config_started = std::time::Instant::now();
         input.provider_config = build_provider_runtime_config(
@@ -675,6 +683,63 @@ fn is_secret_field(field_type: &str) -> bool {
 fn load_provider_package(path: &str) -> Result<ProviderPackage> {
     ProviderPackage::load_from_dir(path)
         .map_err(|_| ControlPlaneError::InvalidInput("provider_package").into())
+}
+
+async fn ensure_model_supports_content_blocks<R>(
+    repository: &R,
+    instance: &domain::ModelProviderInstanceRecord,
+    package: &ProviderPackage,
+    model_id: &str,
+    input: &ProviderInvocationInput,
+) -> Result<()>
+where
+    R: ModelProviderRepository,
+{
+    if !provider_input_has_content_blocks(input) {
+        return Ok(());
+    }
+
+    if selected_model_supports_multimodal(repository, instance, package, model_id).await? {
+        return Ok(());
+    }
+
+    Err(ControlPlaneError::Conflict("model_multimodal_unsupported").into())
+}
+
+fn provider_input_has_content_blocks(input: &ProviderInvocationInput) -> bool {
+    input.messages.iter().any(|message| {
+        message
+            .content_blocks
+            .as_ref()
+            .is_some_and(|content_blocks| !content_blocks.is_null())
+    })
+}
+
+async fn selected_model_supports_multimodal<R>(
+    repository: &R,
+    instance: &domain::ModelProviderInstanceRecord,
+    package: &ProviderPackage,
+    model_id: &str,
+) -> Result<bool>
+where
+    R: ModelProviderRepository,
+{
+    if let Some(cache) = repository.get_catalog_cache(instance.id).await? {
+        let models: Vec<ProviderModelDescriptor> = serde_json::from_value(cache.models_json)?;
+        if let Some(model) = models.iter().find(|model| model.model_id == model_id) {
+            return Ok(model.supports_multimodal);
+        }
+    }
+
+    if let Some(model) = package
+        .predefined_models
+        .iter()
+        .find(|model| model.model_id == model_id)
+    {
+        return Ok(model.supports_multimodal);
+    }
+
+    Ok(false)
 }
 
 pub(super) async fn freeze_failover_queue_routes<R>(

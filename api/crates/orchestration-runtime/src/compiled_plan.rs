@@ -261,6 +261,7 @@ pub enum CompileIssueCode {
     InvalidCodeIsolationProfile,
     InvalidLlmContextSelector,
     IncompatibleLlmContextSchema,
+    InvalidVisibleInternalLlmTool,
     DuplicateAnswerPresentationReference,
     InvalidAnswerPresentationOrder,
 }

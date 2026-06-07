@@ -46,6 +46,93 @@ fn compile_collects_provider_compile_issues() {
 }
 
 #[test]
+fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_dependency() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "inspect_visible_context",
+            "target_node_id": "node-mounted-llm",
+            "input_schema": { "type": "object" }
+        }
+    ]);
+    document["graph"]["nodes"]
+        .as_array_mut()
+        .expect("sample graph nodes should be an array")
+        .push(json!({
+            "id": "node-mounted-llm",
+            "type": "llm",
+            "alias": "Mounted LLM",
+            "description": "",
+            "containerId": null,
+            "position": { "x": 480, "y": 0 },
+            "configVersion": 1,
+            "config": {
+                "execution_role": "visible_internal_llm_tool",
+                "model_provider": {
+                    "provider_code": "fixture_provider",
+                    "model_id": "gpt-5.4-mini"
+                }
+            },
+            "bindings": {
+                "prompt_messages": {
+                    "kind": "prompt_messages",
+                    "value": [
+                        {
+                            "id": "mounted-user",
+                            "role": "user",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": "{{ node-start.query }}"
+                            }
+                        }
+                    ]
+                }
+            },
+            "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+        }));
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+    let main_llm = plan.nodes.get("node-llm").expect("main llm should compile");
+    let mounted_llm = plan
+        .nodes
+        .get("node-mounted-llm")
+        .expect("mounted llm should compile");
+
+    assert!(plan.compile_issues.is_empty(), "{:?}", plan.compile_issues);
+    assert_eq!(
+        main_llm.config["visible_internal_llm_tools"][0]["target_node_id"],
+        json!("node-mounted-llm")
+    );
+    assert_eq!(plan.edges.len(), 1);
+    assert!(!main_llm
+        .downstream_node_ids
+        .contains(&"node-mounted-llm".to_string()));
+    assert!(mounted_llm.dependency_node_ids.is_empty());
+}
+
+#[test]
+fn compile_flags_invalid_visible_internal_llm_tool_target() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "inspect_visible_context",
+            "target_node_id": "node-start",
+            "input_schema": { "type": "object" }
+        }
+    ]);
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.code == CompileIssueCode::InvalidVisibleInternalLlmTool && issue.node_id == "node-llm"
+    }));
+}
+
+#[test]
 fn compile_uses_selected_instance_models_instead_of_provider_family_aggregate() {
     let flow_id = Uuid::now_v7();
     let mut context = compile_context();

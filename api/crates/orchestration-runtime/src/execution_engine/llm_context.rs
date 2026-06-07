@@ -542,6 +542,24 @@ pub(super) fn provider_tools(
     variable_pool: &Map<String, Value>,
     runtime_context: &ExecutionRuntimeContext,
 ) -> Vec<Value> {
+    let mut tools = external_provider_tools(
+        node,
+        resolved_inputs,
+        rendered_templates,
+        variable_pool,
+        runtime_context,
+    );
+    tools.extend(visible_internal_llm_provider_tools(node));
+    tools
+}
+
+fn external_provider_tools(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    rendered_templates: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
+) -> Vec<Value> {
     for candidate in [
         rendered_templates.get("tools"),
         resolved_inputs.get("tools"),

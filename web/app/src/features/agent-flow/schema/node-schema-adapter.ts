@@ -331,6 +331,10 @@ export function createAgentFlowNodeSchemaAdapter({
         return node;
       }
 
+      if (key === 'document') {
+        return document;
+      }
+
       if (key === 'definitionMeta') {
         return getNodeDefinitionMeta(node.type);
       }

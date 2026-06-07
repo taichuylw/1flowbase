@@ -36,6 +36,16 @@ export interface LlmNodeExternalReasoningPolicy {
   follow_external_reasoning: boolean;
 }
 
+export type LlmNodeExecutionRole = 'standard' | 'visible_internal_llm_tool';
+
+export interface LlmVisibleInternalTool {
+  type: 'visible_internal_llm_tool';
+  tool_name: string;
+  target_node_id: string;
+  description?: string;
+  input_schema?: Record<string, unknown>;
+}
+
 export const DEFAULT_LLM_CONTEXT_POLICY: LlmNodeContextPolicy = {
   integration_context: 'enabled',
   context_selector: ['node-start', 'history']
@@ -54,6 +64,9 @@ export const DEFAULT_LLM_PARAMETERS: LlmNodeParameters = {
 export const DEFAULT_LLM_RESPONSE_FORMAT: LlmNodeResponseFormat = {
   mode: 'text'
 };
+
+export const DEFAULT_LLM_EXECUTION_ROLE: LlmNodeExecutionRole = 'standard';
+export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS: LlmVisibleInternalTool[] = [];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -227,6 +240,49 @@ export function getLlmExternalReasoningPolicy(
     follow_external_reasoning:
       externalReasoningPolicy.follow_external_reasoning === true
   };
+}
+
+export function getLlmExecutionRole(
+  config: Record<string, unknown>
+): LlmNodeExecutionRole {
+  return config.execution_role === 'visible_internal_llm_tool'
+    ? 'visible_internal_llm_tool'
+    : DEFAULT_LLM_EXECUTION_ROLE;
+}
+
+export function getLlmVisibleInternalTools(
+  config: Record<string, unknown>
+): LlmVisibleInternalTool[] {
+  const tools = config.visible_internal_llm_tools;
+
+  if (!Array.isArray(tools)) {
+    return DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS;
+  }
+
+  return tools.flatMap((tool): LlmVisibleInternalTool[] => {
+    if (!isRecord(tool) || tool.type !== 'visible_internal_llm_tool') {
+      return [];
+    }
+
+    const toolName = asString(tool.tool_name).trim();
+    const targetNodeId = asString(tool.target_node_id).trim();
+
+    if (!toolName || !targetNodeId) {
+      return [];
+    }
+
+    return [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: toolName,
+        target_node_id: targetNodeId,
+        description: asString(tool.description).trim() || undefined,
+        input_schema: isRecord(tool.input_schema)
+          ? (tool.input_schema as Record<string, unknown>)
+          : undefined
+      }
+    ];
+  });
 }
 
 export function getLlmResponseFormat(

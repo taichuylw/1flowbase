@@ -5,6 +5,9 @@ use crate::node_error_policy::{node_uses_error_branch, ERROR_BRANCH_SOURCE_HANDL
 use super::node_compilation::compile_node;
 use super::*;
 
+const VISIBLE_INTERNAL_LLM_TOOL_ROLE: &str = "visible_internal_llm_tool";
+const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
+
 type NodeTopologyBuild = (
     BTreeMap<String, CompiledNode>,
     Vec<CompiledEdge>,
@@ -202,6 +205,7 @@ pub(super) fn build_nodes_and_topology(
     }
 
     compile_issues.extend(validate_llm_context_policies(&nodes));
+    compile_issues.extend(validate_visible_internal_llm_tools(&nodes));
 
     Ok((nodes, compiled_edges, topological_order, compile_issues))
 }
@@ -417,6 +421,75 @@ fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<
             })
         })
         .collect()
+}
+
+fn validate_visible_internal_llm_tools(
+    nodes: &BTreeMap<String, CompiledNode>,
+) -> Vec<CompileIssue> {
+    let mut issues = Vec::new();
+
+    for node in nodes.values().filter(|node| node.node_type == "llm") {
+        let Some(tools) = node
+            .config
+            .get("visible_internal_llm_tools")
+            .or_else(|| node.config.get("visibleInternalLlmTools"))
+            .and_then(Value::as_array)
+        else {
+            continue;
+        };
+
+        for tool in tools {
+            if tool.get("type").and_then(Value::as_str) != Some(VISIBLE_INTERNAL_LLM_TOOL_TYPE) {
+                continue;
+            }
+            let target_node_id = tool
+                .get("target_node_id")
+                .or_else(|| tool.get("targetNodeId"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let Some(target_node_id) = target_node_id else {
+                issues.push(CompileIssue {
+                    node_id: node.node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tools entry is missing target_node_id",
+                        node.node_id
+                    ),
+                });
+                continue;
+            };
+            let Some(target_node) = nodes.get(target_node_id) else {
+                issues.push(CompileIssue {
+                    node_id: node.node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tool target {target_node_id} was not found",
+                        node.node_id
+                    ),
+                });
+                continue;
+            };
+            let target_role = target_node
+                .config
+                .get("execution_role")
+                .or_else(|| target_node.config.get("executionRole"))
+                .and_then(Value::as_str);
+            if target_node.node_type != "llm" || target_role != Some(VISIBLE_INTERNAL_LLM_TOOL_ROLE)
+            {
+                issues.push(CompileIssue {
+                    node_id: node.node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tool target {target_node_id} must be an LLM node with execution_role=visible_internal_llm_tool",
+                        node.node_id
+                    ),
+                });
+            }
+        }
+    }
+
+    issues
 }
 
 fn context_policy_selector(node: &CompiledNode) -> Option<Vec<String>> {

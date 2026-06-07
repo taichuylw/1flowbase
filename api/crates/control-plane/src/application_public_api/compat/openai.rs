@@ -1,4 +1,4 @@
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::application_public_api::callback_tool_ids::decode_openai_callback_tool_call_id;
@@ -72,17 +72,23 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
             .get("role")
             .and_then(Value::as_str)
             .ok_or_else(|| OpenAiCompatError::invalid("messages", "message role is required"))?;
-        let content = openai_message_text(message)?;
+        let content = openai_message_content(message)?;
         if index == last_user_index {
             continue;
         }
         if role == "system" {
+            if content.content_blocks.is_some() {
+                return Err(OpenAiCompatError::unsupported("messages"));
+            }
             if !content.trim().is_empty() {
-                system_parts.push(content);
+                system_parts.push(content.text);
             }
             continue;
         }
-        let mut history_entry = serde_json::json!({ "role": role, "content": content });
+        let mut history_entry = serde_json::json!({ "role": role, "content": content.text });
+        if let Some(content_blocks) = content.content_blocks {
+            history_entry["content_blocks"] = content_blocks;
+        }
         if let Some(tool_calls) = message.get("tool_calls").filter(|value| value.is_array()) {
             history_entry["tool_calls"] = openai_chat_history_tool_calls(tool_calls);
         }
@@ -92,7 +98,15 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
         }
         history.push(history_entry);
     }
-    let query = openai_message_text(&messages[last_user_index])?;
+    let latest_user_content = openai_message_content(&messages[last_user_index])?;
+    let query = latest_user_content.text;
+    if let Some(content_blocks) = latest_user_content.content_blocks {
+        history.push(serde_json::json!({
+            "role": "user",
+            "content": query.clone(),
+            "content_blocks": content_blocks,
+        }));
+    }
 
     let response_mode = object
         .get("stream")
@@ -367,12 +381,23 @@ fn responses_input_to_query_and_history(
     let mut history = Vec::new();
     for (index, message) in messages.into_iter().enumerate() {
         if index == last_user_index {
+            if let Some(content_blocks) = message.content_blocks {
+                history.push(serde_json::json!({
+                    "role": message.role,
+                    "content": message.content.clone(),
+                    "content_blocks": content_blocks,
+                }));
+            }
             return Ok((message.content, history));
         }
-        history.push(serde_json::json!({
+        let mut history_entry = serde_json::json!({
             "role": message.role,
             "content": message.content
-        }));
+        });
+        if let Some(content_blocks) = message.content_blocks {
+            history_entry["content_blocks"] = content_blocks;
+        }
+        history.push(history_entry);
     }
     Err(OpenAiCompatError::invalid(
         "input",
@@ -383,6 +408,7 @@ fn responses_input_to_query_and_history(
 struct ResponsesInputMessage {
     role: String,
     content: String,
+    content_blocks: Option<Value>,
 }
 
 fn responses_input_message(item: &Value) -> Result<ResponsesInputMessage, OpenAiCompatError> {
@@ -395,14 +421,22 @@ fn responses_input_message(item: &Value) -> Result<ResponsesInputMessage, OpenAi
         .unwrap_or("user")
         .to_string();
     let content = match object.get("content") {
-        Some(content) => openai_text_content(content)?,
+        Some(content) => openai_content(content)?,
         None => object
             .get("text")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned)
+            .map(|content| OpenAiMappedContent {
+                text: content,
+                content_blocks: None,
+            })
             .ok_or_else(|| OpenAiCompatError::invalid("input", "input content is required"))?,
     };
-    Ok(ResponsesInputMessage { role, content })
+    Ok(ResponsesInputMessage {
+        role,
+        content: content.text,
+        content_blocks: content.content_blocks,
+    })
 }
 
 fn compatibility_inputs(compatibility: Value) -> Value {
@@ -460,10 +494,27 @@ fn normalize_openai_tool(tool: &Value) -> Option<Value> {
     Some(Value::Object(normalized))
 }
 
-fn openai_message_text(message: &Value) -> Result<String, OpenAiCompatError> {
+#[derive(Debug, Clone, PartialEq)]
+struct OpenAiMappedContent {
+    text: String,
+    content_blocks: Option<Value>,
+}
+
+impl OpenAiMappedContent {
+    fn trim(&self) -> &str {
+        self.text.trim()
+    }
+}
+
+fn openai_message_content(message: &Value) -> Result<OpenAiMappedContent, OpenAiCompatError> {
     match message.get("content") {
-        Some(Value::Null) | None if message.get("tool_calls").is_some() => Ok(String::new()),
-        Some(content) => openai_text_content(content),
+        Some(Value::Null) | None if message.get("tool_calls").is_some() => {
+            Ok(OpenAiMappedContent {
+                text: String::new(),
+                content_blocks: None,
+            })
+        }
+        Some(content) => openai_content(content),
         None => Err(OpenAiCompatError::invalid(
             "messages",
             "message content is required",
@@ -471,40 +522,72 @@ fn openai_message_text(message: &Value) -> Result<String, OpenAiCompatError> {
     }
 }
 
-fn openai_text_content(content: &Value) -> Result<String, OpenAiCompatError> {
+fn openai_content(content: &Value) -> Result<OpenAiMappedContent, OpenAiCompatError> {
     if let Some(text) = content.as_str() {
-        return Ok(text.to_string());
+        return Ok(OpenAiMappedContent {
+            text: text.to_string(),
+            content_blocks: None,
+        });
     }
     let parts = content
         .as_array()
         .ok_or_else(|| OpenAiCompatError::invalid("messages", "content must be text"))?;
     let mut text = String::new();
+    let mut blocks = Vec::new();
+    let mut has_media_blocks = false;
     for part in parts {
         let part_type = part.get("type").and_then(Value::as_str).unwrap_or_default();
         match part_type {
-            "text" => {
+            "text" | "input_text" => {
                 if let Some(value) = part.get("text").and_then(Value::as_str) {
                     if !text.is_empty() {
                         text.push('\n');
                     }
                     text.push_str(value);
+                    blocks.push(json!({ "type": "text", "text": value }));
                 }
             }
-            "input_text" => {
-                if let Some(value) = part.get("text").and_then(Value::as_str) {
-                    if !text.is_empty() {
-                        text.push('\n');
-                    }
-                    text.push_str(value);
-                }
+            "image_url" | "input_image" => {
+                let Some(block) = openai_image_content_block(part) else {
+                    return Err(OpenAiCompatError::invalid(
+                        "messages",
+                        "image content is invalid",
+                    ));
+                };
+                has_media_blocks = true;
+                blocks.push(block);
             }
-            "image_url" | "input_image" | "input_audio" | "file" | "input_file" => {
+            "input_audio" | "file" | "input_file" => {
                 return Err(OpenAiCompatError::unsupported("messages"));
             }
             _ => return Err(OpenAiCompatError::unsupported("messages")),
         }
     }
-    Ok(text)
+    Ok(OpenAiMappedContent {
+        text,
+        content_blocks: has_media_blocks.then_some(Value::Array(blocks)),
+    })
+}
+
+fn openai_image_content_block(part: &Value) -> Option<Value> {
+    let object = part.as_object()?;
+    let image_url = object
+        .get("image_url")
+        .or_else(|| object.get("imageUrl"))
+        .or_else(|| object.get("url"))
+        .or_else(|| object.get("data"))?;
+    Some(json!({
+        "type": "image_url",
+        "image_url": openai_image_url_value(image_url)
+    }))
+}
+
+fn openai_image_url_value(value: &Value) -> Value {
+    if value.is_object() {
+        value.clone()
+    } else {
+        json!({ "url": value })
+    }
 }
 
 #[cfg(test)]

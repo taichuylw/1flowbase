@@ -1,5 +1,8 @@
 use super::event_forwarding::is_answer_presentation_delta;
 use super::*;
+use crate::routes::application_public_api::llm_tool_visibility::{
+    external_llm_tool_call_values, payload_has_only_internal_llm_tool_calls,
+};
 
 pub(super) struct OpenAiChatStreamMapper {
     model: String,
@@ -276,25 +279,37 @@ fn openai_runtime_event_to_sse(
             done_sse(),
         ],
         "flow_cancelled" => vec![done_sse()],
-        "waiting_callback" => openai_tool_call_chunk_payload(
-            initial_run,
-            model,
-            chat_completion_id,
-            &envelope.payload,
-        )
-        .map(|payload| {
-            vec![
-                json_sse(payload),
-                json_sse(openai_finish_chunk_payload(
-                    initial_run,
-                    model,
-                    chat_completion_id,
-                    "tool_calls",
-                )),
-                done_sse(),
-            ]
-        })
-        .unwrap_or_else(required_action_not_supported_openai_sse),
+        "waiting_callback" => {
+            if let Some(payload) = openai_tool_call_chunk_payload(
+                initial_run,
+                model,
+                chat_completion_id,
+                &envelope.payload,
+            ) {
+                vec![
+                    json_sse(payload),
+                    json_sse(openai_finish_chunk_payload(
+                        initial_run,
+                        model,
+                        chat_completion_id,
+                        "tool_calls",
+                    )),
+                    done_sse(),
+                ]
+            } else if payload_has_only_internal_llm_tool_calls(&envelope.payload) {
+                vec![
+                    json_sse(openai_finish_chunk_payload(
+                        initial_run,
+                        model,
+                        chat_completion_id,
+                        "stop",
+                    )),
+                    done_sse(),
+                ]
+            } else {
+                required_action_not_supported_openai_sse()
+            }
+        }
         "waiting_human" => required_action_not_supported_openai_sse(),
         _ => Vec::new(),
     }
@@ -401,17 +416,29 @@ fn openai_response_runtime_event_to_sse(
                 }
             }),
         )],
-        "waiting_callback" => openai_response_function_call_output_items(&envelope.payload)
-            .map(|items| {
+        "waiting_callback" => {
+            if let Some(items) = openai_response_function_call_output_items(&envelope.payload) {
                 openai_response_function_call_sse(initial_run, model, previous_response_id, items)
-            })
-            .unwrap_or_else(|| {
+            } else if payload_has_only_internal_llm_tool_calls(&envelope.payload) {
+                vec![event_json_sse(
+                    "response.completed",
+                    json!({
+                        "type": "response.completed",
+                        "response": openai_response_completed_snapshot(
+                            initial_run,
+                            model,
+                            previous_response_id
+                        )
+                    }),
+                )]
+            } else {
                 required_action_not_supported_openai_response_sse(
                     initial_run,
                     model,
                     previous_response_id,
                 )
-            }),
+            }
+        }
         "waiting_human" => required_action_not_supported_openai_response_sse(
             initial_run,
             model,
@@ -833,8 +860,8 @@ fn llm_tool_callback_task_id(payload: &Value) -> Option<uuid::Uuid> {
         .and_then(|value| uuid::Uuid::parse_str(value).ok())
 }
 
-fn llm_tool_calls(payload: &Value) -> Option<&Vec<Value>> {
-    payload
+fn llm_tool_calls(payload: &Value) -> Option<Vec<&Value>> {
+    let calls = payload
         .get("tool_calls")
         .and_then(Value::as_array)
         .or_else(|| {
@@ -842,8 +869,9 @@ fn llm_tool_calls(payload: &Value) -> Option<&Vec<Value>> {
                 .get("request_payload")
                 .and_then(|request| request.get("tool_calls"))
                 .and_then(Value::as_array)
-        })
-        .filter(|calls| !calls.is_empty())
+        })?;
+
+    external_llm_tool_call_values(calls)
 }
 
 fn tool_call_arguments_string(arguments: Value) -> String {
@@ -965,9 +993,17 @@ impl AnthropicStreamMapper {
             }
             "text_delta" | "reasoning_delta" => Vec::new(),
             "flow_finished" => self.anthropic_terminal_events(initial_run, &envelope.payload),
-            "waiting_callback" => self
-                .anthropic_tool_use_events(&envelope.payload, initial_run.usage.as_ref())
-                .unwrap_or_else(required_action_not_supported_anthropic_sse),
+            "waiting_callback" => {
+                if let Some(events) =
+                    self.anthropic_tool_use_events(&envelope.payload, initial_run.usage.as_ref())
+                {
+                    events
+                } else if payload_has_only_internal_llm_tool_calls(&envelope.payload) {
+                    self.anthropic_terminal_events(initial_run, &envelope.payload)
+                } else {
+                    required_action_not_supported_anthropic_sse()
+                }
+            }
             "waiting_human" => required_action_not_supported_anthropic_sse(),
             "flow_failed" => {
                 if terminal_answer_text(initial_run, &envelope.payload).is_some() {

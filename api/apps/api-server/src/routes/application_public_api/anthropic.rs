@@ -31,7 +31,9 @@ use crate::{
     app_state::ApiState,
     provider_runtime::ApiProviderRuntime,
     routes::application_public_api::{
-        compat_sse, native,
+        compat_sse,
+        llm_tool_visibility::external_llm_tool_calls,
+        native,
         tool_callback_ids::{
             decode_anthropic_callback_tool_use_id, encode_anthropic_callback_tool_use_id,
         },
@@ -394,7 +396,7 @@ fn anthropic_tool_use_blocks(
     tool_calls: Option<&Value>,
     callback_task_id: Option<Uuid>,
 ) -> Option<Vec<Value>> {
-    let calls = tool_calls?.as_array()?;
+    let calls = external_llm_tool_calls(tool_calls)?;
     let mapped = calls
         .iter()
         .filter_map(|call| {

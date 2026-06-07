@@ -36,7 +36,9 @@ use crate::{
     app_state::ApiState,
     provider_runtime::ApiProviderRuntime,
     routes::application_public_api::{
-        compat_sse, native,
+        compat_sse,
+        llm_tool_visibility::external_llm_tool_calls,
+        native,
         tool_callback_ids::{
             decode_openai_callback_tool_call_id, encode_openai_callback_tool_call_id,
         },
@@ -1042,12 +1044,14 @@ fn to_openai_responses_response(
     previous_response_id: Option<String>,
 ) -> OpenAiResponsesObject {
     let callback_task_id = callback_task_id_from_required_action(&run);
-    let output_text = if run.tool_calls.is_some() {
+    let function_call_items =
+        openai_response_function_call_items(run.tool_calls.as_ref(), callback_task_id);
+    let output_text = if function_call_items.is_some() {
         String::new()
     } else {
         run.answer.clone().unwrap_or_default()
     };
-    let output = openai_response_function_call_items(run.tool_calls.as_ref(), callback_task_id)
+    let output = function_call_items
         .unwrap_or_else(|| vec![openai_response_message_item(&run, &output_text)]);
     OpenAiResponsesObject {
         id: response_id_from_run_id(run.id),
@@ -1082,7 +1086,7 @@ fn openai_response_function_call_items(
     tool_calls: Option<&Value>,
     callback_task_id: Option<Uuid>,
 ) -> Option<Vec<Value>> {
-    let calls = tool_calls?.as_array()?;
+    let calls = external_llm_tool_calls(tool_calls)?;
     let mapped = calls
         .iter()
         .filter_map(|call| {
@@ -1115,7 +1119,7 @@ fn openai_tool_calls(
     tool_calls: Option<&Value>,
     callback_task_id: Option<Uuid>,
 ) -> Option<Vec<OpenAiToolCall>> {
-    let calls = tool_calls?.as_array()?;
+    let calls = external_llm_tool_calls(tool_calls)?;
     let mapped = calls
         .iter()
         .filter_map(|call| {

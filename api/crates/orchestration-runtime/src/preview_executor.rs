@@ -166,6 +166,7 @@ where
         )
     } else if node.node_type == "llm" {
         let execution = execute_llm_node(
+            plan,
             node,
             &resolved_inputs,
             &rendered_templates,

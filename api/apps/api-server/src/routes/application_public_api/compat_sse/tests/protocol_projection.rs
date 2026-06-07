@@ -133,6 +133,62 @@ async fn openai_chat_durable_waiting_callback_fallback_drains_text_delta_first()
 }
 
 #[tokio::test]
+async fn openai_chat_waiting_internal_llm_tool_callback_finishes_without_tool_calls() {
+    let mut run = native_run();
+    let callback_task_id = Uuid::from_u128(0x12121212121212121212121212121212);
+    run.status = NativeRunStatus::Waiting;
+    run.answer = Some("visible internal LLM output".to_string());
+    run.tool_calls = Some(json!([
+        {
+            "id": "call_internal",
+            "type": "visible_internal_llm_tool",
+            "name": "inspect_visible_context",
+            "arguments": { "query": "visible" }
+        }
+    ]));
+
+    let mut mapper =
+        OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+    let mut events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+    );
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "tool_calls": run.tool_calls.clone().unwrap()
+                }),
+            },
+        ),
+    ));
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("\"finish_reason\":\"stop\""), "{body}");
+    assert!(!body.contains("\"tool_calls\""), "{body}");
+    assert!(!body.contains("required_action_not_supported"), "{body}");
+    assert!(body.contains("[DONE]"), "{body}");
+}
+
+#[tokio::test]
 async fn terminal_answer_recovery_prefers_durable_answer_presentation() {
     let run = native_run();
     let (base_state, _) = crate::_tests::support::test_api_state_with_database_url().await;
@@ -652,6 +708,61 @@ async fn openai_responses_waiting_callback_streams_function_call_added_done_and_
     );
 }
 
+#[tokio::test]
+async fn openai_responses_waiting_internal_llm_tool_callback_completes_without_function_call() {
+    let mut run = native_run();
+    let callback_task_id = Uuid::from_u128(0x34343434343434343434343434343434);
+    run.status = NativeRunStatus::Waiting;
+    run.answer = Some("visible internal LLM output".to_string());
+    run.tool_calls = Some(json!([
+        {
+            "id": "call_internal",
+            "visibility": "internal",
+            "origin": "visible_internal_llm_tool",
+            "name": "inspect_visible_context",
+            "arguments": { "query": "visible" }
+        }
+    ]));
+
+    let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
+    let mut events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+    );
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "tool_calls": run.tool_calls.clone().unwrap()
+                }),
+            },
+        ),
+    ));
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("event: response.completed"), "{body}");
+    assert!(!body.contains("\"type\":\"function_call\""), "{body}");
+    assert!(!body.contains("required_action_not_supported"), "{body}");
+}
+
 #[test]
 fn anthropic_waiting_callback_maps_to_tool_use_block() {
     let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
@@ -675,6 +786,65 @@ fn anthropic_waiting_callback_maps_to_tool_use_block() {
         .as_str()
         .expect("tool_use id should be encoded")
         .contains("toolu_weather"));
+}
+
+#[tokio::test]
+async fn anthropic_waiting_internal_llm_tool_callback_streams_text_without_tool_use() {
+    let mut run = native_run();
+    let callback_task_id = Uuid::from_u128(0x56565656565656565656565656565656);
+    run.status = NativeRunStatus::Waiting;
+    run.answer = Some("visible internal LLM output".to_string());
+    run.tool_calls = Some(json!([
+        {
+            "id": "toolu_internal",
+            "metadata": {
+                "visibility": "internal",
+                "origin": "visible_internal_llm_tool"
+            },
+            "name": "inspect_visible_context",
+            "arguments": { "query": "visible" }
+        }
+    ]));
+
+    let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+    let mut events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+    );
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "tool_calls": run.tool_calls.clone().unwrap()
+                }),
+            },
+        ),
+    ));
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("visible internal LLM output"), "{body}");
+    assert!(body.contains("\"type\":\"text_delta\""), "{body}");
+    assert!(body.contains("\"stop_reason\":\"end_turn\""), "{body}");
+    assert!(!body.contains("\"type\":\"tool_use\""), "{body}");
+    assert!(!body.contains("required_action_not_supported"), "{body}");
 }
 
 #[tokio::test]

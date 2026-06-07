@@ -3,12 +3,22 @@ use crate::node_error_policy::ERROR_BRANCH_SOURCE_HANDLE;
 
 pub fn initial_active_node_ids(plan: &CompiledPlan) -> BTreeSet<String> {
     if plan.edges.is_empty() {
-        return plan.topological_order.iter().cloned().collect();
+        return plan
+            .topological_order
+            .iter()
+            .filter(|node_id| {
+                plan.nodes
+                    .get(*node_id)
+                    .is_some_and(|node| !node_is_visible_internal_llm_tool(node))
+            })
+            .cloned()
+            .collect();
     }
 
     plan.nodes
         .values()
         .filter(|node| node.dependency_node_ids.is_empty())
+        .filter(|node| !node_is_visible_internal_llm_tool(node))
         .map(|node| node.node_id.clone())
         .collect()
 }

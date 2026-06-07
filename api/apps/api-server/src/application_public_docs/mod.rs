@@ -478,19 +478,19 @@ impl DocTextResolver {
     fn unsupported_notes(&self, category_id: &str) -> &'static str {
         match (category_id, self.locale) {
             (OPENAI_CATEGORY_ID, DocsLocale::ZhHans) => {
-                "此 v1 兼容端点支持 Chat Completions 和 Responses 外层协议适配，tools、tool_choice、function_call 字段进入模型供应商调用，支持 tool 消息历史回传和返回 tool_calls；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量会投影为对应协议事件。暂不支持音频输出、图片/文件内容和多模态生成。如需查看 required_action 或恢复运行，请使用原生 API。"
+                "此 v1 兼容端点支持 Chat Completions 和 Responses 外层协议适配，图片输入、tools、tool_choice、function_call 字段会进入模型供应商调用，支持 tool 消息历史回传和返回 tool_calls；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量会投影为对应协议事件。暂不支持音频输出、文件内容和多模态输出生成。如需查看 required_action 或恢复运行，请使用原生 API。"
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::ZhHans) => {
-                "此 v1 兼容端点支持顶层 tools/tool_choice 进入模型供应商调用，支持 tool_use / tool_result 文本块历史回传；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量映射为 thinking_delta。暂不支持 computer use、image/document blocks 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
+                "此 v1 兼容端点支持顶层 tools/tool_choice 与 image/document blocks 进入模型供应商调用，支持 tool_use / tool_result 文本块历史回传；stream=true 时返回 text/event-stream，心跳文本为 heartbeat，推理增量映射为 thinking_delta。暂不支持 computer use 和等待态恢复。如需查看 required_action 或恢复运行，请使用原生 API。"
             }
             (_, DocsLocale::ZhHans) => {
                 "原生 API 支持查看 required_action 并恢复运行。response_mode=streaming 时返回 text/event-stream，并包含心跳、reasoning.delta、message.delta 和终态事件。公开路径不会包含 application_id。"
             }
             (OPENAI_CATEGORY_ID, DocsLocale::EnUs) => {
-                "This v1 compatible endpoint adapts Chat Completions and Responses protocol shapes, forwards tools, tool_choice, and function_call fields into the model-provider invocation, forwards tool message history, and can return tool_calls. stream=true returns text/event-stream with heartbeat text heartbeat and protocol-shaped events. Unsupported: audio output, image/file content, and multimodal generation. Use the Native API for required_action inspection and resume."
+                "This v1 compatible endpoint adapts Chat Completions and Responses protocol shapes, forwards image input, tools, tool_choice, and function_call fields into the model-provider invocation, forwards tool message history, and can return tool_calls. stream=true returns text/event-stream with heartbeat text heartbeat and protocol-shaped events. Unsupported: audio output, file content, and multimodal output generation. Use the Native API for required_action inspection and resume."
             }
             (ANTHROPIC_CATEGORY_ID, DocsLocale::EnUs) => {
-                "This v1 compatible endpoint forwards top-level tools/tool_choice into the model-provider invocation and supports tool_use/tool_result text block history. stream=true returns text/event-stream with heartbeat text heartbeat and reasoning deltas as thinking_delta. Unsupported: computer use, image/document blocks, and waiting-state resume. Use the Native API for required_action inspection and resume."
+                "This v1 compatible endpoint forwards top-level tools/tool_choice and image/document blocks into the model-provider invocation and supports tool_use/tool_result text block history. stream=true returns text/event-stream with heartbeat text heartbeat and reasoning deltas as thinking_delta. Unsupported: computer use and waiting-state resume. Use the Native API for required_action inspection and resume."
             }
             (_, DocsLocale::EnUs) => {
                 "Native API supports required_action inspection and resume. response_mode=streaming returns text/event-stream with heartbeat, reasoning.delta, message.delta, and terminal run events. Public paths never include application_id."
