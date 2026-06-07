@@ -37,6 +37,7 @@ const FIELD_RENDERER_BY_EDITOR: Record<NodeEditorKind, string> = {
   condition_group: 'condition_group',
   if_else_branches: 'if_else_branches',
   state_write: 'state_write',
+  environment_variable_update: 'environment_variable_update',
   output_contract_definition: 'output_contract_definition',
   start_input_fields: 'start_input_fields',
   start_model_list: 'start_model_list'
@@ -46,6 +47,7 @@ const CONTRACT_FIELD_RENDERER_ALLOWLIST = new Set(
   [
     ...Object.values(FIELD_RENDERER_BY_EDITOR),
     'switch',
+    'environment_variable_update',
     'http_request_endpoint',
     'http_request_key_values',
     'http_request_body',

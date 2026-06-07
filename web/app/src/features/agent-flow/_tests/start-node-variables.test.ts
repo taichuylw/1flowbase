@@ -346,6 +346,56 @@ describe('start node variables', () => {
     );
   });
 
+  test('exposes environment update node outputs from the selected variable type', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+
+    variableNode.outputs = [
+      {
+        key: 'ApiBaseUrl',
+        title: 'env.ApiBaseUrl',
+        valueType: 'string'
+      }
+    ];
+    document.graph.nodes.splice(2, 0, variableNode);
+    document.graph.edges = [
+      {
+        id: 'edge-start-env-update',
+        source: 'node-start',
+        target: 'node-env-update',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      },
+      {
+        id: 'edge-env-update-answer',
+        source: 'node-env-update',
+        target: 'node-answer',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      }
+    ];
+
+    expect(
+      listVisibleSelectorOptions(document, 'node-answer').map((option) => ({
+        value: option.value,
+        label: option.displayLabel,
+        valueType: option.valueType
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          value: ['node-env-update', 'ApiBaseUrl'],
+          label: 'Environment Variable Update/env.ApiBaseUrl',
+          valueType: 'string'
+        }
+      ])
+    );
+  });
+
   test('exposes only public LLM runtime output variables to downstream selectors', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
@@ -523,6 +573,29 @@ describe('start node variables', () => {
         }
       }
     });
+  });
+
+  test('adds application environment variables to flow debug input', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+
+    expect(
+      buildFlowDebugRunInput(document, undefined, [
+        {
+          name: 'ApiBaseUrl',
+          value_type: 'string',
+          value: 'https://api.example.com',
+          description: ''
+        }
+      ])
+    ).toEqual(
+      expect.objectContaining({
+        input_payload: expect.objectContaining({
+          env: {
+            ApiBaseUrl: 'https://api.example.com'
+          }
+        })
+      })
+    );
   });
 
   test('normalizes rich start input field configuration', () => {

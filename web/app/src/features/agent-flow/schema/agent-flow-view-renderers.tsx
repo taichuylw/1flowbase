@@ -2,11 +2,23 @@ import type { FlowNodeDocument } from '@1flowbase/flow-schema';
 import {
   BookOutlined,
   DownOutlined,
+  EditOutlined,
   HomeOutlined,
   PlusOutlined,
   QuestionCircleOutlined
 } from '@ant-design/icons';
-import { Button, Card, Empty, Select, Space, Switch, Tooltip, Typography } from 'antd';
+import {
+  Button,
+  Card,
+  Empty,
+  Input,
+  Modal,
+  Select,
+  Space,
+  Switch,
+  Tooltip,
+  Typography
+} from 'antd';
 import { useState } from 'react';
 
 import type {
@@ -26,6 +38,24 @@ import { i18nText } from '../../../shared/i18n/text';
 
 function getNode(adapter: SchemaViewRendererProps['adapter']) {
   return adapter.getDerived('node') as FlowNodeDocument | null | undefined;
+}
+
+function defaultOutputEditorText(value: unknown) {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return '{}';
+}
+
+function parseDefaultOutputEditorText(value: string) {
+  const parsed = JSON.parse(value) as unknown;
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('default output must be an object');
+  }
+
+  return parsed as Record<string, unknown>;
 }
 
 function renderSummaryView({ adapter, block }: SchemaViewRendererProps) {
@@ -189,11 +219,41 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
   const retryEnabled = Boolean(adapter.getValue('config.retry_enabled'));
   const errorPolicy =
     (adapter.getValue('config.error_policy') as string | undefined) ?? 'none';
+  const [defaultOutputOpen, setDefaultOutputOpen] = useState(false);
+  const [defaultOutputText, setDefaultOutputText] = useState(() =>
+    defaultOutputEditorText(adapter.getValue('config.error_default_output'))
+  );
+  const [defaultOutputError, setDefaultOutputError] = useState<string | null>(
+    null
+  );
   const externalReasoningPolicy = getLlmExternalReasoningPolicy({
     external_reasoning_policy: adapter.getValue(
       'config.external_reasoning_policy'
     )
   });
+
+  function openDefaultOutputEditor() {
+    setDefaultOutputText(
+      defaultOutputEditorText(adapter.getValue('config.error_default_output'))
+    );
+    setDefaultOutputError(null);
+    setDefaultOutputOpen(true);
+  }
+
+  function saveDefaultOutput() {
+    try {
+      adapter.setValue(
+        'config.error_default_output',
+        parseDefaultOutputEditorText(defaultOutputText)
+      );
+      setDefaultOutputError(null);
+      setDefaultOutputOpen(false);
+    } catch {
+      setDefaultOutputError(
+        i18nText('agentFlow', 'auto.default_output_json_invalid')
+      );
+    }
+  }
 
   const errorPolicyOptions = [
     {
@@ -291,10 +351,59 @@ function renderPolicyGroupView({ adapter }: SchemaViewRendererProps) {
             }}
             popupMatchSelectWidth={false}
             value={errorPolicy}
-            onChange={(value) => adapter.setValue('config.error_policy', value)}
+            onChange={(value) => {
+              adapter.setValue('config.error_policy', value);
+
+              if (value === 'default_value') {
+                openDefaultOutputEditor();
+              }
+            }}
           />
         </div>
+        {errorPolicy === 'default_value' ? (
+          <Tooltip
+            title={i18nText('agentFlow', 'auto.edit', {
+              value1: i18nText('agentFlow', 'auto.default_output')
+            })}
+          >
+            <Button
+              aria-label={i18nText('agentFlow', 'auto.edit', {
+                value1: i18nText('agentFlow', 'auto.default_output')
+              })}
+              icon={<EditOutlined />}
+              shape="circle"
+              size="small"
+              type="text"
+              onClick={openDefaultOutputEditor}
+            />
+          </Tooltip>
+        ) : null}
       </div>
+      <Modal
+        cancelText={i18nText('agentFlow', 'auto.cancel')}
+        okText={i18nText('agentFlow', 'auto.save')}
+        open={defaultOutputOpen}
+        title={i18nText('agentFlow', 'auto.default_output')}
+        onCancel={() => setDefaultOutputOpen(false)}
+        onOk={saveDefaultOutput}
+      >
+        <Input.TextArea
+          aria-label={i18nText('agentFlow', 'auto.default_output')}
+          autoSize={{ minRows: 5, maxRows: 10 }}
+          placeholder={i18nText(
+            'agentFlow',
+            'auto.default_output_json_placeholder'
+          )}
+          value={defaultOutputText}
+          onChange={(event) => {
+            setDefaultOutputText(event.target.value);
+            setDefaultOutputError(null);
+          }}
+        />
+        {defaultOutputError ? (
+          <Typography.Text type="danger">{defaultOutputError}</Typography.Text>
+        ) : null}
+      </Modal>
     </div>
   );
 }

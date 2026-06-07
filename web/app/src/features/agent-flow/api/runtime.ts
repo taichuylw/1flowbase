@@ -39,12 +39,16 @@ import {
   agentFlowSystemVariables,
   systemVariableNodeId
 } from '../lib/variables/system-variables';
+import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
 import { extractNamedBindingSelectors } from '../lib/named-binding-expressions';
 import {
   collectConditionSelectors,
   collectIfElseBranchSelectors
 } from '../lib/if-else-branches';
-import { parseTemplateSelectorTokens } from '../lib/template-binding';
+import {
+  TEMPLATE_SELECTOR_REGEX,
+  parseTemplateSelectorTokens
+} from '../lib/template-binding';
 import { i18nText } from '../../../shared/i18n/text';
 
 export type NodeLastRun = ConsoleNodeLastRun;
@@ -167,6 +171,18 @@ export interface NodeDebugVariableConfirmationPlan {
   input_payload: Record<string, Record<string, unknown>>;
   fields: NodeDebugPreviewVariableField[];
 }
+
+interface EnvironmentVariableUpdateOperation {
+  path: string[];
+  operator: 'set' | 'append' | 'clear' | 'increment';
+  source?: string[] | null;
+  value?: StateWriteValueExpression | null;
+}
+
+type StateWriteValueExpression =
+  | { kind: 'constant'; value: unknown }
+  | { kind: 'selector'; selector: string[] }
+  | { kind: 'templated_text'; value: string };
 
 export const nodeLastRunQueryKey = (applicationId: string, nodeId: string) =>
   [
@@ -293,10 +309,14 @@ export function extractNodePreviewVariableOutput(
 
 export function buildFlowDebugRunInput(
   document: FlowAuthoringDocument,
-  inputValues?: Record<string, unknown>
+  inputValues?: Record<string, unknown>,
+  environmentVariables: AgentFlowEnvironmentVariable[] = []
 ) {
   const startNode = document.graph.nodes.find((node) => node.type === 'start');
   const startPayload: Record<string, unknown> = {};
+  const inputPayload: Record<string, Record<string, unknown>> = {
+    [startNode?.id ?? 'node-start']: startPayload
+  };
 
   for (const output of startNode ? getNodeVariableOutputs(startNode) : []) {
     startPayload[output.key] =
@@ -306,10 +326,18 @@ export function buildFlowDebugRunInput(
         : buildPreviewValue(startNode, output.key);
   }
 
+  if (environmentVariables.length > 0) {
+    inputPayload.env = environmentVariables.reduce<Record<string, unknown>>(
+      (payload, variable) => {
+        payload[variable.name] = variable.value;
+        return payload;
+      },
+      {}
+    );
+  }
+
   return {
-    input_payload: {
-      [startNode?.id ?? 'node-start']: startPayload
-    }
+    input_payload: inputPayload
   };
 }
 
@@ -479,6 +507,54 @@ function extractConfigReferenceSelectors(
   ];
 }
 
+function normalizeStateWriteValueExpression(
+  value: unknown
+): StateWriteValueExpression | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (value.kind === 'constant') {
+    return {
+      kind: 'constant',
+      value: value.value
+    };
+  }
+
+  if (value.kind === 'selector') {
+    const selector = normalizeConfigSelectorPath(value.selector);
+
+    return selector ? { kind: 'selector', selector } : null;
+  }
+
+  if (value.kind === 'templated_text' && typeof value.value === 'string') {
+    return {
+      kind: 'templated_text',
+      value: value.value
+    };
+  }
+
+  return null;
+}
+
+function extractStateWriteValueSelectors(value: unknown): string[][] {
+  const expression = normalizeStateWriteValueExpression(value);
+
+  if (!expression) {
+    return [];
+  }
+
+  if (expression.kind === 'selector') {
+    return [expression.selector];
+  }
+
+  if (expression.kind === 'templated_text') {
+    return extractTemplateSelectors(expression.value);
+  }
+
+  return [];
+}
+
 function extractSelectors(binding: FlowBinding): string[][] {
   switch (binding.kind) {
     case 'selector': {
@@ -505,9 +581,14 @@ function extractSelectors(binding: FlowBinding): string[][] {
         .map((condition) => normalizeSelectorPath(condition))
         .filter((value): value is string[] => value !== null);
     case 'state_write':
-      return binding.value
-        .map((entry) => normalizeSelectorPath(entry.source))
-        .filter((value): value is string[] => value !== null);
+      return binding.value.flatMap((entry) => {
+        const source = normalizeSelectorPath(entry.source);
+
+        return [
+          ...(source ? [source] : []),
+          ...extractStateWriteValueSelectors(entry.value)
+        ];
+      });
     case 'data_model_query':
       return extractDataModelQuerySelectors(binding.value)
         .map((value) => normalizeSelectorPath(value))
@@ -524,6 +605,52 @@ function collectNodeReferenceSelectors(node: FlowNodeDocument) {
     ),
     ...extractConfigReferenceSelectors(node.config)
   ];
+}
+
+function collectUpstreamNodeIds(
+  document: FlowAuthoringDocument,
+  nodeId: string
+) {
+  const visited = new Set<string>();
+  const queue = [nodeId];
+
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+
+    if (!currentNodeId) {
+      continue;
+    }
+
+    for (const edge of document.graph.edges) {
+      if (edge.target !== currentNodeId || visited.has(edge.source)) {
+        continue;
+      }
+
+      visited.add(edge.source);
+      queue.push(edge.source);
+    }
+  }
+
+  return visited;
+}
+
+function getEnvironmentVariableUpdateOperations(
+  node: FlowNodeDocument
+): EnvironmentVariableUpdateOperation[] {
+  const binding = node.bindings.operations;
+
+  if (node.type !== 'variable_assigner' || binding?.kind !== 'state_write') {
+    return [];
+  }
+
+  return binding.value.filter(
+    (operation): operation is EnvironmentVariableUpdateOperation =>
+      operation.operator === 'set' &&
+      operation.path.length === 2 &&
+      operation.path[0] === 'env' &&
+      operation.path[1].trim().length > 0 &&
+      normalizeStateWriteValueExpression(operation.value) !== null
+  );
 }
 
 function hasPreviewVariableValue(value: unknown) {
@@ -670,6 +797,32 @@ function readCachedOutputValue(
   return { found: true, value: current };
 }
 
+function readPreviewInputValue(
+  inputPayload: Record<string, Record<string, unknown>>,
+  selector: string[]
+): { found: true; value: unknown } | { found: false } {
+  const [nodeId, ...path] = selector;
+
+  if (!nodeId || path.length === 0) {
+    return { found: false };
+  }
+
+  let current: unknown = inputPayload[nodeId];
+
+  for (const segment of path) {
+    if (
+      !isRecord(current) ||
+      !Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
+      return { found: false };
+    }
+
+    current = current[segment];
+  }
+
+  return { found: true, value: current };
+}
+
 function buildNodePreviewVariableField({
   document,
   nodeId,
@@ -743,6 +896,199 @@ function buildMissingPreviewField(
     sourceOutput: findNodeOutput(node, outputKey),
     value: buildPreviewValue(node, outputKey)
   });
+}
+
+function hasMissingPreviewField(
+  fields: NodeDebugPreviewVariableField[],
+  nodeId: string,
+  outputKey: string
+) {
+  return fields.some((field) => field.nodeId === nodeId && field.key === outputKey);
+}
+
+function resolvePreviewSelectorValue({
+  document,
+  variableCache,
+  inputPayload,
+  missingFields,
+  selector
+}: {
+  document: FlowAuthoringDocument;
+  variableCache: NodeDebugPreviewVariableCache;
+  inputPayload: Record<string, Record<string, unknown>>;
+  missingFields: NodeDebugPreviewVariableField[];
+  selector: string[];
+}): { found: true; value: unknown } | { found: false } {
+  const sourceNodeId = selector[0] ?? '';
+  const outputKey = selectorOutputKey(selector);
+  const sourceNode = document.graph.nodes.find(
+    (entry) => entry.id === sourceNodeId
+  );
+  const sourceOutput = findNodeOutputBySelector(sourceNode, selector);
+  const previewInputValue = readPreviewInputValue(inputPayload, selector);
+  const cachedOutput =
+    previewInputValue.found
+      ? previewInputValue
+      : readCachedOutputValue(
+          variableCache[sourceNodeId],
+          sourceOutput,
+          outputKey
+        );
+  const value =
+    cachedOutput.found && hasPreviewVariableValue(cachedOutput.value)
+      ? cachedOutput.value
+      : canUseStartPreviewDefault(sourceNode, outputKey)
+        ? buildPreviewValue(sourceNode, outputKey)
+        : undefined;
+
+  if (value !== undefined) {
+    return { found: true, value };
+  }
+
+  if (!hasMissingPreviewField(missingFields, sourceNodeId, outputKey)) {
+    missingFields.push(
+      buildMissingPreviewField(document, sourceNodeId, outputKey)
+    );
+  }
+
+  return { found: false };
+}
+
+function stringifyTemplateReplacement(value: unknown) {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value === null) {
+    return 'null';
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function renderPreviewTemplateValue({
+  template,
+  document,
+  variableCache,
+  inputPayload,
+  missingFields
+}: {
+  template: string;
+  document: FlowAuthoringDocument;
+  variableCache: NodeDebugPreviewVariableCache;
+  inputPayload: Record<string, Record<string, unknown>>;
+  missingFields: NodeDebugPreviewVariableField[];
+}): { found: true; value: string } | { found: false } {
+  let hasMissingSelector = false;
+  TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
+  const rendered = template.replace(
+    TEMPLATE_SELECTOR_REGEX,
+    (_match, selectorPath: string) => {
+      const selector = selectorPath.split('.');
+      const resolved = resolvePreviewSelectorValue({
+        document,
+        variableCache,
+        inputPayload,
+        missingFields,
+        selector
+      });
+
+      if (!resolved.found) {
+        hasMissingSelector = true;
+        return _match;
+      }
+
+      return stringifyTemplateReplacement(resolved.value);
+    }
+  );
+  TEMPLATE_SELECTOR_REGEX.lastIndex = 0;
+
+  return hasMissingSelector ? { found: false } : { found: true, value: rendered };
+}
+
+function resolveEnvironmentVariableUpdateValue({
+  expression,
+  document,
+  variableCache,
+  inputPayload,
+  missingFields
+}: {
+  expression: StateWriteValueExpression;
+  document: FlowAuthoringDocument;
+  variableCache: NodeDebugPreviewVariableCache;
+  inputPayload: Record<string, Record<string, unknown>>;
+  missingFields: NodeDebugPreviewVariableField[];
+}): { found: true; value: unknown } | { found: false } {
+  if (expression.kind === 'constant') {
+    return { found: true, value: expression.value };
+  }
+
+  if (expression.kind === 'selector') {
+    return resolvePreviewSelectorValue({
+      document,
+      variableCache,
+      inputPayload,
+      missingFields,
+      selector: expression.selector
+    });
+  }
+
+  return renderPreviewTemplateValue({
+    template: expression.value,
+    document,
+    variableCache,
+    inputPayload,
+    missingFields
+  });
+}
+
+function applyEnvironmentVariableUpdatesToPreviewPlan({
+  document,
+  nodeId,
+  variableCache,
+  inputPayload,
+  missingFields
+}: {
+  document: FlowAuthoringDocument;
+  nodeId: string;
+  variableCache: NodeDebugPreviewVariableCache;
+  inputPayload: Record<string, Record<string, unknown>>;
+  missingFields: NodeDebugPreviewVariableField[];
+}) {
+  const upstreamNodeIds = collectUpstreamNodeIds(document, nodeId);
+
+  for (const node of document.graph.nodes) {
+    if (!upstreamNodeIds.has(node.id)) {
+      continue;
+    }
+
+    for (const operation of getEnvironmentVariableUpdateOperations(node)) {
+      const expression = normalizeStateWriteValueExpression(operation.value);
+
+      if (!expression) {
+        continue;
+      }
+
+      const resolved = resolveEnvironmentVariableUpdateValue({
+        expression,
+        document,
+        variableCache,
+        inputPayload,
+        missingFields
+      });
+
+      if (!resolved.found) {
+        continue;
+      }
+
+      inputPayload.env ??= {};
+      inputPayload.env[operation.path[1]] = resolved.value;
+    }
+  }
 }
 
 function isRequiredStartPreviewKey(node: FlowNodeDocument, outputKey: string) {
@@ -957,6 +1303,14 @@ export function buildNodeDebugPreviewPlan(
       buildMissingPreviewField(document, sourceNodeId, outputKey)
     );
   }
+
+  applyEnvironmentVariableUpdatesToPreviewPlan({
+    document,
+    nodeId,
+    variableCache,
+    inputPayload,
+    missingFields
+  });
 
   return { input_payload: inputPayload, missing_fields: missingFields };
 }

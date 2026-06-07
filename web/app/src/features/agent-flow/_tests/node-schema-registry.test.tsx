@@ -107,6 +107,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.start_model_list).toBeTypeOf(
       'function'
     );
+    expect(
+      agentFlowRendererRegistry.fields.environment_variable_update
+    ).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.fields.data_model_query).toBeTypeOf(
       'function'
     );
@@ -115,6 +118,75 @@ describe('agent-flow node schema registry', () => {
     );
     expect(agentFlowRendererRegistry.views.summary).toBeTypeOf('function');
     expect(agentFlowRendererRegistry.views.relations).toBeTypeOf('function');
+  });
+
+  test('uses a narrow environment variable update editor for Variable Assigner', () => {
+    const configBlocks = buildCommonConfigBlocks('variable_assigner');
+    const operationsField = findFieldBlock(configBlocks, 'bindings.operations');
+    const contract = getBuiltinNodeRuntimeContract('variable_assigner');
+
+    expect(contract?.meta.title).toBe('Environment Variable Update');
+    expect(contract?.defaults.alias).toBe('Environment Variable Update');
+    expect(contract?.defaults.outputs).toEqual([]);
+    expect(operationsField).toEqual(
+      expect.objectContaining({
+        path: 'bindings.operations',
+        renderer: 'environment_variable_update'
+      })
+    );
+  });
+
+  test('syncs Variable Assigner outputs from selected environment variables', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const variableNode = createNodeDocument('variable_assigner', 'node-env-update');
+    const variableDocument = {
+      ...document,
+      graph: {
+        ...document.graph,
+        nodes: [variableNode]
+      }
+    };
+    const setWorkingDocument = vi.fn();
+    const adapter = createAgentFlowNodeSchemaAdapter({
+      document: variableDocument,
+      nodeId: 'node-env-update',
+      environmentVariables: [
+        {
+          name: 'ApiBaseUrl',
+          value_type: 'string',
+          value: 'https://api.example.com',
+          description: ''
+        }
+      ],
+      setWorkingDocument,
+      dispatch: vi.fn()
+    });
+
+    adapter.setValue('bindings.operations', {
+      kind: 'state_write',
+      value: [
+        {
+          path: ['env', 'ApiBaseUrl'],
+          operator: 'set',
+          value: { kind: 'templated_text', value: '{{node-start.query}}' }
+        }
+      ]
+    });
+
+    const update = setWorkingDocument.mock.calls[0]?.[0] as
+      | typeof variableDocument
+      | ((currentDocument: typeof variableDocument) => typeof variableDocument);
+    const nextDocument =
+      typeof update === 'function' ? update(variableDocument) : update;
+    const nextNode = getNode(nextDocument, 'node-env-update');
+
+    expect(nextNode.outputs).toEqual([
+      {
+        key: 'ApiBaseUrl',
+        title: 'env.ApiBaseUrl',
+        valueType: 'string'
+      }
+    ]);
   });
 
   test('renders start input fields before the relations section', () => {

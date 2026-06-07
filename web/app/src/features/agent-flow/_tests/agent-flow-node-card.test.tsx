@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
 import { AgentFlowNodeCard } from '../components/nodes/AgentFlowNodeCard';
+import { ERROR_BRANCH_SOURCE_HANDLE } from '../lib/node-error-policy';
 import type { NodePickerOption } from '../lib/plugin-node-definitions';
 import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
 
@@ -231,6 +232,7 @@ describe('AgentFlowNodeCard', () => {
 
     expect(trigger).toHaveClass('react-flow__handle');
     expect(within(trigger).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(trigger).queryByText('+')).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
 
@@ -331,6 +333,119 @@ describe('AgentFlowNodeCard', () => {
       'node-if-else',
       codeOption,
       'if'
+    );
+  });
+
+  test('adds the fixed exception handle from the common node shell', async () => {
+    const onOpenPicker = vi.fn();
+    const onInsertNode = vi.fn();
+    const codeOption = {
+      kind: 'builtin',
+      type: 'code',
+      label: 'Code',
+      description: 'Run code',
+      category: 'data',
+      inputKeys: [],
+      outputKeys: []
+    } satisfies NodePickerOption;
+
+    const { rerender } = render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-llm',
+              nodeType: 'llm',
+              nodeSchema: resolveAgentFlowNodeSchema('llm'),
+              typeLabel: 'LLM',
+              alias: 'LLM',
+              description: '选择并调用大语言模型',
+              config: { error_policy: 'error_branch' },
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              pickerSourceHandleId: null,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              branchSourceHandles: [],
+              isContainer: false,
+              nodePickerOptions: [codeOption],
+              onOpenPicker,
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode,
+              onRunNode: vi.fn(),
+              onReplaceNode: vi.fn(),
+              onDeleteNode: vi.fn()
+            },
+            id: 'node-llm',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    const exceptionHandle = screen.getByRole('button', {
+      name: '在 LLM 的 异常 分支后新增节点'
+    });
+    const defaultHandle = screen.getByRole('button', {
+      name: '在 LLM 后新增节点'
+    });
+
+    expect(defaultHandle).toHaveClass('react-flow__handle');
+    expect(exceptionHandle).toHaveClass('agent-flow-node-handle--branch');
+
+    fireEvent.click(exceptionHandle);
+
+    expect(onOpenPicker).toHaveBeenCalledWith(
+      'node-llm',
+      ERROR_BRANCH_SOURCE_HANDLE
+    );
+
+    rerender(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-llm',
+              nodeType: 'llm',
+              nodeSchema: resolveAgentFlowNodeSchema('llm'),
+              typeLabel: 'LLM',
+              alias: 'LLM',
+              description: '选择并调用大语言模型',
+              config: { error_policy: 'error_branch' },
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: true,
+              pickerSourceHandleId: ERROR_BRANCH_SOURCE_HANDLE,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              branchSourceHandles: [],
+              isContainer: false,
+              nodePickerOptions: [codeOption],
+              onOpenPicker,
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode,
+              onRunNode: vi.fn(),
+              onReplaceNode: vi.fn(),
+              onDeleteNode: vi.fn()
+            },
+            id: 'node-llm',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Code' }));
+
+    expect(onInsertNode).toHaveBeenCalledWith(
+      'node-llm',
+      codeOption,
+      ERROR_BRANCH_SOURCE_HANDLE
     );
   });
 

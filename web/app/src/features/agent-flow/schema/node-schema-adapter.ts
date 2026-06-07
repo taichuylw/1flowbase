@@ -1,7 +1,8 @@
 import type {
   FlowAuthoringDocument,
   FlowBinding,
-  FlowNodeDocument
+  FlowNodeDocument,
+  FlowNodeOutputDocument
 } from '@1flowbase/flow-schema';
 
 import {
@@ -13,7 +14,10 @@ import { listVisibleSelectorOptions } from '../lib/selector-options';
 import { getNodeDefinitionMeta } from '../lib/node-definitions';
 import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
 import { parseHttpRequestUrlParts } from '../lib/http-request/url';
-import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
+import {
+  formatEnvironmentVariableTitle,
+  type AgentFlowEnvironmentVariable
+} from '../lib/variables/application-environment-variables';
 import type { AgentFlowIssue } from '../lib/validate-document';
 
 import type { SchemaAdapter } from '../../../shared/schema-ui/registry/create-renderer-registry';
@@ -99,6 +103,79 @@ function getDisplayOutputs(node: FlowNodeDocument) {
     ...node.outputs,
     ...contractOutputs.filter((output) => !outputsByKey.has(output.key))
   ];
+}
+
+function isStateWriteBinding(value: unknown): value is Extract<
+  FlowBinding,
+  { kind: 'state_write' }
+> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === 'state_write' &&
+    Array.isArray((value as { value?: unknown }).value)
+  );
+}
+
+function deriveEnvironmentVariableUpdateOutputs(
+  binding: Extract<FlowBinding, { kind: 'state_write' }>,
+  environmentVariables: AgentFlowEnvironmentVariable[]
+): FlowNodeOutputDocument[] {
+  const variablesByName = new Map(
+    environmentVariables.map((variable) => [variable.name, variable])
+  );
+  const selectedNames = new Set<string>();
+  const outputs: FlowNodeOutputDocument[] = [];
+
+  for (const operation of binding.value) {
+    const [namespace, targetName] = operation.path;
+
+    if (
+      namespace !== 'env' ||
+      !targetName ||
+      !operation.value ||
+      selectedNames.has(targetName)
+    ) {
+      continue;
+    }
+
+    const variable = variablesByName.get(targetName);
+
+    if (!variable) {
+      continue;
+    }
+
+    selectedNames.add(targetName);
+    outputs.push({
+      key: targetName,
+      title: formatEnvironmentVariableTitle(targetName),
+      valueType: variable.value_type
+    });
+  }
+
+  return outputs;
+}
+
+function updateVariableAssignerOperationsField({
+  document,
+  nodeId,
+  binding,
+  environmentVariables
+}: {
+  document: FlowAuthoringDocument;
+  nodeId: string;
+  binding: Extract<FlowBinding, { kind: 'state_write' }>;
+  environmentVariables: AgentFlowEnvironmentVariable[];
+}) {
+  return replaceNodeOutputs(
+    updateNodeField(document, {
+      nodeId,
+      fieldKey: 'bindings.operations',
+      value: binding
+    }),
+    nodeId,
+    deriveEnvironmentVariableUpdateOutputs(binding, environmentVariables)
+  );
 }
 
 function groupFieldIssues(
@@ -209,6 +286,23 @@ export function createAgentFlowNodeSchemaAdapter({
         return;
       }
 
+      if (
+        node.type === 'variable_assigner' &&
+        path === 'bindings.operations' &&
+        isStateWriteBinding(value)
+      ) {
+        setWorkingDocument((currentDocument) =>
+          updateVariableAssignerOperationsField({
+            document: currentDocument,
+            nodeId,
+            binding: value,
+            environmentVariables
+          })
+        );
+
+        return;
+      }
+
       setWorkingDocument((currentDocument) =>
         updateNodeField(currentDocument, {
           nodeId,
@@ -240,6 +334,10 @@ export function createAgentFlowNodeSchemaAdapter({
           nodeId,
           environmentVariables
         );
+      }
+
+      if (key === 'environmentVariables') {
+        return environmentVariables;
       }
 
       if (key === 'downstreamNodes') {

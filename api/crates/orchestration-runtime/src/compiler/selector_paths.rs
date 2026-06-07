@@ -86,6 +86,28 @@ pub(super) fn extract_selector_paths(kind: &str, raw_value: &Value) -> Result<Ve
                 if let Some(source) = entry.get("source").filter(|value| value.is_array()) {
                     selectors.push(selector_path(source)?);
                 }
+
+                let Some(value) = entry.get("value").and_then(Value::as_object) else {
+                    continue;
+                };
+
+                match value.get("kind").and_then(Value::as_str) {
+                    Some("constant") => {}
+                    Some("selector") => {
+                        selectors.push(selector_path(
+                            value.get("selector").unwrap_or(&Value::Null),
+                        )?);
+                    }
+                    Some("templated_text") => {
+                        let template =
+                            value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                                anyhow!("state_write templated_text value must be a string")
+                            })?;
+                        selectors.extend(parse_template_selector_tokens(template));
+                    }
+                    Some(kind) => bail!("state_write value kind is unsupported: {kind}"),
+                    None => bail!("state_write value kind is required"),
+                }
             }
 
             Ok(selectors)

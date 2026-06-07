@@ -96,16 +96,21 @@ export function listVisibleSelectorOptions(
   const nodeOptions = document.graph.nodes
     .filter((node) => visibleNodeIds.has(node.id))
     .flatMap((node) =>
-      getNodeVariableOutputs(node).map((output) => ({
-        nodeId: node.id,
-        nodeLabel: node.alias,
-        outputKey: output.key,
-        outputLabel: output.key,
-        valueType: output.valueType,
-        jsonSchema: output.jsonSchema,
-        value: outputSelectorValue(node.id, output),
-        displayLabel: formatNodeVariableLabel(node.alias, output.key)
-      }))
+      getNodeVariableOutputs(node).map((output) => {
+        const outputLabel =
+          node.type === 'variable_assigner' ? output.title : output.key;
+
+        return {
+          nodeId: node.id,
+          nodeLabel: node.alias,
+          outputKey: output.key,
+          outputLabel,
+          valueType: output.valueType,
+          jsonSchema: output.jsonSchema,
+          value: outputSelectorValue(node.id, output),
+          displayLabel: formatNodeVariableLabel(node.alias, outputLabel)
+        };
+      })
     );
 
   return [...systemOptions, ...environmentOptions, ...nodeOptions];

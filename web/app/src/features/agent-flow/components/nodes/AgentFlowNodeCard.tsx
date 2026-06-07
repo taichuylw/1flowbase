@@ -15,10 +15,12 @@ import {
 
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { CanvasHandle } from '../canvas/CanvasHandle';
+import { ConnectorAddIcon } from '../canvas/ConnectorAddIcon';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
 import { getNodeDefinitionMeta } from '../../lib/node-definitions';
+import { getCommonErrorBranchSourceHandle } from '../../lib/node-error-policy';
 import {
   getNodePickerOptionDescription,
   getNodePickerOptionKey
@@ -152,13 +154,29 @@ export function AgentFlowNodeCard({
     dispatch: () => undefined
   } as const;
   const branchSourceHandles = data.branchSourceHandles ?? [];
-  const branchHandleSignature = branchSourceHandles
+  const commonErrorBranchSourceHandle = getCommonErrorBranchSourceHandle({
+    type: data.nodeType,
+    config: data.config
+  });
+  const branchHandleSignature = [
+    ...branchSourceHandles,
+    ...(commonErrorBranchSourceHandle ? [commonErrorBranchSourceHandle] : [])
+  ]
     .map((handle) => handle.id)
     .join('|');
-  const sourceHandles =
+  const primarySourceHandles =
     branchSourceHandles.length > 0
       ? branchSourceHandles
       : [{ id: null, title: null }];
+  const sourceHandles = [
+    ...primarySourceHandles,
+    ...(commonErrorBranchSourceHandle &&
+    !primarySourceHandles.some(
+      (handle) => handle.id === commonErrorBranchSourceHandle.id
+    )
+      ? [commonErrorBranchSourceHandle]
+      : [])
+  ];
 
   useEffect(() => {
     updateNodeInternals(data.nodeId);
@@ -265,9 +283,7 @@ export function AgentFlowNodeCard({
                 }
               }}
             >
-              <span aria-hidden="true" className="agent-flow-node-handle__icon">
-                +
-              </span>
+              <ConnectorAddIcon className="agent-flow-node-handle__icon" />
             </CanvasHandle>
           </Tooltip>
         </NodePickerPopover>

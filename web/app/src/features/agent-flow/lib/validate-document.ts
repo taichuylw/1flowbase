@@ -18,6 +18,10 @@ import {
   getActiveNodeBindings
 } from './data-model-query-binding';
 import { getLlmModelProvider } from './llm-node-config';
+import {
+  ERROR_BRANCH_SOURCE_HANDLE,
+  nodeUsesErrorBranch
+} from './node-error-policy';
 import { getBuiltinNodeRuntimeContract } from './node-definitions/contracts';
 import {
   extractNamedBindingSelectors,
@@ -124,7 +128,17 @@ function isMissingRequiredField(
     case 'if_else_branches':
       return ifElseBranchesMissingRequiredInput(binding.value.branches);
     case 'state_write':
-      return binding.value.length === 0;
+      return (
+        binding.value.length === 0 ||
+        binding.value.some(
+          (entry) =>
+            entry.path.length < 2 ||
+            entry.path.some((segment) => segment.trim().length === 0) ||
+            !entry.source ||
+            entry.source.length < 2 ||
+            entry.source.some((segment) => segment.trim().length === 0)
+        )
+      );
   }
 }
 
@@ -256,12 +270,31 @@ function collectBindingSelectors(binding: FlowBinding): string[][] {
     case 'if_else_branches':
       return collectIfElseBranchSelectors(binding.value.branches);
     case 'state_write':
-      return binding.value.flatMap((entry) =>
-        entry.source ? [entry.source] : []
-      );
+      return binding.value.flatMap((entry) => [
+        ...(entry.source ? [entry.source] : []),
+        ...collectStateWriteValueSelectors(entry.value)
+      ]);
     case 'data_model_query':
       return extractDataModelQuerySelectors(binding.value);
   }
+}
+
+function collectStateWriteValueSelectors(
+  value: Extract<FlowBinding, { kind: 'state_write' }>['value'][number]['value']
+): string[][] {
+  if (!value) {
+    return [];
+  }
+
+  if (value.kind === 'selector') {
+    return [value.selector];
+  }
+
+  if (value.kind === 'templated_text') {
+    return parseTemplateSelectorTokens(value.value);
+  }
+
+  return [];
 }
 
 function pushFieldIssue(
@@ -703,8 +736,26 @@ export function validateDocument(
         sourceNode?.type === 'if_else'
           ? getIfElseBranchesFromBindings(sourceNode.bindings)
           : null;
+      const usesErrorBranchSourceHandle =
+        edge.sourceHandle === ERROR_BRANCH_SOURCE_HANDLE;
 
-      if (sourceBranches) {
+      if (
+        usesErrorBranchSourceHandle &&
+        (!sourceNode || !nodeUsesErrorBranch(sourceNode))
+      ) {
+        issues.push({
+          id: `${edge.id}-invalid-source-handle`,
+          scope: 'node',
+          level: 'error',
+          nodeId: edge.source,
+          sectionKey: 'policy',
+          fieldKey: 'config.error_policy',
+          title: i18nText('agentFlow', 'auto.branch_connection_invalid'),
+          message: i18nText('agentFlow', 'auto.branch_connection_invalid_message')
+        });
+      }
+
+      if (sourceBranches && !usesErrorBranchSourceHandle) {
         const branchHandles = new Set(
           sourceBranches.map((branch) => branch.sourceHandle)
         );

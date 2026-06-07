@@ -1,4 +1,5 @@
 use super::*;
+use crate::node_error_policy::ERROR_BRANCH_SOURCE_HANDLE;
 
 #[tokio::test]
 async fn failed_llm_public_text_is_available_to_downstream_answer_contract() {
@@ -93,6 +94,136 @@ async fn failed_llm_with_compiled_edges_activates_terminal_answer() {
         }
         other => panic!("expected failed stop reason after terminal answer, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn failed_llm_with_default_value_policy_continues_normal_branch() {
+    let mut plan = llm_answer_plan();
+    plan.edges = vec![
+        CompiledEdge {
+            edge_id: "edge-start-llm".to_string(),
+            source: "node-start".to_string(),
+            target: "node-llm".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-answer".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-answer".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+    ];
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["error_policy"] = json!("default_value");
+    llm.config["error_default_output"] = json!({ "text": "兜底回复" });
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &StubProviderInvoker {
+            fail: true,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: String::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
+    assert_eq!(outcome.variable_pool["node-llm"]["text"], json!("兜底回复"));
+    assert_eq!(
+        outcome.variable_pool["node-answer"]["answer"],
+        json!("兜底回复")
+    );
+}
+
+#[tokio::test]
+async fn failed_llm_with_error_branch_policy_activates_only_error_branch() {
+    let mut plan = llm_answer_plan();
+    plan.topological_order = vec![
+        "node-start".to_string(),
+        "node-llm".to_string(),
+        "node-answer".to_string(),
+        "node-error-answer".to_string(),
+    ];
+    plan.edges = vec![
+        CompiledEdge {
+            edge_id: "edge-start-llm".to_string(),
+            source: "node-start".to_string(),
+            target: "node-llm".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-answer".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-answer".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-error-answer".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-error-answer".to_string(),
+            source_handle: Some(ERROR_BRANCH_SOURCE_HANDLE.to_string()),
+            target_handle: None,
+        },
+    ];
+    let llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("llm node should exist");
+    llm.config["error_policy"] = json!("error_branch");
+    llm.downstream_node_ids = vec!["node-answer".to_string(), "node-error-answer".to_string()];
+    let mut error_answer = plan
+        .nodes
+        .get("node-answer")
+        .expect("answer node should exist")
+        .clone();
+    error_answer.node_id = "node-error-answer".to_string();
+    error_answer.alias = "Error Answer".to_string();
+    error_answer.bindings = BTreeMap::from([(
+        "answer_template".to_string(),
+        CompiledBinding {
+            kind: "templated_text".to_string(),
+            selector_paths: vec![vec!["node-llm".to_string(), "text".to_string()]],
+            raw_value: json!("handled: {{ node-llm.text }}"),
+        },
+    )]);
+    plan.nodes
+        .insert("node-error-answer".to_string(), error_answer);
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "hello" } }),
+        &StubProviderInvoker {
+            fail: true,
+            captured_input: Arc::new(Mutex::new(None)),
+            final_content: String::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.stop_reason, ExecutionStopReason::Completed);
+    assert!(!outcome.variable_pool.contains_key("node-answer"));
+    assert_eq!(
+        outcome.variable_pool["node-error-answer"]["answer"],
+        json!("handled: invalid api_key")
+    );
+    assert_eq!(
+        outcome
+            .node_traces
+            .iter()
+            .map(|trace| trace.node_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["node-start", "node-llm", "node-error-answer"]
+    );
 }
 
 #[tokio::test]

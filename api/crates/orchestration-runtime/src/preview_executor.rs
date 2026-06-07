@@ -5,8 +5,9 @@ use crate::{
     binding_runtime::{render_templated_bindings, resolve_node_inputs},
     compiled_plan::CompiledPlan,
     execution_engine::{
-        execute_code_node, execute_http_request_node, execute_llm_node, CodeInvoker,
-        ExecutionRuntimeContext, HttpResponseFilePersister, ProviderInvoker,
+        execute_code_node, execute_environment_variable_update_node, execute_http_request_node,
+        execute_llm_node, CodeInvoker, ExecutionRuntimeContext, HttpResponseFilePersister,
+        ProviderInvoker,
     },
     node_errors::build_node_type_not_implemented_error_payload,
 };
@@ -187,6 +188,16 @@ where
             execution.error_payload,
             execution.metrics_payload,
             execution.debug_payload,
+            Vec::new(),
+        )
+    } else if node.node_type == "variable_assigner" {
+        let execution =
+            execute_environment_variable_update_node(node, &resolved_inputs, &mut variable_pool)?;
+        (
+            execution,
+            None,
+            json!({ "preview_mode": true }),
+            json!({}),
             Vec::new(),
         )
     } else if node.node_type == "http_request" {

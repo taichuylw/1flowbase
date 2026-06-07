@@ -15,8 +15,8 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::{
     binding_runtime::{
-        lookup_selector_value, render_templated_bindings, resolve_answer_node_inputs,
-        resolve_node_inputs, BindingResolutionIssue,
+        lookup_selector_value, render_template, render_templated_bindings,
+        resolve_answer_node_inputs, resolve_node_inputs, BindingResolutionIssue,
     },
     compiled_plan::{
         CompiledEdge, CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime,
@@ -25,6 +25,9 @@ use crate::{
     execution_state::{
         CheckpointSnapshot, ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure,
         NodeExecutionTrace, PendingCallbackTask, PendingHumanInput,
+    },
+    node_error_policy::{
+        error_default_output, node_error_policy, NodeErrorPolicy, ERROR_BRANCH_SOURCE_HANDLE,
     },
     node_errors::build_node_type_not_implemented_error_payload,
     output_schema::value_is_llm_context_messages,
@@ -212,6 +215,186 @@ where
     .await
 }
 
+fn configured_default_output_payload(node: &CompiledNode) -> Value {
+    match error_default_output(node) {
+        Some(value @ Value::Object(_)) => value,
+        Some(value) => json!({ first_output_key(node): value }),
+        None => json!({}),
+    }
+}
+
+pub(crate) fn execute_environment_variable_update_node(
+    _node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &mut Map<String, Value>,
+) -> Result<Value> {
+    let operations = resolved_inputs
+        .get("operations")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("environment variable update requires operations"))?;
+    if operations.is_empty() {
+        return Err(anyhow!(
+            "environment variable update requires at least one operation"
+        ));
+    }
+
+    let updates = operations
+        .iter()
+        .map(|operation| {
+            let path = operation
+                .get("path")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("environment variable update path is required"))?;
+            let operator = operation
+                .get("operator")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("environment variable update operator is required"))?;
+            let target_namespace = path.first().and_then(Value::as_str);
+            let target_name = path
+                .get(1)
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("environment variable update target name is required"))?;
+
+            if operator != "set" || target_namespace != Some("env") || target_name.trim().is_empty()
+            {
+                return Err(anyhow!(
+                    "environment variable update only supports setting env variables"
+                ));
+            }
+
+            let value = resolve_environment_variable_update_value(operation, variable_pool)?;
+
+            Ok((target_name.to_string(), value))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut updated = Map::new();
+    let env_value = variable_pool
+        .entry("env".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+
+    if !env_value.is_object() {
+        *env_value = Value::Object(Map::new());
+    }
+
+    let env = env_value
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("environment variable pool must be an object"))?;
+
+    for (target_name, value) in updates {
+        env.insert(target_name.clone(), value.clone());
+        updated.insert(target_name, value);
+    }
+
+    Ok(Value::Object(updated))
+}
+
+fn resolve_environment_variable_update_value(
+    operation: &Value,
+    variable_pool: &Map<String, Value>,
+) -> Result<Value> {
+    let value = operation
+        .get("value")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("environment variable update value is required"))?;
+
+    match value.get("kind").and_then(Value::as_str) {
+        Some("constant") => Ok(value.get("value").cloned().unwrap_or(Value::Null)),
+        Some("selector") => {
+            let selector = value
+                .get("selector")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("environment variable update selector value is required"))?
+                .iter()
+                .map(|segment| {
+                    segment.as_str().map(str::to_string).ok_or_else(|| {
+                        anyhow!("environment variable update selector must be strings")
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            lookup_selector_value(variable_pool, &selector)
+        }
+        Some("templated_text") => {
+            let template = value.get("value").and_then(Value::as_str).ok_or_else(|| {
+                anyhow!("environment variable update templated_text value must be a string")
+            })?;
+            render_template(template, variable_pool).map(Value::String)
+        }
+        Some(kind) => Err(anyhow!(
+            "environment variable update value kind is unsupported: {kind}"
+        )),
+        None => Err(anyhow!(
+            "environment variable update value kind is required"
+        )),
+    }
+}
+
+fn apply_node_error_policy(
+    plan: &CompiledPlan,
+    failed_node_index: usize,
+    active_node_ids: &mut BTreeSet<String>,
+    variable_pool: &mut Map<String, Value>,
+    pending_failure: &mut Option<NodeExecutionFailure>,
+    node: &CompiledNode,
+    output_payload: &Value,
+    error_payload: Value,
+    allow_terminal_template_fallback: bool,
+) -> Result<Option<NodeExecutionFailure>> {
+    let failure = NodeExecutionFailure {
+        node_id: node.node_id.clone(),
+        node_alias: node.alias.clone(),
+        error_payload: error_payload.clone(),
+    };
+
+    match node_error_policy(node) {
+        NodeErrorPolicy::DefaultValue => {
+            let default_output_payload = configured_default_output_payload(node);
+            variable_pool.insert(
+                node.node_id.clone(),
+                project_node_variable_payload(node, &default_output_payload)?,
+            );
+            activate_downstream_nodes(plan, active_node_ids, node, None);
+            Ok(None)
+        }
+        NodeErrorPolicy::ErrorBranch => {
+            variable_pool.insert(
+                node.node_id.clone(),
+                project_node_variable_payload(node, output_payload)?,
+            );
+            if activate_downstream_nodes(
+                plan,
+                active_node_ids,
+                node,
+                Some(ERROR_BRANCH_SOURCE_HANDLE),
+            ) {
+                return Ok(None);
+            }
+
+            Ok(Some(failure))
+        }
+        NodeErrorPolicy::None => {
+            if allow_terminal_template_fallback {
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, output_payload)?,
+                );
+                let mut next_active_node_ids = active_node_ids.clone();
+                activate_downstream_nodes(plan, &mut next_active_node_ids, node, None);
+                if can_continue_to_terminal_template_nodes(
+                    plan,
+                    failed_node_index,
+                    &next_active_node_ids,
+                ) {
+                    *active_node_ids = next_active_node_ids;
+                    *pending_failure = Some(failure);
+                    return Ok(None);
+                }
+            }
+
+            Ok(Some(failure))
+        }
+    }
+}
+
 async fn execute_from<I>(
     plan: &CompiledPlan,
     next_node_index: usize,
@@ -338,33 +521,25 @@ where
                 node_traces.push(trace);
 
                 if let Some(error_payload) = execution.error_payload {
-                    variable_pool.insert(
-                        node.node_id.clone(),
-                        project_node_variable_payload(node, &execution.output_payload)?,
-                    );
-                    let failure = NodeExecutionFailure {
-                        node_id: node.node_id.clone(),
-                        node_alias: node.alias.clone(),
-                        error_payload,
-                    };
-                    let mut next_active_node_ids = active_node_ids.clone();
-                    activate_downstream_nodes(
+                    if let Some(failure) = apply_node_error_policy(
                         plan,
-                        &mut next_active_node_ids,
+                        index,
+                        &mut active_node_ids,
+                        &mut variable_pool,
+                        &mut pending_failure,
                         node,
-                        selected_source_handle.as_deref(),
-                    );
-                    if can_continue_to_terminal_template_nodes(plan, index, &next_active_node_ids) {
-                        active_node_ids = next_active_node_ids;
-                        pending_failure = Some(failure);
-                        continue;
+                        &execution.output_payload,
+                        error_payload,
+                        true,
+                    )? {
+                        return Ok(FlowDebugExecutionOutcome {
+                            stop_reason: ExecutionStopReason::Failed(failure),
+                            variable_pool,
+                            checkpoint_snapshot: None,
+                            node_traces,
+                        });
                     }
-                    return Ok(FlowDebugExecutionOutcome {
-                        stop_reason: ExecutionStopReason::Failed(failure),
-                        variable_pool,
-                        checkpoint_snapshot: None,
-                        node_traces,
-                    });
+                    continue;
                 }
 
                 if let Some(wait) = build_llm_tool_callback_wait(
@@ -417,22 +592,53 @@ where
                 node_traces.push(trace);
 
                 if let Some(error_payload) = execution.error_payload {
-                    return Ok(FlowDebugExecutionOutcome {
-                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
-                            node_id: node.node_id.clone(),
-                            node_alias: node.alias.clone(),
-                            error_payload,
-                        }),
-                        variable_pool,
-                        checkpoint_snapshot: None,
-                        node_traces,
-                    });
+                    if let Some(failure) = apply_node_error_policy(
+                        plan,
+                        index,
+                        &mut active_node_ids,
+                        &mut variable_pool,
+                        &mut pending_failure,
+                        node,
+                        &execution.output_payload,
+                        error_payload,
+                        false,
+                    )? {
+                        return Ok(FlowDebugExecutionOutcome {
+                            stop_reason: ExecutionStopReason::Failed(failure),
+                            variable_pool,
+                            checkpoint_snapshot: None,
+                            node_traces,
+                        });
+                    }
+                    continue;
                 }
 
                 variable_pool.insert(
                     node.node_id.clone(),
                     project_node_variable_payload(node, &execution.output_payload)?,
                 );
+            }
+            "variable_assigner" => {
+                let output_payload = execute_environment_variable_update_node(
+                    node,
+                    &resolved_inputs,
+                    &mut variable_pool,
+                )?;
+                variable_pool.insert(
+                    node.node_id.clone(),
+                    project_node_variable_payload(node, &output_payload)?,
+                );
+                node_traces.push(NodeExecutionTrace {
+                    node_id: node.node_id.clone(),
+                    node_type: node.node_type.clone(),
+                    node_alias: node.alias.clone(),
+                    input_payload: Value::Object(resolved_inputs),
+                    output_payload,
+                    error_payload: None,
+                    metrics_payload: json!({ "preview_mode": true }),
+                    debug_payload: json!({}),
+                    provider_events: Vec::new(),
+                });
             }
             "template_transform" | "answer" => {
                 let output_key = first_output_key(node);
@@ -557,16 +763,25 @@ where
                 });
 
                 if let Some(error_payload) = execution.error_payload {
-                    return Ok(FlowDebugExecutionOutcome {
-                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
-                            node_id: node.node_id.clone(),
-                            node_alias: node.alias.clone(),
-                            error_payload,
-                        }),
-                        variable_pool,
-                        checkpoint_snapshot: None,
-                        node_traces,
-                    });
+                    if let Some(failure) = apply_node_error_policy(
+                        plan,
+                        index,
+                        &mut active_node_ids,
+                        &mut variable_pool,
+                        &mut pending_failure,
+                        node,
+                        &execution.output_payload,
+                        error_payload,
+                        false,
+                    )? {
+                        return Ok(FlowDebugExecutionOutcome {
+                            stop_reason: ExecutionStopReason::Failed(failure),
+                            variable_pool,
+                            checkpoint_snapshot: None,
+                            node_traces,
+                        });
+                    }
+                    continue;
                 }
 
                 variable_pool.insert(
@@ -589,16 +804,25 @@ where
                 });
 
                 if let Some(error_payload) = execution.error_payload {
-                    return Ok(FlowDebugExecutionOutcome {
-                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
-                            node_id: node.node_id.clone(),
-                            node_alias: node.alias.clone(),
-                            error_payload,
-                        }),
-                        variable_pool,
-                        checkpoint_snapshot: None,
-                        node_traces,
-                    });
+                    if let Some(failure) = apply_node_error_policy(
+                        plan,
+                        index,
+                        &mut active_node_ids,
+                        &mut variable_pool,
+                        &mut pending_failure,
+                        node,
+                        &execution.output_payload,
+                        error_payload,
+                        false,
+                    )? {
+                        return Ok(FlowDebugExecutionOutcome {
+                            stop_reason: ExecutionStopReason::Failed(failure),
+                            variable_pool,
+                            checkpoint_snapshot: None,
+                            node_traces,
+                        });
+                    }
+                    continue;
                 }
 
                 variable_pool.insert(

@@ -14,6 +14,10 @@ import type {
 import type { AgentFlowDataModelFieldOption } from '../api/data-model-options';
 import { ConditionGroupField } from '../components/bindings/ConditionGroupField';
 import { DataModelQueryField } from '../components/bindings/DataModelQueryField';
+import {
+  EnvironmentVariableUpdateField,
+  type EnvironmentVariableUpdateValue
+} from '../components/bindings/EnvironmentVariableUpdateField';
 import { IfElseBranchesField } from '../components/bindings/IfElseBranchesField';
 import { NamedBindingsField } from '../components/bindings/NamedBindingsField';
 import { SelectorField } from '../components/bindings/SelectorField';
@@ -55,6 +59,7 @@ import {
   decodeSelectorValue,
   type FlowSelectorOption
 } from '../lib/selector-options';
+import type { AgentFlowEnvironmentVariable } from '../lib/variables/application-environment-variables';
 import { codeOutputSelector } from '../lib/output-contract/code-output';
 import { outputHasLlmContextSchema } from '../lib/output-contract/schema';
 import { createTemplateSelectorToken } from '../lib/template-binding';
@@ -588,6 +593,38 @@ function renderStateWriteField({ adapter, block }: SchemaFieldRendererProps) {
   );
 }
 
+function renderEnvironmentVariableUpdateField({
+  adapter,
+  block
+}: SchemaFieldRendererProps) {
+  const value = adapter.getValue(block.path);
+  const binding = getBindingValue<EnvironmentVariableUpdateValue[]>(
+    value,
+    'state_write',
+    []
+  );
+  const environmentVariables =
+    (adapter.getDerived('environmentVariables') as
+      | AgentFlowEnvironmentVariable[]
+      | null
+      | undefined) ?? [];
+
+  return (
+    <EnvironmentVariableUpdateField
+      ariaLabel={block.label}
+      environmentVariables={environmentVariables}
+      selectorOptions={getSelectorOptions(adapter)}
+      value={binding}
+      onChange={(nextValue) =>
+        adapter.setValue(block.path, {
+          kind: 'state_write',
+          value: nextValue
+        })
+      }
+    />
+  );
+}
+
 function renderOutputContractDefinitionField({
   adapter,
   block
@@ -778,6 +815,7 @@ export const agentFlowFieldRenderers = {
   condition_group: renderConditionGroupField,
   if_else_branches: renderIfElseBranchesField,
   state_write: renderStateWriteField,
+  environment_variable_update: renderEnvironmentVariableUpdateField,
   output_contract_definition: renderOutputContractDefinitionField,
   start_input_fields: renderStartInputFieldsField,
   start_model_list: renderStartModelListField,

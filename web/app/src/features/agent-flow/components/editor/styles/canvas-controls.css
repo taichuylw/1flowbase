@@ -12,6 +12,7 @@
 
 .agent-flow-node-handle--source.react-flow__handle {
   right: -7px;
+  transform: translate(50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -28,16 +29,25 @@
   z-index: 10;
 }
 
-.agent-flow-node-handle--branch.react-flow__handle {
-  right: -7px;
-  transform: translateY(-50%);
+.agent-flow-connector-add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  line-height: 0;
+  font-size: 14px;
+}
+
+.agent-flow-connector-add-icon svg {
+  display: block;
 }
 
 .agent-flow-node-handle__icon {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
-  transform: translateY(-1px);
 }
 
 .react-flow__node:hover .agent-flow-node-handle--source.react-flow__handle,
@@ -48,13 +58,6 @@
   border: 2px solid #fff;
   background: #1677ff;
   box-shadow: 0 2px 8px rgba(22, 119, 255, 0.4);
-}
-
-.react-flow__node:hover .agent-flow-node-handle--branch.react-flow__handle,
-.agent-flow-node-handle--branch.react-flow__handle[aria-expanded='true'] {
-  width: 24px;
-  height: 24px;
-  right: -12px;
 }
 
 .react-flow__node:hover
@@ -84,21 +87,33 @@
   transform: translate(-50%, -50%) scale(1.05);
 }
 
-.agent-flow-edge-add-button-wrapper .ant-btn {
+.agent-flow-edge-add-button.ant-btn {
   background: #1677ff;
   color: white;
   border-radius: 50%;
   width: 24px;
   height: 24px;
-  display: flex;
+  min-width: 24px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  font-size: 16px;
-  line-height: 1;
+  border: none;
+  font-size: 14px;
+  line-height: 0;
+  z-index: 30;
 }
 
-.agent-flow-edge-add-button-wrapper .ant-btn:hover {
+.agent-flow-edge-add-button.ant-btn .ant-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.agent-flow-edge-add-button.ant-btn:hover,
+.agent-flow-edge-add-button.ant-btn:focus-visible {
   background: #0958d9;
   color: white;
 }

@@ -452,7 +452,7 @@ export function useAgentFlowDebugSession({
     }
 
     const runInput = {
-      ...buildFlowDebugRunInput(document, inputValues),
+      ...buildFlowDebugRunInput(document, inputValues, environmentVariables),
       document,
       debug_session_id: debugSessionState.id
     };

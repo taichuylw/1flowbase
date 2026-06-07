@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use crate::node_error_policy::{node_uses_error_branch, ERROR_BRANCH_SOURCE_HANDLE};
+
 use super::node_compilation::compile_node;
 use super::*;
 
@@ -220,6 +222,17 @@ fn validate_edge_source_handle(
     source_handle: Option<&str>,
     if_else_source_handles: &BTreeMap<String, BTreeSet<String>>,
 ) -> Result<()> {
+    if source_handle == Some(ERROR_BRANCH_SOURCE_HANDLE) {
+        if node_uses_error_branch(source_node) {
+            return Ok(());
+        }
+
+        bail!(
+            "edge {edge_id} uses error sourceHandle on node {} without error_branch policy",
+            source_node.node_id
+        );
+    }
+
     if source_node.node_type != "if_else" {
         return Ok(());
     }

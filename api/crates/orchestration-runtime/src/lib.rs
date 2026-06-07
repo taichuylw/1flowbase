@@ -8,6 +8,7 @@ pub mod compiled_plan;
 pub mod compiler;
 pub mod execution_engine;
 pub mod execution_state;
+pub mod node_error_policy;
 pub mod node_errors;
 pub mod output_schema;
 pub mod payload_builder;

@@ -45,7 +45,7 @@ export const nodeDefinitionMeta: NodeDefinitionMetaMap = {
   },
   ...dataModelNodeMeta,
   variable_assigner: {
-    summary: i18nText("agentFlow", "auto.write_update_upstream_data_workflow_state"),
+    summary: i18nText("agentFlow", "auto.update_environment_variable_current_run"),
     helpHref: '/docs/agentflow/nodes/variable-assigner'
   },
   parameter_extractor: {
