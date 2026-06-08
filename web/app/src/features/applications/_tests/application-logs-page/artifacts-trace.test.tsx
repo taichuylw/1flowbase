@@ -590,7 +590,26 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
                 artifact_ref: 'artifact-tool-weather'
               }
             ]
-          }
+          },
+          visible_internal_llm_tool_trace: [
+            {
+              __runtime_debug_artifact: true,
+              kind: 'visible_internal_llm_tool_trace',
+              preview_kind: 'visible_internal_llm_tool_trace',
+              artifact_ref: 'artifact-route-weather',
+              tool_call_id: 'call_weather',
+              tool_name: 'lookup_weather',
+              route_model: 'mimo-v2.5',
+              returned_to_main: true,
+              main_resume: true,
+              route_output_summary: {
+                kind: 'text',
+                preview: 'weather route said warm',
+                char_count: 23,
+                truncated: false
+              }
+            }
+          ]
         }
       },
       {
@@ -618,6 +637,20 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
             },
             parsed_result: {
               ok: true
+            }
+          };
+        }
+        if (artifactRef === 'artifact-route-weather') {
+          return {
+            kind: 'visible_internal_llm_tool_trace',
+            tool_call_id: 'call_weather',
+            route: {
+              model: 'mimo-v2.5'
+            },
+            returned_to_main: true,
+            main_resume: true,
+            main_resume_output: {
+              content: 'main saw weather route'
             }
           };
         }
@@ -659,6 +692,8 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     const toolCallbackNode = within(logPanel).getByRole('button', {
       name: /lookup_weather/
     });
+    expect(toolCallbackNode).toHaveTextContent('路由模型 mimo-v2.5');
+    expect(toolCallbackNode).toHaveTextContent('已回到主模型');
     fireEvent.click(toolCallbackNode);
 
     await waitFor(() =>
@@ -667,6 +702,26 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
       'app-1',
       'artifact-tool-weather'
+    );
+    const routeTraceJson = within(logPanel).getByLabelText('智能路由 JSON');
+    expect(routeTraceJson).toHaveTextContent('weather route said warm');
+    const routeTraceBlock = routeTraceJson.closest('section');
+    expect(routeTraceBlock).not.toBeNull();
+    fireEvent.click(
+      within(routeTraceBlock as HTMLElement).getByRole('button', {
+        name: '加载完整值'
+      })
+    );
+    await waitFor(() =>
+      expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+        'app-1',
+        'artifact-route-weather'
+      )
+    );
+    await waitFor(() =>
+      expect(
+        within(logPanel).getByLabelText('智能路由 JSON')
+      ).toHaveTextContent('main saw weather route')
     );
 
     fireEvent.mouseDown(
@@ -704,7 +759,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     );
 
     await waitFor(() =>
-      expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledTimes(1)
+      expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledTimes(2)
     );
   }, 20_000);
 

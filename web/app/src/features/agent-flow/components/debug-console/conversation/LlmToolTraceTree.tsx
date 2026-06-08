@@ -6,7 +6,8 @@ import { RuntimeDebugPayloadBlock } from '../../detail/last-run/NodeRunIOCard';
 import {
   collectLlmToolCallbacksFromDebugPayloads,
   readLlmToolCallbackDetail,
-  type LlmToolCallback
+  type LlmToolCallback,
+  type LlmToolRouteTraceSummary
 } from './llm-tool-callbacks';
 import { i18nText } from '../../../../../shared/i18n/text';
 import { formatTokens, formatDurationScaled } from './metrics-formatter';
@@ -68,6 +69,84 @@ function callUsageTotalTokens(callback: LlmToolCallback): number | null {
   return typeof totalTokens === 'number' && Number.isFinite(totalTokens)
     ? totalTokens
     : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function stringField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function routeTraceOutputPreview(summary: Record<string, unknown> | null) {
+  if (!summary) {
+    return null;
+  }
+  const directPreview = stringField(summary, 'preview');
+
+  if (directPreview) {
+    return directPreview;
+  }
+  const textSummary = summary.text;
+
+  return isRecord(textSummary) ? stringField(textSummary, 'preview') : null;
+}
+
+function trimInlinePreview(value: string) {
+  const maxLength = 80;
+
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function LlmToolRouteInlineSummary({
+  routeTrace
+}: {
+  routeTrace: LlmToolRouteTraceSummary | null;
+}) {
+  if (!routeTrace) {
+    return null;
+  }
+
+  const pieces: string[] = [];
+  if (routeTrace.routeModel) {
+    pieces.push(
+      i18nText('agentFlow', 'auto.route_model', {
+        value1: routeTrace.routeModel
+      })
+    );
+  }
+  if (routeTrace.returnedToMain) {
+    pieces.push(i18nText('agentFlow', 'auto.returned_to_main_model'));
+  } else if (routeTrace.mainResume) {
+    pieces.push(i18nText('agentFlow', 'auto.main_model_resumed'));
+  }
+
+  const outputPreview = routeTraceOutputPreview(routeTrace.routeOutputSummary);
+  if (outputPreview) {
+    pieces.push(
+      i18nText('agentFlow', 'auto.route_output_preview', {
+        value1: trimInlinePreview(outputPreview)
+      })
+    );
+  }
+
+  if (pieces.length === 0) {
+    return null;
+  }
+
+  return (
+    <Typography.Text
+      className="agent-flow-editor__debug-llm-tool-inline-metrics"
+      type="secondary"
+    >
+      {pieces.join(' · ')}
+    </Typography.Text>
+  );
 }
 
 function LlmToolInlineMetrics({ callback }: { callback: LlmToolCallback }) {
@@ -146,6 +225,7 @@ function LlmToolCallbackItem({
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
           <LlmToolInlineMetrics callback={callback} />
+          <LlmToolRouteInlineSummary routeTrace={callback.routeTrace} />
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
@@ -175,6 +255,14 @@ function LlmToolCallbackItem({
           ) : null}
           {!loading && !loadFailed ? (
             <>
+              {callback.routeTrace ? (
+                <RuntimeDebugPayloadBlock
+                  height="11rem"
+                  payload={callback.routeTrace.rawPayload}
+                  title={i18nText('agentFlow', 'auto.route_trace')}
+                  onLoadArtifact={onLoadArtifact}
+                />
+              ) : null}
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
@@ -255,7 +343,8 @@ export function LlmToolTraceTree({
             callback.result_context_usage,
           duration_ms: loadedCallback.duration_ms ?? callback.duration_ms,
           detailArtifactRef:
-            callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
+            callback.detailArtifactRef ?? loadedCallback.detailArtifactRef,
+          routeTrace: loadedCallback.routeTrace ?? callback.routeTrace
         };
       }),
     [loadedToolCallbacks, toolCallbacks]

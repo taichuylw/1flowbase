@@ -165,9 +165,12 @@ pub(super) fn with_application_run_input_summary(
 }
 
 pub(super) fn should_keep_runtime_payload_field_inline(field_path: &[String]) -> bool {
-    field_path
-        .iter()
-        .any(|key| matches!(key.as_str(), "query" | "model" | "files" | "sys" | "env"))
+    field_path.iter().any(|key| {
+        matches!(
+            key.as_str(),
+            "query" | "model" | "files" | "sys" | "env" | "visible_internal_llm_tool_trace"
+        )
+    })
 }
 
 pub(super) fn is_safe_to_persist_debug_artifact_previews(status: domain::FlowRunStatus) -> bool {

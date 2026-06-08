@@ -17,7 +17,22 @@ export interface LlmToolCallback {
   call_usage: Record<string, unknown> | null;
   result_context_usage: Record<string, unknown> | null;
   duration_ms: number | null;
+  routeTrace: LlmToolRouteTraceSummary | null;
   detailArtifactRef?: string | null;
+}
+
+export interface LlmToolRouteTraceSummary {
+  detailArtifactRef: string | null;
+  rawPayload: Record<string, unknown>;
+  status: string | null;
+  routeModel: string | null;
+  targetNodeId: string | null;
+  routeNodeId: string | null;
+  routeNodeAlias: string | null;
+  returnedToMain: boolean;
+  mainResume: boolean;
+  routeOutputSummary: Record<string, unknown> | null;
+  finalOutputSummary: Record<string, unknown> | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -88,8 +103,75 @@ function optionalNumberField(
   return null;
 }
 
+function optionalBooleanField(
+  record: Record<string, unknown>,
+  keys: string[]
+): boolean {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === 'boolean') {
+      return value;
+    }
+  }
+
+  return false;
+}
+
 function recordArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function readRouteTraceSummary(value: unknown): {
+  id: string;
+  trace: LlmToolRouteTraceSummary;
+} | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const kind = firstStringField(value, ['kind', 'preview_kind']);
+  const id = firstStringField(value, ['tool_call_id', 'id', 'call_id']);
+
+  if (kind !== 'visible_internal_llm_tool_trace' || !id) {
+    return null;
+  }
+
+  return {
+    id,
+    trace: {
+      detailArtifactRef: firstStringField(value, [
+        'artifact_ref',
+        'detail_artifact_ref'
+      ]),
+      rawPayload: value,
+      status: firstStringField(value, ['status']),
+      routeModel: firstStringField(value, ['route_model']),
+      targetNodeId: firstStringField(value, ['target_node_id']),
+      routeNodeId: firstStringField(value, ['route_node_id']),
+      routeNodeAlias: firstStringField(value, ['route_node_alias']),
+      returnedToMain: optionalBooleanField(value, ['returned_to_main']),
+      mainResume: optionalBooleanField(value, ['main_resume']),
+      routeOutputSummary: optionalRecordField(value, ['route_output_summary']),
+      finalOutputSummary: optionalRecordField(value, ['final_output_summary'])
+    }
+  };
+}
+
+function readVisibleInternalRouteTraces(
+  debugPayload: unknown
+): Array<{ id: string; trace: LlmToolRouteTraceSummary }> {
+  if (!isRecord(debugPayload)) {
+    return [];
+  }
+
+  return recordArray(debugPayload.visible_internal_llm_tool_trace)
+    .map(readRouteTraceSummary)
+    .filter(
+      (
+        trace
+      ): trace is { id: string; trace: LlmToolRouteTraceSummary } =>
+        trace !== null
+    );
 }
 
 function roundIndex(round: Record<string, unknown>, fallbackIndex: number) {
@@ -177,6 +259,7 @@ function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
           'result_context_usage'
         ]),
         duration_ms: optionalNumberField(toolCallback, ['duration_ms']),
+        routeTrace: readRouteTraceSummary(toolCallback.route_trace)?.trace ?? null,
         detailArtifactRef: firstStringField(toolCallback, [
           'artifact_ref',
           'detail_artifact_ref'
@@ -224,6 +307,7 @@ export function readLlmToolCallbackDetail(
       'result_context_usage'
     ]),
     duration_ms: optionalNumberField(loadedPayload, ['duration_ms']),
+    routeTrace: readRouteTraceSummary(loadedPayload.route_trace)?.trace ?? null,
     detailArtifactRef:
       firstStringField(loadedPayload, [
         'artifact_ref',
@@ -406,12 +490,23 @@ export function collectLlmToolCallbacks(
 export function collectLlmToolCallbacksFromDebugPayloads(
   debugPayloads: unknown[]
 ): LlmToolCallback[] {
-  return mergeLlmToolCallbacks([
+  const routeTracesById = new Map<string, LlmToolRouteTraceSummary>();
+  debugPayloads
+    .flatMap(readVisibleInternalRouteTraces)
+    .forEach(({ id, trace }) => {
+      routeTracesById.set(id, trace);
+    });
+  const callbacks = mergeLlmToolCallbacks([
     ...debugPayloads.flatMap(readIndexedToolCallbacks),
     ...collectLlmToolCallbacksFromRounds(
       debugPayloads.flatMap(readLlmRoundsFromDebugPayload)
     )
   ]);
+
+  return callbacks.map((callback) => ({
+    ...callback,
+    routeTrace: routeTracesById.get(callback.id) ?? callback.routeTrace
+  }));
 }
 
 function mergeLlmToolCallbacks(callbacks: LlmToolCallback[]) {
@@ -469,7 +564,8 @@ function mergeLlmToolCallbacks(callbacks: LlmToolCallback[]) {
       call_usage: callback.call_usage ?? currentCallback.call_usage,
       result_context_usage:
         callback.result_context_usage ?? currentCallback.result_context_usage,
-      duration_ms: callback.duration_ms ?? currentCallback.duration_ms
+      duration_ms: callback.duration_ms ?? currentCallback.duration_ms,
+      routeTrace: callback.routeTrace ?? currentCallback.routeTrace
     };
   }
 
@@ -537,7 +633,8 @@ function collectLlmToolCallbacksFromRounds(
       result_context_usage:
         nextCallback.result_context_usage ??
         currentCallback.result_context_usage,
-      duration_ms: nextCallback.duration_ms ?? currentCallback.duration_ms
+      duration_ms: nextCallback.duration_ms ?? currentCallback.duration_ms,
+      routeTrace: nextCallback.routeTrace ?? currentCallback.routeTrace
     };
   };
 
@@ -558,7 +655,8 @@ function collectLlmToolCallbacksFromRounds(
         call_usage:
           optionalRecordField(toolCall, ['call_usage']) ?? currentUsage,
         result_context_usage: null,
-        duration_ms: optionalNumberField(toolCall, ['duration_ms'])
+        duration_ms: optionalNumberField(toolCall, ['duration_ms']),
+        routeTrace: readRouteTraceSummary(toolCall.route_trace)?.trace ?? null
       });
     });
 
@@ -576,7 +674,8 @@ function collectLlmToolCallbacksFromRounds(
         result_context_usage: optionalRecordField(toolResult, [
           'result_context_usage'
         ]),
-        duration_ms: optionalNumberField(toolResult, ['duration_ms'])
+        duration_ms: optionalNumberField(toolResult, ['duration_ms']),
+        routeTrace: readRouteTraceSummary(toolResult.route_trace)?.trace ?? null
       });
     });
   });
