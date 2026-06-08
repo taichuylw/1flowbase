@@ -14,6 +14,7 @@
 | `node scripts/node/cli/test-contracts.js` | 共享 DTO / consumer contract / style-boundary contract consumer | 改共享 console API DTO、settings / agent-flow provider consumer、`style-boundary` registry 或其他跨消费者契约 | 不替代页面质量和后端分层回归 |
 | `node scripts/node/test-frontend.js fast` | 前端快速回归 | 需要仓库级前端快检，但还没到 full gate | 不替代移动端/真实运行态证据 |
 | `node scripts/node/test-frontend.js full` | 前端 lint、test、build、style-boundary full gate | 要给前端结论兜底，或 `verify-repo` 前置确认 | 不替代具体页面走查和截图证据 |
+| `node scripts/node/tooling.js gate-router [--staged]` | 根据 changed files 输出非阻塞质量门禁建议；提交前 hook 使用 `--staged`，线上 `repo-tooling` 使用 branch diff | 需要在开发阶段提示“本次改动应该跑哪些相关门禁”，但不想阻塞提交 | 不替代实际运行被建议的门禁 |
 | `node scripts/node/tooling.js repo-hygiene` | 废弃标记、前后端字段兼容标记、弱断言、重复测试标题、超大文件和目录压力，报告写入 `tmp/test-governance/repo-hygiene.json` | 全量审计、热点预防、判断旧逻辑、字段兼容 alias 和测试重复是否已进入 QA 证据层 | 不替代业务正确性、覆盖率和人工架构审查 |
 | `node scripts/node/tooling.js i18n-hygiene` | 多语言 locale 文件名、key 对齐、JSON 重复 key、同 owner value 重复和未引用前端 key warning，报告写入 `tmp/test-governance/i18n-hygiene.json`；`--include-cross-owner-warnings` 可额外输出跨 owner advisory | 改前端 / 插件 `i18n/`、语言切换、UI 文案抽取、common 文案或仓库级 QA tooling | 不替代人工判断跨 owner 文案是否真的同语义，也不替代动态 key 人工确认 |
 | `node scripts/node/tooling.js check-rust-backend` | Rust 后端静态质量门禁，报告写入 `tmp/test-governance/rust-backend-static-gate.json` | 需要快速检查新增 Rust 后端坏味道，或定位 `test-backend` / `verify-backend` 前置静态门禁失败 | 不替代 cargo 编译、测试、clippy 和业务语义审查 |

@@ -1,0 +1,12 @@
+#!/bin/sh
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+
+if command -v node >/dev/null 2>&1; then
+  node "$repo_root/scripts/node/tooling.js" gate-router --staged || true
+else
+  printf '%s\n' '[1flowbase-gate-router] Advisory only: node is not available; skipped quality gate suggestions.'
+  printf '%s\n' 'This hook does not block the commit.'
+fi
+
+exit 0

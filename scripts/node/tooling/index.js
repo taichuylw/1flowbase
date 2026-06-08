@@ -4,6 +4,7 @@ const path = require('node:path');
 
 const { main: runCheckStyleBoundary } = require('../check-style-boundary/core.js');
 const { main: runCheckRustBackend } = require('../check-rust-backend/core.js');
+const { main: runGateRouter } = require('../gate-router/core.js');
 const { main: runHotspotReview } = require('../hotspot-review/core.js');
 const { main: runI18nHygiene } = require('../i18n-hygiene/core.js');
 const { main: runRepoHygiene } = require('../repo-hygiene/core.js');
@@ -21,6 +22,7 @@ const TOOLING_COMMANDS = new Set([
   'check-style-boundary',
   'check-rust-backend',
   'claude-skill-sync',
+  'gate-router',
   'hotspot-review',
   'i18n-hygiene',
   'mock-ui-sync',
@@ -89,7 +91,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <check-rust-backend|check-style-boundary|claude-skill-sync|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|security-risk> [args]\n'
+    'Usage: node scripts/node/tooling <check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|security-risk> [args]\n'
   );
 }
 
@@ -115,6 +117,10 @@ async function main(argv = [], deps = {}) {
 
   if (options.command === 'claude-skill-sync') {
     return (deps.runClaudeSkillSyncImpl || runClaudeSkillSync)(options.rest);
+  }
+
+  if (options.command === 'gate-router') {
+    return (deps.runGateRouterImpl || runGateRouter)(options.rest, deps);
   }
 
   if (options.command === 'hotspot-review') {
