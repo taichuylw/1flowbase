@@ -274,6 +274,7 @@ export interface LlmPromptMessage {
 export interface FlowLlmVisibleInternalToolDocument {
   type: 'visible_internal_llm_tool';
   tool_name: string;
+  connector_id?: string;
   target_node_id: string;
   description?: string;
   input_schema?: Record<string, unknown>;
@@ -524,7 +525,7 @@ export function createDefaultAgentFlowDocument({
             external_reasoning_policy: {
               follow_external_reasoning: false
             },
-            execution_role: 'standard',
+            visible_internal_llm_tools_enabled: false,
             visible_internal_llm_tools: [],
             response_format: {
               mode: 'text'

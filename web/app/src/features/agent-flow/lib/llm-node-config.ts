@@ -36,11 +36,10 @@ export interface LlmNodeExternalReasoningPolicy {
   follow_external_reasoning: boolean;
 }
 
-export type LlmNodeExecutionRole = 'standard' | 'visible_internal_llm_tool';
-
 export interface LlmVisibleInternalTool {
   type: 'visible_internal_llm_tool';
   tool_name: string;
+  connector_id?: string;
   target_node_id: string;
   description?: string;
   input_schema?: Record<string, unknown>;
@@ -65,7 +64,7 @@ export const DEFAULT_LLM_RESPONSE_FORMAT: LlmNodeResponseFormat = {
   mode: 'text'
 };
 
-export const DEFAULT_LLM_EXECUTION_ROLE: LlmNodeExecutionRole = 'standard';
+export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS_ENABLED = false;
 export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS: LlmVisibleInternalTool[] = [];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -242,12 +241,10 @@ export function getLlmExternalReasoningPolicy(
   };
 }
 
-export function getLlmExecutionRole(
+export function getLlmVisibleInternalToolsEnabled(
   config: Record<string, unknown>
-): LlmNodeExecutionRole {
-  return config.execution_role === 'visible_internal_llm_tool'
-    ? 'visible_internal_llm_tool'
-    : DEFAULT_LLM_EXECUTION_ROLE;
+): boolean {
+  return config.visible_internal_llm_tools_enabled === true;
 }
 
 export function getLlmVisibleInternalTools(
@@ -275,6 +272,7 @@ export function getLlmVisibleInternalTools(
       {
         type: 'visible_internal_llm_tool',
         tool_name: toolName,
+        connector_id: asString(tool.connector_id).trim() || toolName,
         target_node_id: targetNodeId,
         description: asString(tool.description).trim() || undefined,
         input_schema: isRecord(tool.input_schema)

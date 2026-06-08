@@ -97,9 +97,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.llm_response_format).toBeTypeOf(
       'function'
     );
-    expect(
-      agentFlowRendererRegistry.fields.llm_internal_tool_attachments
-    ).toBeTypeOf('function');
+    expect(agentFlowRendererRegistry.fields.llm_tool_registrations).toBeTypeOf(
+      'function'
+    );
     expect(agentFlowRendererRegistry.fields.code_source).toBeTypeOf('function');
     expect(
       agentFlowRendererRegistry.fields.output_contract_definition
@@ -285,36 +285,28 @@ describe('agent-flow node schema registry', () => {
     );
   });
 
-  test('exposes LLM internal attachment authoring fields without topology edges', () => {
+  test('exposes LLM tool registration authoring fields without execution role UI', () => {
     const schema = resolveAgentFlowNodeSchema('llm');
     const contract = getBuiltinNodeRuntimeContract('llm');
     const executionRoleField = findFieldBlock(
       schema.detail.tabs.config.blocks,
       'config.execution_role'
     );
-    const internalToolsField = findFieldBlock(
+    const mountToolsField = findFieldBlock(
       schema.detail.tabs.config.blocks,
-      'config.visible_internal_llm_tools'
+      'config.visible_internal_llm_tools_enabled'
     );
 
     expect(contract?.defaults.config).toEqual(
       expect.objectContaining({
-        execution_role: 'standard',
+        visible_internal_llm_tools_enabled: false,
         visible_internal_llm_tools: []
       })
     );
-    expect(executionRoleField).toEqual(
+    expect(executionRoleField).toBeNull();
+    expect(mountToolsField).toEqual(
       expect.objectContaining({
-        renderer: 'static_select',
-        options: expect.arrayContaining([
-          expect.objectContaining({ value: 'standard' }),
-          expect.objectContaining({ value: 'visible_internal_llm_tool' })
-        ])
-      })
-    );
-    expect(internalToolsField).toEqual(
-      expect.objectContaining({
-        renderer: 'llm_internal_tool_attachments'
+        renderer: 'llm_tool_registrations'
       })
     );
   });
@@ -1050,15 +1042,9 @@ describe('agent-flow node schema registry', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  test('writes LLM internal tool attachments into node config without graph edges', () => {
+  test('writes LLM tool registrations into node config without graph edges', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const mountedLlm = {
-      ...createNodeDocument('llm', 'node-mounted-llm'),
-      config: {
-        ...createNodeDocument('llm', 'node-mounted-llm').config,
-        execution_role: 'visible_internal_llm_tool'
-      }
-    };
+    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm');
     const documentWithMountedLlm = {
       ...document,
       graph: {
@@ -1078,23 +1064,25 @@ describe('agent-flow node schema registry', () => {
       {
         type: 'visible_internal_llm_tool',
         tool_name: 'inspect_visible_context',
+        connector_id: 'inspect_visible_context',
         target_node_id: 'node-mounted-llm',
+        description: 'Inspect visible context',
         input_schema: { type: 'object' }
       }
     ];
 
+    adapter.setValue('config.visible_internal_llm_tools_enabled', true);
     adapter.setValue('config.visible_internal_llm_tools', nextTools);
 
-    const update = setWorkingDocument.mock.calls[0]?.[0] as
-      | typeof documentWithMountedLlm
-      | ((
-          currentDocument: typeof documentWithMountedLlm
-        ) => typeof documentWithMountedLlm);
-    const nextDocument =
-      typeof update === 'function' ? update(documentWithMountedLlm) : update;
+    const nextDocument = setWorkingDocument.mock.calls.reduce(
+      (currentDocument, [update]) =>
+        typeof update === 'function' ? update(currentDocument) : update,
+      documentWithMountedLlm
+    );
 
     expect(getNode(nextDocument, 'node-llm').config).toEqual(
       expect.objectContaining({
+        visible_internal_llm_tools_enabled: true,
         visible_internal_llm_tools: nextTools
       })
     );

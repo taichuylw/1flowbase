@@ -3,15 +3,15 @@ import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_LLM_PARAMETERS,
   DEFAULT_LLM_CONTEXT_POLICY,
-  DEFAULT_LLM_EXECUTION_ROLE,
   DEFAULT_LLM_EXTERNAL_REASONING_POLICY,
+  DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS_ENABLED,
   DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS,
   getLlmContextPolicy,
-  getLlmExecutionRole,
   getLlmExternalReasoningPolicy,
   getLlmParameterDefaultValue,
   getLlmModelProvider,
   getLlmParameters,
+  getLlmVisibleInternalToolsEnabled,
   getLlmVisibleInternalTools
 } from '../../lib/llm-node-config';
 
@@ -97,17 +97,18 @@ describe('llm-node-config', () => {
     });
   });
 
-  test('getLlmExecutionRole defaults to standard and accepts internal tool role', () => {
-    expect(getLlmExecutionRole({})).toBe(DEFAULT_LLM_EXECUTION_ROLE);
-    expect(
-      getLlmExecutionRole({ execution_role: 'visible_internal_llm_tool' })
-    ).toBe('visible_internal_llm_tool');
-    expect(getLlmExecutionRole({ execution_role: 'legacy-tool' })).toBe(
-      'standard'
+  test('getLlmVisibleInternalToolsEnabled defaults mount tools to disabled', () => {
+    expect(getLlmVisibleInternalToolsEnabled({})).toBe(
+      DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS_ENABLED
     );
+    expect(
+      getLlmVisibleInternalToolsEnabled({
+        visible_internal_llm_tools_enabled: true
+      })
+    ).toBe(true);
   });
 
-  test('getLlmVisibleInternalTools keeps only stable internal attachment contract', () => {
+  test('getLlmVisibleInternalTools keeps only stable tool registrations', () => {
     expect(getLlmVisibleInternalTools({})).toEqual(
       DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS
     );
@@ -117,6 +118,7 @@ describe('llm-node-config', () => {
           {
             type: 'visible_internal_llm_tool',
             tool_name: ' inspect_visible_context ',
+            connector_id: ' inspect_visible_context ',
             target_node_id: ' node-mounted-llm ',
             description: ' Read visible context ',
             input_schema: { type: 'object' }
@@ -137,6 +139,7 @@ describe('llm-node-config', () => {
       {
         type: 'visible_internal_llm_tool',
         tool_name: 'inspect_visible_context',
+        connector_id: 'inspect_visible_context',
         target_node_id: 'node-mounted-llm',
         description: 'Read visible context',
         input_schema: { type: 'object' }

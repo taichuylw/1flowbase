@@ -31,7 +31,7 @@ import { OutputContractDefinitionField } from '../components/detail/fields/Outpu
 import { CodeSourceField } from '../components/detail/fields/CodeSourceField';
 import { DataModelField } from '../components/detail/fields/DataModelField';
 import { LlmModelField } from '../components/detail/fields/LlmModelField';
-import { LlmInternalToolAttachmentsField } from '../components/detail/fields/LlmInternalToolAttachmentsField';
+import { LlmToolRegistrationsField } from '../components/detail/fields/LlmToolRegistrationsField';
 import { LlmPromptMessagesField } from '../components/detail/fields/LlmPromptMessagesField';
 import { LlmResponseFormatField } from '../components/detail/fields/LlmResponseFormatField';
 import { StartInputFieldsField } from '../components/detail/fields/StartInputFieldsField';
@@ -825,7 +825,7 @@ export const agentFlowFieldRenderers = {
   llm_model: LlmModelField,
   llm_context_policy: renderLlmContextPolicyField,
   llm_external_reasoning_policy: renderLlmExternalReasoningPolicyField,
-  llm_internal_tool_attachments: LlmInternalToolAttachmentsField,
+  llm_tool_registrations: LlmToolRegistrationsField,
   llm_prompt_messages: renderLlmPromptMessagesField,
   llm_response_format: LlmResponseFormatField,
   number: renderNumberField,

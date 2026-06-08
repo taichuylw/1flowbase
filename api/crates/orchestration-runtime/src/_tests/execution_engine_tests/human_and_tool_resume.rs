@@ -1029,10 +1029,12 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
         .nodes
         .get_mut("node-llm")
         .expect("main llm node should exist");
+    main_llm.config["visible_internal_llm_tools_enabled"] = json!(true);
     main_llm.config["visible_internal_llm_tools"] = json!([
         {
             "type": "visible_internal_llm_tool",
             "tool_name": "inspect_visible_context",
+            "connector_id": "inspect_visible_context",
             "description": "Inspect the current user content with a mounted LLM",
             "target_node_id": "node-mounted-llm",
             "input_schema": {
@@ -1082,7 +1084,6 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
                 json_schema: None,
             }],
             config: json!({
-                "execution_role": "visible_internal_llm_tool",
                 "model_provider": {
                     "provider_code": "fixture_provider",
                     "model_id": "gpt-5.4-mini"

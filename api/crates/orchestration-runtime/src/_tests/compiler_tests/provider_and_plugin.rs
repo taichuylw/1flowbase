@@ -49,10 +49,12 @@ fn compile_collects_provider_compile_issues() {
 fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_dependency() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
     document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
         {
             "type": "visible_internal_llm_tool",
             "tool_name": "inspect_visible_context",
+            "connector_id": "inspect_visible_context",
             "target_node_id": "node-mounted-llm",
             "input_schema": { "type": "object" }
         }
@@ -69,7 +71,6 @@ fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_depende
             "position": { "x": 480, "y": 0 },
             "configVersion": 1,
             "config": {
-                "execution_role": "visible_internal_llm_tool",
                 "model_provider": {
                     "provider_code": "fixture_provider",
                     "model_id": "gpt-5.4-mini"
@@ -116,10 +117,12 @@ fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_depende
 fn compile_flags_invalid_visible_internal_llm_tool_target() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
     document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
         {
             "type": "visible_internal_llm_tool",
             "tool_name": "inspect_visible_context",
+            "connector_id": "inspect_visible_context",
             "target_node_id": "node-start",
             "input_schema": { "type": "object" }
         }

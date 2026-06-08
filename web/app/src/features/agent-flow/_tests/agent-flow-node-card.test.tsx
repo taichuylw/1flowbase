@@ -24,21 +24,29 @@ vi.mock('@xyflow/react', () => ({
     ['aria-label']?: string;
     onClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
     onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
+    isConnectable?: boolean;
   }) => {
     const domProps = { ...(props as Record<string, unknown>) };
 
     delete domProps.type;
     delete domProps.position;
+    const isConnectable = domProps.isConnectable;
+    delete domProps.isConnectable;
 
     return (
-      <div className={`react-flow__handle ${className ?? ''}`} {...domProps}>
+      <div
+        className={`react-flow__handle ${className ?? ''}`}
+        data-is-connectable={String(isConnectable)}
+        {...domProps}
+      >
         {children}
       </div>
     );
   },
   Position: {
     Left: 'left',
-    Right: 'right'
+    Right: 'right',
+    Bottom: 'bottom'
   },
   useUpdateNodeInternals: () => updateNodeInternalsMock
 }));
@@ -88,7 +96,9 @@ describe('AgentFlowNodeCard', () => {
       </AppProviders>
     );
 
-    const card = screen.getByRole('button', { name: /database Data Model List/ });
+    const card = screen.getByRole('button', {
+      name: /database Data Model List/
+    });
 
     expect(card).toHaveClass('agent-flow-node-card--theme-unified');
     expect(card).toHaveClass('agent-flow-node-card--type-data_model_list');
@@ -239,6 +249,78 @@ describe('AgentFlowNodeCard', () => {
     expect(onOpenPicker).toHaveBeenCalledWith('node-llm');
   });
 
+  test('renders LLM tool registrations as bottom non-topology connectors', () => {
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-llm',
+              nodeType: 'llm',
+              nodeSchema: resolveAgentFlowNodeSchema('llm'),
+              typeLabel: 'LLM',
+              alias: 'LLM',
+              description: '选择并调用大语言模型',
+              config: {
+                model_provider: {
+                  provider_code: 'openai_compatible',
+                  model_id: 'gpt-4',
+                  provider_label: 'OpenAI Prod',
+                  model_label: 'GPT-4'
+                },
+                visible_internal_llm_tools_enabled: true,
+                visible_internal_llm_tools: [
+                  {
+                    type: 'visible_internal_llm_tool',
+                    tool_name: 'search_context',
+                    connector_id: 'search_context',
+                    target_node_id: 'node-search-llm'
+                  },
+                  {
+                    type: 'visible_internal_llm_tool',
+                    tool_name: 'inspect_image',
+                    connector_id: 'inspect_image',
+                    target_node_id: 'node-vision-llm'
+                  }
+                ]
+              },
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              toolSourceHandles: [
+                { id: 'search_context', title: 'search_context' },
+                { id: 'inspect_image', title: 'inspect_image' }
+              ],
+              isContainer: false,
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn()
+            },
+            id: 'node-llm',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    expect(screen.getByText('search_context')).toBeInTheDocument();
+    expect(screen.getByText('inspect_image')).toBeInTheDocument();
+    expect(screen.getByText('挂载工具')).toBeInTheDocument();
+
+    const toolConnectors = screen.getAllByLabelText(/工具连接器$/);
+
+    expect(toolConnectors).toHaveLength(2);
+    expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
+    expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'false');
+    expect(
+      screen.getByRole('button', { name: '在 LLM 后新增节点' })
+    ).toBeInTheDocument();
+  });
+
   test('routes If / Else branch handles through picker open and insert callbacks', async () => {
     const onOpenPicker = vi.fn();
     const onInsertNode = vi.fn();
@@ -329,11 +411,7 @@ describe('AgentFlowNodeCard', () => {
 
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Code' }));
 
-    expect(onInsertNode).toHaveBeenCalledWith(
-      'node-if-else',
-      codeOption,
-      'if'
-    );
+    expect(onInsertNode).toHaveBeenCalledWith('node-if-else', codeOption, 'if');
   });
 
   test('adds the fixed exception handle from the common node shell', async () => {

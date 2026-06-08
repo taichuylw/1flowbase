@@ -327,7 +327,7 @@ function createLlmContract(): NodeRuntimeUiContract {
       external_reasoning_policy: {
         follow_external_reasoning: false
       },
-      execution_role: 'standard',
+      visible_internal_llm_tools_enabled: false,
       visible_internal_llm_tools: [],
       response_format: {
         mode: 'text'
@@ -358,26 +358,10 @@ function createLlmContract(): NodeRuntimeUiContract {
           required: true
         }),
         panelField({
-          key: 'config.execution_role',
-          title: i18nText('agentFlow', 'auto.llm_execution_role'),
-          renderer: 'static_select',
-          required: true,
-          options: [
-            {
-              label: i18nText('agentFlow', 'auto.standard_llm'),
-              value: 'standard'
-            },
-            {
-              label: i18nText('agentFlow', 'auto.internal_llm_tool'),
-              value: 'visible_internal_llm_tool'
-            }
-          ]
-        }),
-        panelField({
-          key: 'config.visible_internal_llm_tools',
-          title: i18nText('agentFlow', 'auto.internal_llm_tool_attachments'),
-          renderer: 'llm_internal_tool_attachments',
-          valueType: 'array'
+          key: 'config.visible_internal_llm_tools_enabled',
+          title: i18nText('agentFlow', 'auto.mount_tools'),
+          renderer: 'llm_tool_registrations',
+          valueType: 'boolean'
         }),
         panelField({
           key: 'config.context_policy',

@@ -1,7 +1,6 @@
 use super::*;
 
 const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
-const VISIBLE_INTERNAL_LLM_TOOL_ROLE: &str = "visible_internal_llm_tool";
 const VISIBLE_INTERNAL_LLM_TOOL_VARIABLE: &str = "visible_internal_llm_tool";
 const MAX_VISIBLE_INTERNAL_LLM_TOOL_ROUNDS: usize = 8;
 
@@ -19,15 +18,19 @@ struct VisibleInternalLlmToolOutput {
     provider_events: Vec<ProviderStreamEvent>,
 }
 
-pub(super) fn node_is_visible_internal_llm_tool(node: &CompiledNode) -> bool {
+fn visible_internal_llm_tools_enabled(node: &CompiledNode) -> bool {
     node.config
-        .get("execution_role")
-        .or_else(|| node.config.get("executionRole"))
-        .and_then(Value::as_str)
-        == Some(VISIBLE_INTERNAL_LLM_TOOL_ROLE)
+        .get("visible_internal_llm_tools_enabled")
+        .or_else(|| node.config.get("visibleInternalLlmToolsEnabled"))
+        .and_then(Value::as_bool)
+        == Some(true)
 }
 
 pub(super) fn visible_internal_llm_tools(node: &CompiledNode) -> Vec<VisibleInternalLlmTool> {
+    if !visible_internal_llm_tools_enabled(node) {
+        return Vec::new();
+    }
+
     node.config
         .get("visible_internal_llm_tools")
         .or_else(|| node.config.get("visibleInternalLlmTools"))
@@ -39,6 +42,15 @@ pub(super) fn visible_internal_llm_tools(node: &CompiledNode) -> Vec<VisibleInte
                 .collect()
         })
         .unwrap_or_default()
+}
+
+pub(super) fn visible_internal_llm_tool_target_node_ids(plan: &CompiledPlan) -> BTreeSet<String> {
+    plan.nodes
+        .values()
+        .filter(|node| node.node_type == "llm")
+        .flat_map(visible_internal_llm_tools)
+        .map(|tool| tool.target_node_id)
+        .collect()
 }
 
 pub(super) fn visible_internal_llm_provider_tools(node: &CompiledNode) -> Vec<Value> {
@@ -218,10 +230,10 @@ where
             "target_node_id": tool.target_node_id,
         })));
     };
-    if target_node.node_type != "llm" || !node_is_visible_internal_llm_tool(target_node) {
+    if target_node.node_type != "llm" {
         return Ok(Err(json!({
             "error_code": "visible_internal_llm_tool_failed",
-            "message": "visible internal LLM tool target must be an LLM node with execution_role=visible_internal_llm_tool",
+            "message": "visible internal LLM tool target must be an LLM node",
             "tool_call_id": tool_call_id(tool_call),
             "tool_name": tool.name,
             "target_node_id": tool.target_node_id,

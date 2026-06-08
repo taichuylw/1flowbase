@@ -425,6 +425,7 @@ where
     let mut node_traces = Vec::new();
     let mut pending_failure: Option<NodeExecutionFailure> = None;
     let mut active_node_ids = active_node_ids.unwrap_or_else(|| initial_active_node_ids(plan));
+    let mounted_llm_target_node_ids = visible_internal_llm_tool_target_node_ids(plan);
 
     for (index, node_id) in plan
         .topological_order
@@ -440,7 +441,7 @@ where
         if !active_node_ids.contains(node_id) {
             continue;
         }
-        if node_is_visible_internal_llm_tool(node) {
+        if mounted_llm_target_node_ids.contains(node_id) {
             continue;
         }
 

@@ -5,7 +5,6 @@ use crate::node_error_policy::{node_uses_error_branch, ERROR_BRANCH_SOURCE_HANDL
 use super::node_compilation::compile_node;
 use super::*;
 
-const VISIBLE_INTERNAL_LLM_TOOL_ROLE: &str = "visible_internal_llm_tool";
 const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
 
 type NodeTopologyBuild = (
@@ -429,6 +428,10 @@ fn validate_visible_internal_llm_tools(
     let mut issues = Vec::new();
 
     for node in nodes.values().filter(|node| node.node_type == "llm") {
+        if !visible_internal_llm_tools_enabled(node) {
+            continue;
+        }
+
         let Some(tools) = node
             .config
             .get("visible_internal_llm_tools")
@@ -470,18 +473,12 @@ fn validate_visible_internal_llm_tools(
                 });
                 continue;
             };
-            let target_role = target_node
-                .config
-                .get("execution_role")
-                .or_else(|| target_node.config.get("executionRole"))
-                .and_then(Value::as_str);
-            if target_node.node_type != "llm" || target_role != Some(VISIBLE_INTERNAL_LLM_TOOL_ROLE)
-            {
+            if target_node.node_type != "llm" {
                 issues.push(CompileIssue {
                     node_id: node.node_id.clone(),
                     code: CompileIssueCode::InvalidVisibleInternalLlmTool,
                     message: format!(
-                        "node {} visible_internal_llm_tool target {target_node_id} must be an LLM node with execution_role=visible_internal_llm_tool",
+                        "node {} visible_internal_llm_tool target {target_node_id} must be an LLM node",
                         node.node_id
                     ),
                 });
@@ -490,6 +487,14 @@ fn validate_visible_internal_llm_tools(
     }
 
     issues
+}
+
+fn visible_internal_llm_tools_enabled(node: &CompiledNode) -> bool {
+    node.config
+        .get("visible_internal_llm_tools_enabled")
+        .or_else(|| node.config.get("visibleInternalLlmToolsEnabled"))
+        .and_then(Value::as_bool)
+        == Some(true)
 }
 
 fn context_policy_selector(node: &CompiledNode) -> Option<Vec<String>> {

@@ -222,3 +222,58 @@
   line-height: 1.55;
   white-space: pre-wrap;
 }
+
+.agent-flow-node-card__tool-connectors {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 10px);
+  min-height: 58px;
+  pointer-events: none;
+}
+
+.agent-flow-node-card__tool-connectors-title {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  transform: translateX(-50%);
+  color: #60756a;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.agent-flow-node-card__tool-connector {
+  position: absolute;
+  top: 8px;
+  width: 74px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.agent-flow-node-card__tool-connector-line {
+  display: block;
+  width: 1px;
+  height: 18px;
+  margin: 0 auto;
+  background: rgba(22, 119, 255, 0.42);
+}
+
+.agent-flow-node-card__tool-connector-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 4px 6px;
+  border: 1px solid rgba(145, 202, 255, 0.9);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #17261b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  word-break: break-word;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.1);
+}

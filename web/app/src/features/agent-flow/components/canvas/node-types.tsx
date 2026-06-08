@@ -20,6 +20,7 @@ export interface AgentFlowCanvasNodeData extends Record<string, unknown> {
   showTargetHandle: boolean;
   showSourceHandle: boolean;
   branchSourceHandles: Array<{ id: string; title: string }>;
+  toolSourceHandles: Array<{ id: string; title: string }>;
   pickerSourceHandleId: string | null;
   isContainer: boolean;
   nodePickerOptions: NodePickerOption[];
