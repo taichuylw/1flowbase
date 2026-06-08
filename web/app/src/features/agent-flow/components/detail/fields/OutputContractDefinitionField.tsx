@@ -7,6 +7,7 @@ import { Button, Empty, Input, Select, Tooltip, Typography } from 'antd';
 import { useRef, useState } from 'react';
 
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
+import { useStableListItemKeys } from '../../../hooks/interactions/use-stable-list-item-keys';
 import { outputTypeSupportsJsonSchema } from '../../../lib/output-contract/schema';
 import { isOutputVariableKeyAllowed } from '../../../lib/output-contract/variable-key';
 import { i18nText } from '../../../../../shared/i18n/text';
@@ -78,6 +79,10 @@ export function OutputContractDefinitionField({
   const schemaTriggerRef = useRef<HTMLElement | null>(null);
   const editingOutput =
     editingIndex === null ? null : (value[editingIndex] ?? null);
+  const { itemKeys, insertItemKey, removeItemKey } = useStableListItemKeys(
+    'output-contract',
+    value.length
+  );
 
   function openSchemaEditor(index: number, trigger: HTMLElement | null) {
     schemaTriggerRef.current = trigger;
@@ -137,12 +142,13 @@ export function OutputContractDefinitionField({
           icon={<PlusOutlined />}
           size="small"
           type="text"
-          onClick={() =>
+          onClick={() => {
+            insertItemKey(value.length);
             emitChange([
               ...value,
               createNextOutput(value.length, selectorForKey)
-            ])
-          }
+            ]);
+          }}
         />
       </div>
       {value.length > 0 ? (
@@ -153,7 +159,7 @@ export function OutputContractDefinitionField({
 
             return (
               <div
-                key={`${output.key}-${index}`}
+                key={itemKeys[index]}
                 className={`agent-flow-output-contract-editor__row${
                   syncTitleWithKey
                     ? ' agent-flow-output-contract-editor__row--synced-title'
@@ -273,11 +279,12 @@ export function OutputContractDefinitionField({
                   icon={<DeleteOutlined />}
                   size="small"
                   type="text"
-                  onClick={() =>
+                  onClick={() => {
+                    removeItemKey(index);
                     emitChange(
                       value.filter((_, outputIndex) => outputIndex !== index)
-                    )
-                  }
+                    );
+                  }}
                 />
               </div>
             );

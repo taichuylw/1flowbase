@@ -379,11 +379,13 @@ export function AgentFlowNodeCard({
           }
         }}
       >
-        <SchemaRenderer
-          adapter={cardAdapter}
-          blocks={data.nodeSchema.card.blocks}
-          registry={agentFlowRendererRegistry}
-        />
+        <div className="agent-flow-node-card__content">
+          <SchemaRenderer
+            adapter={cardAdapter}
+            blocks={data.nodeSchema.card.blocks}
+            registry={agentFlowRendererRegistry}
+          />
+        </div>
         <div
           className={`agent-flow-node-card__quick-actions${quickActionsVisible ? ' agent-flow-node-card__quick-actions--visible' : ''}`}
           data-testid={`agent-flow-node-quick-actions-${data.nodeId}`}

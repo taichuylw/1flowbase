@@ -48,6 +48,9 @@ const TEST_PATH_PATTERN = /(?:^|\/)(?:_tests|tests)\//u;
 const LOCAL_ENV_ARTIFACT_PATTERN = /(?:^|\/)(?![^/]+\.env\.example$|[^/]+\.env\.template$)[^/]+\.env$/u;
 const BUILD_ARTIFACT_PATTERN = /(?:^|\/)[^/]+\.tsbuildinfo$/u;
 const ROOT_SCRATCH_ARTIFACT_PATTERN = /^[^/]*(?:test|tmp|scratch)[^/]*\.txt$/iu;
+const JSX_KEY_TEMPLATE_PATTERN = /\bkey\s*=\s*\{\s*`[^`]*`\s*\}/u;
+const JSX_KEY_MUTABLE_MEMBER_PATTERN = /\$\{\s*(?:entry|field|item|output|row|variable)\s*\.\s*(?:key|label|name|title|value)\b/u;
+const JSX_KEY_POSITION_PATTERN = /\$\{\s*(?:blockIndex|fieldIndex|index|itemIndex|pathLabel|rowIndex)\b/u;
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -347,6 +350,14 @@ function collectLowValueTestFindings({ relativePath, lines, structuralLines }) {
   return findings;
 }
 
+function hasMutableJsxListKey(line) {
+  return (
+    JSX_KEY_TEMPLATE_PATTERN.test(line)
+    && JSX_KEY_MUTABLE_MEMBER_PATTERN.test(line)
+    && JSX_KEY_POSITION_PATTERN.test(line)
+  );
+}
+
 function scanSourceFile({ relativePath, content }) {
   const lines = content.split(/\r?\n/u);
   const findings = [];
@@ -387,6 +398,21 @@ function scanSourceFile({ relativePath, content }) {
         file: relativePath,
         line: lineNumber,
         message: 'source contains a legacy/deprecated/TODO-style marker that should stay visible in QA reports',
+        snippet: line,
+      }));
+    }
+
+    if (
+      !testPath
+      && path.extname(relativePath) === '.tsx'
+      && hasMutableJsxListKey(line)
+    ) {
+      findings.push(createFinding({
+        severity: 'error',
+        rule: 'mutable-jsx-list-key',
+        file: relativePath,
+        line: lineNumber,
+        message: 'JSX list key uses editable-looking data plus position; use a stable row id to avoid remounting focused controls',
         snippet: line,
       }));
     }

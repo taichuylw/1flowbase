@@ -18,6 +18,7 @@ import {
   createTemplateSelectorToken,
   parseTemplateSelectorTokens
 } from '../../lib/template-binding';
+import { useStableListItemKeys } from '../../hooks/interactions/use-stable-list-item-keys';
 import { SelectorField } from './SelectorField';
 import { TemplatedTextField } from './TemplatedTextField';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -337,6 +338,11 @@ export function TemplatedNamedBindingsField({
   options,
   onChange
 }: TemplatedNamedBindingsFieldProps) {
+  const { itemKeys, insertItemKey, removeItemKey } = useStableListItemKeys(
+    'templated-named-binding',
+    value.length
+  );
+
   function updateEntry(index: number, nextEntry: TemplatedNamedBindingValue) {
     onChange(
       value.map((entry, entryIndex) =>
@@ -468,7 +474,7 @@ export function TemplatedNamedBindingsField({
 
         return (
           <div
-            key={`${entry.name}-${index}`}
+            key={itemKeys[index]}
             className="agent-flow-templated-binding-row"
           >
             <div className="agent-flow-templated-binding-row__name">
@@ -525,24 +531,26 @@ export function TemplatedNamedBindingsField({
               icon={<DeleteOutlined />}
               size="small"
               type="text"
-              onClick={() =>
-                onChange(value.filter((_, itemIndex) => itemIndex !== index))
-              }
+              onClick={() => {
+                removeItemKey(index);
+                onChange(value.filter((_, itemIndex) => itemIndex !== index));
+              }}
             />
           </div>
         );
       })}
       <Button
         type="dashed"
-        onClick={() =>
+        onClick={() => {
+          insertItemKey(value.length);
           onChange([
             ...value,
             {
               name: '',
               value: { kind: 'constant', value: '' }
             }
-          ])
-        }
+          ]);
+        }}
       >
         {i18nText("agentFlow", "auto.add_new_variable")}
       </Button>

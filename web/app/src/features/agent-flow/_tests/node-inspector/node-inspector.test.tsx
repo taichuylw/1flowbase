@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 
+import { useState } from 'react';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { modelProviderOptionsContract } from '../../../../test/model-provider-contract-fixtures';
+import { NamedBindingsField } from '../../components/bindings/NamedBindingsField';
 import { TemplatedNamedBindingsField } from '../../components/bindings/TemplatedNamedBindingsField';
 import { NodeDetailPanel } from '../../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../../components/detail/tabs/NodeConfigTab';
@@ -32,6 +34,21 @@ import {
 } from './support';
 
 beforeEach(setupNodeInspectorTest);
+
+function NamedBindingsFocusHarness() {
+  const [value, setValue] = useState<
+    Array<{ name: string; selector: string[] }>
+  >([{ name: 'arg1', selector: [] }]);
+
+  return (
+    <NamedBindingsField
+      ariaLabel="bindings"
+      value={value}
+      options={[]}
+      onChange={setValue}
+    />
+  );
+}
 
 describe('NodeInspector core', () => {
   test('reads config sections through the node schema registry and adapter bridge', async () => {
@@ -582,5 +599,17 @@ describe('NodeInspector core', () => {
         value: { kind: 'constant', value: '' }
       }
     ]);
+  });
+
+  test('keeps named binding input focused when editing its name', () => {
+    renderWithProviders(<NamedBindingsFocusHarness />);
+
+    const nameInput = screen.getByLabelText('bindings-0-name');
+    nameInput.focus();
+    fireEvent.change(nameInput, {
+      target: { value: 'arg2' }
+    });
+
+    expect(screen.getByLabelText('bindings-0-name')).toHaveFocus();
   });
 });

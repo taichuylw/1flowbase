@@ -91,15 +91,25 @@ describe('NodeInspector code schema', () => {
     expect(screen.getByLabelText('输出变量名 1')).toHaveValue('riskScore');
     expect(screen.queryByLabelText('输出显示名 1')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/输入变量-0-name|input variables-0-name/), {
+    const inputVariableName = screen.getByLabelText(
+      /输入变量-0-name|input variables-0-name/
+    );
+    inputVariableName.focus();
+    fireEvent.change(inputVariableName, {
       target: { value: 'score_1' }
     });
+    expect(
+      screen.getByLabelText(/输入变量-0-name|input variables-0-name/)
+    ).toHaveFocus();
     fireEvent.change(codeEditor, {
       target: { value: 'return { risk_score: inputs.score };' }
     });
-    fireEvent.change(screen.getByLabelText('输出变量名 1'), {
+    const outputVariableName = screen.getByLabelText('输出变量名 1');
+    outputVariableName.focus();
+    fireEvent.change(outputVariableName, {
       target: { value: 'risk_score' }
     });
+    expect(screen.getByLabelText('输出变量名 1')).toHaveFocus();
 
     await waitFor(() => {
       expect(getCodeNode(latestDocument).config).toMatchObject({
@@ -171,9 +181,12 @@ describe('NodeInspector code schema', () => {
     expect(screen.getByLabelText('Schema 字段名 2')).toHaveValue('content');
 
     fireEvent.click(screen.getByRole('button', { name: '添加 Schema 字段' }));
-    fireEvent.change(screen.getByLabelText('Schema 字段名 3'), {
+    const schemaFieldNameInput = screen.getByLabelText('Schema 字段名 3');
+    schemaFieldNameInput.focus();
+    fireEvent.change(schemaFieldNameInput, {
       target: { value: 'metadata' }
     });
+    expect(screen.getByLabelText('Schema 字段名 3')).toHaveFocus();
     await openSelect('Schema 字段类型 3');
     await selectOption('Object');
     fireEvent.click(screen.getByRole('button', { name: '添加 metadata 子字段' }));

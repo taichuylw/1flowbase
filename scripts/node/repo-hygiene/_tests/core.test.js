@@ -117,6 +117,27 @@ test('scanSourceFile reports front-back field contract compatibility markers as 
   assert.equal(findings[0].severity, 'warning');
 });
 
+test('scanSourceFile reports editable-looking values in JSX list keys', () => {
+  const findings = scanSourceFile({
+    relativePath: 'web/app/src/features/example/components/EditableRows.tsx',
+    content: [
+      'export function EditableRows({ rows }) {',
+      '  return rows.map((row, index) => (',
+      '    <div key={`${index}-${row.key}`}>',
+      '      <Input value={row.key} onChange={() => undefined} />',
+      '    </div>',
+      '  ));',
+      '}',
+    ].join('\n'),
+  });
+
+  assert.deepEqual(
+    findings.map((finding) => finding.rule),
+    ['mutable-jsx-list-key']
+  );
+  assert.equal(findings[0].severity, 'error');
+});
+
 test('collectRepoHygieneFindings reports duplicate test titles and oversized files', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-'));
   writeFile(

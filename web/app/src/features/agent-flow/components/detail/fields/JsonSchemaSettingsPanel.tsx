@@ -36,11 +36,19 @@ const schemaFieldTypeOptions = [
 ] satisfies Array<{ value: SchemaFieldType; label: string }>;
 
 interface SchemaFieldRow {
+  id: string;
   key: string;
   type: SchemaFieldType;
   description: string;
   required: boolean;
   children?: SchemaFieldRow[];
+}
+
+let schemaFieldRowIdSeed = 0;
+
+function createSchemaFieldRowId() {
+  schemaFieldRowIdSeed += 1;
+  return `schema-field-row-${schemaFieldRowIdSeed}`;
 }
 
 const JSON_SCHEMA_EDITOR_OPTIONS = {
@@ -118,6 +126,7 @@ function schemaRowFromProperty(
 
   if (type === 'object') {
     return {
+      id: createSchemaFieldRowId(),
       key,
       type,
       description,
@@ -130,6 +139,7 @@ function schemaRowFromProperty(
     const items = isRecord(property) ? property.items : undefined;
 
     return {
+      id: createSchemaFieldRowId(),
       key,
       type,
       description,
@@ -138,7 +148,7 @@ function schemaRowFromProperty(
     };
   }
 
-  return { key, type, description, required };
+  return { id: createSchemaFieldRowId(), key, type, description, required };
 }
 
 function schemaRowsFromSchema(schema: unknown): SchemaFieldRow[] {
@@ -486,6 +496,7 @@ export const JsonSchemaEditorContent = forwardRef<
 
   function createSchemaRow(index: number): SchemaFieldRow {
     return {
+      id: createSchemaFieldRowId(),
       key: `field_${index + 1}`,
       type: 'string',
       description: '',
@@ -747,7 +758,7 @@ export const JsonSchemaEditorContent = forwardRef<
       return (
         <div
           className="agent-flow-json-schema-settings__field-node"
-          key={`${pathLabel}-${row.key}`}
+          key={row.id}
         >
           <div
             className="agent-flow-json-schema-settings__field-row"

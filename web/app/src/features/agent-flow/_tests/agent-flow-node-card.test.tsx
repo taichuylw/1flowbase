@@ -153,6 +153,86 @@ describe('AgentFlowNodeCard', () => {
     expect(screen.queryByText('3')).not.toBeInTheDocument();
   });
 
+  test('clips rendered node content in an inner layer while floating controls stay on the shell', () => {
+    const canvasStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/canvas.css',
+      'utf8'
+    );
+
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-llm',
+              nodeType: 'llm',
+              nodeSchema: resolveAgentFlowNodeSchema('llm'),
+              typeLabel: 'LLM',
+              alias: 'LLM',
+              description: '选择并调用大语言模型',
+              config: {
+                model_provider: {
+                  provider_code: 'openai_compatible',
+                  model_id: 'gpt-4',
+                  provider_label: 'OpenAI Prod',
+                  model_label: 'GPT-4'
+                }
+              },
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              toolSourceHandles: [
+                { id: 'search_context', title: 'search_context' }
+              ],
+              isContainer: false,
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn(),
+              onRunNode: vi.fn(),
+              onReplaceNode: vi.fn(),
+              onDeleteNode: vi.fn()
+            },
+            id: 'node-llm',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    const card = screen.getByRole('button', {
+      name: /LLM OpenAI Prod GPT-4/
+    });
+    const content = card.querySelector('.agent-flow-node-card__content');
+    const quickActions = screen.getByTestId(
+      'agent-flow-node-quick-actions-node-llm'
+    );
+    const toolHandleSlot = screen.getByTestId(
+      'agent-flow-node-tool-handle-0'
+    );
+
+    expect(content).toBeInTheDocument();
+    expect(content).toContainElement(
+      card.querySelector('.agent-flow-node-card__header') as HTMLElement
+    );
+    expect(content).toContainElement(
+      card.querySelector('.agent-flow-node-card__model') as HTMLElement
+    );
+    expect(card).toContainElement(quickActions);
+    expect(content).not.toContainElement(quickActions);
+    expect(card).toContainElement(toolHandleSlot);
+    expect(content).not.toContainElement(toolHandleSlot);
+    expect(canvasStyles).toMatch(
+      /\.agent-flow-node-card\s*\{[^}]*overflow:\s*visible;/s
+    );
+    expect(canvasStyles).toMatch(
+      /\.agent-flow-node-card__content\s*\{[^}]*overflow:\s*hidden;[^}]*border-radius:\s*calc\(var\(--agent-flow-node-card-radius\)\s*-\s*1px\);/s
+    );
+  });
+
   test('renders Code nodes with a code SVG icon', () => {
     render(
       <AppProviders>

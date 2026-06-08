@@ -2,6 +2,7 @@ import { DeleteOutlined } from '@ant-design/icons';
 import { Button, Input, Select } from 'antd';
 
 import type { FlowSelectorOption } from '../../lib/selector-options';
+import { useStableListItemKeys } from '../../hooks/interactions/use-stable-list-item-keys';
 import { SelectorField } from './SelectorField';
 import { i18nText } from '../../../../shared/i18n/text';
 
@@ -31,10 +32,15 @@ export function NamedBindingsField({
   addButtonLabel = i18nText("agentFlow", "auto.add_new_variable"),
   onChange
 }: NamedBindingsFieldProps) {
+  const { itemKeys, insertItemKey, removeItemKey } = useStableListItemKeys(
+    'named-binding',
+    value.length
+  );
+
   return (
     <div className="agent-flow-binding-list">
       {value.map((entry, index) => (
-        <div key={`${entry.name}-${index}`} className="agent-flow-binding-row">
+        <div key={itemKeys[index]} className="agent-flow-binding-row">
           <div className="agent-flow-binding-row__name">
             {nameOptions ? (
               <Select
@@ -90,15 +96,19 @@ export function NamedBindingsField({
             icon={<DeleteOutlined />}
             size="small"
             type="text"
-            onClick={() =>
-              onChange(value.filter((_, itemIndex) => itemIndex !== index))
-            }
+            onClick={() => {
+              removeItemKey(index);
+              onChange(value.filter((_, itemIndex) => itemIndex !== index));
+            }}
           />
         </div>
       ))}
       <Button
         type="dashed"
-        onClick={() => onChange([...value, { name: '', selector: [] }])}
+        onClick={() => {
+          insertItemKey(value.length);
+          onChange([...value, { name: '', selector: [] }]);
+        }}
       >
         {addButtonLabel}
       </Button>

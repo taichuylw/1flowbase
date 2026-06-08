@@ -11,6 +11,7 @@ import { useRef, useState } from 'react';
 import type { FlowStartInputField } from '@1flowbase/flow-schema';
 
 import { JsonPreviewBlock } from '../../../../../shared/ui/json-preview/JsonPreviewBlock';
+import { useStableListItemKeys } from '../../../hooks/interactions/use-stable-list-item-keys';
 import {
   normalizeStartInputField,
   startSystemVariables
@@ -137,6 +138,8 @@ export function StartInputFieldsField({
   );
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const draggingIndexRef = useRef<number | null>(null);
+  const { itemKeys, insertItemKey, moveItemKey, removeItemKey } =
+    useStableListItemKeys('start-input-field', fields.length);
 
   function openAddPanel() {
     setEditing({
@@ -181,6 +184,7 @@ export function StartInputFieldsField({
     );
 
     if (editing.index === null) {
+      insertItemKey(fields.length);
       onChange([...fields, nextField]);
     } else {
       onChange(replaceAt(fields, editing.index, nextField));
@@ -201,6 +205,7 @@ export function StartInputFieldsField({
       return;
     }
 
+    moveItemKey(draggingIndex, targetIndex);
     onChange(moveItem(fields, draggingIndex, targetIndex));
     draggingIndexRef.current = null;
   }
@@ -245,7 +250,7 @@ export function StartInputFieldsField({
         <div className="agent-flow-start-input-fields__list">
           {fields.map((field, index) => (
             <div
-              key={`${field.key}-${index}`}
+              key={itemKeys[index]}
               className="agent-flow-start-input-fields__item agent-flow-node-detail__list-item"
               data-testid={`start-input-field-row-${field.key}`}
               onDragOver={(event) => event.preventDefault()}
@@ -315,11 +320,12 @@ export function StartInputFieldsField({
                 icon={<DeleteOutlined />}
                 size="small"
                 type="text"
-                onClick={() =>
+                onClick={() => {
+                  removeItemKey(index);
                   onChange(
                     fields.filter((_, fieldIndex) => fieldIndex !== index)
-                  )
-                }
+                  );
+                }}
               />
             </div>
           ))}

@@ -29,12 +29,14 @@
 
 /* ===== 节点卡片容器 ===== */
 .agent-flow-node-card {
+  --agent-flow-node-card-radius: 14px;
+
   min-width: 200px;
   padding: 0;
   position: relative;
   overflow: visible;
   border: 1px solid var(--node-accent-border, #d7e0d4);
-  border-radius: 14px;
+  border-radius: var(--agent-flow-node-card-radius);
   background: rgba(255, 255, 255, 0.98);
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.04),
@@ -44,6 +46,12 @@
     transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.25s ease,
     border-color 0.2s ease;
+}
+
+.agent-flow-node-card__content {
+  overflow: hidden;
+  border-radius: calc(var(--agent-flow-node-card-radius) - 1px);
+  background: inherit;
 }
 
 .agent-flow-node-card:hover {
