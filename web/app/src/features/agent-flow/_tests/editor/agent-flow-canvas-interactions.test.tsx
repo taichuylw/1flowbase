@@ -508,19 +508,23 @@ describe('AgentFlowCanvas interactions', () => {
     );
   });
 
-  test('routes LLM tool connector connections into mounted tool targets without graph edges', () => {
+  test('creates a composable edge from an LLM tool connector', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
-    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm', 720, 240);
+    const transformNode = createNodeDocument(
+      'template_transform',
+      'node-tool-transform',
+      720,
+      240
+    );
     const sourceLlm = document.graph.nodes.find(
       (node) => node.id === 'node-llm'
     );
-    const initialEdges = [...document.graph.edges];
 
     if (!sourceLlm) {
       throw new Error('expected default LLM node');
     }
 
-    document.graph.nodes.push(mountedLlm);
+    document.graph.nodes.push(transformNode);
     sourceLlm.config = {
       ...sourceLlm.config,
       visible_internal_llm_tools_enabled: true,
@@ -542,7 +546,7 @@ describe('AgentFlowCanvas interactions', () => {
     act(() => {
       latestReactFlowProps?.onConnect?.({
         source: 'node-llm',
-        target: 'node-mounted-llm',
+        target: 'node-tool-transform',
         sourceHandle: 'visible_internal_llm_tool:inspect_visible_context',
         targetHandle: null
       });
@@ -555,16 +559,14 @@ describe('AgentFlowCanvas interactions', () => {
     expect(nextSourceLlm?.config.visible_internal_llm_tools).toEqual([
       expect.objectContaining({
         tool_name: 'inspect_visible_context',
-        target_node_id: 'node-mounted-llm'
+        target_node_id: ''
       })
     ]);
-    expect(getState().workingDocument.graph.edges).toEqual(initialEdges);
-    expect(latestReactFlowProps?.edges).toEqual(
+    expect(getState().workingDocument.graph.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'llm-tool-node-llm-inspect_visible_context-node-mounted-llm',
           source: 'node-llm',
-          target: 'node-mounted-llm',
+          target: 'node-tool-transform',
           sourceHandle: 'visible_internal_llm_tool:inspect_visible_context',
           targetHandle: null
         })
@@ -572,7 +574,7 @@ describe('AgentFlowCanvas interactions', () => {
     );
   });
 
-  test('does not open the node picker when an LLM tool connector stops on the pane', () => {
+  test('opens the node picker when an LLM tool connector stops on the pane', async () => {
     const flowDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const sourceLlm = flowDocument.graph.nodes.find(
       (node) => node.id === 'node-llm'
@@ -612,11 +614,33 @@ describe('AgentFlowCanvas interactions', () => {
     });
 
     expect(getState().nodePickerState).toEqual({
-      open: false,
-      anchorNodeId: null,
+      open: true,
+      anchorNodeId: 'node-llm',
       anchorEdgeId: null,
-      anchorCanvasPosition: null
+      anchorCanvasPosition: { x: 420, y: 260 }
     });
+
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Template Transform' })
+    );
+
+    const insertedNode = getState().workingDocument.graph.nodes.find(
+      (node) => node.type === 'template_transform'
+    );
+
+    expect(insertedNode).toMatchObject({
+      type: 'template_transform',
+      position: { x: 609, y: 405 }
+    });
+    expect(getState().workingDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-llm',
+          target: insertedNode?.id,
+          sourceHandle: 'visible_internal_llm_tool:inspect_visible_context'
+        })
+      ])
+    );
   });
 
   test('opens the shared node picker when a dragged connection stops on the pane', () => {

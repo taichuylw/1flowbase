@@ -791,10 +791,11 @@ async fn visible_internal_llm_tool_outputs_visible_text_and_recalls_main_llm() {
     .await
     .unwrap();
 
-    assert!(matches!(
-        outcome.stop_reason,
-        ExecutionStopReason::Completed
-    ));
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "expected completed run, got {:?}",
+        outcome.stop_reason
+    );
     assert_eq!(
         outcome.variable_pool["node-answer"]["answer"],
         json!("main-before mounted-visible main-after")
@@ -828,6 +829,70 @@ async fn visible_internal_llm_tool_outputs_visible_text_and_recalls_main_llm() {
             .and_then(|tool_call| tool_call.get("id"))
             == Some(&json!("call_visible"))
     }));
+    let tool_result = captured[2]
+        .messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_visible")
+        })
+        .expect("main llm recall should include the internal tool result");
+    assert_eq!(tool_result.content, "mounted-visible ");
+}
+
+#[tokio::test]
+async fn visible_internal_llm_tool_executes_composed_connector_branch() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({ "query": "image?" }),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        final_llm_response("mounted-visible "),
+        final_llm_response("main-after"),
+    ]);
+    let plan = visible_internal_llm_tool_chain_plan();
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "describe the picture", "history": [] } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "expected completed run, got {:?}",
+        outcome.stop_reason
+    );
+    assert_eq!(
+        outcome.variable_pool["node-answer"]["answer"],
+        json!("main-before mounted-visible main-after")
+    );
+    assert!(
+        outcome
+            .node_traces
+            .iter()
+            .all(|trace| trace.node_id != "node-tool-transform"
+                && trace.node_id != "node-mounted-llm")
+    );
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 3);
+    assert_eq!(
+        captured[1].messages[0].content,
+        "Inspect transformed image?"
+    );
     let tool_result = captured[2]
         .messages
         .iter()
@@ -1045,6 +1110,9 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
             }
         }
     ]);
+    main_llm
+        .downstream_node_ids
+        .push("node-mounted-llm".to_string());
 
     plan.nodes.insert(
         "node-mounted-llm".to_string(),
@@ -1104,6 +1172,123 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
             code_runtime: None,
         },
     );
+    plan.edges.push(CompiledEdge {
+        edge_id: "edge-start-llm".to_string(),
+        source: "node-start".to_string(),
+        target: "node-llm".to_string(),
+        source_handle: None,
+        target_handle: None,
+    });
+    plan.edges.push(CompiledEdge {
+        edge_id: "edge-llm-answer".to_string(),
+        source: "node-llm".to_string(),
+        target: "node-answer".to_string(),
+        source_handle: None,
+        target_handle: None,
+    });
+    plan.edges.push(CompiledEdge {
+        edge_id: "edge-llm-visible-tool-mounted".to_string(),
+        source: "node-llm".to_string(),
+        target: "node-mounted-llm".to_string(),
+        source_handle: Some("visible_internal_llm_tool:inspect_visible_context".to_string()),
+        target_handle: None,
+    });
+
+    plan
+}
+
+fn visible_internal_llm_tool_chain_plan() -> CompiledPlan {
+    let mut plan = visible_internal_llm_tool_plan();
+    plan.topological_order = vec![
+        "node-start".to_string(),
+        "node-llm".to_string(),
+        "node-tool-transform".to_string(),
+        "node-mounted-llm".to_string(),
+        "node-answer".to_string(),
+    ];
+
+    let main_llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("main llm node should exist");
+    main_llm.config["visible_internal_llm_tools"][0]["target_node_id"] =
+        json!("node-tool-transform");
+    main_llm.downstream_node_ids =
+        vec!["node-answer".to_string(), "node-tool-transform".to_string()];
+
+    plan.nodes.insert(
+        "node-tool-transform".to_string(),
+        CompiledNode {
+            node_id: "node-tool-transform".to_string(),
+            node_type: "template_transform".to_string(),
+            alias: "Tool Transform".to_string(),
+            container_id: None,
+            dependency_node_ids: vec!["node-llm".to_string()],
+            downstream_node_ids: vec!["node-mounted-llm".to_string()],
+            bindings: BTreeMap::from([(
+                "template".to_string(),
+                CompiledBinding {
+                    kind: "templated_text".to_string(),
+                    selector_paths: vec![vec![
+                        "visible_internal_llm_tool".to_string(),
+                        "arguments".to_string(),
+                        "query".to_string(),
+                    ]],
+                    raw_value: json!("transformed {{ visible_internal_llm_tool.arguments.query }}"),
+                },
+            )]),
+            outputs: vec![CompiledOutput {
+                key: "text".to_string(),
+                title: "转换结果".to_string(),
+                value_type: "string".to_string(),
+                selector: Vec::new(),
+                json_schema: None,
+            }],
+            config: json!({}),
+            plugin_runtime: None,
+            llm_runtime: None,
+            code_runtime: None,
+        },
+    );
+
+    let mounted_llm = plan
+        .nodes
+        .get_mut("node-mounted-llm")
+        .expect("mounted llm node should exist");
+    mounted_llm.dependency_node_ids = vec!["node-tool-transform".to_string()];
+    mounted_llm.bindings = BTreeMap::from([(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec!["node-tool-transform".to_string(), "text".to_string()]],
+            raw_value: json!([
+                {
+                    "id": "mounted-user",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "Inspect {{ node-tool-transform.text }}"
+                    }
+                }
+            ]),
+        },
+    )]);
+
+    if let Some(edge) = plan
+        .edges
+        .iter_mut()
+        .find(|edge| edge.edge_id == "edge-llm-visible-tool-mounted")
+    {
+        edge.edge_id = "edge-llm-visible-tool-transform".to_string();
+        edge.target = "node-tool-transform".to_string();
+    }
+    plan.edges.push(CompiledEdge {
+        edge_id: "edge-tool-transform-mounted".to_string(),
+        source: "node-tool-transform".to_string(),
+        target: "node-mounted-llm".to_string(),
+        source_handle: None,
+        target_handle: None,
+    });
 
     plan
 }

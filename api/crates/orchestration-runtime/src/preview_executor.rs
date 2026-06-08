@@ -6,7 +6,7 @@ use crate::{
     compiled_plan::CompiledPlan,
     execution_engine::{
         execute_code_node, execute_http_request_node, execute_llm_node,
-        execute_variable_assignment_node, CodeInvoker, ExecutionRuntimeContext,
+        execute_variable_assignment_node, CapabilityInvoker, CodeInvoker, ExecutionRuntimeContext,
         HttpResponseFilePersister, ProviderInvoker,
     },
     node_errors::build_node_type_not_implemented_error_payload,
@@ -105,7 +105,7 @@ pub async fn run_node_preview<I>(
     invoker: &I,
 ) -> Result<NodePreviewOutcome>
 where
-    I: ProviderInvoker + CodeInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     run_node_preview_with_http_file_persister(plan, target_node_id, input_payload, invoker, None)
         .await
@@ -119,7 +119,7 @@ pub async fn run_node_preview_with_http_file_persister<I>(
     http_file_persister: Option<&dyn HttpResponseFilePersister>,
 ) -> Result<NodePreviewOutcome>
 where
-    I: ProviderInvoker + CodeInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let node = plan
         .nodes

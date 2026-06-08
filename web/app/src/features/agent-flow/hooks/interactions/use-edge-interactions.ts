@@ -7,7 +7,6 @@ import {
 import { isLlmToolSourceHandle } from '../../lib/llm-node-config';
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
 import {
-  connectVisibleInternalLlmTool,
   connectNodeFromSource,
   connectNodes,
   insertNodeOnEdge,
@@ -70,13 +69,9 @@ export function useEdgeInteractions() {
 
   return {
     connect(connection: Parameters<typeof connectNodes>[1]['connection']) {
-      const nextDocument = isLlmToolSourceHandle(connection.sourceHandle)
-        ? connectVisibleInternalLlmTool(document, {
-            connection
-          })
-        : connectNodes(document, {
-            connection
-          });
+      const nextDocument = connectNodes(document, {
+        connection
+      });
 
       closeNodePicker();
       clearConnectingPayload();
@@ -130,11 +125,7 @@ export function useEdgeInteractions() {
       const anchorCanvasPosition = nodePickerState.anchorCanvasPosition;
       const zoom = document.editor.viewport.zoom || 1;
 
-      if (
-        !sourceNodeId ||
-        !anchorCanvasPosition ||
-        isLlmToolSourceHandle(sourceHandleId)
-      ) {
+      if (!sourceNodeId || !anchorCanvasPosition) {
         return;
       }
 
@@ -207,15 +198,8 @@ export function useEdgeInteractions() {
     },
     finishConnectionOnPane(position: { x: number; y: number }) {
       const sourceNodeId = connectingPayloadRef.current.sourceNodeId;
-      const sourceHandleId = connectingPayloadRef.current.sourceHandleId;
 
       if (!sourceNodeId) {
-        return;
-      }
-
-      if (isLlmToolSourceHandle(sourceHandleId)) {
-        closeNodePicker();
-        clearConnectingPayload();
         return;
       }
 

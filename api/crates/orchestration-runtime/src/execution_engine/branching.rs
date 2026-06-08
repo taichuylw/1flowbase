@@ -53,6 +53,8 @@ pub fn activate_downstream_nodes(
                 }
             } else if edge.source_handle.as_deref() == Some(ERROR_BRANCH_SOURCE_HANDLE) {
                 continue;
+            } else if is_visible_internal_llm_tool_source_handle(edge.source_handle.as_deref()) {
+                continue;
             }
         }
 

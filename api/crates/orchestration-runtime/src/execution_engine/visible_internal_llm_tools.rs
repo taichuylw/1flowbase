@@ -2,6 +2,7 @@ use super::*;
 
 const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
 const VISIBLE_INTERNAL_LLM_TOOL_VARIABLE: &str = "visible_internal_llm_tool";
+const VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX: &str = "visible_internal_llm_tool:";
 const MAX_VISIBLE_INTERNAL_LLM_TOOL_ROUNDS: usize = 8;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,6 +25,12 @@ fn visible_internal_llm_tools_enabled(node: &CompiledNode) -> bool {
         .or_else(|| node.config.get("visibleInternalLlmToolsEnabled"))
         .and_then(Value::as_bool)
         == Some(true)
+}
+
+pub(super) fn is_visible_internal_llm_tool_source_handle(source_handle: Option<&str>) -> bool {
+    source_handle
+        .map(|handle| handle.starts_with(VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX))
+        .unwrap_or(false)
 }
 
 pub(super) fn visible_internal_llm_tools(node: &CompiledNode) -> Vec<VisibleInternalLlmTool> {
@@ -84,7 +91,7 @@ pub(super) async fn execute_llm_node_with_visible_internal_tools<I>(
     invoker: &I,
 ) -> Result<LlmNodeExecution>
 where
-    I: ProviderInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let tools = visible_internal_llm_tools(node);
     if tools.is_empty() {
@@ -219,27 +226,8 @@ async fn execute_visible_internal_llm_tool_call<I>(
     tool: &VisibleInternalLlmTool,
 ) -> Result<Result<VisibleInternalLlmToolOutput, Value>>
 where
-    I: ProviderInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
-    let Some(target_node) = plan.nodes.get(&tool.target_node_id) else {
-        return Ok(Err(json!({
-            "error_code": "visible_internal_llm_tool_failed",
-            "message": "visible internal LLM tool target node was not found",
-            "tool_call_id": tool_call_id(tool_call),
-            "tool_name": tool.name,
-            "target_node_id": tool.target_node_id,
-        })));
-    };
-    if target_node.node_type != "llm" {
-        return Ok(Err(json!({
-            "error_code": "visible_internal_llm_tool_failed",
-            "message": "visible internal LLM tool target must be an LLM node",
-            "tool_call_id": tool_call_id(tool_call),
-            "tool_name": tool.name,
-            "target_node_id": tool.target_node_id,
-        })));
-    }
-
     let mut tool_variable_pool = variable_pool.clone();
     tool_variable_pool.insert(
         VISIBLE_INTERNAL_LLM_TOOL_VARIABLE.to_string(),
@@ -252,59 +240,228 @@ where
                 .unwrap_or_else(|| json!({})),
         }),
     );
-    let resolved_inputs = match resolve_node_inputs(target_node, &tool_variable_pool) {
-        Ok(inputs) => inputs,
-        Err(error) => {
-            return Ok(Err(json!({
-                "error_code": "visible_internal_llm_tool_failed",
-                "message": "visible internal LLM tool input resolution failed",
-                "runtime_message": error.to_string(),
-                "tool_call_id": tool_call_id(tool_call),
-                "tool_name": tool.name,
-                "target_node_id": tool.target_node_id,
-            })));
-        }
-    };
-    let rendered_templates = render_templated_bindings(target_node, &resolved_inputs);
-    let execution = execute_llm_node_provider_round(
-        target_node,
-        &resolved_inputs,
-        &rendered_templates,
-        &tool_variable_pool,
+
+    execute_visible_internal_llm_tool_branch(
+        plan,
+        tool_variable_pool,
         runtime_context,
         invoker,
+        tool_call,
+        tool,
     )
-    .await?;
+    .await
+}
 
-    if let Some(error_payload) = execution.error_payload {
+async fn execute_visible_internal_llm_tool_branch<I>(
+    plan: &CompiledPlan,
+    mut variable_pool: Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
+    invoker: &I,
+    tool_call: &Value,
+    tool: &VisibleInternalLlmTool,
+) -> Result<Result<VisibleInternalLlmToolOutput, Value>>
+where
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
+{
+    if !plan.nodes.contains_key(&tool.target_node_id) {
         return Ok(Err(json!({
             "error_code": "visible_internal_llm_tool_failed",
-            "message": "visible internal LLM tool target invocation failed",
+            "message": "visible internal LLM tool branch entry node was not found",
             "tool_call_id": tool_call_id(tool_call),
             "tool_name": tool.name,
             "target_node_id": tool.target_node_id,
-            "details": error_payload,
         })));
     }
-    if output_tool_calls(&execution.output_payload).is_some() {
-        return Ok(Err(json!({
-            "error_code": "visible_internal_llm_tool_failed",
-            "message": "visible internal LLM tool target cannot request external tool callbacks",
-            "tool_call_id": tool_call_id(tool_call),
-            "tool_name": tool.name,
-            "target_node_id": tool.target_node_id,
-        })));
+
+    let mut active_node_ids = BTreeSet::from([tool.target_node_id.clone()]);
+    let mut provider_events = Vec::new();
+    let mut branch_text = String::new();
+
+    for node_id in &plan.topological_order {
+        if !active_node_ids.contains(node_id) {
+            continue;
+        }
+        let Some(node) = plan.nodes.get(node_id) else {
+            continue;
+        };
+        let resolved_inputs = match resolve_node_inputs(node, &variable_pool) {
+            Ok(inputs) => inputs,
+            Err(error) => {
+                return Ok(Err(visible_internal_llm_tool_node_error(
+                    tool_call,
+                    tool,
+                    node,
+                    "visible internal LLM tool input resolution failed",
+                    Some(error.to_string()),
+                    None,
+                )));
+            }
+        };
+        let rendered_templates = render_templated_bindings(node, &resolved_inputs);
+        let output_payload = match execute_visible_internal_llm_tool_node(
+            node,
+            &resolved_inputs,
+            &rendered_templates,
+            &mut variable_pool,
+            runtime_context,
+            invoker,
+            &mut provider_events,
+        )
+        .await?
+        {
+            Ok(output_payload) => output_payload,
+            Err(error_payload) => {
+                return Ok(Err(visible_internal_llm_tool_node_error(
+                    tool_call,
+                    tool,
+                    node,
+                    "visible internal LLM tool branch node failed",
+                    None,
+                    Some(error_payload),
+                )));
+            }
+        };
+
+        branch_text = visible_internal_llm_tool_output_text(&output_payload);
+        variable_pool.insert(
+            node.node_id.clone(),
+            project_node_variable_payload(node, &output_payload)?,
+        );
+        activate_downstream_nodes(plan, &mut active_node_ids, node, None);
     }
 
     Ok(Ok(VisibleInternalLlmToolOutput {
-        text: execution
-            .output_payload
-            .get("text")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
-        provider_events: execution.provider_events,
+        text: branch_text,
+        provider_events,
     }))
+}
+
+async fn execute_visible_internal_llm_tool_node<I>(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    rendered_templates: &Map<String, Value>,
+    variable_pool: &mut Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
+    invoker: &I,
+    provider_events: &mut Vec<ProviderStreamEvent>,
+) -> Result<Result<Value, Value>>
+where
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
+{
+    match node.node_type.as_str() {
+        "llm" => {
+            let execution = execute_llm_node_provider_round(
+                node,
+                resolved_inputs,
+                rendered_templates,
+                variable_pool,
+                runtime_context,
+                invoker,
+            )
+            .await?;
+            provider_events.extend(execution.provider_events);
+            if let Some(error_payload) = execution.error_payload {
+                return Ok(Err(error_payload));
+            }
+            if output_tool_calls(&execution.output_payload).is_some() {
+                return Ok(Err(json!({
+                    "message": "visible internal LLM tool branch LLM cannot request tool callbacks"
+                })));
+            }
+
+            Ok(Ok(execution.output_payload))
+        }
+        "template_transform" | "answer" => {
+            let output_key = first_output_key(node);
+            let output_value = rendered_templates
+                .values()
+                .next()
+                .cloned()
+                .unwrap_or_else(|| {
+                    resolved_inputs
+                        .values()
+                        .next()
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                });
+            Ok(Ok(template_output_payload(
+                node,
+                output_key,
+                output_value,
+                variable_pool,
+            )))
+        }
+        "code" => {
+            let execution = execute_code_node(node, resolved_inputs, invoker).await?;
+            if let Some(error_payload) = execution.error_payload {
+                return Ok(Err(error_payload));
+            }
+
+            Ok(Ok(execution.output_payload))
+        }
+        "http_request" => {
+            let execution =
+                execute_http_request_node(node, resolved_inputs, variable_pool, None).await?;
+            if let Some(error_payload) = execution.error_payload {
+                return Ok(Err(error_payload));
+            }
+
+            Ok(Ok(execution.output_payload))
+        }
+        "plugin_node" => {
+            let execution =
+                execute_capability_plugin_node(node, resolved_inputs, rendered_templates, invoker)
+                    .await?;
+            if let Some(error_payload) = execution.error_payload {
+                return Ok(Err(error_payload));
+            }
+
+            Ok(Ok(execution.output_payload))
+        }
+        "variable_assigner" => Ok(Ok(execute_variable_assignment_node(
+            node,
+            resolved_inputs,
+            variable_pool,
+        )?)),
+        unsupported => Ok(Err(json!({
+            "message": format!("visible internal LLM tool branch node type {unsupported} is not supported"),
+        }))),
+    }
+}
+
+fn visible_internal_llm_tool_node_error(
+    tool_call: &Value,
+    tool: &VisibleInternalLlmTool,
+    node: &CompiledNode,
+    message: &str,
+    runtime_message: Option<String>,
+    details: Option<Value>,
+) -> Value {
+    json!({
+        "error_code": "visible_internal_llm_tool_failed",
+        "message": message,
+        "runtime_message": runtime_message,
+        "tool_call_id": tool_call_id(tool_call),
+        "tool_name": tool.name,
+        "target_node_id": tool.target_node_id,
+        "node_id": node.node_id,
+        "details": details,
+    })
+}
+
+fn visible_internal_llm_tool_output_text(output_payload: &Value) -> String {
+    output_payload
+        .get("text")
+        .or_else(|| output_payload.get("answer"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| {
+            output_payload
+                .as_object()
+                .and_then(|object| object.values().find_map(Value::as_str))
+                .map(str::to_string)
+        })
+        .unwrap_or_default()
 }
 
 fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternalLlmTool> {

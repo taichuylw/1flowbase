@@ -18,7 +18,8 @@ use crate::{
         CompiledNode, CompiledOutput, CompiledPlan,
     },
     execution_engine::{
-        CodeInvocationOutput, CodeInvoker, ProviderInvocationOutput, ProviderInvoker,
+        CapabilityInvocationOutput, CapabilityInvoker, CodeInvocationOutput, CodeInvoker,
+        ProviderInvocationOutput, ProviderInvoker,
     },
     preview_executor,
 };
@@ -78,6 +79,18 @@ impl CodeInvoker for StubPreviewInvoker {
             output_payload: json!({ "result": input_payload["query"] }),
             console_logs: Vec::new(),
         })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for StubPreviewInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &crate::compiled_plan::CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("preview executor tests do not execute capability nodes")
     }
 }
 

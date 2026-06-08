@@ -46,7 +46,7 @@ fn compile_collects_provider_compile_issues() {
 }
 
 #[test]
-fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_dependency() {
+fn compile_visible_internal_llm_tool_entry_from_source_handle_edge() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
@@ -55,7 +55,6 @@ fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_depende
             "type": "visible_internal_llm_tool",
             "tool_name": "inspect_visible_context",
             "connector_id": "inspect_visible_context",
-            "target_node_id": "node-mounted-llm",
             "input_schema": { "type": "object" }
         }
     ]);
@@ -93,6 +92,17 @@ fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_depende
             },
             "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
         }));
+    document["graph"]["edges"]
+        .as_array_mut()
+        .expect("sample graph edges should be an array")
+        .push(json!({
+            "id": "edge-llm-visible-tool-mounted",
+            "source": "node-llm",
+            "target": "node-mounted-llm",
+            "sourceHandle": "visible_internal_llm_tool:inspect_visible_context",
+            "targetHandle": null,
+            "containerId": null
+        }));
 
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
     let main_llm = plan.nodes.get("node-llm").expect("main llm should compile");
@@ -106,15 +116,22 @@ fn compile_visible_internal_llm_tool_attachment_does_not_create_topology_depende
         main_llm.config["visible_internal_llm_tools"][0]["target_node_id"],
         json!("node-mounted-llm")
     );
-    assert_eq!(plan.edges.len(), 1);
-    assert!(!main_llm
+    assert!(plan.edges.iter().any(|edge| {
+        edge.source == "node-llm"
+            && edge.target == "node-mounted-llm"
+            && edge.source_handle.as_deref()
+                == Some("visible_internal_llm_tool:inspect_visible_context")
+    }));
+    assert!(main_llm
         .downstream_node_ids
         .contains(&"node-mounted-llm".to_string()));
-    assert!(mounted_llm.dependency_node_ids.is_empty());
+    assert!(mounted_llm
+        .dependency_node_ids
+        .contains(&"node-llm".to_string()));
 }
 
 #[test]
-fn compile_flags_invalid_visible_internal_llm_tool_target() {
+fn compile_flags_visible_internal_llm_tool_without_connector_edge() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
@@ -123,7 +140,6 @@ fn compile_flags_invalid_visible_internal_llm_tool_target() {
             "type": "visible_internal_llm_tool",
             "tool_name": "inspect_visible_context",
             "connector_id": "inspect_visible_context",
-            "target_node_id": "node-start",
             "input_schema": { "type": "object" }
         }
     ]);

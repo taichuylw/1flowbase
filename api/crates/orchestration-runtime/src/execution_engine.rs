@@ -908,7 +908,7 @@ pub async fn execute_llm_node<I>(
     invoker: &I,
 ) -> Result<LlmNodeExecution>
 where
-    I: ProviderInvoker + ?Sized,
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     execute_llm_node_with_visible_internal_tools(
         plan,
