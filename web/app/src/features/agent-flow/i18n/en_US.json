@@ -32,6 +32,7 @@
     "mount_tools": "Mount tools",
     "input_schema": "Input Schema",
     "input_parameters": "Input parameters",
+    "tool_call_arguments": "Tool call arguments",
     "connector_id": "Connector ID",
     "tool_connector": "tool connector",
     "tool_registration": "Tool registration",

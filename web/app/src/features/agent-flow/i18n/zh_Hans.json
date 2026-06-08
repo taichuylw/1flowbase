@@ -32,6 +32,7 @@
     "mount_tools": "挂载工具",
     "input_schema": "输入 Schema",
     "input_parameters": "输入参数",
+    "tool_call_arguments": "工具调用参数",
     "connector_id": "连接器标识",
     "tool_connector": "工具连接器",
     "tool_registration": "工具注册",
