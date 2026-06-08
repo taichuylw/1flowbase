@@ -555,6 +555,10 @@ test("quality gate action isolates middleware postgres per gate scope", () => {
   );
   assert.match(
     action,
+    /DATABASE_URL="\$\{DATABASE_URL:-\$API_DATABASE_URL\}"/u,
+  );
+  assert.match(
+    action,
     /quality-gate-postgres-cleanup/u,
   );
   assert.match(
