@@ -1039,6 +1039,12 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
 
   const toolingCommands = [
     {
+      label: 'repo-gate-router',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'gate-router'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-hygiene',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'repo-hygiene'],

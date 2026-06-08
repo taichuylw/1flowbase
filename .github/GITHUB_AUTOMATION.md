@@ -33,13 +33,14 @@ The `repo-frontend-pr` scope runs web lint, a compact frontend PR smoke suite, a
 build. Full app Vitest, page regression, style-boundary, React Doctor, coverage, and backend
 consistency evidence stay in nightly or manual full quality gates.
 
-The `repo-tooling` scope includes `repo-hygiene`, which writes
-`tmp/test-governance/repo-hygiene.json` with debt-marker, weak-assertion,
-duplicate-test-title, file-size, and directory-pressure findings. It also runs
-`security-risk`, which writes `tmp/test-governance/security-risk.json` for changed
-dependency, lockfile, communication, CI, Docker, deploy, proxy, plugin, and runtime
-execution-path risks. Advisory findings remain warnings; focused tests still fail
-the repo gate.
+The `repo-tooling` scope starts with `gate-router`, a non-blocking advisory that
+prints related quality gate suggestions for the current branch diff. It also
+includes `repo-hygiene`, which writes `tmp/test-governance/repo-hygiene.json`
+with debt-marker, weak-assertion, duplicate-test-title, file-size, and
+directory-pressure findings. It also runs `security-risk`, which writes
+`tmp/test-governance/security-risk.json` for changed dependency, lockfile,
+communication, CI, Docker, deploy, proxy, plugin, and runtime execution-path
+risks. Advisory findings remain warnings; focused tests still fail the repo gate.
 
 React Doctor is no longer an automatic PR merge blocker. Run it from a nightly or manual full quality gate when you need structural frontend debt evidence:
 

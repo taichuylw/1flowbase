@@ -6,10 +6,16 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../verify-repo.js');
 
-test('buildCommands composes hygiene, i18n hygiene, security risk, script tests, contract tests, frontend gates and backend verify gate', () => {
+test('buildCommands composes gate router, hygiene, i18n hygiene, security risk, script tests, contract tests, frontend gates and backend verify gate', () => {
   const repoRoot = '/repo-root';
 
   assert.deepEqual(buildCommands({ repoRoot }), [
+    {
+      label: 'repo-gate-router',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'gate-router'],
+      cwd: repoRoot,
+    },
     {
       label: 'repo-hygiene',
       command: process.execPath,
@@ -66,7 +72,14 @@ test('buildCommands can select repository gate slices for parallel CI jobs', () 
 
   assert.deepEqual(
     buildCommands({ repoRoot, target: 'tooling' }).map((command) => command.label),
-    ['repo-hygiene', 'repo-i18n-hygiene', 'repo-security-risk', 'repo-script-tests', 'repo-contract-tests']
+    [
+      'repo-gate-router',
+      'repo-hygiene',
+      'repo-i18n-hygiene',
+      'repo-security-risk',
+      'repo-script-tests',
+      'repo-contract-tests',
+    ]
   );
   assert.deepEqual(
     buildCommands({ repoRoot, target: 'frontend' }).map((command) => command.label),
@@ -103,10 +116,11 @@ test('main runs repository full gate in order and captures advisory output', asy
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 8);
+  assert.equal(calls.length, 9);
   assert.deepEqual(
     calls.map((call) => call.args),
     [
+      [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'gate-router'],
       [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'repo-hygiene'],
       [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'i18n-hygiene'],
       [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'security-risk'],
@@ -121,6 +135,7 @@ test('main runs repository full gate in order and captures advisory output', asy
   const warningLogPath = path.join(repoRoot, 'tmp', 'test-governance', 'verify-repo.warnings.log');
   assert.equal(fs.existsSync(warningLogPath), true);
   const warningLog = fs.readFileSync(warningLogPath, 'utf8');
+  assert.match(warningLog, /warning: .*tooling\.js\/gate-router advisory/u);
   assert.match(warningLog, /warning: .*tooling\.js\/repo-hygiene advisory/u);
   assert.match(warningLog, /warning: .*tooling\.js\/i18n-hygiene advisory/u);
   assert.match(warningLog, /warning: .*tooling\.js\/security-risk advisory/u);
@@ -187,7 +202,7 @@ test('main passes the inherited lock token through every repository gate command
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 8);
+  assert.equal(calls.length, 9);
   assert.equal(calls[0].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[1].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[2].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
@@ -196,6 +211,7 @@ test('main passes the inherited lock token through every repository gate command
   assert.equal(calls[5].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[6].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
   assert.equal(calls[7].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
+  assert.equal(calls[8].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
 });
 
 test('main routes the repository gate through the heavy managed runner', async () => {

@@ -101,6 +101,20 @@ test('tooling index dispatches security-risk subcommand', async () => {
   assert.deepEqual(capturedArgv, ['origin/latest']);
 });
 
+test('tooling index dispatches gate-router subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['gate-router', '--staged'], {
+    runGateRouterImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--staged']);
+});
+
 test('tooling index passes subcommand help through to the subcommand', async () => {
   let capturedArgv = null;
 
