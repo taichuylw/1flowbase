@@ -339,14 +339,15 @@ where
                     .await;
                 }
 
-                if let Some(wait) =
+                let pending_callback = execution.pending_callback.clone().or_else(|| {
                     orchestration_runtime::execution_engine::build_llm_tool_callback_wait(
                         node,
                         &resolved_inputs,
                         &variable_pool,
                         &execution.output_payload,
                     )
-                {
+                });
+                if let Some(wait) = pending_callback {
                     let checkpoint_variable_pool = wait.checkpoint_variable_pool.clone();
                     ensure_node_run_transition(
                         domain::NodeRunStatus::Running,
@@ -400,7 +401,7 @@ where
                             status: "waiting_callback".to_string(),
                             reason: "等待 LLM 工具回调".to_string(),
                             locator_payload: CheckpointLocatorPayload::from_runtime_position(
-                                &node.node_id,
+                                &wait.node_id,
                                 node_index,
                                 orchestration_runtime::execution_engine::branching::checkpoint_active_node_ids(
                                     &active_node_ids,
@@ -437,7 +438,7 @@ where
                         debug_stream_events::waiting_callback_with_task(
                             flow_run.id,
                             node_run.id,
-                            &node.node_id,
+                            &wait.node_id,
                             &callback_task,
                         ),
                     )

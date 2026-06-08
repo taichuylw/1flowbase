@@ -7,6 +7,8 @@ pub fn build_llm_tool_callback_wait(
     output_payload: &Value,
 ) -> Option<LlmToolCallbackWait> {
     has_pending_tool_calls(output_payload).then(|| LlmToolCallbackWait {
+        node_id: node.node_id.clone(),
+        node_alias: node.alias.clone(),
         request_payload: build_llm_tool_callback_request_payload(
             node,
             resolved_inputs,
@@ -19,6 +21,7 @@ pub fn build_llm_tool_callback_wait(
             variable_pool,
             output_payload,
         ),
+        node_trace: None,
     })
 }
 
@@ -163,6 +166,7 @@ pub(super) fn append_llm_tool_result_messages(
         .map(ToOwned::to_owned);
     let provider_route = state.get("provider_route").cloned();
     let provider_metadata = state.get("provider_metadata").cloned();
+    let visible_internal_transcript = state.get("visible_internal_llm_tool_transcript").cloned();
     let pending_tool_calls = state
         .get("pending_tool_calls")
         .and_then(Value::as_array)
@@ -274,6 +278,12 @@ pub(super) fn append_llm_tool_result_messages(
     if !delta_messages.is_empty() {
         callback_state.insert("delta_messages".to_string(), Value::Array(delta_messages));
     }
+    if let Some(visible_internal_transcript) = visible_internal_transcript {
+        callback_state.insert(
+            "visible_internal_llm_tool_transcript".to_string(),
+            visible_internal_transcript,
+        );
+    }
     let mut node_state = Map::new();
     node_state.insert(
         LLM_TOOL_CALLBACK_STATE_KEY.to_string(),
@@ -317,6 +327,34 @@ pub(super) fn pending_llm_tool_callback_history(
         .get("history")?
         .as_array()
         .cloned()
+}
+
+pub(super) fn pending_llm_tool_callback_visible_internal_transcript(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+) -> Option<String> {
+    pending_llm_tool_callback_state(variable_pool, &node.node_id)?
+        .get("visible_internal_llm_tool_transcript")?
+        .as_str()
+        .map(str::to_string)
+}
+
+pub(super) fn set_pending_llm_tool_callback_visible_internal_transcript(
+    variable_pool: &mut Map<String, Value>,
+    node_id: &str,
+    transcript: String,
+) -> Result<()> {
+    let state = variable_pool
+        .get_mut(node_id)
+        .and_then(Value::as_object_mut)
+        .and_then(|node_state| node_state.get_mut(LLM_TOOL_CALLBACK_STATE_KEY))
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| anyhow!("llm tool callback state not found for {node_id}"))?;
+    state.insert(
+        "visible_internal_llm_tool_transcript".to_string(),
+        Value::String(transcript),
+    );
+    Ok(())
 }
 
 pub(super) fn pending_llm_tool_callback_delta_messages(

@@ -109,6 +109,7 @@ pub(super) fn build_failed_llm_execution(
         metrics_payload: built.metrics_payload,
         debug_payload: built.debug_payload,
         provider_events,
+        pending_callback: None,
     })
 }
 
@@ -206,6 +207,7 @@ pub(super) fn build_successful_llm_execution(
         metrics_payload: built.metrics_payload,
         debug_payload: built.debug_payload,
         provider_events,
+        pending_callback: None,
     })
 }
 

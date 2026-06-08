@@ -126,6 +126,7 @@ pub struct LlmNodeExecution {
     pub metrics_payload: Value,
     pub debug_payload: Value,
     pub provider_events: Vec<ProviderStreamEvent>,
+    pub pending_callback: Option<LlmToolCallbackWait>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -138,8 +139,11 @@ pub struct CapabilityNodeExecution {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LlmToolCallbackWait {
+    pub node_id: String,
+    pub node_alias: String,
     pub request_payload: Value,
     pub checkpoint_variable_pool: Map<String, Value>,
+    pub node_trace: Option<NodeExecutionTrace>,
 }
 
 pub async fn start_flow_debug_run<I>(
@@ -178,6 +182,68 @@ where
 
     if pending_llm_tool_callback_state(&variable_pool, waiting_node_id).is_some() {
         append_llm_tool_result_messages(&mut variable_pool, waiting_node_id, resume_payload)?;
+        if has_visible_internal_llm_tool_callback_state(&variable_pool) {
+            match resume_visible_internal_llm_tool_callback(
+                plan,
+                waiting_node_id,
+                variable_pool,
+                &runtime_context,
+                invoker,
+            )
+            .await?
+            {
+                VisibleInternalLlmToolResume::Ready(variable_pool) => {
+                    return execute_from(
+                        plan,
+                        checkpoint.next_node_index,
+                        variable_pool,
+                        Some(checkpoint.active_node_ids.iter().cloned().collect()),
+                        &runtime_context,
+                        invoker,
+                    )
+                    .await;
+                }
+                VisibleInternalLlmToolResume::Waiting(wait) => {
+                    let checkpoint_variable_pool = wait.checkpoint_variable_pool.clone();
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::WaitingCallback(PendingCallbackTask {
+                            node_id: wait.node_id.clone(),
+                            node_alias: wait.node_alias.clone(),
+                            callback_kind: LLM_TOOL_CALLBACK_KIND.to_string(),
+                            request_payload: wait.request_payload,
+                        }),
+                        variable_pool: checkpoint_variable_pool.clone(),
+                        checkpoint_snapshot: Some(CheckpointSnapshot {
+                            next_node_index: checkpoint.next_node_index,
+                            variable_pool: checkpoint_variable_pool,
+                            active_node_ids: checkpoint.active_node_ids.clone(),
+                        }),
+                        node_traces: wait.node_trace.into_iter().collect(),
+                    });
+                }
+                VisibleInternalLlmToolResume::Failed {
+                    node_id,
+                    node_alias,
+                    execution,
+                } => {
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                            node_id,
+                            node_alias,
+                            error_payload: execution.error_payload.clone().unwrap_or_else(|| {
+                                json!({
+                                    "error_code": "visible_internal_llm_tool_failed",
+                                    "message": "visible internal LLM tool branch node failed"
+                                })
+                            }),
+                        }),
+                        variable_pool: Map::new(),
+                        checkpoint_snapshot: None,
+                        node_traces: Vec::new(),
+                    });
+                }
+            }
+        }
         return execute_from(
             plan,
             checkpoint.next_node_index,
@@ -563,16 +629,22 @@ where
                     continue;
                 }
 
-                if let Some(wait) = build_llm_tool_callback_wait(
-                    node,
-                    &resolved_inputs,
-                    &variable_pool,
-                    &execution.output_payload,
-                ) {
+                let pending_callback = execution.pending_callback.or_else(|| {
+                    build_llm_tool_callback_wait(
+                        node,
+                        &resolved_inputs,
+                        &variable_pool,
+                        &execution.output_payload,
+                    )
+                });
+                if let Some(wait) = pending_callback {
+                    if let Some(trace) = wait.node_trace.clone() {
+                        node_traces.push(trace);
+                    }
                     return Ok(FlowDebugExecutionOutcome {
                         stop_reason: ExecutionStopReason::WaitingCallback(PendingCallbackTask {
-                            node_id: node.node_id.clone(),
-                            node_alias: node.alias.clone(),
+                            node_id: wait.node_id.clone(),
+                            node_alias: wait.node_alias.clone(),
                             callback_kind: LLM_TOOL_CALLBACK_KIND.to_string(),
                             request_payload: wait.request_payload,
                         }),
