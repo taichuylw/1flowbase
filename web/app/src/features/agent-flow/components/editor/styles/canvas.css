@@ -229,6 +229,6 @@
   width: 14px;
   height: 14px;
   transform: translateX(-50%);
-  pointer-events: auto;
+  pointer-events: none;
   z-index: 12;
 }

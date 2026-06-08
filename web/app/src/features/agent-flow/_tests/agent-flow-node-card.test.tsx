@@ -250,6 +250,10 @@ describe('AgentFlowNodeCard', () => {
   });
 
   test('renders LLM tool registrations as bottom edge handles with hover labels', async () => {
+    const canvasStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/canvas.css',
+      'utf8'
+    );
     const canvasControlStyles = readFileSync(
       'src/features/agent-flow/components/editor/styles/canvas-controls.css',
       'utf8'
@@ -323,13 +327,24 @@ describe('AgentFlowNodeCard', () => {
     const firstToolHandleSlot = screen.getByTestId(
       'agent-flow-node-tool-handle-0'
     );
+    const mainSourceConnector = screen.getByRole('button', {
+      name: '在 LLM 后新增节点'
+    });
     const card = screen.getByRole('button', {
       name: /LLM OpenAI Prod GPT-4/
     });
 
     expect(toolConnectors).toHaveLength(2);
+    expect(mainSourceConnector).toHaveClass('agent-flow-node-handle--source');
+    expect(mainSourceConnector).not.toHaveClass('agent-flow-node-handle--tool');
     expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
     expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'true');
+    expect(canvasStyles).toMatch(
+      /\.agent-flow-node-card__tool-handle\s*\{[^}]*pointer-events:\s*none;/s
+    );
+    expect(canvasControlStyles).toMatch(
+      /\.agent-flow-node-handle--tool\.react-flow__handle\s*\{[^}]*pointer-events:\s*auto;/s
+    );
     expect(canvasControlStyles).toContain(
       '.agent-flow-node-handle--tool.react-flow__handle:hover'
     );
@@ -343,9 +358,7 @@ describe('AgentFlowNodeCard', () => {
     ).toBe(toolConnectors[0]);
     fireEvent.mouseEnter(toolConnectors[0]);
     expect(await screen.findByText('search_context')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: '在 LLM 后新增节点' })
-    ).toBeInTheDocument();
+    expect(mainSourceConnector).toBeInTheDocument();
   });
 
   test('routes If / Else branch handles through picker open and insert callbacks', async () => {
