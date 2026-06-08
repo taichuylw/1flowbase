@@ -31,6 +31,7 @@ use crate::stdio_runtime::{
 
 type ProviderWorkerHandle = Arc<Mutex<ProviderWorker>>;
 type ProviderWorkerRegistry = Arc<StdMutex<HashMap<String, ProviderWorkerHandle>>>;
+type ProviderLiveEvents = Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoadedProviderSummary {
@@ -170,6 +171,17 @@ impl ActiveProviderStreamRecord {
 struct ActiveProviderInvocationLease {
     provider_pool_key: String,
     _permit: OwnedSemaphorePermit,
+}
+
+struct PreparedProviderStreamInvocation {
+    loaded: LoadedProviderPackage,
+    provider_workers: ProviderWorkerRegistry,
+    active_streams: Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
+    active_invocation_leases: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
+    invocation_id: String,
+    plugin_id: String,
+    input: ProviderInvocationInput,
+    live_events: ProviderLiveEvents,
 }
 
 impl Drop for ActiveProviderInvocationLease {
@@ -421,7 +433,7 @@ impl ProviderHost {
         &self,
         plugin_id: &str,
         input: ProviderInvocationInput,
-        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+        live_events: ProviderLiveEvents,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
         self.invoke_stream_with_live_events_operation(plugin_id, input, live_events)?
             .await
@@ -431,7 +443,7 @@ impl ProviderHost {
         &self,
         plugin_id: &str,
         input: ProviderInvocationInput,
-        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+        live_events: ProviderLiveEvents,
     ) -> FrameworkResult<
         impl std::future::Future<Output = FrameworkResult<ProviderInvokeStreamOutput>> + Send + 'static,
     > {
@@ -445,7 +457,7 @@ impl ProviderHost {
         let invocation_id = format!("{plugin_id}:{sequence}");
         let plugin_id = plugin_id.to_string();
         Ok(async move {
-            Self::invoke_stream_prepared(
+            Self::invoke_stream_prepared(PreparedProviderStreamInvocation {
                 loaded,
                 provider_workers,
                 active_streams,
@@ -454,7 +466,7 @@ impl ProviderHost {
                 plugin_id,
                 input,
                 live_events,
-            )
+            })
             .await
         })
     }
@@ -582,15 +594,19 @@ impl ProviderHost {
     }
 
     async fn invoke_stream_prepared(
-        loaded: LoadedProviderPackage,
-        provider_workers: ProviderWorkerRegistry,
-        active_streams: Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
-        active_invocation_leases: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
-        invocation_id: String,
-        plugin_id: String,
-        input: ProviderInvocationInput,
-        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+        invocation: PreparedProviderStreamInvocation,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
+        let PreparedProviderStreamInvocation {
+            loaded,
+            provider_workers,
+            active_streams,
+            active_invocation_leases,
+            invocation_id,
+            plugin_id,
+            input,
+            live_events,
+        } = invocation;
+
         let _lease =
             Self::acquire_active_invocation_lease(&active_invocation_leases, &input).await?;
         Self::register_active_stream(&active_streams, invocation_id.clone(), &plugin_id, &input)
