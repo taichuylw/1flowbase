@@ -68,7 +68,32 @@ runs:
           scope_slug="quality-gate"
         fi
         scope_hash="$(printf '%s' "$scope_slug" | cksum | awk '{ print $1 }')"
-        postgres_port="${QUALITY_GATE_POSTGRES_PORT:-$((36000 + (scope_hash % 2000)))}"
+        postgres_port_start="$((20000 + (scope_hash % 8000)))"
+        if [ -n "${QUALITY_GATE_POSTGRES_PORT:-}" ]; then
+          postgres_port="$QUALITY_GATE_POSTGRES_PORT"
+        else
+          postgres_port="$(
+            POSTGRES_PORT_START="$postgres_port_start" python3 - <<'PY'
+        import os
+        import socket
+        import sys
+
+        start = int(os.environ["POSTGRES_PORT_START"])
+        candidates = list(range(start, 28000)) + list(range(20000, start))
+        for port in candidates:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                try:
+                    sock.bind(("127.0.0.1", port))
+                except OSError:
+                    continue
+                print(port)
+                break
+        else:
+            print("no free quality gate postgres port found", file=sys.stderr)
+            sys.exit(1)
+        PY
+          )"
+        fi
         compose_project_name="${QUALITY_GATE_COMPOSE_PROJECT_NAME:-qg-${scope_slug}-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}}"
         postgres_data_dir="${POSTGRES_DATA_DIR:-${RUNNER_TEMP:-$PWD/tmp}/1flowbase-postgres-${compose_project_name}}"
 

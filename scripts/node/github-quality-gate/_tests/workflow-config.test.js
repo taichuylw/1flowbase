@@ -531,7 +531,23 @@ test("quality gate action isolates middleware postgres per gate scope", () => {
   );
   assert.match(
     action,
-    /postgres_port="\$\{QUALITY_GATE_POSTGRES_PORT:-\$\(\(36000 \+ \(scope_hash % 2000\)\)\)\}"/u,
+    /postgres_port_start="\$\(\(20000 \+ \(scope_hash % 8000\)\)\)"/u,
+  );
+  assert.match(
+    action,
+    /if \[ -n "\$\{QUALITY_GATE_POSTGRES_PORT:-\}" \]; then/u,
+  );
+  assert.match(
+    action,
+    /POSTGRES_PORT_START="\$postgres_port_start" python3 - <<'PY'/u,
+  );
+  assert.match(
+    action,
+    /list\(range\(start, 28000\)\) \+ list\(range\(20000, start\)\)/u,
+  );
+  assert.match(
+    action,
+    /sock\.bind\(\("127\.0\.0\.1", port\)\)/u,
   );
   assert.match(
     action,
