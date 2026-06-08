@@ -325,3 +325,49 @@ async fn orchestration_runtime_rejects_content_blocks_when_selected_model_is_not
         Some(ControlPlaneError::Conflict("model_multimodal_unsupported"))
     ));
 }
+
+#[test]
+fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
+    let mut input = ProviderInvocationInput {
+        messages: vec![
+            ProviderMessage {
+                role: ProviderMessageRole::User,
+                content: "Describe image".to_string(),
+                name: None,
+                tool_call_id: None,
+                tool_calls: None,
+                content_blocks: None,
+            },
+            ProviderMessage {
+                role: ProviderMessageRole::Tool,
+                content: String::new(),
+                name: Some("Read".to_string()),
+                tool_call_id: Some("call_read".to_string()),
+                tool_calls: None,
+                content_blocks: Some(json!([
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "aW1hZ2U="
+                        }
+                    }
+                ])),
+            },
+        ],
+        ..ProviderInvocationInput::default()
+    };
+
+    provider_invoker::textualize_tool_result_content_blocks_for_text_model(&mut input);
+
+    let tool_message = &input.messages[1];
+    assert!(tool_message.content_blocks.is_none());
+    assert!(tool_message
+        .content
+        .contains("\"error_code\":\"tool_result_media_unsupported\""));
+    assert!(tool_message
+        .content
+        .contains("\"media_type\":\"image/png\""));
+    assert!(!tool_message.content.contains("aW1hZ2U="));
+}

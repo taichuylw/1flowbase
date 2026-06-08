@@ -498,17 +498,17 @@ fn anthropic_blocks_have_visible_user_text(blocks: &[Value]) -> bool {
 
 fn history_content_blocks(role: &str, content: &Value) -> Option<Value> {
     let blocks = content.as_array()?;
-    let should_keep_text_blocks = blocks.iter().any(|block| {
+    let has_direct_media_blocks = blocks.iter().any(|block| {
         matches!(
             block.get("type").and_then(Value::as_str),
-            Some("image" | "document" | "tool_use" | "server_tool_use" | "tool_result")
+            Some("image" | "document")
         )
     });
     let blocks = blocks
         .iter()
         .filter_map(|block| match block.get("type").and_then(Value::as_str) {
             Some("thinking" | "redacted_thinking") => None,
-            Some("text") if should_keep_text_blocks => {
+            Some("text") if has_direct_media_blocks => {
                 let sanitized = sanitize_anthropic_compat_text(
                     role,
                     block
@@ -521,7 +521,8 @@ fn history_content_blocks(role: &str, content: &Value) -> Option<Value> {
                 Some(Value::Object(block))
             }
             Some("text") => None,
-            _ => Some(block.clone()),
+            Some("image" | "document") => Some(block.clone()),
+            _ => None,
         })
         .collect::<Vec<_>>();
     (!blocks.is_empty()).then_some(Value::Array(blocks))
@@ -550,13 +551,54 @@ fn anthropic_tool_result_text(block: &Value) -> String {
         return text.to_string();
     }
     if let Some(blocks) = content.as_array() {
-        return blocks
+        let text = blocks
             .iter()
             .filter_map(|entry| entry.get("text").and_then(Value::as_str))
             .collect::<Vec<_>>()
             .join("\n");
+        if blocks
+            .iter()
+            .all(|entry| entry.get("type").and_then(Value::as_str) == Some("text"))
+            || !text.trim().is_empty()
+        {
+            return text;
+        }
+        return serde_json::json!({
+            "error_code": "anthropic_tool_result_media_unsupported",
+            "message": "Anthropic-compatible tool result contained media blocks that were not injected into the text model context.",
+            "recoverable": true,
+            "media_blocks": summarize_history_tool_result_media_blocks(blocks),
+        })
+        .to_string();
     }
     content.to_string()
+}
+
+fn summarize_history_tool_result_media_blocks(blocks: &[Value]) -> Value {
+    Value::Array(
+        blocks
+            .iter()
+            .filter_map(|block| {
+                let block_type = block.get("type").and_then(Value::as_str)?;
+                if !matches!(block_type, "image" | "document") {
+                    return None;
+                }
+                let mut summary = Map::new();
+                summary.insert("type".to_string(), Value::String(block_type.to_string()));
+                if let Some(media_type) = block
+                    .get("source")
+                    .and_then(|source| source.get("media_type"))
+                    .and_then(Value::as_str)
+                {
+                    summary.insert(
+                        "media_type".to_string(),
+                        Value::String(media_type.to_string()),
+                    );
+                }
+                Some(Value::Object(summary))
+            })
+            .collect(),
+    )
 }
 
 pub fn sanitize_anthropic_compat_assistant_text(content: &str) -> Option<String> {
@@ -949,7 +991,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_claude_code_tool_result_history_preserves_image_blocks() {
+    fn maps_claude_code_tool_result_history_textualizes_image_blocks() {
         let request = map_messages_request(json!({
             "model": "1flowbase",
             "messages": [
@@ -984,14 +1026,12 @@ mod tests {
         .unwrap();
 
         assert_eq!(request.query, "next question");
-        assert_eq!(request.history[2]["role"], json!("user"));
-        assert_eq!(
-            request.history[2]["content_blocks"][0]["type"],
-            json!("tool_result")
-        );
-        assert_eq!(
-            request.history[2]["content_blocks"][0]["content"][0]["type"],
-            json!("image")
-        );
+        assert_eq!(request.history[1]["role"], json!("user"));
+        assert!(request.history[1].get("content_blocks").is_none());
+        let content = request.history[1]["content"]
+            .as_str()
+            .expect("media tool result should become text");
+        assert!(content.contains("anthropic_tool_result_media_unsupported"));
+        assert!(content.contains("\"media_type\":\"image/png\""));
     }
 }

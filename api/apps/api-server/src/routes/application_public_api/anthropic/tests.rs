@@ -372,6 +372,10 @@ fn anthropic_tool_resume_request_preserves_media_tool_result_content() {
     assert_eq!(resume.callback_task_id, callback_task_id);
     assert_eq!(resume.tool_results[0]["tool_call_id"], json!("toolu_image"));
     assert_eq!(resume.tool_results[0]["content"][0]["type"], json!("image"));
+    assert_eq!(
+        resume.tool_results[0]["content"][0]["source"]["media_type"],
+        json!("image/png")
+    );
 }
 
 #[test]

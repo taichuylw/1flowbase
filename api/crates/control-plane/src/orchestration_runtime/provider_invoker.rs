@@ -1,4 +1,5 @@
 use super::*;
+use plugin_framework::provider_contract::ProviderMessageRole;
 
 #[async_trait]
 impl<R, H> orchestration_runtime::execution_engine::ProviderInvoker for RuntimeProviderInvoker<R, H>
@@ -55,12 +56,12 @@ where
             package_load_ms = package_load_started.elapsed().as_millis() as u64,
             "package load finished"
         );
-        ensure_model_supports_content_blocks(
+        adapt_or_ensure_model_supports_content_blocks(
             &self.repository,
             &instance,
             &package,
             &runtime.model,
-            &input,
+            &mut input,
         )
         .await?;
 
@@ -685,12 +686,12 @@ fn load_provider_package(path: &str) -> Result<ProviderPackage> {
         .map_err(|_| ControlPlaneError::InvalidInput("provider_package").into())
 }
 
-async fn ensure_model_supports_content_blocks<R>(
+async fn adapt_or_ensure_model_supports_content_blocks<R>(
     repository: &R,
     instance: &domain::ModelProviderInstanceRecord,
     package: &ProviderPackage,
     model_id: &str,
-    input: &ProviderInvocationInput,
+    input: &mut ProviderInvocationInput,
 ) -> Result<()>
 where
     R: ModelProviderRepository,
@@ -700,6 +701,11 @@ where
     }
 
     if selected_model_supports_multimodal(repository, instance, package, model_id).await? {
+        return Ok(());
+    }
+
+    if provider_content_blocks_are_only_tool_results(input) {
+        textualize_tool_result_content_blocks_for_text_model(input);
         return Ok(());
     }
 
@@ -713,6 +719,74 @@ fn provider_input_has_content_blocks(input: &ProviderInvocationInput) -> bool {
             .as_ref()
             .is_some_and(|content_blocks| !content_blocks.is_null())
     })
+}
+
+fn provider_content_blocks_are_only_tool_results(input: &ProviderInvocationInput) -> bool {
+    input.messages.iter().all(|message| {
+        message.content_blocks.is_none() || matches!(message.role, ProviderMessageRole::Tool)
+    })
+}
+
+pub(super) fn textualize_tool_result_content_blocks_for_text_model(
+    input: &mut ProviderInvocationInput,
+) {
+    for message in &mut input.messages {
+        if !matches!(message.role, ProviderMessageRole::Tool) {
+            continue;
+        }
+        let Some(content_blocks) = message.content_blocks.take() else {
+            continue;
+        };
+        if content_blocks.is_null() {
+            continue;
+        }
+        let fallback = json!({
+            "error_code": "tool_result_media_unsupported",
+            "message": "Tool result contained media blocks that were not injected into the selected text model context.",
+            "recoverable": true,
+            "media_blocks": summarize_tool_result_media_blocks(&content_blocks),
+        })
+        .to_string();
+        if message.content.trim().is_empty() {
+            message.content = fallback;
+        } else {
+            message.content = format!("{}\n{}", message.content.trim_end(), fallback);
+        }
+    }
+}
+
+fn summarize_tool_result_media_blocks(content_blocks: &Value) -> Value {
+    let Some(blocks) = content_blocks.as_array() else {
+        return Value::Array(Vec::new());
+    };
+    Value::Array(
+        blocks
+            .iter()
+            .filter_map(|block| {
+                let block_type = block.get("type").and_then(Value::as_str)?;
+                if !matches!(
+                    block_type,
+                    "image" | "document" | "image_url" | "input_image"
+                ) {
+                    return None;
+                }
+                let mut summary = serde_json::Map::new();
+                summary.insert("type".to_string(), Value::String(block_type.to_string()));
+                if let Some(media_type) = block
+                    .get("source")
+                    .and_then(|source| source.get("media_type"))
+                    .or_else(|| block.get("media_type"))
+                    .and_then(Value::as_str)
+                {
+                    summary.insert(
+                        "media_type".to_string(),
+                        Value::String(media_type.to_string()),
+                    );
+                }
+                Some(Value::Object(summary))
+            })
+            .collect(),
+    )
 }
 
 async fn selected_model_supports_multimodal<R>(
