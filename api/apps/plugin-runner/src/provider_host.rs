@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex as StdMutex,
     },
 };
 
@@ -28,6 +28,9 @@ use crate::stdio_runtime::{
     call_executable, call_executable_streaming, ProviderWorker,
     DEFAULT_PROVIDER_INVOCATION_TIMEOUT_MS,
 };
+
+type ProviderWorkerHandle = Arc<Mutex<ProviderWorker>>;
+type ProviderWorkerRegistry = Arc<StdMutex<HashMap<String, ProviderWorkerHandle>>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoadedProviderSummary {
@@ -182,7 +185,7 @@ impl Drop for ActiveProviderInvocationLease {
 pub struct ProviderHost {
     loaded_packages: HashMap<String, LoadedProviderPackage>,
     loaded_sources: HashMap<String, LoadedProviderSource>,
-    provider_workers: Mutex<HashMap<String, ProviderWorker>>,
+    provider_workers: ProviderWorkerRegistry,
     active_streams: Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
     active_invocation_leases: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
     next_invocation_sequence: AtomicU64,
@@ -193,7 +196,7 @@ impl Default for ProviderHost {
         Self {
             loaded_packages: HashMap::new(),
             loaded_sources: HashMap::new(),
-            provider_workers: Mutex::new(HashMap::new()),
+            provider_workers: Arc::new(StdMutex::new(HashMap::new())),
             active_streams: Arc::new(Mutex::new(HashMap::new())),
             active_invocation_leases: Arc::new(Mutex::new(HashMap::new())),
             next_invocation_sequence: AtomicU64::new(1),
@@ -234,7 +237,7 @@ impl ProviderHost {
             .insert(summary.plugin_id.clone(), loaded);
         self.loaded_sources
             .insert(summary.plugin_id.clone(), source);
-        self.provider_workers.get_mut().remove(&summary.plugin_id);
+        self.remove_provider_worker(&summary.plugin_id)?;
         Ok(summary)
     }
 
@@ -293,11 +296,28 @@ impl ProviderHost {
         plugin_id: &str,
         provider_config: Value,
     ) -> FrameworkResult<ProviderValidationOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(loaded, ProviderStdioMethod::Validate, provider_config)
+        self.validate_operation(plugin_id, provider_config)?.await
+    }
+
+    pub fn validate_operation(
+        &self,
+        plugin_id: &str,
+        provider_config: Value,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<ProviderValidationOutput>> + Send + 'static,
+    > {
+        let loaded = self.loaded_package(plugin_id)?.clone();
+        let provider_workers = Arc::clone(&self.provider_workers);
+        Ok(async move {
+            let output = Self::call_runtime_loaded(
+                loaded,
+                provider_workers,
+                ProviderStdioMethod::Validate,
+                provider_config,
+            )
             .await?;
-        Ok(ProviderValidationOutput { output })
+            Ok(ProviderValidationOutput { output })
+        })
     }
 
     pub async fn list_models(
@@ -305,26 +325,46 @@ impl ProviderHost {
         plugin_id: &str,
         provider_config: Value,
     ) -> FrameworkResult<ProviderModelsOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let models = match loaded.package.provider.model_discovery_mode {
-            ModelDiscoveryMode::Static => loaded.package.predefined_models.clone(),
-            ModelDiscoveryMode::Dynamic => {
-                let dynamic = self
-                    .call_runtime(loaded, ProviderStdioMethod::ListModels, provider_config)
+        self.list_models_operation(plugin_id, provider_config)?
+            .await
+    }
+
+    pub fn list_models_operation(
+        &self,
+        plugin_id: &str,
+        provider_config: Value,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<ProviderModelsOutput>> + Send + 'static,
+    > {
+        let loaded = self.loaded_package(plugin_id)?.clone();
+        let provider_workers = Arc::clone(&self.provider_workers);
+        Ok(async move {
+            let models = match loaded.package.provider.model_discovery_mode {
+                ModelDiscoveryMode::Static => loaded.package.predefined_models.clone(),
+                ModelDiscoveryMode::Dynamic => {
+                    let dynamic = Self::call_runtime_loaded(
+                        loaded,
+                        provider_workers,
+                        ProviderStdioMethod::ListModels,
+                        provider_config,
+                    )
                     .await?;
-                normalize_models(dynamic)?
-            }
-            ModelDiscoveryMode::Hybrid => {
-                let dynamic = self
-                    .call_runtime(loaded, ProviderStdioMethod::ListModels, provider_config)
+                    normalize_models(dynamic)?
+                }
+                ModelDiscoveryMode::Hybrid => {
+                    let predefined_models = loaded.package.predefined_models.clone();
+                    let dynamic = Self::call_runtime_loaded(
+                        loaded,
+                        provider_workers,
+                        ProviderStdioMethod::ListModels,
+                        provider_config,
+                    )
                     .await?;
-                merge_models(
-                    &loaded.package.predefined_models,
-                    normalize_models(dynamic)?,
-                )
-            }
-        };
-        Ok(ProviderModelsOutput { models })
+                    merge_models(&predefined_models, normalize_models(dynamic)?)
+                }
+            };
+            Ok(ProviderModelsOutput { models })
+        })
     }
 
     pub async fn get_balance(
@@ -332,12 +372,30 @@ impl ProviderHost {
         plugin_id: &str,
         provider_config: Value,
     ) -> FrameworkResult<ProviderBalanceOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let raw_balance = self
-            .call_runtime(loaded, ProviderStdioMethod::Balance, provider_config)
+        self.get_balance_operation(plugin_id, provider_config)?
+            .await
+    }
+
+    pub fn get_balance_operation(
+        &self,
+        plugin_id: &str,
+        provider_config: Value,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<ProviderBalanceOutput>> + Send + 'static,
+    > {
+        let loaded = self.loaded_package(plugin_id)?.clone();
+        let provider_workers = Arc::clone(&self.provider_workers);
+        Ok(async move {
+            let raw_balance = Self::call_runtime_loaded(
+                loaded,
+                provider_workers,
+                ProviderStdioMethod::Balance,
+                provider_config,
+            )
             .await?;
-        Ok(ProviderBalanceOutput {
-            balance: normalize_balance(raw_balance)?,
+            Ok(ProviderBalanceOutput {
+                balance: normalize_balance(raw_balance)?,
+            })
         })
     }
 
@@ -346,8 +404,17 @@ impl ProviderHost {
         plugin_id: &str,
         input: ProviderInvocationInput,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
-        self.invoke_stream_with_live_events(plugin_id, input, None)
-            .await
+        self.invoke_stream_operation(plugin_id, input)?.await
+    }
+
+    pub fn invoke_stream_operation(
+        &self,
+        plugin_id: &str,
+        input: ProviderInvocationInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<ProviderInvokeStreamOutput>> + Send + 'static,
+    > {
+        self.invoke_stream_with_live_events_operation(plugin_id, input, None)
     }
 
     pub async fn invoke_stream_with_live_events(
@@ -356,52 +423,39 @@ impl ProviderHost {
         input: ProviderInvocationInput,
         live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
     ) -> FrameworkResult<ProviderInvokeStreamOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let _lease = self.acquire_active_invocation_lease(&input).await?;
-        let invocation_id = self.register_active_stream(plugin_id, &input).await;
-        let event_observer = Some(self.active_stream_event_observer(invocation_id.clone()));
-        let request = ProviderStdioRequest {
-            method: ProviderStdioMethod::Invoke,
-            input: serde_json::to_value(input).unwrap(),
-        };
-        let invocation_limits = provider_invocation_limits(&loaded.package.manifest.runtime.limits);
-        let output = match loaded.package.manifest.execution_mode {
-            PluginExecutionMode::ProcessPerCall => {
-                call_executable_streaming(
-                    &loaded.runtime_executable,
-                    &request,
-                    &invocation_limits,
-                    live_events,
-                    event_observer,
-                )
-                .await
-            }
-            PluginExecutionMode::StatefulProviderWorker => {
-                let mut workers = self.provider_workers.lock().await;
-                let worker = workers.entry(plugin_id.to_string()).or_insert_with(|| {
-                    ProviderWorker::new(
-                        loaded.runtime_executable.clone(),
-                        loaded.package.manifest.runtime.limits.clone(),
-                    )
-                });
-                worker
-                    .call_streaming_with_limits(
-                        &request,
-                        &invocation_limits,
-                        live_events,
-                        event_observer,
-                    )
-                    .await
-            }
-            _ => Err(PluginFrameworkError::invalid_provider_package(
-                "model provider package declares unsupported execution_mode",
-            )),
-        };
-        self.remove_active_stream(&invocation_id).await;
-        let output = output?;
-        Ok(ProviderInvokeStreamOutput {
-            events: output.events,
-            result: output.result,
+        self.invoke_stream_with_live_events_operation(plugin_id, input, live_events)?
+            .await
+    }
+
+    pub fn invoke_stream_with_live_events_operation(
+        &self,
+        plugin_id: &str,
+        input: ProviderInvocationInput,
+        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<ProviderInvokeStreamOutput>> + Send + 'static,
+    > {
+        let loaded = self.loaded_package(plugin_id)?.clone();
+        let provider_workers = Arc::clone(&self.provider_workers);
+        let active_streams = Arc::clone(&self.active_streams);
+        let active_invocation_leases = Arc::clone(&self.active_invocation_leases);
+        let sequence = self
+            .next_invocation_sequence
+            .fetch_add(1, Ordering::Relaxed);
+        let invocation_id = format!("{plugin_id}:{sequence}");
+        let plugin_id = plugin_id.to_string();
+        Ok(async move {
+            Self::invoke_stream_prepared(
+                loaded,
+                provider_workers,
+                active_streams,
+                active_invocation_leases,
+                invocation_id,
+                plugin_id,
+                input,
+                live_events,
+            )
+            .await
         })
     }
 
@@ -419,27 +473,19 @@ impl ProviderHost {
     }
 
     async fn register_active_stream(
-        &self,
+        active_streams: &Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
+        invocation_id: String,
         plugin_id: &str,
         input: &ProviderInvocationInput,
-    ) -> String {
-        let sequence = self
-            .next_invocation_sequence
-            .fetch_add(1, Ordering::Relaxed);
-        let invocation_id = format!("{plugin_id}:{sequence}");
+    ) {
         let record = ActiveProviderStreamRecord::new(invocation_id.clone(), plugin_id, input);
-        self.active_streams
-            .lock()
-            .await
-            .insert(invocation_id.clone(), record);
-        invocation_id
+        active_streams.lock().await.insert(invocation_id, record);
     }
 
     fn active_stream_event_observer(
-        &self,
+        active_streams: Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
         invocation_id: String,
     ) -> tokio::sync::mpsc::UnboundedSender<()> {
-        let active_streams = Arc::clone(&self.active_streams);
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(async move {
             while receiver.recv().await.is_some() {
@@ -451,17 +497,20 @@ impl ProviderHost {
         sender
     }
 
-    async fn remove_active_stream(&self, invocation_id: &str) {
-        self.active_streams.lock().await.remove(invocation_id);
+    async fn remove_active_stream(
+        active_streams: &Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
+        invocation_id: &str,
+    ) {
+        active_streams.lock().await.remove(invocation_id);
     }
 
     async fn acquire_active_invocation_lease(
-        &self,
+        active_invocation_leases: &Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
         input: &ProviderInvocationInput,
     ) -> FrameworkResult<ActiveProviderInvocationLease> {
         let provider_pool_key = provider_pool_key(input);
         let semaphore = {
-            let mut leases = self.active_invocation_leases.lock().await;
+            let mut leases = active_invocation_leases.lock().await;
             leases
                 .entry(provider_pool_key.clone())
                 .or_insert_with(|| Arc::new(Semaphore::new(1)))
@@ -490,6 +539,12 @@ impl ProviderHost {
         })
     }
 
+    fn remove_provider_worker(&mut self, plugin_id: &str) -> FrameworkResult<()> {
+        let mut workers = lock_provider_worker_registry(&self.provider_workers)?;
+        workers.remove(plugin_id);
+        Ok(())
+    }
+
     fn loaded_package(&self, plugin_id: &str) -> FrameworkResult<&LoadedProviderPackage> {
         self.loaded_packages.get(plugin_id).ok_or_else(|| {
             PluginFrameworkError::invalid_provider_package(format!(
@@ -498,9 +553,9 @@ impl ProviderHost {
         })
     }
 
-    async fn call_runtime(
-        &self,
-        loaded: &LoadedProviderPackage,
+    async fn call_runtime_loaded(
+        loaded: LoadedProviderPackage,
+        provider_workers: ProviderWorkerRegistry,
         method: ProviderStdioMethod,
         input: Value,
     ) -> FrameworkResult<Value> {
@@ -516,13 +571,8 @@ impl ProviderHost {
             }
             PluginExecutionMode::StatefulProviderWorker => {
                 let plugin_id = loaded.package.identifier();
-                let mut workers = self.provider_workers.lock().await;
-                let worker = workers.entry(plugin_id).or_insert_with(|| {
-                    ProviderWorker::new(
-                        loaded.runtime_executable.clone(),
-                        loaded.package.manifest.runtime.limits.clone(),
-                    )
-                });
+                let worker = provider_worker_handle(&provider_workers, plugin_id, &loaded)?;
+                let mut worker = worker.lock().await;
                 worker.call(&request).await
             }
             _ => Err(PluginFrameworkError::invalid_provider_package(
@@ -530,6 +580,89 @@ impl ProviderHost {
             )),
         }
     }
+
+    async fn invoke_stream_prepared(
+        loaded: LoadedProviderPackage,
+        provider_workers: ProviderWorkerRegistry,
+        active_streams: Arc<Mutex<HashMap<String, ActiveProviderStreamRecord>>>,
+        active_invocation_leases: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
+        invocation_id: String,
+        plugin_id: String,
+        input: ProviderInvocationInput,
+        live_events: Option<tokio::sync::mpsc::UnboundedSender<ProviderStreamEvent>>,
+    ) -> FrameworkResult<ProviderInvokeStreamOutput> {
+        let _lease =
+            Self::acquire_active_invocation_lease(&active_invocation_leases, &input).await?;
+        Self::register_active_stream(&active_streams, invocation_id.clone(), &plugin_id, &input)
+            .await;
+        let event_observer = Some(Self::active_stream_event_observer(
+            Arc::clone(&active_streams),
+            invocation_id.clone(),
+        ));
+        let request = ProviderStdioRequest {
+            method: ProviderStdioMethod::Invoke,
+            input: serde_json::to_value(input).unwrap(),
+        };
+        let invocation_limits = provider_invocation_limits(&loaded.package.manifest.runtime.limits);
+        let output = match loaded.package.manifest.execution_mode {
+            PluginExecutionMode::ProcessPerCall => {
+                call_executable_streaming(
+                    &loaded.runtime_executable,
+                    &request,
+                    &invocation_limits,
+                    live_events,
+                    event_observer,
+                )
+                .await
+            }
+            PluginExecutionMode::StatefulProviderWorker => {
+                let worker = provider_worker_handle(&provider_workers, plugin_id, &loaded)?;
+                let mut worker = worker.lock().await;
+                worker
+                    .call_streaming_with_limits(
+                        &request,
+                        &invocation_limits,
+                        live_events,
+                        event_observer,
+                    )
+                    .await
+            }
+            _ => Err(PluginFrameworkError::invalid_provider_package(
+                "model provider package declares unsupported execution_mode",
+            )),
+        };
+        Self::remove_active_stream(&active_streams, &invocation_id).await;
+        let output = output?;
+        Ok(ProviderInvokeStreamOutput {
+            events: output.events,
+            result: output.result,
+        })
+    }
+}
+
+fn lock_provider_worker_registry(
+    provider_workers: &ProviderWorkerRegistry,
+) -> FrameworkResult<std::sync::MutexGuard<'_, HashMap<String, ProviderWorkerHandle>>> {
+    provider_workers.lock().map_err(|_| {
+        PluginFrameworkError::invalid_provider_package("provider worker registry is unavailable")
+    })
+}
+
+fn provider_worker_handle(
+    provider_workers: &ProviderWorkerRegistry,
+    plugin_id: String,
+    loaded: &LoadedProviderPackage,
+) -> FrameworkResult<ProviderWorkerHandle> {
+    let mut workers = lock_provider_worker_registry(provider_workers)?;
+    Ok(workers
+        .entry(plugin_id)
+        .or_insert_with(|| {
+            Arc::new(Mutex::new(ProviderWorker::new(
+                loaded.runtime_executable.clone(),
+                loaded.package.manifest.runtime.limits.clone(),
+            )))
+        })
+        .clone())
 }
 
 fn provider_invocation_limits(limits: &PluginRuntimeLimits) -> PluginRuntimeLimits {
@@ -754,6 +887,93 @@ esac
                 fs::set_permissions(path, permissions).unwrap();
             }
         }
+
+        fn write_stateful_provider_package(
+            &self,
+            plugin_id: &str,
+            provider_code: &str,
+            display_name: &str,
+        ) {
+            self.write(
+                "manifest.yaml",
+                &format!(
+                    r#"manifest_version: 1
+plugin_id: {plugin_id}
+version: 0.1.0
+vendor: 1flowbase
+display_name: {display_name}
+description: Fixture provider
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: runtime_extension
+execution_mode: stateful_provider_worker
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json_worker
+  entry: bin/fixture_provider
+  limits:
+    timeout_ms: 30000
+node_contributions: []
+"#
+                ),
+            );
+            self.write(
+                &format!("provider/{provider_code}.yaml"),
+                &format!(
+                    r#"provider_code: {provider_code}
+display_name: {display_name}
+protocol: openai_compatible
+model_discovery: static
+config_schema: []
+"#
+                ),
+            );
+        }
+
+        fn write_slow_worker_runtime(&self, response_label: &str) {
+            self.write(
+                "bin/fixture_provider",
+                &format!(
+                    r#"#!/usr/bin/env bash
+set -euo pipefail
+while IFS= read -r payload; do
+  case "${{payload}}" in
+    *'"method":"invoke"'*)
+      printf '%s\n' '{{"type":"text_delta","delta":"started"}}'
+      sleep 0.20
+      printf '%s\n' '{{"type":"result","result":{{"final_content":"{response_label}","finish_reason":"stop"}}}}'
+      ;;
+    *)
+      printf '%s\n' '{{"ok":true,"result":{{}}}}'
+      ;;
+  esac
+done
+"#
+                ),
+            );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+
+                let path = self.path().join("bin/fixture_provider");
+                let mut permissions = fs::metadata(&path).unwrap().permissions();
+                permissions.set_mode(0o755);
+                fs::set_permissions(path, permissions).unwrap();
+            }
+        }
     }
 
     impl Drop for TempProviderPackage {
@@ -946,5 +1166,61 @@ esac
         wait_for_active_streams(&host, 2).await;
         first.await.unwrap();
         second.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stateful_worker_registry_does_not_serialize_different_plugins() {
+        let first_package = TempProviderPackage::new();
+        first_package.write_stateful_provider_package(
+            "fixture_provider_a",
+            "fixture_provider_a",
+            "Fixture Provider A",
+        );
+        first_package.write_slow_worker_runtime("first done");
+        let second_package = TempProviderPackage::new();
+        second_package.write_stateful_provider_package(
+            "fixture_provider_b",
+            "fixture_provider_b",
+            "Fixture Provider B",
+        );
+        second_package.write_slow_worker_runtime("second done");
+        let mut host = ProviderHost::default();
+        let first_plugin_id = host
+            .load(first_package.path().to_str().unwrap())
+            .unwrap()
+            .plugin_id;
+        let second_plugin_id = host
+            .load(second_package.path().to_str().unwrap())
+            .unwrap()
+            .plugin_id;
+        let host = Arc::new(host);
+
+        let first_host = Arc::clone(&host);
+        let first = tokio::spawn(async move {
+            first_host
+                .invoke_stream(&first_plugin_id, invocation_input("fixture-model-a"))
+                .await
+                .unwrap()
+        });
+        wait_for_active_streams(&host, 1).await;
+
+        let second_host = Arc::clone(&host);
+        let second = tokio::spawn(async move {
+            second_host
+                .invoke_stream(&second_plugin_id, invocation_input("fixture-model-b"))
+                .await
+                .unwrap()
+        });
+
+        tokio::time::timeout(Duration::from_millis(320), async {
+            let first = first.await.unwrap();
+            let second = second.await.unwrap();
+            assert_eq!(first.result.final_content.as_deref(), Some("first done"));
+            assert_eq!(second.result.final_content.as_deref(), Some("second done"));
+        })
+        .await
+        .expect(
+            "different stateful provider workers should not be serialized by the registry lock",
+        );
     }
 }

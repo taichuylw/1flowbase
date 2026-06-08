@@ -8,7 +8,7 @@ This directory owns GitHub Actions automation for repository quality gates.
 | --- | --- |
 | `.github/workflows/verify.yml` | Automatic merge CI for `pull_request` and `push` to `main` / `latest`; runs lightweight repo tooling, frontend PR, and backend static/fmt/check gates, updates one PR report comment for same-repository pull requests, then publishes one aggregate issue only for `latest` pushes. |
 | `.github/workflows/quality-gate.yml` | Manual and nightly quality gate run; full `ci` scope runs component gates, coverage gates, and container image security in parallel before one aggregate Issue report. |
-| `.github/workflows/container-images.yml` | Container image CD for `web`, `api-server`, and `plugin-runner`; builds scan-candidate GHCR tags, runs Trivy admission scans, promotes passing images to version and `latest` tags, then publishes a CD quality gate Issue report. |
+| `.github/workflows/container-images.yml` | Container image CD for `web`, `api-server`, and `plugin-runner`; builds scan-candidate GHCR tags, runs Trivy admission scans, promotes passing images to version and `latest` tags, then uploads artifact-only CD quality gate evidence. |
 | `.github/actions/quality-gate/action.yml` | Reusable repository-local action used by CI, manual, and nightly quality gates. |
 
 ## Automatic CI
@@ -30,7 +30,7 @@ scope: repo-backend-check-{core-libs,runtime-storage,apps}
 ```
 
 The `repo-frontend-pr` scope runs web lint, a compact frontend PR smoke suite, and the app
-build. Full app Vitest, page regression, style-boundary, React Doctor, coverage, and backend
+build. Full app Vitest, page regression, style-boundary, coverage, and backend
 consistency evidence stay in nightly or manual full quality gates.
 
 The `repo-tooling` scope starts with `gate-router`, a non-blocking advisory that
@@ -42,7 +42,7 @@ directory-pressure findings. It also runs `security-risk`, which writes
 communication, CI, Docker, deploy, proxy, plugin, and runtime execution-path
 risks. Advisory findings remain warnings; focused tests still fail the repo gate.
 
-React Doctor is no longer an automatic PR merge blocker. Run it from a nightly or manual full quality gate when you need structural frontend debt evidence:
+React Doctor is no longer an automatic PR merge blocker. React Doctor is not part of `quality-gate` `scope: ci`; run it manually when you need structural frontend debt evidence:
 
 ```yaml
 run: npx react-doctor@0.2.16 web/app --diff origin/main --offline --fail-on warning --verbose
@@ -86,11 +86,10 @@ tmp/test-governance/trivy-${component}-high.json
 tmp/test-governance/trivy-${component}-critical.json
 ```
 
-After the publish matrix finishes, the report job downloads the Trivy artifacts, runs
-`scope: container-images` through the local Quality Gate Action, and publishes one
-`[Quality Gate][CD]` Issue for the container image run. The issue body includes a readable
-component table, HIGH / CRITICAL counts, top vulnerabilities, and evidence paths. The local
-reporter writes:
+After the publish matrix finishes, the report job downloads the Trivy artifacts and runs
+`scope: container-images` through the local Quality Gate Action with `publish_issue: "false"`.
+Container CD reports are artifact-only so vulnerability and system-error details stay in
+Actions artifacts instead of GitHub Issues. The local reporter writes:
 
 ```text
 tmp/test-governance/container-image-security.md
@@ -115,7 +114,7 @@ environment: leave empty
 
 For `scope: ci`, manual and scheduled runs use the full quality gate shape: repo tooling,
 full repo frontend, backend static/fmt/package shards, backend app test package shards, backend
-consistency, frontend coverage, backend coverage package shards, React Doctor, and container
+consistency, frontend coverage, backend coverage package shards, and container
 image security run as separate jobs.
 An aggregate job downloads their artifacts, publishes one Issue report, and uploads
 `test-governance-artifacts`.

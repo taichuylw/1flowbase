@@ -61,10 +61,25 @@ impl CapabilityHost {
         contribution_code: &str,
         config_payload: Value,
     ) -> FrameworkResult<CapabilityValueOutput> {
+        self.validate_config_operation(plugin_id, contribution_code, config_payload)?
+            .await
+    }
+
+    pub fn validate_config_operation(
+        &self,
+        plugin_id: &str,
+        contribution_code: &str,
+        config_payload: Value,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<CapabilityValueOutput>> + Send + 'static,
+    > {
         let loaded = self.loaded_package(plugin_id)?;
         self.ensure_contribution(loaded, contribution_code)?;
-        let output = self
-            .call_runtime(
+        let loaded = loaded.clone();
+        let plugin_id = plugin_id.to_string();
+        let contribution_code = contribution_code.to_string();
+        Ok(async move {
+            let output = Self::call_runtime_loaded(
                 loaded,
                 CapabilityStdioMethod::ValidateConfig,
                 json!({
@@ -74,7 +89,8 @@ impl CapabilityHost {
                 }),
             )
             .await?;
-        Ok(CapabilityValueOutput { output })
+            Ok(CapabilityValueOutput { output })
+        })
     }
 
     pub async fn resolve_dynamic_options(
@@ -83,10 +99,25 @@ impl CapabilityHost {
         contribution_code: &str,
         config_payload: Value,
     ) -> FrameworkResult<CapabilityValueOutput> {
+        self.resolve_dynamic_options_operation(plugin_id, contribution_code, config_payload)?
+            .await
+    }
+
+    pub fn resolve_dynamic_options_operation(
+        &self,
+        plugin_id: &str,
+        contribution_code: &str,
+        config_payload: Value,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<CapabilityValueOutput>> + Send + 'static,
+    > {
         let loaded = self.loaded_package(plugin_id)?;
         self.ensure_contribution(loaded, contribution_code)?;
-        let output = self
-            .call_runtime(
+        let loaded = loaded.clone();
+        let plugin_id = plugin_id.to_string();
+        let contribution_code = contribution_code.to_string();
+        Ok(async move {
+            let output = Self::call_runtime_loaded(
                 loaded,
                 CapabilityStdioMethod::ResolveDynamicOptions,
                 json!({
@@ -96,7 +127,8 @@ impl CapabilityHost {
                 }),
             )
             .await?;
-        Ok(CapabilityValueOutput { output })
+            Ok(CapabilityValueOutput { output })
+        })
     }
 
     pub async fn resolve_output_schema(
@@ -105,10 +137,25 @@ impl CapabilityHost {
         contribution_code: &str,
         config_payload: Value,
     ) -> FrameworkResult<CapabilityValueOutput> {
+        self.resolve_output_schema_operation(plugin_id, contribution_code, config_payload)?
+            .await
+    }
+
+    pub fn resolve_output_schema_operation(
+        &self,
+        plugin_id: &str,
+        contribution_code: &str,
+        config_payload: Value,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<CapabilityValueOutput>> + Send + 'static,
+    > {
         let loaded = self.loaded_package(plugin_id)?;
         self.ensure_contribution(loaded, contribution_code)?;
-        let output = self
-            .call_runtime(
+        let loaded = loaded.clone();
+        let plugin_id = plugin_id.to_string();
+        let contribution_code = contribution_code.to_string();
+        Ok(async move {
+            let output = Self::call_runtime_loaded(
                 loaded,
                 CapabilityStdioMethod::ResolveOutputSchema,
                 json!({
@@ -118,7 +165,8 @@ impl CapabilityHost {
                 }),
             )
             .await?;
-        Ok(CapabilityValueOutput { output })
+            Ok(CapabilityValueOutput { output })
+        })
     }
 
     pub async fn execute(
@@ -128,10 +176,26 @@ impl CapabilityHost {
         config_payload: Value,
         input_payload: Value,
     ) -> FrameworkResult<CapabilityExecutionOutput> {
+        self.execute_operation(plugin_id, contribution_code, config_payload, input_payload)?
+            .await
+    }
+
+    pub fn execute_operation(
+        &self,
+        plugin_id: &str,
+        contribution_code: &str,
+        config_payload: Value,
+        input_payload: Value,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<CapabilityExecutionOutput>> + Send + 'static,
+    > {
         let loaded = self.loaded_package(plugin_id)?;
         self.ensure_contribution(loaded, contribution_code)?;
-        let output = self
-            .call_runtime(
+        let loaded = loaded.clone();
+        let plugin_id = plugin_id.to_string();
+        let contribution_code = contribution_code.to_string();
+        Ok(async move {
+            let output = Self::call_runtime_loaded(
                 loaded,
                 CapabilityStdioMethod::Execute,
                 json!({
@@ -142,8 +206,9 @@ impl CapabilityHost {
                 }),
             )
             .await?;
-        Ok(CapabilityExecutionOutput {
-            output_payload: output,
+            Ok(CapabilityExecutionOutput {
+                output_payload: output,
+            })
         })
     }
 
@@ -174,9 +239,8 @@ impl CapabilityHost {
         )))
     }
 
-    async fn call_runtime(
-        &self,
-        loaded: &LoadedCapabilityPackage,
+    async fn call_runtime_loaded(
+        loaded: LoadedCapabilityPackage,
         method: CapabilityStdioMethod,
         input: Value,
     ) -> FrameworkResult<Value> {

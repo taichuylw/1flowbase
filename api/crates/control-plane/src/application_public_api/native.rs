@@ -335,6 +335,7 @@ pub enum NativeRunValidationError {
     InvalidModelParameters(&'static str),
     InvalidToolResults(String),
     InvalidState,
+    IdempotencyConflict,
 }
 
 pub struct ApplicationNativeRunService<R> {

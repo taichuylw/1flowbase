@@ -22,6 +22,42 @@ fn local_infra_host_provides_required_defaults() {
 }
 
 #[test]
+fn local_infra_host_default_provider_source_matches_builtin_extension_id() {
+    let registry = crate::host_infrastructure::build_local_host_infrastructure();
+
+    assert_eq!(
+        registry.default_provider_source("cache-store").unwrap(),
+        "official.local-infra-host"
+    );
+}
+
+#[test]
+fn local_infra_host_can_be_built_from_builtin_host_extension_contributions() {
+    let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let manifests =
+        crate::host_extensions::builtin::load_builtin_host_extension_manifests(workspace_root)
+            .unwrap();
+    let host_extensions =
+        control_plane::host_extension_boot::register_builtin_host_extension_contributions(
+            &manifests,
+        )
+        .unwrap();
+    let registry =
+        crate::host_infrastructure::build_local_host_infrastructure_from_host_extensions(
+            &host_extensions,
+        )
+        .unwrap();
+
+    assert_eq!(registry.default_provider("cache-store").unwrap(), "local");
+    assert_eq!(
+        registry.default_provider_source("cache-store").unwrap(),
+        "official.local-infra-host"
+    );
+    assert!(registry.session_store().is_some());
+    assert!(registry.runtime_event_stream().is_some());
+}
+
+#[test]
 fn empty_infra_registry_reports_contracts_as_unregistered() {
     let registry = crate::host_infrastructure::HostInfrastructureRegistry::default();
 

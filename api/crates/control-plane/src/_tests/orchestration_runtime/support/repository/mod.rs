@@ -40,6 +40,7 @@ struct InMemoryOrchestrationRuntimeState {
     file_storages_by_id: HashMap<Uuid, domain::FileStorageRecord>,
     file_tables_by_id: HashMap<Uuid, domain::FileTableRecord>,
     status_after_next_get: Option<(Uuid, domain::FlowRunStatus)>,
+    status_before_next_flow_update: Option<(Uuid, domain::FlowRunStatus)>,
 }
 
 #[derive(Clone)]
@@ -721,6 +722,17 @@ impl InMemoryOrchestrationRuntimeRepository {
             .lock()
             .expect("runtime repo mutex poisoned")
             .status_after_next_get = Some((flow_run_id, status));
+    }
+
+    pub(super) fn force_flow_run_status_before_next_flow_update(
+        &self,
+        flow_run_id: Uuid,
+        status: domain::FlowRunStatus,
+    ) {
+        self.inner
+            .lock()
+            .expect("runtime repo mutex poisoned")
+            .status_before_next_flow_update = Some((flow_run_id, status));
     }
 }
 

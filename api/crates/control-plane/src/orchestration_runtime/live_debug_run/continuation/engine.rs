@@ -420,16 +420,28 @@ where
                             external_ref_payload: Some(wait.request_payload),
                         })
                         .await?;
-                    service
+                    if service
                         .repository
-                        .update_flow_run(&UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::WaitingCallback,
-                            output_payload: answer_output_payload,
-                            error_payload: None,
-                            finished_at: None,
-                        })
-                        .await?;
+                        .update_flow_run_if_status(
+                            &UpdateFlowRunInput {
+                                flow_run_id: flow_run.id,
+                                status: domain::FlowRunStatus::WaitingCallback,
+                                output_payload: answer_output_payload,
+                                error_payload: None,
+                                finished_at: None,
+                            },
+                            domain::FlowRunStatus::Running,
+                        )
+                        .await?
+                        .is_none()
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
                     append_runtime_event(
                         service,
                         flow_run.id,
@@ -553,16 +565,28 @@ where
                         domain::FlowRunStatus::Failed,
                         "continue_flow_debug_run",
                     )?;
-                    service
+                    if service
                         .repository
-                        .update_flow_run(&UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::Failed,
-                            output_payload: last_output_payload.clone(),
-                            error_payload: Some(error_payload.clone()),
-                            finished_at: Some(OffsetDateTime::now_utc()),
-                        })
-                        .await?;
+                        .update_flow_run_if_status(
+                            &UpdateFlowRunInput {
+                                flow_run_id: flow_run.id,
+                                status: domain::FlowRunStatus::Failed,
+                                output_payload: last_output_payload.clone(),
+                                error_payload: Some(error_payload.clone()),
+                                finished_at: Some(OffsetDateTime::now_utc()),
+                            },
+                            domain::FlowRunStatus::Running,
+                        )
+                        .await?
+                        .is_none()
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
                     emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
                     service
                         .repository
@@ -697,16 +721,28 @@ where
                             external_ref_payload: Some(confirmation_payload),
                         })
                         .await?;
-                    service
+                    if service
                         .repository
-                        .update_flow_run(&UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::WaitingCallback,
-                            output_payload: answer_output_payload,
-                            error_payload: None,
-                            finished_at: None,
-                        })
-                        .await?;
+                        .update_flow_run_if_status(
+                            &UpdateFlowRunInput {
+                                flow_run_id: flow_run.id,
+                                status: domain::FlowRunStatus::WaitingCallback,
+                                output_payload: answer_output_payload,
+                                error_payload: None,
+                                finished_at: None,
+                            },
+                            domain::FlowRunStatus::Running,
+                        )
+                        .await?
+                        .is_none()
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
                     append_runtime_event(
                         service,
                         flow_run.id,
@@ -768,16 +804,28 @@ where
                         domain::FlowRunStatus::Failed,
                         "continue_flow_debug_run",
                     )?;
-                    service
+                    if service
                         .repository
-                        .update_flow_run(&UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::Failed,
-                            output_payload: last_output_payload.clone(),
-                            error_payload: Some(error_payload.clone()),
-                            finished_at: Some(OffsetDateTime::now_utc()),
-                        })
-                        .await?;
+                        .update_flow_run_if_status(
+                            &UpdateFlowRunInput {
+                                flow_run_id: flow_run.id,
+                                status: domain::FlowRunStatus::Failed,
+                                output_payload: last_output_payload.clone(),
+                                error_payload: Some(error_payload.clone()),
+                                finished_at: Some(OffsetDateTime::now_utc()),
+                            },
+                            domain::FlowRunStatus::Running,
+                        )
+                        .await?
+                        .is_none()
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
                     emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
                     service
                         .repository
@@ -902,16 +950,28 @@ where
                         external_ref_payload: Some(json!({ "prompt": prompt })),
                     })
                     .await?;
-                service
+                if service
                     .repository
-                    .update_flow_run(&UpdateFlowRunInput {
-                        flow_run_id: flow_run.id,
-                        status: domain::FlowRunStatus::WaitingHuman,
-                        output_payload: answer_output_payload,
-                        error_payload: None,
-                        finished_at: None,
-                    })
-                    .await?;
+                    .update_flow_run_if_status(
+                        &UpdateFlowRunInput {
+                            flow_run_id: flow_run.id,
+                            status: domain::FlowRunStatus::WaitingHuman,
+                            output_payload: answer_output_payload,
+                            error_payload: None,
+                            finished_at: None,
+                        },
+                        domain::FlowRunStatus::Running,
+                    )
+                    .await?
+                    .is_none()
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
                 append_runtime_event(
                     service,
                     flow_run.id,
@@ -1004,16 +1064,28 @@ where
                         external_ref_payload: Some(request_payload),
                     })
                     .await?;
-                service
+                if service
                     .repository
-                    .update_flow_run(&UpdateFlowRunInput {
-                        flow_run_id: flow_run.id,
-                        status: domain::FlowRunStatus::WaitingCallback,
-                        output_payload: answer_output_payload,
-                        error_payload: None,
-                        finished_at: None,
-                    })
-                    .await?;
+                    .update_flow_run_if_status(
+                        &UpdateFlowRunInput {
+                            flow_run_id: flow_run.id,
+                            status: domain::FlowRunStatus::WaitingCallback,
+                            output_payload: answer_output_payload,
+                            error_payload: None,
+                            finished_at: None,
+                        },
+                        domain::FlowRunStatus::Running,
+                    )
+                    .await?
+                    .is_none()
+                {
+                    return load_run_detail(
+                        &service.repository,
+                        command.application_id,
+                        flow_run.id,
+                    )
+                    .await;
+                }
                 append_runtime_event(
                     service,
                     flow_run.id,
@@ -1094,16 +1166,28 @@ where
                         domain::FlowRunStatus::Failed,
                         "continue_flow_debug_run",
                     )?;
-                    service
+                    if service
                         .repository
-                        .update_flow_run(&UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::Failed,
-                            output_payload: last_output_payload.clone(),
-                            error_payload: Some(error_payload.clone()),
-                            finished_at: Some(OffsetDateTime::now_utc()),
-                        })
-                        .await?;
+                        .update_flow_run_if_status(
+                            &UpdateFlowRunInput {
+                                flow_run_id: flow_run.id,
+                                status: domain::FlowRunStatus::Failed,
+                                output_payload: last_output_payload.clone(),
+                                error_payload: Some(error_payload.clone()),
+                                finished_at: Some(OffsetDateTime::now_utc()),
+                            },
+                            domain::FlowRunStatus::Running,
+                        )
+                        .await?
+                        .is_none()
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
                     emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
                     service
                         .repository
@@ -1180,16 +1264,28 @@ where
                         domain::FlowRunStatus::Failed,
                         "continue_flow_debug_run",
                     )?;
-                    service
+                    if service
                         .repository
-                        .update_flow_run(&UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::Failed,
-                            output_payload: last_output_payload.clone(),
-                            error_payload: Some(error_payload.clone()),
-                            finished_at: Some(OffsetDateTime::now_utc()),
-                        })
-                        .await?;
+                        .update_flow_run_if_status(
+                            &UpdateFlowRunInput {
+                                flow_run_id: flow_run.id,
+                                status: domain::FlowRunStatus::Failed,
+                                output_payload: last_output_payload.clone(),
+                                error_payload: Some(error_payload.clone()),
+                                finished_at: Some(OffsetDateTime::now_utc()),
+                            },
+                            domain::FlowRunStatus::Running,
+                        )
+                        .await?
+                        .is_none()
+                    {
+                        return load_run_detail(
+                            &service.repository,
+                            command.application_id,
+                            flow_run.id,
+                        )
+                        .await;
+                    }
                     emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
                     service
                         .repository

@@ -357,6 +357,8 @@ pub async fn call_executable_streaming(
 
         let runtime_line =
             serde_json::from_str::<ProviderRuntimeLine>(trimmed).map_err(|error| {
+                // Provider output is upstream diagnostic contract. Preserve the observed
+                // line on the runtime error path; do not redact, localize, or replace it here.
                 PluginFrameworkError::runtime(ProviderRuntimeError::normalize(
                     "invalid_provider_ndjson",
                     format!("invalid provider ndjson: {error}"),
@@ -389,6 +391,8 @@ pub async fn call_executable_streaming(
     let stderr = stderr_task.await.unwrap_or_default();
     if !status.success() {
         let summary = stderr.trim();
+        // Provider stderr is intentionally surfaced as upstream runtime detail.
+        // Host code must not rewrite, redact, or collapse it into a generic message.
         return Err(PluginFrameworkError::runtime(
             ProviderRuntimeError::normalize(
                 "provider_runtime",

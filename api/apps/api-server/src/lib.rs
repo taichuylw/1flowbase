@@ -23,7 +23,7 @@ pub mod runtime_profile_client;
 pub mod runtime_registry_sync;
 pub mod workers;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use argon2::{
@@ -48,7 +48,7 @@ use crate::{
     app_state::ApiState,
     config::{ApiConfig, ApiEnvironment},
     host_extension_loader::load_host_extensions_at_startup,
-    host_infrastructure::build_local_host_infrastructure,
+    host_infrastructure::build_local_host_infrastructure_from_host_extensions,
     provider_runtime::{ApiDataSourceRuntimeRecordBackend, ApiProviderRuntime, ApiRuntimeServices},
     runtime_profile_client::{HostApiRuntimeProfileCollector, HttpPluginRunnerSystemClient},
 };
@@ -186,7 +186,15 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     )
     .await?;
     let store = durable.store.clone();
-    let infrastructure = Arc::new(build_local_host_infrastructure());
+    let builtin_host_extensions =
+        host_extensions::builtin::load_builtin_host_extension_manifests(api_workspace_root()?)?;
+    let host_extension_registry =
+        control_plane::host_extension_boot::register_builtin_host_extension_contributions(
+            &builtin_host_extensions,
+        )?;
+    let infrastructure = Arc::new(build_local_host_infrastructure_from_host_extensions(
+        &host_extension_registry,
+    )?);
     let session_store = infrastructure
         .session_store()
         .expect("storage-ephemeral default provider must provide session store");
@@ -326,6 +334,25 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
     Ok(app_with_state_and_config(state, config))
 }
 
+fn api_workspace_root() -> Result<PathBuf> {
+    let current_dir = std::env::current_dir()?;
+    let candidates = [
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        current_dir.clone(),
+        current_dir.join("api"),
+    ];
+
+    for candidate in candidates {
+        if candidate.join("plugins/host-extensions").is_dir() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(anyhow!(
+        "api workspace root with plugins/host-extensions was not found"
+    ))
+}
+
 pub fn init_tracing() {
     let _ = tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
@@ -335,7 +362,7 @@ pub fn init_tracing() {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_bind_addr, DEFAULT_API_SERVER_ADDR};
+    use super::{api_workspace_root, parse_bind_addr, DEFAULT_API_SERVER_ADDR};
 
     #[test]
     fn parse_bind_addr_uses_new_default_api_port() {
@@ -349,6 +376,13 @@ mod tests {
         let error = parse_bind_addr(Some("not-an-addr"), DEFAULT_API_SERVER_ADDR).unwrap_err();
 
         assert!(error.to_string().contains("API_SERVER_ADDR"));
+    }
+
+    #[test]
+    fn api_workspace_root_contains_builtin_host_extensions() {
+        let root = api_workspace_root().unwrap();
+
+        assert!(root.join("plugins/host-extensions").is_dir());
     }
 }
 

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
 use control_plane::ports::SessionStore;
+use plugin_framework::HostExtensionRegistry;
 use storage_ephemeral::{
     MemoryDistributedLock, MemoryEventBus, MemoryTaskQueue, MokaCacheStore, MokaRateLimitStore,
     MokaSessionStore,
@@ -12,56 +14,61 @@ use super::{
 };
 
 const LOCAL_PROVIDER_CODE: &str = "local";
-const LOCAL_PROVIDER_SOURCE: &str = "local-infra-host";
+const LOCAL_PROVIDER_SOURCE: &str = "official.local-infra-host";
 const CACHE_STORE_NAMESPACE: &str = "flowbase:cache";
 const RATE_LIMIT_STORE_NAMESPACE: &str = "flowbase:rate-limit";
 const LOCK_NAMESPACE: &str = "flowbase:lock";
 const TASK_QUEUE_NAMESPACE: &str = "flowbase:task";
 const LOCAL_CACHE_MAX_CAPACITY: u64 = 10_000;
+const LOCAL_INFRASTRUCTURE_CONTRACTS: &[&str] = &[
+    "storage-ephemeral",
+    "session-store",
+    "cache-store",
+    "distributed-lock",
+    "event-bus",
+    "task-queue",
+    "rate-limit-store",
+    "runtime-event-stream",
+];
 
 pub fn build_local_host_infrastructure() -> HostInfrastructureRegistry {
     let mut registry = HostInfrastructureRegistry::default();
-    registry
-        .register_default_provider(
-            "storage-ephemeral",
-            LOCAL_PROVIDER_CODE,
-            LOCAL_PROVIDER_SOURCE,
-        )
-        .expect("local storage-ephemeral provider registration should be unique");
-    registry
-        .register_default_provider("session-store", LOCAL_PROVIDER_CODE, LOCAL_PROVIDER_SOURCE)
-        .expect("local session-store provider registration should be unique");
-    registry
-        .register_default_provider("cache-store", LOCAL_PROVIDER_CODE, LOCAL_PROVIDER_SOURCE)
-        .expect("local cache-store provider registration should be unique");
-    registry
-        .register_default_provider(
-            "distributed-lock",
-            LOCAL_PROVIDER_CODE,
-            LOCAL_PROVIDER_SOURCE,
-        )
-        .expect("local distributed-lock provider registration should be unique");
-    registry
-        .register_default_provider("event-bus", LOCAL_PROVIDER_CODE, LOCAL_PROVIDER_SOURCE)
-        .expect("local event-bus provider registration should be unique");
-    registry
-        .register_default_provider("task-queue", LOCAL_PROVIDER_CODE, LOCAL_PROVIDER_SOURCE)
-        .expect("local task-queue provider registration should be unique");
-    registry
-        .register_default_provider(
-            "rate-limit-store",
-            LOCAL_PROVIDER_CODE,
-            LOCAL_PROVIDER_SOURCE,
-        )
-        .expect("local rate-limit-store provider registration should be unique");
-    registry
-        .register_default_provider(
-            "runtime-event-stream",
-            LOCAL_PROVIDER_CODE,
-            LOCAL_PROVIDER_SOURCE,
-        )
-        .expect("local runtime-event-stream provider registration should be unique");
+    for contract in LOCAL_INFRASTRUCTURE_CONTRACTS {
+        registry
+            .register_default_provider(*contract, LOCAL_PROVIDER_CODE, LOCAL_PROVIDER_SOURCE)
+            .expect("local provider registration should be unique");
+    }
 
+    install_local_infrastructure_services(&mut registry);
+    registry
+}
+
+pub fn build_local_host_infrastructure_from_host_extensions(
+    host_extensions: &HostExtensionRegistry,
+) -> Result<HostInfrastructureRegistry> {
+    let mut registry = HostInfrastructureRegistry::default();
+    for contract in LOCAL_INFRASTRUCTURE_CONTRACTS {
+        let provider = host_extensions
+            .infrastructure_provider(contract, LOCAL_PROVIDER_CODE)
+            .ok_or_else(|| {
+                anyhow!(
+                    "builtin local infrastructure provider `{}` for `{}` is not registered",
+                    LOCAL_PROVIDER_CODE,
+                    contract
+                )
+            })?;
+        registry.register_default_provider(
+            provider.contract.clone(),
+            provider.provider_code.clone(),
+            provider.extension_id.clone(),
+        )?;
+    }
+
+    install_local_infrastructure_services(&mut registry);
+    Ok(registry)
+}
+
+fn install_local_infrastructure_services(registry: &mut HostInfrastructureRegistry) {
     registry.set_session_store(Arc::new(MokaSessionStore::new(
         SESSION_STORE_NAMESPACE,
         LOCAL_CACHE_MAX_CAPACITY,
@@ -83,6 +90,4 @@ pub fn build_local_host_infrastructure() -> HostInfrastructureRegistry {
     registry.set_runtime_event_stream(
         Arc::new(LocalRuntimeEventStream::new()) as Arc<dyn RuntimeEventStream>
     );
-
-    registry
 }

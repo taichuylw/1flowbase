@@ -10,7 +10,8 @@ use control_plane::{
         },
         run_service::{
             ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
-            CancelPublishedFlowRunInput, ListWaitingCallbackPublishedRunsInput,
+            CancelPublishedFlowRunInput, CreatePublishedFlowRunResult,
+            ListWaitingCallbackPublishedRunsInput,
         },
     },
     errors::ControlPlaneError,
@@ -539,8 +540,8 @@ impl ApplicationPublishedFlowRunRepository for PgControlPlaneStore {
     async fn create_published_flow_run(
         &self,
         input: &CreateFlowRunInput,
-    ) -> Result<domain::FlowRunRecord> {
-        PgControlPlaneStore::create_flow_run(self, input).await
+    ) -> Result<CreatePublishedFlowRunResult> {
+        PgControlPlaneStore::create_published_flow_run(self, input).await
     }
 
     async fn find_published_flow_run_by_idempotency_key(

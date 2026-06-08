@@ -92,8 +92,8 @@ const runtimeApi = vi.hoisted(() => ({
       return {
         items: rawPage.items.map((item: ConversationMessagePageItem) => ({
           ...item,
-          run_id: item.flow_run_id ?? item.id,
-          detail_run_id: item.flow_run_id ?? item.id,
+          run_id: item.flow_run_id ?? `message:${item.id}`,
+          detail_run_id: item.flow_run_id,
           can_open_detail: item.flow_run_id === 'run-0',
           status: item.status ?? 'succeeded'
         })),
@@ -149,7 +149,7 @@ function conversationMessagesPage(
 ) {
   return {
     items: items.map((item) => ({
-      run_id: item.flow_run_id ?? item.id,
+      run_id: item.flow_run_id ?? `message:${item.id}`,
       detail_run_id: item.flow_run_id,
       can_open_detail: Boolean(item.flow_run_id),
       role: item.role,

@@ -83,7 +83,6 @@ const styleBoundaryNodeContributions = [
 
 const styleBoundaryApplicationRunRecord = {
   id: 'run-1',
-  flow_run_id: 'run-1',
   application_id: 'app-1',
   scope_id: 'workspace-1',
   run_mode: 'debug_flow_run',

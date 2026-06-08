@@ -86,15 +86,26 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceConfigInput,
     ) -> FrameworkResult<DataSourceValueOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::ValidateConfig,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        Ok(DataSourceValueOutput { output })
+        self.validate_config_operation(plugin_id, input)?.await
+    }
+
+    pub fn validate_config_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceConfigInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceValueOutput>> + Send + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::ValidateConfig,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move {
+            Ok(DataSourceValueOutput {
+                output: operation.await?,
+            })
+        })
     }
 
     pub async fn test_connection(
@@ -102,15 +113,26 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceConfigInput,
     ) -> FrameworkResult<DataSourceValueOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::TestConnection,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        Ok(DataSourceValueOutput { output })
+        self.test_connection_operation(plugin_id, input)?.await
+    }
+
+    pub fn test_connection_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceConfigInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceValueOutput>> + Send + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::TestConnection,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move {
+            Ok(DataSourceValueOutput {
+                output: operation.await?,
+            })
+        })
     }
 
     pub async fn discover_catalog(
@@ -118,16 +140,25 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceConfigInput,
     ) -> FrameworkResult<DataSourceCatalogOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::DiscoverCatalog,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        Ok(DataSourceCatalogOutput {
-            entries: normalize_catalog(output)?,
+        self.discover_catalog_operation(plugin_id, input)?.await
+    }
+
+    pub fn discover_catalog_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceConfigInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceCatalogOutput>> + Send + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::DiscoverCatalog,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move {
+            Ok(DataSourceCatalogOutput {
+                entries: normalize_catalog(operation.await?)?,
+            })
         })
     }
 
@@ -137,20 +168,31 @@ impl DataSourceHost {
         connection: DataSourceConfigInput,
         resource_key: String,
     ) -> FrameworkResult<DataSourceDescriptorOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::DescribeResource,
-                serde_json::to_value(DataSourceDescribeResourceInput {
-                    connection,
-                    resource_key,
-                })
-                .unwrap(),
-            )
-            .await?;
-        Ok(DataSourceDescriptorOutput {
-            descriptor: normalize_descriptor(output)?,
+        self.describe_resource_operation(plugin_id, connection, resource_key)?
+            .await
+    }
+
+    pub fn describe_resource_operation(
+        &self,
+        plugin_id: &str,
+        connection: DataSourceConfigInput,
+        resource_key: String,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceDescriptorOutput>> + Send + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::DescribeResource,
+            serde_json::to_value(DataSourceDescribeResourceInput {
+                connection,
+                resource_key,
+            })
+            .unwrap(),
+        )?;
+        Ok(async move {
+            Ok(DataSourceDescriptorOutput {
+                descriptor: normalize_descriptor(operation.await?)?,
+            })
         })
     }
 
@@ -159,15 +201,22 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourcePreviewReadInput,
     ) -> FrameworkResult<DataSourcePreviewReadOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::PreviewRead,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_preview_read(output)
+        self.preview_read_operation(plugin_id, input)?.await
+    }
+
+    pub fn preview_read_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourcePreviewReadInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourcePreviewReadOutput>> + Send + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::PreviewRead,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move { normalize_preview_read(operation.await?) })
     }
 
     pub async fn import_snapshot(
@@ -175,15 +224,24 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceImportSnapshotInput,
     ) -> FrameworkResult<DataSourceImportSnapshotOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::ImportSnapshot,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_import_snapshot(output)
+        self.import_snapshot_operation(plugin_id, input)?.await
+    }
+
+    pub fn import_snapshot_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceImportSnapshotInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceImportSnapshotOutput>>
+            + Send
+            + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::ImportSnapshot,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move { normalize_import_snapshot(operation.await?) })
     }
 
     pub async fn list_records(
@@ -191,15 +249,22 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceListRecordsInput,
     ) -> FrameworkResult<DataSourceListRecordsOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::ListRecords,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_list_records(output)
+        self.list_records_operation(plugin_id, input)?.await
+    }
+
+    pub fn list_records_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceListRecordsInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceListRecordsOutput>> + Send + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::ListRecords,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move { normalize_list_records(operation.await?) })
     }
 
     pub async fn get_record(
@@ -207,15 +272,22 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceGetRecordInput,
     ) -> FrameworkResult<DataSourceGetRecordOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::GetRecord,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_get_record(output)
+        self.get_record_operation(plugin_id, input)?.await
+    }
+
+    pub fn get_record_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceGetRecordInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceGetRecordOutput>> + Send + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::GetRecord,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move { normalize_get_record(operation.await?) })
     }
 
     pub async fn create_record(
@@ -223,15 +295,24 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceCreateRecordInput,
     ) -> FrameworkResult<DataSourceCreateRecordOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::CreateRecord,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_create_record(output)
+        self.create_record_operation(plugin_id, input)?.await
+    }
+
+    pub fn create_record_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceCreateRecordInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceCreateRecordOutput>>
+            + Send
+            + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::CreateRecord,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move { normalize_create_record(operation.await?) })
     }
 
     pub async fn update_record(
@@ -239,15 +320,24 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceUpdateRecordInput,
     ) -> FrameworkResult<DataSourceUpdateRecordOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::UpdateRecord,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_update_record(output)
+        self.update_record_operation(plugin_id, input)?.await
+    }
+
+    pub fn update_record_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceUpdateRecordInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceUpdateRecordOutput>>
+            + Send
+            + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::UpdateRecord,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move { normalize_update_record(operation.await?) })
     }
 
     pub async fn delete_record(
@@ -255,15 +345,24 @@ impl DataSourceHost {
         plugin_id: &str,
         input: DataSourceDeleteRecordInput,
     ) -> FrameworkResult<DataSourceDeleteRecordOutput> {
-        let loaded = self.loaded_package(plugin_id)?;
-        let output = self
-            .call_runtime(
-                loaded,
-                DataSourceStdioMethod::DeleteRecord,
-                serde_json::to_value(input).unwrap(),
-            )
-            .await?;
-        normalize_delete_record(output)
+        self.delete_record_operation(plugin_id, input)?.await
+    }
+
+    pub fn delete_record_operation(
+        &self,
+        plugin_id: &str,
+        input: DataSourceDeleteRecordInput,
+    ) -> FrameworkResult<
+        impl std::future::Future<Output = FrameworkResult<DataSourceDeleteRecordOutput>>
+            + Send
+            + 'static,
+    > {
+        let operation = self.call_runtime_operation(
+            plugin_id,
+            DataSourceStdioMethod::DeleteRecord,
+            serde_json::to_value(input).unwrap(),
+        )?;
+        Ok(async move { normalize_delete_record(operation.await?) })
     }
 
     fn loaded_package(&self, plugin_id: &str) -> FrameworkResult<&LoadedDataSourcePackage> {
@@ -274,9 +373,19 @@ impl DataSourceHost {
         })
     }
 
-    async fn call_runtime(
+    fn call_runtime_operation(
         &self,
-        loaded: &LoadedDataSourcePackage,
+        plugin_id: &str,
+        method: DataSourceStdioMethod,
+        input: Value,
+    ) -> FrameworkResult<impl std::future::Future<Output = FrameworkResult<Value>> + Send + 'static>
+    {
+        let loaded = self.loaded_package(plugin_id)?.clone();
+        Ok(async move { Self::call_runtime_loaded(loaded, method, input).await })
+    }
+
+    async fn call_runtime_loaded(
+        loaded: LoadedDataSourcePackage,
         method: DataSourceStdioMethod,
         input: Value,
     ) -> FrameworkResult<Value> {

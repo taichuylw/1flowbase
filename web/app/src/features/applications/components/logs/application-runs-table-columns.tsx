@@ -57,12 +57,12 @@ export function getApplicationRunsTableColumns(
     render: (value) => (value ? `${value}` : '-')
   },
   {
-    key: 'flow_run_id',
+    key: 'id',
     title: t('auto.run_id'),
-    dataIndex: 'flow_run_id',
+    dataIndex: 'id',
     width: 180,
     ellipsis: true,
-    render: (_value, run) => run.flow_run_id ?? run.id
+    render: (_value, run) => run.id
   },
   {
     key: 'run_mode',

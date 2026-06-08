@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -35,7 +36,8 @@ use conversation_history::application_public_conversation_messages_to_native_his
 pub use native_results::{native_result_from_flow_run, native_result_from_run_detail};
 pub use repository_contracts::{
     ApplicationPublishedFlowRunRepository, ApplicationPublishedRunControlRepository,
-    CancelPublishedFlowRunInput, ListWaitingCallbackPublishedRunsInput,
+    CancelPublishedFlowRunInput, CreatePublishedFlowRunResult,
+    ListWaitingCallbackPublishedRunsInput,
 };
 use run_input::{
     compiled_plan_start_node_id, freeze_run_input_environment, generate_external_conversation_id,
@@ -44,6 +46,7 @@ use run_input::{
 
 const APPLICATION_PUBLIC_CONVERSATION_HISTORY_LIMIT: i64 = 50;
 const ANTHROPIC_MESSAGES_COMPATIBILITY_MODE: &str = "anthropic-messages-v1";
+const PUBLIC_RUN_IDEMPOTENCY_FINGERPRINT: &str = "public_run_idempotency_fingerprint";
 
 pub struct ApplicationPublishedRunService<R> {
     repository: R,
@@ -90,8 +93,18 @@ where
         self.ensure_application_exists(&actor).await?;
 
         let publication = self.load_enabled_publication(&actor).await?;
+        let client_request = command.request;
+        let idempotency_key = client_request
+            .execution
+            .get("idempotency_key")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
+        let idempotency_fingerprint = idempotency_key
+            .as_ref()
+            .map(|_| public_run_idempotency_fingerprint(&client_request))
+            .transpose()?;
         let request = self
-            .bind_conversation(actor.application_id, actor.api_key_id, command.request)
+            .bind_conversation(actor.application_id, actor.api_key_id, client_request)
             .await?;
         let external_model_parameters =
             validate_external_model_parameters(&request, &publication.document_snapshot)?;
@@ -106,10 +119,6 @@ where
         let mapped = NativeInputMapper::map(&request, &publication.mapping_snapshot)
             .map_err(|_| NativeRunValidationError::InvalidMapping)?;
         let metadata = mapped.metadata;
-        let idempotency_key = metadata
-            .get("idempotency_key")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned);
 
         if let Some(idempotency_key) = idempotency_key.as_deref() {
             if let Some(flow_run) = self
@@ -122,6 +131,10 @@ where
                 .await
                 .map_err(|_| NativeRunValidationError::InvalidMapping)?
             {
+                ensure_idempotency_fingerprint_matches(
+                    &flow_run,
+                    idempotency_fingerprint.as_deref(),
+                )?;
                 return Ok(native_result_from_flow_run(&flow_run, metadata));
             }
         }
@@ -135,7 +148,17 @@ where
             .await
             .map_err(|_| NativeRunValidationError::InvalidMapping)?;
         let started_at = OffsetDateTime::now_utc();
-        let flow_run = self
+        let input_payload = freeze_run_input_environment(
+            mapped.node_input_payload,
+            &environment_variables,
+            external_model_parameters,
+            compiled_plan_start_node_id(&compiled_plan.plan).as_deref(),
+        );
+        let input_payload = with_public_run_idempotency_fingerprint(
+            input_payload,
+            idempotency_fingerprint.as_deref(),
+        );
+        let created = self
             .repository
             .create_published_flow_run(&CreateFlowRunInput {
                 actor_user_id: actor.creator_user_id,
@@ -150,12 +173,7 @@ where
                 target_node_id: None,
                 title: build_flow_run_title(request.title.as_deref(), &request.query),
                 status: domain::FlowRunStatus::Queued,
-                input_payload: freeze_run_input_environment(
-                    mapped.node_input_payload,
-                    &environment_variables,
-                    external_model_parameters,
-                    compiled_plan_start_node_id(&compiled_plan.plan).as_deref(),
-                ),
+                input_payload,
                 started_at,
                 api_key_id: Some(actor.api_key_id),
                 publication_version_id: Some(publication.id),
@@ -179,6 +197,11 @@ where
             })
             .await
             .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+        let flow_run = created.flow_run;
+        if !created.created {
+            ensure_idempotency_fingerprint_matches(&flow_run, idempotency_fingerprint.as_deref())?;
+            return Ok(native_result_from_flow_run(&flow_run, metadata));
+        }
 
         self.append_started_audit(&actor, &publication, &flow_run, &metadata)
             .await;
@@ -494,6 +517,94 @@ where
         }
         Ok(request)
     }
+}
+
+fn public_run_idempotency_fingerprint(
+    request: &NativeRunRequest,
+) -> std::result::Result<String, NativeRunValidationError> {
+    let value =
+        serde_json::to_value(request).map_err(|_| NativeRunValidationError::InvalidMapping)?;
+    let mut canonical = Vec::new();
+    write_canonical_json(&value, &mut canonical)
+        .map_err(|_| NativeRunValidationError::InvalidMapping)?;
+    let hash = Sha256::digest(canonical);
+    Ok(format!("sha256:{}", hex_lower(&hash)))
+}
+
+fn write_canonical_json(value: &Value, out: &mut Vec<u8>) -> serde_json::Result<()> {
+    match value {
+        Value::Object(object) => {
+            out.push(b'{');
+            let mut keys = object.keys().collect::<Vec<_>>();
+            keys.sort_unstable();
+            for (index, key) in keys.into_iter().enumerate() {
+                if index > 0 {
+                    out.push(b',');
+                }
+                serde_json::to_writer(&mut *out, key)?;
+                out.push(b':');
+                write_canonical_json(&object[key], out)?;
+            }
+            out.push(b'}');
+            Ok(())
+        }
+        Value::Array(values) => {
+            out.push(b'[');
+            for (index, item) in values.iter().enumerate() {
+                if index > 0 {
+                    out.push(b',');
+                }
+                write_canonical_json(item, out)?;
+            }
+            out.push(b']');
+            Ok(())
+        }
+        _ => serde_json::to_writer(out, value),
+    }
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn with_public_run_idempotency_fingerprint(
+    mut input_payload: Value,
+    fingerprint: Option<&str>,
+) -> Value {
+    let Some(fingerprint) = fingerprint else {
+        return input_payload;
+    };
+    let payload = input_payload
+        .as_object_mut()
+        .expect("frozen run input payload");
+    let sys = payload.entry("sys").or_insert_with(|| json!({}));
+    if !sys.is_object() {
+        *sys = json!({});
+    }
+    sys.as_object_mut().expect("sys payload").insert(
+        PUBLIC_RUN_IDEMPOTENCY_FINGERPRINT.to_string(),
+        Value::String(fingerprint.to_string()),
+    );
+    input_payload
+}
+
+fn ensure_idempotency_fingerprint_matches(
+    flow_run: &domain::FlowRunRecord,
+    expected: Option<&str>,
+) -> std::result::Result<(), NativeRunValidationError> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    let stored = flow_run
+        .input_payload
+        .get("sys")
+        .and_then(Value::as_object)
+        .and_then(|sys| sys.get(PUBLIC_RUN_IDEMPOTENCY_FINGERPRINT))
+        .and_then(Value::as_str);
+    if stored == Some(expected) {
+        return Ok(());
+    }
+    Err(NativeRunValidationError::IdempotencyConflict)
 }
 
 #[cfg(test)]

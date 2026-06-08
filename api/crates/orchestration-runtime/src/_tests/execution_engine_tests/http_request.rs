@@ -659,6 +659,65 @@ async fn http_request_node_default_response_budget_allows_six_mib() {
 }
 
 #[tokio::test]
+async fn http_request_node_keeps_binary_response_file_descriptor_when_inline_body_is_truncated() {
+    let body = vec![0, 1, 2, 3, 4, 5];
+    let (base_url, _captured, server) = spawn_http_fixture(vec![response(
+        "/large-download",
+        200,
+        "application/octet-stream",
+        body,
+    )])
+    .await;
+    let plan = http_request_plan(
+        json!({
+            "method": "GET",
+            "url": format!("{base_url}/large-download"),
+            "body_type": "none",
+            "timeout_ms": 30000,
+            "max_response_bytes": 4,
+            "verify_ssl": true,
+            "store_response_as_file": true
+        }),
+        BTreeMap::new(),
+    );
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "refund" } }),
+        &successful_invoker(),
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        outcome.stop_reason,
+        ExecutionStopReason::Completed
+    ));
+    assert_eq!(
+        outcome.variable_pool["node-http"]["body"],
+        json!(String::from_utf8_lossy(&[0, 1, 2, 3]).to_string())
+    );
+    assert_eq!(
+        outcome.variable_pool["node-http"]["files"][0]["filename"],
+        "response.bin"
+    );
+    assert_eq!(outcome.variable_pool["node-http"]["files"][0]["size"], 6);
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["body_truncated"],
+        json!(true)
+    );
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["stored_body_bytes"],
+        json!(4)
+    );
+    assert_eq!(
+        outcome.node_traces[1].metrics_payload["response_bytes_observed"],
+        json!(6)
+    );
+    server.abort();
+}
+
+#[tokio::test]
 async fn http_request_node_truncates_response_body_at_configured_budget() {
     let (base_url, _captured, server) =
         spawn_http_fixture(vec![response("/large-text", 200, "text/plain", "abcdef")]).await;

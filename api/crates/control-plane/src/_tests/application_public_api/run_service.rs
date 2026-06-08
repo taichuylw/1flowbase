@@ -638,6 +638,44 @@ async fn start_native_run_replays_existing_run_for_same_idempotency_key() {
 }
 
 #[tokio::test]
+async fn start_native_run_rejects_same_idempotency_key_with_different_request() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let repository = harness.repository();
+    let application = harness.seed_application(actor_user_id(), "Idempotent Native App");
+    let token = issue_key(&harness, application.id).await;
+    ApplicationPublicationService::new(repository.clone())
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: published_mapping(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let service = ApplicationPublishedRunService::new(repository.clone());
+    service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: native_request("blocking", Some("idem-conflict")),
+        })
+        .await
+        .unwrap();
+    let mut changed_request = native_request("blocking", Some("idem-conflict"));
+    changed_request.query = "Summarize a different incident".to_string();
+
+    let error = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token,
+            request: changed_request,
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(error, NativeRunValidationError::IdempotencyConflict);
+    assert_eq!(repository.flow_run_count(), 1);
+}
+
+#[tokio::test]
 async fn start_anthropic_run_cancels_previous_waiting_callback_in_same_conversation() {
     let harness = ApplicationPublicApiTestHarness::new();
     let repository = harness.repository();

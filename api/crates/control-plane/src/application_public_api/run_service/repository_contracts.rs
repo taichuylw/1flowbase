@@ -6,12 +6,18 @@ use uuid::Uuid;
 
 use crate::ports::CreateFlowRunInput;
 
+#[derive(Debug, Clone)]
+pub struct CreatePublishedFlowRunResult {
+    pub flow_run: domain::FlowRunRecord,
+    pub created: bool,
+}
+
 #[async_trait]
 pub trait ApplicationPublishedFlowRunRepository: Send + Sync {
     async fn create_published_flow_run(
         &self,
         input: &CreateFlowRunInput,
-    ) -> Result<domain::FlowRunRecord>;
+    ) -> Result<CreatePublishedFlowRunResult>;
 
     async fn find_published_flow_run_by_idempotency_key(
         &self,

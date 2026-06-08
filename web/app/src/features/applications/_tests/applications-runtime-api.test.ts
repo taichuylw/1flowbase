@@ -323,7 +323,6 @@ describe('applications runtime api', () => {
       items: [
         {
           id: 'run-1',
-          flow_run_id: 'run-1',
           application_id: 'app-1',
           scope_id: 'workspace-1',
           run_mode: 'published_api_run',
@@ -346,12 +345,14 @@ describe('applications runtime api', () => {
       total: 1
     });
 
-    await expect(
-      fetchApplicationRuns('app-1', { titleIncludes: '退款' })
-    ).resolves.toMatchObject({
+    const runsPage = await fetchApplicationRuns('app-1', {
+      titleIncludes: '退款'
+    });
+
+    expect(runsPage).toMatchObject({
       items: [
         {
-          flow_run_id: 'run-1',
+          id: 'run-1',
           application_id: 'app-1',
           scope_id: 'workspace-1',
           title: '退款总结',
@@ -365,6 +366,7 @@ describe('applications runtime api', () => {
       page: 1,
       page_size: 20
     });
+    expect(runsPage.items[0]).not.toHaveProperty('flow_run_id');
 
     expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
       'application_run_log_summaries',

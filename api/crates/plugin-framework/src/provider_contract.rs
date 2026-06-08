@@ -419,6 +419,8 @@ impl ProviderRuntimeError {
 
 impl fmt::Display for ProviderRuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // RuntimeContract errors intentionally preserve upstream provider details.
+        // Do not collapse, redact, or localize this display path in host code.
         match &self.provider_summary {
             Some(summary) => write!(f, "{:?}: {} ({summary})", self.kind, self.message),
             None => write!(f, "{:?}: {}", self.kind, self.message),

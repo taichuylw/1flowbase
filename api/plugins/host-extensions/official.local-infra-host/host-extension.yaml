@@ -15,6 +15,12 @@ infrastructure_providers:
     description: Local in-process host infrastructure provider.
     config_ref: secret://system/official.local-infra-host/config
     config_schema: []
+  - contract: session-store
+    provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
+    config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
   - contract: cache-store
     provider_code: local
     display_name: Local
@@ -40,6 +46,12 @@ infrastructure_providers:
     config_ref: secret://system/official.local-infra-host/config
     config_schema: []
   - contract: rate-limit-store
+    provider_code: local
+    display_name: Local
+    description: Local in-process host infrastructure provider.
+    config_ref: secret://system/official.local-infra-host/config
+    config_schema: []
+  - contract: runtime-event-stream
     provider_code: local
     display_name: Local
     description: Local in-process host infrastructure provider.

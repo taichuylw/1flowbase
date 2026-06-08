@@ -38,6 +38,7 @@
 - `Resource Action Kernel` 是否仍由宿主托管
 - HostExtension 是否只通过 manifest contribution 注册 resource、action、hook、route、worker、migration 和 infrastructure provider
 - pre-state infrastructure provider 是否在 `ApiState`、session store、control-plane service、runtime engine 和 HTTP router 构造前完成
+- Provider / 上游 runtime 错误是否按 passthrough contract 保留原始排障信息；不要把 stdout / stderr / upstream error 进入 `RuntimeContract` / API response 判为泄漏，真正的问题是宿主改写、截断、翻译、吞掉或泛化上游信息
 - RuntimeExtension / CapabilityPlugin 是否没有直接持有 Redis、NATS、RabbitMQ 等基础设施连接
 - native HostExtension 是否保持 in-process、restart-scoped，不设计 Rust native 热卸载
 - `dynamic modeling` 是否仍是元数据系统，而不是 runtime 数据本身

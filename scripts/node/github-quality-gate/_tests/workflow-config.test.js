@@ -311,7 +311,7 @@ test("GitHub automation docs describe latest-only issue publishing", () => {
   assert.doesNotMatch(readme, /refs\/heads\/main/u);
 });
 
-test("GitHub automation docs keep React Doctor in nightly and manual full gates", () => {
+test("GitHub automation docs keep React Doctor outside workflow scopes", () => {
   const readme = readGitHubAutomationDocs();
 
   assert.match(readme, /React Doctor is no longer an automatic PR merge blocker/u);
@@ -320,7 +320,17 @@ test("GitHub automation docs keep React Doctor in nightly and manual full gates"
     /npx react-doctor@0\.2\.16 web\/app --diff origin\/main --offline --fail-on warning --verbose/u,
   );
   assert.match(readme, /web\/app\/doctor\.config\.json/u);
-  assert.match(readme, /nightly or manual full quality gate/u);
+  assert.match(readme, /React Doctor is not part of `quality-gate` `scope: ci`/u);
+  assert.doesNotMatch(readme, /React Doctor, and container/u);
+});
+
+test("GitHub automation docs describe container image CD as artifact-only reporting", () => {
+  const readme = readGitHubAutomationDocs();
+
+  assert.match(readme, /Container Image CD/u);
+  assert.match(readme, /publish_issue: "false"/u);
+  assert.match(readme, /artifact-only/u);
+  assert.doesNotMatch(readme, /publishes one\s+`\[Quality Gate\]\[CD\]` Issue/u);
 });
 
 test("quality gate workflow supports dispatch targets and nightly latest CI defaults", () => {
@@ -512,7 +522,7 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
   assert.match(workflow, /scope: \$\{\{ env\.QUALITY_GATE_SCOPE \}\}/u);
   assert.match(
     workflow,
-    /start_postgres: \$\{\{ inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u,
+    /start_postgres: \$\{\{ inputs\.scope == 'repo' \|\| inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u,
   );
   assert.match(workflow, /publish_issue: "true"/u);
 });

@@ -111,7 +111,7 @@ impl run_service::ApplicationPublishedFlowRunRepository for ApplicationPublicApi
     async fn create_published_flow_run(
         &self,
         input: &CreateFlowRunInput,
-    ) -> Result<domain::FlowRunRecord> {
+    ) -> Result<run_service::CreatePublishedFlowRunResult> {
         let record = domain::FlowRunRecord {
             id: Uuid::now_v7(),
             application_id: input.application_id,
@@ -146,6 +146,26 @@ impl run_service::ApplicationPublishedFlowRunRepository for ApplicationPublicApi
             .inner
             .lock()
             .expect("application public api test repo mutex poisoned");
+        if let (Some(api_key_id), Some(idempotency_key)) =
+            (record.api_key_id, record.idempotency_key.as_deref())
+        {
+            if let Some(existing) = inner
+                .flow_runs
+                .values()
+                .find(|run| {
+                    run.application_id == record.application_id
+                        && run.api_key_id == Some(api_key_id)
+                        && run.idempotency_key.as_deref() == Some(idempotency_key)
+                        && run.run_mode == domain::FlowRunMode::PublishedApiRun
+                })
+                .cloned()
+            {
+                return Ok(run_service::CreatePublishedFlowRunResult {
+                    flow_run: existing,
+                    created: false,
+                });
+            }
+        }
         if let (Some(api_key_id), Some(external_user), Some(external_conversation_id)) = (
             record.api_key_id,
             record.external_user.as_ref(),
@@ -162,7 +182,10 @@ impl run_service::ApplicationPublishedFlowRunRepository for ApplicationPublicApi
             }
         }
         inner.flow_runs.insert(record.id, record.clone());
-        Ok(record)
+        Ok(run_service::CreatePublishedFlowRunResult {
+            flow_run: record,
+            created: true,
+        })
     }
 
     async fn find_published_flow_run_by_idempotency_key(

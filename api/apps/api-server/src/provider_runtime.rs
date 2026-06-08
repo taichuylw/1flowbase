@@ -183,8 +183,12 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         provider_config: Value,
     ) -> anyhow::Result<Value> {
         self.ensure_provider_loaded(installation).await?;
-        let host = self.services.provider_host.read().await;
-        host.validate(&installation.plugin_id, provider_config)
+        let operation = {
+            let host = self.services.provider_host.read().await;
+            host.validate_operation(&installation.plugin_id, provider_config)
+                .map_err(map_provider_framework_error)?
+        };
+        operation
             .await
             .map(|output| output.output)
             .map_err(map_provider_framework_error)
@@ -196,8 +200,12 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         provider_config: Value,
     ) -> anyhow::Result<Vec<ProviderModelDescriptor>> {
         self.ensure_provider_loaded(installation).await?;
-        let host = self.services.provider_host.read().await;
-        host.list_models(&installation.plugin_id, provider_config)
+        let operation = {
+            let host = self.services.provider_host.read().await;
+            host.list_models_operation(&installation.plugin_id, provider_config)
+                .map_err(map_provider_framework_error)?
+        };
+        operation
             .await
             .map(|output| output.models)
             .map_err(map_provider_framework_error)
@@ -209,8 +217,12 @@ impl ProviderRuntimePort for ApiProviderRuntime {
         provider_config: Value,
     ) -> anyhow::Result<ProviderBalanceResult> {
         self.ensure_provider_loaded(installation).await?;
-        let host = self.services.provider_host.read().await;
-        host.get_balance(&installation.plugin_id, provider_config)
+        let operation = {
+            let host = self.services.provider_host.read().await;
+            host.get_balance_operation(&installation.plugin_id, provider_config)
+                .map_err(map_provider_framework_error)?
+        };
+        operation
             .await
             .map(|output| output.balance)
             .map_err(map_provider_framework_error)
@@ -223,15 +235,21 @@ impl ProviderRuntimePort for ApiProviderRuntime {
     ) -> anyhow::Result<ProviderRuntimeInvocationOutput> {
         let activity = self.start_runtime_activity(ApplicationActivityKind::ModelRequest);
         self.ensure_provider_loaded(installation).await?;
-        let host = self.services.provider_host.read().await;
-        let result = host
-            .invoke_stream(&installation.plugin_id, input)
-            .await
-            .map(|output| ProviderRuntimeInvocationOutput {
-                events: output.events,
-                result: output.result,
-            })
-            .map_err(map_provider_framework_error);
+        let operation = {
+            let host = self.services.provider_host.read().await;
+            host.invoke_stream_operation(&installation.plugin_id, input)
+                .map_err(map_provider_framework_error)
+        };
+        let result = match operation {
+            Ok(operation) => operation
+                .await
+                .map(|output| ProviderRuntimeInvocationOutput {
+                    events: output.events,
+                    result: output.result,
+                })
+                .map_err(map_provider_framework_error),
+            Err(error) => Err(error),
+        };
         finish_runtime_activity(activity, &result);
         result
     }
@@ -248,15 +266,25 @@ impl ProviderRuntimePort for ApiProviderRuntime {
     ) -> anyhow::Result<ProviderRuntimeInvocationOutput> {
         let activity = self.start_runtime_activity(ApplicationActivityKind::ModelRequest);
         self.ensure_provider_loaded(installation).await?;
-        let host = self.services.provider_host.read().await;
-        let result = host
-            .invoke_stream_with_live_events(&installation.plugin_id, input, live_events)
-            .await
-            .map(|output| ProviderRuntimeInvocationOutput {
-                events: output.events,
-                result: output.result,
-            })
-            .map_err(map_provider_framework_error);
+        let operation = {
+            let host = self.services.provider_host.read().await;
+            host.invoke_stream_with_live_events_operation(
+                &installation.plugin_id,
+                input,
+                live_events,
+            )
+            .map_err(map_provider_framework_error)
+        };
+        let result = match operation {
+            Ok(operation) => operation
+                .await
+                .map(|output| ProviderRuntimeInvocationOutput {
+                    events: output.events,
+                    result: output.result,
+                })
+                .map_err(map_provider_framework_error),
+            Err(error) => Err(error),
+        };
         finish_runtime_activity(activity, &result);
         result
     }
@@ -285,17 +313,21 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
         secret_json: Value,
     ) -> anyhow::Result<Value> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.validate_config(
-            &installation.plugin_id,
-            DataSourceConfigInput {
-                config_json,
-                secret_json,
-            },
-        )
-        .await
-        .map(|output| output.output)
-        .map_err(|error| map_framework_error(error, "data_source_runtime"))
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.validate_config_operation(
+                &installation.plugin_id,
+                DataSourceConfigInput {
+                    config_json,
+                    secret_json,
+                },
+            )
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
+            .await
+            .map(|output| output.output)
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
 
     async fn test_connection(
@@ -305,17 +337,21 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
         secret_json: Value,
     ) -> anyhow::Result<Value> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.test_connection(
-            &installation.plugin_id,
-            DataSourceConfigInput {
-                config_json,
-                secret_json,
-            },
-        )
-        .await
-        .map(|output| output.output)
-        .map_err(|error| map_framework_error(error, "data_source_runtime"))
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.test_connection_operation(
+                &installation.plugin_id,
+                DataSourceConfigInput {
+                    config_json,
+                    secret_json,
+                },
+            )
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
+            .await
+            .map(|output| output.output)
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
 
     async fn discover_catalog(
@@ -325,15 +361,18 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
         secret_json: Value,
     ) -> anyhow::Result<Value> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        let output = host
-            .discover_catalog(
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.discover_catalog_operation(
                 &installation.plugin_id,
                 DataSourceConfigInput {
                     config_json,
                     secret_json,
                 },
             )
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        let output = operation
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))?;
         Ok(serde_json::to_value(output.entries)?)
@@ -345,15 +384,19 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
         input: DataSourceDescribeResourceInput,
     ) -> anyhow::Result<DataSourceResourceDescriptor> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.describe_resource(
-            &installation.plugin_id,
-            input.connection,
-            input.resource_key,
-        )
-        .await
-        .map(|output| output.descriptor)
-        .map_err(|error| map_framework_error(error, "data_source_runtime"))
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.describe_resource_operation(
+                &installation.plugin_id,
+                input.connection,
+                input.resource_key,
+            )
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
+            .await
+            .map(|output| output.descriptor)
+            .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
 
     async fn preview_read(
@@ -362,8 +405,12 @@ impl DataSourceRuntimePort for ApiProviderRuntime {
         input: DataSourcePreviewReadInput,
     ) -> anyhow::Result<DataSourcePreviewReadOutput> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.preview_read(&installation.plugin_id, input)
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.preview_read_operation(&installation.plugin_id, input)
+                .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
@@ -377,8 +424,12 @@ impl DataSourceCrudRuntimePort for ApiProviderRuntime {
         input: DataSourceListRecordsInput,
     ) -> anyhow::Result<DataSourceListRecordsOutput> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.list_records(&installation.plugin_id, input)
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.list_records_operation(&installation.plugin_id, input)
+                .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
@@ -389,8 +440,12 @@ impl DataSourceCrudRuntimePort for ApiProviderRuntime {
         input: DataSourceGetRecordInput,
     ) -> anyhow::Result<DataSourceGetRecordOutput> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.get_record(&installation.plugin_id, input)
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.get_record_operation(&installation.plugin_id, input)
+                .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
@@ -401,8 +456,12 @@ impl DataSourceCrudRuntimePort for ApiProviderRuntime {
         input: DataSourceCreateRecordInput,
     ) -> anyhow::Result<DataSourceCreateRecordOutput> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.create_record(&installation.plugin_id, input)
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.create_record_operation(&installation.plugin_id, input)
+                .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
@@ -413,8 +472,12 @@ impl DataSourceCrudRuntimePort for ApiProviderRuntime {
         input: DataSourceUpdateRecordInput,
     ) -> anyhow::Result<DataSourceUpdateRecordOutput> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.update_record(&installation.plugin_id, input)
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.update_record_operation(&installation.plugin_id, input)
+                .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
@@ -425,8 +488,12 @@ impl DataSourceCrudRuntimePort for ApiProviderRuntime {
         input: DataSourceDeleteRecordInput,
     ) -> anyhow::Result<DataSourceDeleteRecordOutput> {
         self.ensure_data_source_loaded(installation).await?;
-        let host = self.services.data_source_host.read().await;
-        host.delete_record(&installation.plugin_id, input)
+        let operation = {
+            let host = self.services.data_source_host.read().await;
+            host.delete_record_operation(&installation.plugin_id, input)
+                .map_err(|error| map_framework_error(error, "data_source_runtime"))?
+        };
+        operation
             .await
             .map_err(|error| map_framework_error(error, "data_source_runtime"))
     }
@@ -522,15 +589,19 @@ impl DataSourceRuntimeRecordBackend for ApiDataSourceRuntimeRecordBackend {
 impl CapabilityPluginRuntimePort for ApiProviderRuntime {
     async fn validate_config(&self, input: ValidateCapabilityConfigInput) -> anyhow::Result<Value> {
         self.ensure_capability_loaded(&input.installation).await?;
-        let host = self.services.capability_host.read().await;
-        host.validate_config(
-            &input.installation.plugin_id,
-            &input.contribution_code,
-            input.config_payload,
-        )
-        .await
-        .map(|output| output.output)
-        .map_err(|error| map_framework_error(error, "capability_runtime"))
+        let operation = {
+            let host = self.services.capability_host.read().await;
+            host.validate_config_operation(
+                &input.installation.plugin_id,
+                &input.contribution_code,
+                input.config_payload,
+            )
+            .map_err(|error| map_framework_error(error, "capability_runtime"))?
+        };
+        operation
+            .await
+            .map(|output| output.output)
+            .map_err(|error| map_framework_error(error, "capability_runtime"))
     }
 
     async fn resolve_dynamic_options(
@@ -538,15 +609,19 @@ impl CapabilityPluginRuntimePort for ApiProviderRuntime {
         input: ResolveCapabilityOptionsInput,
     ) -> anyhow::Result<Value> {
         self.ensure_capability_loaded(&input.installation).await?;
-        let host = self.services.capability_host.read().await;
-        host.resolve_dynamic_options(
-            &input.installation.plugin_id,
-            &input.contribution_code,
-            input.config_payload,
-        )
-        .await
-        .map(|output| output.output)
-        .map_err(|error| map_framework_error(error, "capability_runtime"))
+        let operation = {
+            let host = self.services.capability_host.read().await;
+            host.resolve_dynamic_options_operation(
+                &input.installation.plugin_id,
+                &input.contribution_code,
+                input.config_payload,
+            )
+            .map_err(|error| map_framework_error(error, "capability_runtime"))?
+        };
+        operation
+            .await
+            .map(|output| output.output)
+            .map_err(|error| map_framework_error(error, "capability_runtime"))
     }
 
     async fn resolve_output_schema(
@@ -554,15 +629,19 @@ impl CapabilityPluginRuntimePort for ApiProviderRuntime {
         input: ResolveCapabilityOutputSchemaInput,
     ) -> anyhow::Result<Value> {
         self.ensure_capability_loaded(&input.installation).await?;
-        let host = self.services.capability_host.read().await;
-        host.resolve_output_schema(
-            &input.installation.plugin_id,
-            &input.contribution_code,
-            input.config_payload,
-        )
-        .await
-        .map(|output| output.output)
-        .map_err(|error| map_framework_error(error, "capability_runtime"))
+        let operation = {
+            let host = self.services.capability_host.read().await;
+            host.resolve_output_schema_operation(
+                &input.installation.plugin_id,
+                &input.contribution_code,
+                input.config_payload,
+            )
+            .map_err(|error| map_framework_error(error, "capability_runtime"))?
+        };
+        operation
+            .await
+            .map(|output| output.output)
+            .map_err(|error| map_framework_error(error, "capability_runtime"))
     }
 
     async fn execute_node(
@@ -571,19 +650,25 @@ impl CapabilityPluginRuntimePort for ApiProviderRuntime {
     ) -> anyhow::Result<CapabilityExecutionOutput> {
         let activity = self.start_runtime_activity(ApplicationActivityKind::ToolCall);
         self.ensure_capability_loaded(&input.installation).await?;
-        let host = self.services.capability_host.read().await;
-        let result = host
-            .execute(
+        let operation = {
+            let host = self.services.capability_host.read().await;
+            host.execute_operation(
                 &input.installation.plugin_id,
                 &input.contribution_code,
                 input.config_payload,
                 input.input_payload,
             )
-            .await
-            .map(|output| CapabilityExecutionOutput {
-                output_payload: output.output_payload,
-            })
-            .map_err(|error| map_framework_error(error, "capability_runtime"));
+            .map_err(|error| map_framework_error(error, "capability_runtime"))
+        };
+        let result = match operation {
+            Ok(operation) => operation
+                .await
+                .map(|output| CapabilityExecutionOutput {
+                    output_payload: output.output_payload,
+                })
+                .map_err(|error| map_framework_error(error, "capability_runtime")),
+            Err(error) => Err(error),
+        };
         finish_runtime_activity(activity, &result);
         result
     }
@@ -706,7 +791,7 @@ mod tests {
         fs,
         path::{Path, PathBuf},
         sync::Arc,
-        time::{SystemTime, UNIX_EPOCH},
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
     use control_plane::ports::ProviderRuntimePort;
@@ -912,6 +997,102 @@ esac
         }
     }
 
+    fn write_slow_invocation_provider_package(package: &TempProviderPackage) {
+        package.write(
+            "manifest.yaml",
+            r#"manifest_version: 1
+plugin_id: fixture_provider@0.1.0
+version: 0.1.0
+vendor: 1flowbase
+display_name: Fixture Provider
+description: Fixture provider
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes:
+  - model_provider
+binding_targets:
+  - workspace
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.provider/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: none
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/fixture_provider
+  limits:
+    timeout_ms: 30000
+node_contributions: []
+"#,
+        );
+        package.write(
+            "provider/fixture_provider.yaml",
+            r#"provider_code: fixture_provider
+display_name: Fixture Provider
+protocol: openai_compatible
+model_discovery: static
+config_schema:
+  - key: api_key
+    type: secret
+    required: true
+"#,
+        );
+        package.write(
+            "i18n/en_US.json",
+            r#"{ "plugin": { "label": "Fixture Provider" } }"#,
+        );
+        package.write(
+            "bin/fixture_provider",
+            r#"#!/usr/bin/env bash
+payload="$(cat)"
+case "${payload}" in
+  *'"method":"invoke"'*)
+    printf '%s\n' '{"type":"text_delta","delta":"slow"}'
+    sleep 1
+    printf '%s\n' '{"type":"result","result":{"final_content":"slow","finish_reason":"stop"}}'
+    ;;
+  *)
+    printf '%s' '{"ok":false,"error":{"kind":"provider_invalid_response","message":"unknown method","provider_summary":null}}'
+    exit 1
+    ;;
+esac
+"#,
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let path = package.path().join("bin/fixture_provider");
+            let mut permissions = fs::metadata(&path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(path, permissions).unwrap();
+        }
+    }
+
+    async fn wait_for_provider_active_streams(
+        provider_host: &Arc<RwLock<ProviderHost>>,
+        count: usize,
+    ) {
+        for _ in 0..20 {
+            let snapshot = {
+                let host = provider_host.read().await;
+                host.active_stream_snapshot().await
+            };
+            if snapshot.streams.len() == count {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("expected {count} active provider stream(s)");
+    }
+
     fn fixture_installation(package: &TempProviderPackage) -> PluginInstallationRecord {
         let now = OffsetDateTime::now_utc();
         PluginInstallationRecord {
@@ -968,6 +1149,51 @@ esac
         assert_eq!(balance.balance_infos[0].currency, "CNY");
         assert_eq!(balance.balance_infos[0].total_balance, "110.00");
         assert_eq!(balance.provider_metadata["provider"], "deepseek");
+    }
+
+    #[tokio::test]
+    async fn provider_runtime_drops_host_lock_before_invoking_provider() {
+        let package = TempProviderPackage::new();
+        write_slow_invocation_provider_package(&package);
+        let provider_host = Arc::new(RwLock::new(ProviderHost::default()));
+        let runtime = ApiProviderRuntime::new(Arc::new(ApiRuntimeServices::new(
+            Arc::clone(&provider_host),
+            Arc::new(RwLock::new(CapabilityHost::default())),
+            Arc::new(RwLock::new(DataSourceHost::default())),
+        )));
+        let installation = fixture_installation(&package);
+
+        ProviderRuntimePort::ensure_loaded(&runtime, &installation)
+            .await
+            .expect("provider should load before invocation");
+        let invoke_runtime = runtime.clone();
+        let invoke_installation = installation.clone();
+        let invocation = tokio::spawn(async move {
+            invoke_runtime
+                .invoke_stream(
+                    &invoke_installation,
+                    ProviderInvocationInput {
+                        provider_instance_id: "provider-1".to_string(),
+                        provider_code: "fixture_provider".to_string(),
+                        protocol: "openai_compatible".to_string(),
+                        model: "fixture_chat".to_string(),
+                        provider_config: json!({
+                            "api_key": "secret"
+                        }),
+                        ..ProviderInvocationInput::default()
+                    },
+                )
+                .await
+                .unwrap()
+        });
+        wait_for_provider_active_streams(&provider_host, 1).await;
+
+        let write_guard = tokio::time::timeout(Duration::from_millis(200), provider_host.write())
+            .await
+            .expect("provider host write lock should not wait for an external invocation");
+        drop(write_guard);
+        let output = invocation.await.unwrap();
+        assert_eq!(output.result.final_content.as_deref(), Some("slow"));
     }
 
     #[tokio::test]

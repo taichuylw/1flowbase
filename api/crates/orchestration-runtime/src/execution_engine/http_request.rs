@@ -80,6 +80,7 @@ struct HttpFileBytes {
 
 struct HttpResponseBodyBytes {
     stored_bytes: Vec<u8>,
+    response_file_bytes: Option<Vec<u8>>,
     response_bytes_observed: u64,
     body_truncated: bool,
 }
@@ -181,14 +182,33 @@ async fn execute_http_request_node_inner(
         .unwrap_or("application/octet-stream")
         .to_string();
     let content_length = response.content_length();
-    let body_bytes = read_response_body(response, content_length, max_response_bytes).await?;
+    let store_response_as_file = node
+        .config
+        .get("store_response_as_file")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let capture_response_file_bytes =
+        store_response_as_file && !response_body_is_inline_text(&response_content_type);
+    let body_bytes = read_response_body(
+        response,
+        content_length,
+        max_response_bytes,
+        capture_response_file_bytes.then_some(MAX_RESPONSE_BYTES_LIMIT),
+    )
+    .await?;
     let body = String::from_utf8_lossy(&body_bytes.stored_bytes).to_string();
     let stored_body_bytes = body_bytes.stored_bytes.len() as u64;
+    let response_file_bytes = body_bytes
+        .response_file_bytes
+        .as_deref()
+        .unwrap_or(&body_bytes.stored_bytes);
+    let response_file_bytes_truncated =
+        body_bytes.response_file_bytes.is_none() && body_bytes.body_truncated;
     let files = response_files(
         node,
         &response_content_type,
-        &body_bytes.stored_bytes,
-        body_bytes.body_truncated,
+        response_file_bytes,
+        response_file_bytes_truncated,
         file_persister,
     )
     .await?;
@@ -235,14 +255,28 @@ async fn read_response_body(
     response: reqwest::Response,
     content_length: Option<u64>,
     max_response_bytes: u64,
+    response_file_bytes_limit: Option<u64>,
 ) -> Result<HttpResponseBodyBytes> {
     let max_stored_bytes = usize::try_from(max_response_bytes)
         .context("max_response_bytes does not fit this platform")?;
+    let max_file_bytes = response_file_bytes_limit
+        .map(usize::try_from)
+        .transpose()
+        .context("response file byte limit does not fit this platform")?;
+    if let (Some(content_length), Some(response_file_bytes_limit)) =
+        (content_length, response_file_bytes_limit)
+    {
+        if content_length > response_file_bytes_limit {
+            bail!("HTTP response file exceeds response file byte limit");
+        }
+    }
     let mut stored_bytes = Vec::with_capacity(
         content_length
             .unwrap_or(max_response_bytes)
             .min(max_response_bytes) as usize,
     );
+    let mut response_file_bytes = response_file_bytes_limit
+        .map(|limit| Vec::with_capacity(content_length.unwrap_or(limit).min(limit) as usize));
     let mut response_bytes_observed = 0_u64;
     let mut body_truncated = false;
     let mut stream = response.bytes_stream();
@@ -252,25 +286,39 @@ async fn read_response_body(
         let chunk_len = chunk.len();
         response_bytes_observed = response_bytes_observed.saturating_add(chunk_len as u64);
 
+        if let Some(file_bytes) = response_file_bytes.as_mut() {
+            let max_file_bytes = max_file_bytes.expect("file byte limit");
+            if file_bytes.len().saturating_add(chunk_len) > max_file_bytes {
+                bail!("HTTP response file exceeds response file byte limit");
+            }
+            file_bytes.extend_from_slice(&chunk);
+        }
+
         let remaining_capacity = max_stored_bytes.saturating_sub(stored_bytes.len());
         if remaining_capacity > 0 {
             let copied_bytes = remaining_capacity.min(chunk_len);
             stored_bytes.extend_from_slice(&chunk[..copied_bytes]);
             if copied_bytes < chunk_len {
                 body_truncated = true;
-                break;
+                if response_file_bytes.is_none() {
+                    break;
+                }
             }
         } else if chunk_len > 0 {
             body_truncated = true;
-            break;
+            if response_file_bytes.is_none() {
+                break;
+            }
         }
 
         if content_length.is_some_and(|length| length > max_response_bytes)
             && stored_bytes.len() >= max_stored_bytes
         {
             body_truncated = true;
-            response_bytes_observed = content_length.unwrap_or(response_bytes_observed);
-            break;
+            if response_file_bytes.is_none() {
+                response_bytes_observed = content_length.unwrap_or(response_bytes_observed);
+                break;
+            }
         }
     }
 
@@ -283,6 +331,7 @@ async fn read_response_body(
 
     Ok(HttpResponseBodyBytes {
         stored_bytes,
+        response_file_bytes,
         response_bytes_observed,
         body_truncated,
     })

@@ -58,6 +58,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 没有运行时证据时，前端样式结论默认降级为受限结论
 - 只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须加载后端专项检查
 - 后端任务必查：三平面、接口包装、状态写入口、`HostExtension / RuntimeExtension / CapabilityPlugin` 边界、HostExtension manifest contribution、pre-state infra provider、route/worker/migration registry、`storage-durable/postgres` 内 `storage-postgres` 的 repository/mapper 拆分、`storage-durable / storage-object` 边界、`workspace/system` 命名面、`SYSTEM_SCOPE_ID`、runtime `scope_id`、无 legacy alias、验证命令与 blast radius
+- Provider / 上游 runtime 错误属于透传 contract：QA 不得把 provider stdout / stderr / upstream error 原样进入 `RuntimeContract` / API response 误判为泄漏或要求脱敏；应检查宿主是否改写、截断、翻译、吞掉或泛化上游信息，导致 provider / 协议排障信息损失
 - 后端范围命中 Rust 代码时，必须额外检查类型不变量、错误边界、状态方法、事务、幂等、async 阻塞、锁跨 await、数据库约束和 Rust 质量门禁
 - Rust 后端验收必须核对 completion self-check；缺少证据时对应项只能写 `未验证`，不能下通过结论
 - 同一工作区内执行后端 `cargo` 验证命令时默认串行，不要为了加速 QA 并发启动多条 `cargo test / check / clippy` 导致锁等待和结论失真

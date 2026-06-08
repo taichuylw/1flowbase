@@ -11,7 +11,9 @@ pub use contracts::{
     CacheStore, ClaimedTask, DistributedLock, EventBus, RateLimitDecision, RateLimitStore,
     RuntimeEventStream, TaskQueue,
 };
-pub use local::build_local_host_infrastructure;
+pub use local::{
+    build_local_host_infrastructure, build_local_host_infrastructure_from_host_extensions,
+};
 pub use local_runtime_event_stream::LocalRuntimeEventStream;
 
 pub const SESSION_STORE_NAMESPACE: &str = "flowbase:console:session";
@@ -63,6 +65,12 @@ impl HostInfrastructureRegistry {
         self.providers
             .get(contract)
             .map(|provider| provider.provider_code.as_str())
+    }
+
+    pub fn default_provider_source(&self, contract: &str) -> Option<&str> {
+        self.providers
+            .get(contract)
+            .map(|provider| provider.source.as_str())
     }
 
     pub fn set_session_store(&mut self, session_store: Arc<dyn SessionStore>) {

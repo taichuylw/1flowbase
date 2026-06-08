@@ -80,11 +80,9 @@ export function ApplicationRunsTable({
       page={page}
       pageSize={pageSize}
       rowClassName={(record) =>
-        (record.flow_run_id ?? record.id) === selectedRunId
-          ? 'application-runs-table__row--active'
-          : ''
+        record.id === selectedRunId ? 'application-runs-table__row--active' : ''
       }
-      rowKey={(record) => record.flow_run_id ?? record.id}
+      rowKey={(record) => record.id}
       total={total}
       onPageChange={onPageChange}
     />

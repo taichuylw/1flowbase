@@ -167,6 +167,155 @@ impl PgControlPlaneStore {
         Ok(flow_run)
     }
 
+    async fn create_published_flow_run(
+        &self,
+        input: &CreateFlowRunInput,
+    ) -> Result<CreatePublishedFlowRunResult> {
+        let row = sqlx::query(
+            r#"
+            with inserted as (
+                insert into flow_runs (
+                    id,
+                    application_id,
+                    flow_id,
+                    flow_draft_id,
+                    compiled_plan_id,
+                    debug_session_id,
+                    flow_schema_version,
+                    document_hash,
+                    run_mode,
+                    target_node_id,
+                    title,
+                    status,
+                    input_payload,
+                    api_key_id,
+                    publication_version_id,
+                    external_user,
+                    external_conversation_id,
+                    external_trace_id,
+                    compatibility_mode,
+                    idempotency_key,
+                    created_by,
+                    started_at,
+                    updated_at
+                ) values (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, $15, $16, $17, $18, $19,
+                    $20, $21, $22, $23
+                )
+                on conflict (application_id, api_key_id, idempotency_key)
+                where run_mode = 'published_api_run'
+                  and api_key_id is not null
+                  and idempotency_key is not null
+                do nothing
+                returning
+                    true as created,
+                    id,
+                    application_id,
+                    flow_id,
+                    flow_draft_id,
+                    compiled_plan_id,
+                    debug_session_id,
+                    flow_schema_version,
+                    document_hash,
+                    run_mode,
+                    target_node_id,
+                    title,
+                    status,
+                    input_payload,
+                    output_payload,
+                    error_payload,
+                    created_by,
+                    null::text as authorized_account,
+                    api_key_id,
+                    publication_version_id,
+                    external_user,
+                    external_conversation_id,
+                    external_trace_id,
+                    compatibility_mode,
+                    idempotency_key,
+                    started_at,
+                    finished_at,
+                    created_at,
+                    updated_at
+            )
+            select * from inserted
+            union all
+            select
+                false as created,
+                id,
+                application_id,
+                flow_id,
+                flow_draft_id,
+                compiled_plan_id,
+                debug_session_id,
+                flow_schema_version,
+                document_hash,
+                run_mode,
+                target_node_id,
+                title,
+                status,
+                input_payload,
+                output_payload,
+                error_payload,
+                created_by,
+                null::text as authorized_account,
+                api_key_id,
+                publication_version_id,
+                external_user,
+                external_conversation_id,
+                external_trace_id,
+                compatibility_mode,
+                idempotency_key,
+                started_at,
+                finished_at,
+                created_at,
+                updated_at
+            from flow_runs
+            where application_id = $2
+              and api_key_id = $14
+              and idempotency_key = $20
+              and run_mode = 'published_api_run'
+              and not exists (select 1 from inserted)
+            order by created desc, created_at asc, id asc
+            limit 1
+            "#,
+        )
+        .bind(Uuid::now_v7())
+        .bind(input.application_id)
+        .bind(input.flow_id)
+        .bind(input.flow_draft_id)
+        .bind(input.compiled_plan_id)
+        .bind(&input.debug_session_id)
+        .bind(&input.flow_schema_version)
+        .bind(&input.document_hash)
+        .bind(input.run_mode.as_str())
+        .bind(input.target_node_id.as_deref())
+        .bind(&input.title)
+        .bind(input.status.as_str())
+        .bind(&input.input_payload)
+        .bind(input.api_key_id)
+        .bind(input.publication_version_id)
+        .bind(input.external_user.as_deref())
+        .bind(input.external_conversation_id.as_deref())
+        .bind(input.external_trace_id.as_deref())
+        .bind(input.compatibility_mode.as_deref())
+        .bind(input.idempotency_key.as_deref())
+        .bind(input.actor_user_id)
+        .bind(input.started_at)
+        .bind(input.started_at)
+        .fetch_one(self.pool())
+        .await?;
+
+        let created = row.try_get("created")?;
+        let flow_run = map_flow_run_record(row)?;
+        if created {
+            self.upsert_application_run_log_summary_for_flow_run(&flow_run)
+                .await?;
+        }
+        Ok(CreatePublishedFlowRunResult { flow_run, created })
+    }
+
     async fn create_flow_run_shell(
         &self,
         input: &CreateFlowRunShellInput,

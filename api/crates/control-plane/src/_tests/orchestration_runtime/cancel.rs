@@ -136,6 +136,50 @@ async fn cancel_flow_run_does_not_overwrite_succeeded_run_after_stale_read() {
 }
 
 #[tokio::test]
+async fn continue_flow_debug_run_does_not_overwrite_cancelled_run_before_waiting_callback_write() {
+    let stream = Arc::new(crate::_tests::support::RecordingRuntimeEventStream::default());
+    let service =
+        OrchestrationRuntimeService::for_tests().with_runtime_event_stream(stream.clone());
+    let seeded = service
+        .seed_application_with_callback_flow("Support Agent")
+        .await;
+    let started = service
+        .start_flow_debug_run(StartFlowDebugRunCommand {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            input_payload: json!({
+                "node-start": { "query": "order_123" }
+            }),
+            document_snapshot: None,
+            debug_session_id: None,
+        })
+        .await
+        .unwrap();
+    service
+        .force_flow_run_status_before_next_flow_update(
+            started.flow_run.id,
+            FlowRunStatus::Cancelled,
+        )
+        .await;
+
+    let detail = service
+        .continue_flow_debug_run(ContinueFlowDebugRunCommand {
+            application_id: seeded.application_id,
+            flow_run_id: started.flow_run.id,
+            workspace_id: Uuid::nil(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(detail.flow_run.status, FlowRunStatus::Cancelled);
+    assert!(!stream
+        .events()
+        .iter()
+        .any(|event| event.event_type == "waiting_callback"));
+    assert!(stream.close_calls().is_empty());
+}
+
+#[tokio::test]
 async fn cancel_flow_run_rejects_terminal_status() {
     let service = OrchestrationRuntimeService::for_tests();
     let seeded = service

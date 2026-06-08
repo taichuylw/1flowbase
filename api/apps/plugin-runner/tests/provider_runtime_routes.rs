@@ -611,6 +611,71 @@ async fn provider_runner_exposes_and_cleans_active_stream_snapshot() {
 }
 
 #[tokio::test]
+async fn provider_runner_reload_is_not_blocked_by_running_invocation() {
+    let package = make_fixture_package();
+    write_slow_invoke_runtime(&package);
+    let app = app();
+
+    let (status, load_payload) = request_json(
+        &app,
+        Method::POST,
+        "/providers/load",
+        json!({
+            "package_root": package.path(),
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let plugin_id = load_payload["plugin_id"].as_str().unwrap().to_string();
+
+    let invoke_app = app.clone();
+    let invoke_plugin_id = plugin_id.clone();
+    let invoke_task = tokio::spawn(async move {
+        request_json(
+            &invoke_app,
+            Method::POST,
+            "/providers/invoke-stream",
+            json!({
+                "plugin_id": invoke_plugin_id,
+                "input": {
+                    "provider_instance_id": "instance-reload",
+                    "provider_code": "fixture_provider",
+                    "protocol": "openai_compatible",
+                    "model": "fixture_dynamic",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "hello",
+                        }
+                    ]
+                }
+            }),
+        )
+        .await
+    });
+    wait_for_single_active_stream(&app).await;
+
+    let reload = tokio::time::timeout(
+        Duration::from_millis(200),
+        request_json(
+            &app,
+            Method::POST,
+            "/providers/reload",
+            json!({
+                "plugin_id": plugin_id,
+            }),
+        ),
+    )
+    .await
+    .expect("provider reload should not wait for an external provider invocation to finish");
+    assert_eq!(reload.0, StatusCode::OK);
+
+    let (status, invoke_payload) = invoke_task.await.unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(invoke_payload["result"]["final_content"], "slow");
+}
+
+#[tokio::test]
 async fn provider_runner_cleans_active_stream_snapshot_after_error() {
     let package = make_fixture_package();
     write_legacy_invoke_runtime(&package);

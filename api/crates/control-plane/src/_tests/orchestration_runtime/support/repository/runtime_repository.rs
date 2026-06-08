@@ -6,6 +6,22 @@ use super::*;
 
 use async_trait::async_trait;
 
+fn force_status_before_next_flow_update(
+    inner: &mut InMemoryOrchestrationRuntimeState,
+    flow_run_id: Uuid,
+) {
+    let Some((race_flow_run_id, status)) = inner.status_before_next_flow_update.take() else {
+        return;
+    };
+    if race_flow_run_id == flow_run_id {
+        if let Some(stored) = inner.flow_runs_by_id.get_mut(&flow_run_id) {
+            stored.status = status;
+        }
+    } else {
+        inner.status_before_next_flow_update = Some((race_flow_run_id, status));
+    }
+}
+
 #[async_trait]
 impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
     async fn upsert_compiled_plan(
@@ -168,6 +184,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
 
     async fn update_flow_run(&self, input: &UpdateFlowRunInput) -> Result<domain::FlowRunRecord> {
         let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        force_status_before_next_flow_update(&mut inner, input.flow_run_id);
         let Some(record) = inner.flow_runs_by_id.get_mut(&input.flow_run_id) else {
             return Err(ControlPlaneError::NotFound("flow_run").into());
         };
@@ -185,6 +202,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
         expected_status: domain::FlowRunStatus,
     ) -> Result<Option<domain::FlowRunRecord>> {
         let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        force_status_before_next_flow_update(&mut inner, input.flow_run_id);
         let Some(record) = inner.flow_runs_by_id.get_mut(&input.flow_run_id) else {
             return Err(ControlPlaneError::NotFound("flow_run").into());
         };

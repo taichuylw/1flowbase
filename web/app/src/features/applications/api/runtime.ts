@@ -33,7 +33,6 @@ import { getApplicationsApiBaseUrl } from './applications';
 
 export type ApplicationRunSummary = {
   id: string;
-  flow_run_id: string;
   application_id: string;
   scope_id: string;
   run_mode: ConsoleApplicationRunSummary['run_mode'];
@@ -734,7 +733,6 @@ function toApplicationRunSummary(
 
   return {
     id,
-    flow_run_id: optionalStringField(record, 'flow_run_id') ?? id,
     application_id: stringField(record, 'application_id'),
     scope_id: stringField(record, 'scope_id'),
     run_mode: stringField(record, 'run_mode') as ApplicationRunSummary['run_mode'],

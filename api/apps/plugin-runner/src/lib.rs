@@ -244,44 +244,48 @@ async fn validate_provider(
     State(state): State<AppState>,
     Json(request): Json<ValidateProviderRequest>,
 ) -> Result<Json<ProviderValidationOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.provider_host.read().await;
-    host.validate(&request.plugin_id, request.provider_config)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.provider_host.read().await;
+        host.validate_operation(&request.plugin_id, request.provider_config)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn list_models(
     State(state): State<AppState>,
     Json(request): Json<ListModelsRequest>,
 ) -> Result<Json<ProviderModelsOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.provider_host.read().await;
-    host.list_models(&request.plugin_id, request.provider_config)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.provider_host.read().await;
+        host.list_models_operation(&request.plugin_id, request.provider_config)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn get_balance(
     State(state): State<AppState>,
     Json(request): Json<BalanceProviderRequest>,
 ) -> Result<Json<ProviderBalanceOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.provider_host.read().await;
-    host.get_balance(&request.plugin_id, request.provider_config)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.provider_host.read().await;
+        host.get_balance_operation(&request.plugin_id, request.provider_config)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn invoke_stream(
     State(state): State<AppState>,
     Json(request): Json<InvokeProviderRequest>,
 ) -> Result<Json<ProviderInvokeStreamOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.provider_host.read().await;
-    host.invoke_stream(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.provider_host.read().await;
+        host.invoke_stream_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn active_provider_streams(
@@ -295,15 +299,16 @@ async fn validate_capability_config(
     State(state): State<AppState>,
     Json(request): Json<ValidateCapabilityRequest>,
 ) -> Result<Json<capability_host::CapabilityValueOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.capability_host.read().await;
-    host.validate_config(
-        &request.plugin_id,
-        &request.contribution_code,
-        request.config_payload,
-    )
-    .await
-    .map(Json)
-    .map_err(map_framework_error)
+    let operation = {
+        let host = state.capability_host.read().await;
+        host.validate_config_operation(
+            &request.plugin_id,
+            &request.contribution_code,
+            request.config_payload,
+        )
+        .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn load_data_source(
@@ -330,167 +335,181 @@ async fn validate_data_source_config(
     State(state): State<AppState>,
     Json(request): Json<DataSourceConnectionRequest>,
 ) -> Result<Json<DataSourceValueOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.validate_config(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.validate_config_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn test_data_source_connection(
     State(state): State<AppState>,
     Json(request): Json<DataSourceConnectionRequest>,
 ) -> Result<Json<DataSourceValueOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.test_connection(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.test_connection_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn discover_data_source_catalog(
     State(state): State<AppState>,
     Json(request): Json<DataSourceConnectionRequest>,
 ) -> Result<Json<DataSourceCatalogOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.discover_catalog(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.discover_catalog_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn describe_data_source_resource(
     State(state): State<AppState>,
     Json(request): Json<DescribeDataSourceRequest>,
 ) -> Result<Json<DataSourceDescriptorOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.describe_resource(&request.plugin_id, request.input, request.resource_key)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.describe_resource_operation(&request.plugin_id, request.input, request.resource_key)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn preview_data_source_read(
     State(state): State<AppState>,
     Json(request): Json<PreviewDataSourceRequest>,
 ) -> Result<Json<DataSourcePreviewReadOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.preview_read(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.preview_read_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn import_data_source_snapshot(
     State(state): State<AppState>,
     Json(request): Json<ImportDataSourceRequest>,
 ) -> Result<Json<DataSourceImportSnapshotOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.import_snapshot(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.import_snapshot_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn list_data_source_records(
     State(state): State<AppState>,
     Json(request): Json<ListDataSourceRecordsRequest>,
 ) -> Result<Json<DataSourceListRecordsOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.list_records(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.list_records_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn get_data_source_record(
     State(state): State<AppState>,
     Json(request): Json<GetDataSourceRecordRequest>,
 ) -> Result<Json<DataSourceGetRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.get_record(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.get_record_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn create_data_source_record(
     State(state): State<AppState>,
     Json(request): Json<CreateDataSourceRecordRequest>,
 ) -> Result<Json<DataSourceCreateRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.create_record(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.create_record_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn update_data_source_record(
     State(state): State<AppState>,
     Json(request): Json<UpdateDataSourceRecordRequest>,
 ) -> Result<Json<DataSourceUpdateRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.update_record(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.update_record_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn delete_data_source_record(
     State(state): State<AppState>,
     Json(request): Json<DeleteDataSourceRecordRequest>,
 ) -> Result<Json<DataSourceDeleteRecordOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.data_source_host.read().await;
-    host.delete_record(&request.plugin_id, request.input)
-        .await
-        .map(Json)
-        .map_err(map_framework_error)
+    let operation = {
+        let host = state.data_source_host.read().await;
+        host.delete_record_operation(&request.plugin_id, request.input)
+            .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn resolve_capability_dynamic_options(
     State(state): State<AppState>,
     Json(request): Json<ValidateCapabilityRequest>,
 ) -> Result<Json<capability_host::CapabilityValueOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.capability_host.read().await;
-    host.resolve_dynamic_options(
-        &request.plugin_id,
-        &request.contribution_code,
-        request.config_payload,
-    )
-    .await
-    .map(Json)
-    .map_err(map_framework_error)
+    let operation = {
+        let host = state.capability_host.read().await;
+        host.resolve_dynamic_options_operation(
+            &request.plugin_id,
+            &request.contribution_code,
+            request.config_payload,
+        )
+        .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn resolve_capability_output_schema(
     State(state): State<AppState>,
     Json(request): Json<ValidateCapabilityRequest>,
 ) -> Result<Json<capability_host::CapabilityValueOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.capability_host.read().await;
-    host.resolve_output_schema(
-        &request.plugin_id,
-        &request.contribution_code,
-        request.config_payload,
-    )
-    .await
-    .map(Json)
-    .map_err(map_framework_error)
+    let operation = {
+        let host = state.capability_host.read().await;
+        host.resolve_output_schema_operation(
+            &request.plugin_id,
+            &request.contribution_code,
+            request.config_payload,
+        )
+        .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 async fn execute_capability(
     State(state): State<AppState>,
     Json(request): Json<ExecuteCapabilityRequest>,
 ) -> Result<Json<capability_host::CapabilityExecutionOutput>, (StatusCode, Json<ErrorResponse>)> {
-    let host = state.capability_host.read().await;
-    host.execute(
-        &request.plugin_id,
-        &request.contribution_code,
-        request.config_payload,
-        request.input_payload,
-    )
-    .await
-    .map(Json)
-    .map_err(map_framework_error)
+    let operation = {
+        let host = state.capability_host.read().await;
+        host.execute_operation(
+            &request.plugin_id,
+            &request.contribution_code,
+            request.config_payload,
+            request.input_payload,
+        )
+        .map_err(map_framework_error)?
+    };
+    operation.await.map(Json).map_err(map_framework_error)
 }
 
 pub fn parse_bind_addr(candidate: Option<&str>, default_addr: &str) -> SocketAddr {

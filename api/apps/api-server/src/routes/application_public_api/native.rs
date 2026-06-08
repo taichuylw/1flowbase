@@ -260,6 +260,11 @@ pub(crate) fn native_error(error: NativeRunValidationError) -> NativeApiError {
             "invalid_state",
             "run is not in a valid state for this operation",
         ),
+        NativeRunValidationError::IdempotencyConflict => NativeApiError::new(
+            StatusCode::CONFLICT,
+            "idempotency_conflict",
+            "idempotency key was already used with a different request",
+        ),
     }
 }
 

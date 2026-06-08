@@ -56,6 +56,8 @@ impl IntoResponse for ApiError {
             },
         };
         let message = if expose_message {
+            // Provider runtime errors are upstream passthrough. Surface the message so
+            // callers can debug provider and protocol failures without host rewriting.
             self.0.to_string()
         } else {
             "internal server error".to_string()

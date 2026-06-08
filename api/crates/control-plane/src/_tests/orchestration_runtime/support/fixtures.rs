@@ -575,9 +575,7 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
     }
 
     pub async fn seed_waiting_callback_run(&self, name: &str) -> SeededWaitingCallbackRun {
-        let seeded = self
-            .seed_application_with_document(name, build_callback_flow_document)
-            .await;
+        let seeded = self.seed_application_with_callback_flow(name).await;
         let started = self
             .start_flow_debug_run(StartFlowDebugRunCommand {
                 actor_user_id: seeded.actor_user_id,
@@ -604,6 +602,14 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
             application_id: seeded.application_id,
             callback_task_id: detail.callback_tasks.first().expect("callback task").id,
         }
+    }
+
+    pub async fn seed_application_with_callback_flow(
+        &self,
+        name: &str,
+    ) -> SeededPreviewApplication {
+        self.seed_application_with_document(name, build_callback_flow_document)
+            .await
     }
 
     pub async fn seed_application_with_plugin_node_flow(
@@ -667,6 +673,15 @@ impl OrchestrationRuntimeService<InMemoryOrchestrationRuntimeRepository, InMemor
     ) {
         self.repository
             .force_flow_run_status_after_next_get(flow_run_id, status);
+    }
+
+    pub async fn force_flow_run_status_before_next_flow_update(
+        &self,
+        flow_run_id: Uuid,
+        status: domain::FlowRunStatus,
+    ) {
+        self.repository
+            .force_flow_run_status_before_next_flow_update(flow_run_id, status);
     }
 
     pub async fn mark_external_opaque_boundary(

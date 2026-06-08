@@ -303,7 +303,7 @@ export function ApplicationLogsPage({
   }, [runs, refetchRuns]);
 
   function selectRun(run: ApplicationRunSummary | null) {
-    const nextRunId = run ? (run.flow_run_id ?? run.id) : null;
+    const nextRunId = run ? run.id : null;
     setSelectedRunId(nextRunId);
     setOpenConversationLogMessage(null);
     setOpenResumeTimelineRunId(null);
