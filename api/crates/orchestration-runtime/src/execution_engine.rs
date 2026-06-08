@@ -329,17 +329,32 @@ fn resolve_variable_assignment_value(
     }
 }
 
-fn apply_node_error_policy(
-    plan: &CompiledPlan,
+struct NodeErrorPolicyApplication<'a> {
+    plan: &'a CompiledPlan,
     failed_node_index: usize,
-    active_node_ids: &mut BTreeSet<String>,
-    variable_pool: &mut Map<String, Value>,
-    pending_failure: &mut Option<NodeExecutionFailure>,
-    node: &CompiledNode,
-    output_payload: &Value,
+    active_node_ids: &'a mut BTreeSet<String>,
+    variable_pool: &'a mut Map<String, Value>,
+    pending_failure: &'a mut Option<NodeExecutionFailure>,
+    node: &'a CompiledNode,
+    output_payload: &'a Value,
     error_payload: Value,
     allow_terminal_template_fallback: bool,
+}
+
+fn apply_node_error_policy(
+    application: NodeErrorPolicyApplication<'_>,
 ) -> Result<Option<NodeExecutionFailure>> {
+    let NodeErrorPolicyApplication {
+        plan,
+        failed_node_index,
+        active_node_ids,
+        variable_pool,
+        pending_failure,
+        node,
+        output_payload,
+        error_payload,
+        allow_terminal_template_fallback,
+    } = application;
     let failure = NodeExecutionFailure {
         node_id: node.node_id.clone(),
         node_alias: node.alias.clone(),
@@ -526,17 +541,17 @@ where
                 node_traces.push(trace);
 
                 if let Some(error_payload) = execution.error_payload {
-                    if let Some(failure) = apply_node_error_policy(
+                    if let Some(failure) = apply_node_error_policy(NodeErrorPolicyApplication {
                         plan,
-                        index,
-                        &mut active_node_ids,
-                        &mut variable_pool,
-                        &mut pending_failure,
+                        failed_node_index: index,
+                        active_node_ids: &mut active_node_ids,
+                        variable_pool: &mut variable_pool,
+                        pending_failure: &mut pending_failure,
                         node,
-                        &execution.output_payload,
+                        output_payload: &execution.output_payload,
                         error_payload,
-                        true,
-                    )? {
+                        allow_terminal_template_fallback: true,
+                    })? {
                         return Ok(FlowDebugExecutionOutcome {
                             stop_reason: ExecutionStopReason::Failed(failure),
                             variable_pool,
@@ -597,17 +612,17 @@ where
                 node_traces.push(trace);
 
                 if let Some(error_payload) = execution.error_payload {
-                    if let Some(failure) = apply_node_error_policy(
+                    if let Some(failure) = apply_node_error_policy(NodeErrorPolicyApplication {
                         plan,
-                        index,
-                        &mut active_node_ids,
-                        &mut variable_pool,
-                        &mut pending_failure,
+                        failed_node_index: index,
+                        active_node_ids: &mut active_node_ids,
+                        variable_pool: &mut variable_pool,
+                        pending_failure: &mut pending_failure,
                         node,
-                        &execution.output_payload,
+                        output_payload: &execution.output_payload,
                         error_payload,
-                        false,
-                    )? {
+                        allow_terminal_template_fallback: false,
+                    })? {
                         return Ok(FlowDebugExecutionOutcome {
                             stop_reason: ExecutionStopReason::Failed(failure),
                             variable_pool,
@@ -765,17 +780,17 @@ where
                 });
 
                 if let Some(error_payload) = execution.error_payload {
-                    if let Some(failure) = apply_node_error_policy(
+                    if let Some(failure) = apply_node_error_policy(NodeErrorPolicyApplication {
                         plan,
-                        index,
-                        &mut active_node_ids,
-                        &mut variable_pool,
-                        &mut pending_failure,
+                        failed_node_index: index,
+                        active_node_ids: &mut active_node_ids,
+                        variable_pool: &mut variable_pool,
+                        pending_failure: &mut pending_failure,
                         node,
-                        &execution.output_payload,
+                        output_payload: &execution.output_payload,
                         error_payload,
-                        false,
-                    )? {
+                        allow_terminal_template_fallback: false,
+                    })? {
                         return Ok(FlowDebugExecutionOutcome {
                             stop_reason: ExecutionStopReason::Failed(failure),
                             variable_pool,
@@ -806,17 +821,17 @@ where
                 });
 
                 if let Some(error_payload) = execution.error_payload {
-                    if let Some(failure) = apply_node_error_policy(
+                    if let Some(failure) = apply_node_error_policy(NodeErrorPolicyApplication {
                         plan,
-                        index,
-                        &mut active_node_ids,
-                        &mut variable_pool,
-                        &mut pending_failure,
+                        failed_node_index: index,
+                        active_node_ids: &mut active_node_ids,
+                        variable_pool: &mut variable_pool,
+                        pending_failure: &mut pending_failure,
                         node,
-                        &execution.output_payload,
+                        output_payload: &execution.output_payload,
                         error_payload,
-                        false,
-                    )? {
+                        allow_terminal_template_fallback: false,
+                    })? {
                         return Ok(FlowDebugExecutionOutcome {
                             stop_reason: ExecutionStopReason::Failed(failure),
                             variable_pool,

@@ -374,6 +374,7 @@ describe('AgentFlowEditorShell', () => {
       'Issues',
       '系统变量',
       '环境变量',
+      '会话变量',
       '保存',
       '发布',
       '历史版本'

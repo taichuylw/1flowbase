@@ -13,7 +13,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-35432}:5432"
     volumes:
-      - ./volumes/postgres:/var/lib/postgresql/data
+      - ${POSTGRES_DATA_DIR:-./volumes/postgres}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-1flowbase}"]
       interval: 5s

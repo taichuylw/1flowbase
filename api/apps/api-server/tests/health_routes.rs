@@ -68,11 +68,12 @@ impl OfficialPluginSourcePort for NoopOfficialPluginSource {
 }
 
 fn default_test_config() -> ApiConfig {
+    let database_url = std::env::var("API_DATABASE_URL")
+        .or_else(|_| std::env::var("DATABASE_URL"))
+        .unwrap_or_else(|_| "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase".to_string());
+
     ApiConfig::from_env_map(&[
-        (
-            "API_DATABASE_URL",
-            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
-        ),
+        ("API_DATABASE_URL", &database_url),
         ("API_DATABASE_POOL_MAX_CONNECTIONS", "1"),
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),

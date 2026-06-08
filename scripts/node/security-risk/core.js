@@ -21,6 +21,13 @@ const HIGH_RISK_FILE_PATTERNS = [
   /(?:^|\/)(?:Dockerfile|docker-compose[^/]*\.ya?ml|nginx\.conf)$/u,
 ];
 
+const DEPENDENCY_MANIFEST_FILE_PATTERNS = [
+  /^package\.json$/u,
+  /^web\/.*package\.json$/u,
+  /^api\/Cargo\.toml$/u,
+  /^api\/.*\/Cargo\.toml$/u,
+];
+
 const RISK_PATTERNS = [
   {
     severity: 'high',
@@ -56,6 +63,7 @@ const RISK_PATTERNS = [
     severity: 'high',
     kind: 'remote-dependency',
     pattern: /"[^"]+"\s*:\s*"(?:git\+https?:|https?:\/\/|github:|gitlab:|bitbucket:)[^"]*"/u,
+    appliesToFile: isDependencyManifestFile,
   },
   {
     severity: 'medium',
@@ -66,6 +74,10 @@ const RISK_PATTERNS = [
 
 function normalizePath(filePath) {
   return filePath.replace(/\\/gu, '/');
+}
+
+function isDependencyManifestFile(filePath) {
+  return DEPENDENCY_MANIFEST_FILE_PATTERNS.some((pattern) => pattern.test(filePath));
 }
 
 function readChangedFiles({ repoRoot, baseRef, env, spawnSyncImpl = spawnSync }) {
@@ -139,6 +151,10 @@ function scanDiffText(diffText) {
 
     const content = line.slice(1);
     for (const rule of RISK_PATTERNS) {
+      if (rule.appliesToFile && !rule.appliesToFile(currentFile)) {
+        continue;
+      }
+
       if (rule.pattern.test(content)) {
         findings.push({
           severity: rule.severity,
