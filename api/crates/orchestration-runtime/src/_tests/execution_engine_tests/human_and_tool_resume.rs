@@ -969,6 +969,19 @@ async fn visible_internal_llm_tool_branch_llm_can_wait_for_external_tool_callbac
         .checkpoint_snapshot
         .clone()
         .expect("mounted llm tool wait should have checkpoint");
+    let main_wait_trace = waiting
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("main llm waiting trace should exist");
+    let route_events = main_wait_trace.debug_payload["visible_internal_llm_tool_events"]
+        .as_array()
+        .expect("main waiting trace should include visible internal route events");
+    assert!(route_events.iter().any(|event| {
+        event["event_type"] == json!("visible_internal_llm_tool_waiting_callback")
+            && event["waiting_node_id"] == json!("node-mounted-llm")
+            && event["request_payload"]["tool_calls"][0]["name"] == json!("Bash")
+    }));
     let captured_waiting = waiting_inputs
         .lock()
         .expect("captured inputs mutex poisoned")
@@ -1042,6 +1055,421 @@ async fn visible_internal_llm_tool_branch_llm_can_wait_for_external_tool_callbac
         main_internal_tool_result.content,
         "need toolsmounted-after-tool "
     );
+}
+
+#[tokio::test]
+async fn visible_internal_llm_tool_branch_inherits_run_context_query_when_argument_is_only_task() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({ "task": "describe the image" }),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        final_llm_response("mounted-visible "),
+        final_llm_response("main-after"),
+    ]);
+    let mut plan = visible_internal_llm_tool_plan();
+    let mounted_llm = plan
+        .nodes
+        .get_mut("node-mounted-llm")
+        .expect("mounted llm node should exist");
+    mounted_llm.config = json!({
+        "model_provider": {
+            "provider_code": "fixture_provider",
+            "model_id": "gpt-5.4-mini"
+        },
+        "context_policy": {
+            "integration_context": "enabled"
+        }
+    });
+    mounted_llm.bindings = BTreeMap::from([(
+        "prompt_messages".to_string(),
+        CompiledBinding {
+            kind: "prompt_messages".to_string(),
+            selector_paths: vec![vec![
+                "visible_internal_llm_tool".to_string(),
+                "arguments".to_string(),
+                "task".to_string(),
+            ]],
+            raw_value: json!([
+                {
+                    "id": "mounted-user",
+                    "role": "user",
+                    "content": {
+                        "kind": "templated_text",
+                        "value": "{{ visible_internal_llm_tool.arguments.task }}"
+                    }
+                }
+            ]),
+        },
+    )]);
+
+    start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "调用 image_llm 看看 tmp/frontstage-layout-preview.png 内容是什么",
+                "history": [],
+                "files": [
+                    {
+                        "path": "tmp/frontstage-layout-preview.png",
+                        "media_type": "image/png"
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 3);
+    let mounted_messages = &captured[1].messages;
+    assert!(
+        mounted_messages.iter().any(|message| message
+            .content
+            .contains("tmp/frontstage-layout-preview.png")),
+        "mounted LLM should inherit original run query/files context, got {mounted_messages:?}"
+    );
+}
+
+#[tokio::test]
+async fn visible_internal_llm_tool_emits_structured_route_events_in_main_debug_payload() {
+    let (invoker, _captured_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({ "query": "image?" }),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        final_llm_response("mounted-visible "),
+        final_llm_response("main-after"),
+    ]);
+
+    let outcome = start_flow_debug_run(
+        &visible_internal_llm_tool_plan(),
+        &json!({ "node-start": { "query": "describe the picture", "history": [] } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let main_trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("main llm trace should exist");
+    let route_events = main_trace.debug_payload["visible_internal_llm_tool_events"]
+        .as_array()
+        .expect("main debug payload should include visible internal route events");
+    assert_eq!(
+        route_events[0]["event_type"],
+        json!("visible_internal_llm_tool_started")
+    );
+    assert_eq!(route_events[0]["main_node_id"], json!("node-llm"));
+    assert_eq!(route_events[0]["target_node_id"], json!("node-mounted-llm"));
+    assert_eq!(
+        route_events[0]["tool_name"],
+        json!("inspect_visible_context")
+    );
+    assert_eq!(route_events[0]["tool_call_id"], json!("call_visible"));
+    assert!(route_events.iter().any(|event| {
+        event["event_type"] == json!("visible_internal_llm_tool_completed")
+            && event["target_node_id"] == json!("node-mounted-llm")
+            && event["provider_route"]["model"] == json!("gpt-5.4-mini")
+    }));
+}
+
+#[tokio::test]
+async fn visible_internal_llm_tool_recoverable_branch_model_error_returns_hidden_tool_result() {
+    let captured_inputs = Arc::new(Mutex::new(Vec::new()));
+    let invoker = MountedModelUnsupportedInvoker {
+        captured_inputs: captured_inputs.clone(),
+    };
+
+    let outcome = start_flow_debug_run(
+        &visible_internal_llm_tool_plan(),
+        &json!({
+            "node-start": {
+                "query": "describe the picture",
+                "history": [
+                    { "role": "user", "content": "describe the picture" }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "recoverable branch model errors should return a hidden tool result, got {:?}",
+        outcome.stop_reason
+    );
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 3);
+    let hidden_tool_result = captured[2]
+        .messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_visible")
+        })
+        .expect("main recall should include hidden branch error as tool result");
+    assert!(hidden_tool_result
+        .content
+        .contains("model_multimodal_unsupported"));
+}
+
+#[tokio::test]
+async fn visible_internal_llm_tool_resume_recoverable_branch_model_error_returns_hidden_tool_result(
+) {
+    let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({ "query": "image?" }),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        tool_call_response(vec![ProviderToolCall {
+            id: "call_bash".to_string(),
+            name: "Bash".to_string(),
+            arguments: json!({ "command": "file tmp/frontstage-layout-preview.png" }),
+            provider_metadata: json!({}),
+        }]),
+    ]);
+    let plan = visible_internal_llm_tool_plan();
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "describe the picture",
+                "history": [],
+                "tools": [
+                    {
+                        "name": "Bash",
+                        "description": "Run a shell command",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": { "type": "string" }
+                            },
+                            "required": ["command"]
+                        }
+                    }
+                ]
+            }
+        }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+    let checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("mounted llm tool wait should have checkpoint");
+
+    let captured_inputs = Arc::new(Mutex::new(Vec::new()));
+    let resume_invoker = ResumeMountedModelUnsupportedInvoker {
+        captured_inputs: captured_inputs.clone(),
+    };
+    let resumed = resume_flow_debug_run(
+        &plan,
+        &checkpoint,
+        "node-mounted-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_bash",
+                    "content": "tmp/frontstage-layout-preview.png: PNG image data"
+                }
+            ]
+        }),
+        &resume_invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(resumed.stop_reason, ExecutionStopReason::Completed),
+        "recoverable branch model errors after callback should return a hidden tool result, got {:?}",
+        resumed.stop_reason
+    );
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 2);
+    let hidden_tool_result = captured[1]
+        .messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_visible")
+        })
+        .expect("main recall should include hidden branch error as tool result");
+    assert!(hidden_tool_result
+        .content
+        .contains("model_multimodal_unsupported"));
+}
+
+struct MountedModelUnsupportedInvoker {
+    captured_inputs: Arc<Mutex<Vec<ProviderInvocationInput>>>,
+}
+
+#[async_trait]
+impl ProviderInvoker for MountedModelUnsupportedInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        let mut captured = self
+            .captured_inputs
+            .lock()
+            .expect("captured inputs mutex poisoned");
+        let call_index = captured.len();
+        captured.push(input);
+        drop(captured);
+
+        match call_index {
+            0 => Ok(ProviderInvocationOutput {
+                events: vec![ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::ToolCall,
+                }],
+                result: ProviderInvocationResult {
+                    final_content: Some("main-before ".to_string()),
+                    tool_calls: vec![ProviderToolCall {
+                        id: "call_visible".to_string(),
+                        name: "inspect_visible_context".to_string(),
+                        arguments: json!({ "query": "image?" }),
+                        provider_metadata: json!({}),
+                    }],
+                    finish_reason: Some(ProviderFinishReason::ToolCall),
+                    ..ProviderInvocationResult::default()
+                },
+                first_token_at: None,
+                time_to_first_token_ms: None,
+            }),
+            1 => Err(anyhow::anyhow!("conflict: model_multimodal_unsupported")),
+            _ => Ok(ProviderInvocationOutput {
+                events: vec![ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::Stop,
+                }],
+                result: final_llm_response("main-after"),
+                first_token_at: None,
+                time_to_first_token_ms: None,
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for MountedModelUnsupportedInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("visible internal model unsupported test does not execute capability nodes")
+    }
+}
+
+#[async_trait]
+impl CodeInvoker for MountedModelUnsupportedInvoker {
+    async fn invoke_code_node(
+        &self,
+        _runtime: &CompiledCodeRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<CodeInvocationOutput> {
+        unreachable!("visible internal model unsupported test does not execute code nodes")
+    }
+}
+
+struct ResumeMountedModelUnsupportedInvoker {
+    captured_inputs: Arc<Mutex<Vec<ProviderInvocationInput>>>,
+}
+
+#[async_trait]
+impl ProviderInvoker for ResumeMountedModelUnsupportedInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        let mut captured = self
+            .captured_inputs
+            .lock()
+            .expect("captured inputs mutex poisoned");
+        let call_index = captured.len();
+        captured.push(input);
+        drop(captured);
+
+        match call_index {
+            0 => Err(anyhow::anyhow!("conflict: model_multimodal_unsupported")),
+            _ => Ok(ProviderInvocationOutput {
+                events: vec![ProviderStreamEvent::Finish {
+                    reason: ProviderFinishReason::Stop,
+                }],
+                result: final_llm_response("main-after"),
+                first_token_at: None,
+                time_to_first_token_ms: None,
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for ResumeMountedModelUnsupportedInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!(
+            "visible internal model unsupported resume test does not execute capability nodes"
+        )
+    }
+}
+
+#[async_trait]
+impl CodeInvoker for ResumeMountedModelUnsupportedInvoker {
+    async fn invoke_code_node(
+        &self,
+        _runtime: &CompiledCodeRuntime,
+        _config_payload: Value,
+        _input_payload: Value,
+    ) -> Result<CodeInvocationOutput> {
+        unreachable!("visible internal model unsupported resume test does not execute code nodes")
+    }
 }
 
 #[tokio::test]

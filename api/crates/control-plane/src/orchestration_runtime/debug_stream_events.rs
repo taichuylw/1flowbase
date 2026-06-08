@@ -177,6 +177,33 @@ pub fn waiting_callback_with_task(
     }
 }
 
+pub fn visible_internal_llm_tool_route(
+    run_id: Uuid,
+    node_run_id: Uuid,
+    node_id: &str,
+    route_event: &Value,
+) -> RuntimeEventPayload {
+    let event_type = route_event
+        .get("event_type")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("visible_internal_llm_tool_event");
+    let mut payload = route_event.as_object().cloned().unwrap_or_else(Map::new);
+    payload.insert("type".to_string(), Value::String(event_type.to_string()));
+    payload.insert("run_id".to_string(), json!(run_id));
+    payload.insert("node_run_id".to_string(), json!(node_run_id));
+    payload.insert("node_id".to_string(), Value::String(node_id.to_string()));
+
+    RuntimeEventPayload {
+        event_type: event_type.to_string(),
+        source: RuntimeEventSource::Runtime,
+        durability: RuntimeEventDurability::DurableRequired,
+        persist_required: true,
+        trace_visible: true,
+        payload: Value::Object(payload),
+    }
+}
+
 pub fn node_started(node_run: &domain::NodeRunRecord) -> RuntimeEventPayload {
     RuntimeEventPayload {
         event_type: "node_started".to_string(),

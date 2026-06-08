@@ -130,5 +130,24 @@ where
         debug_stream_events::node_finished(&node_run),
     )
     .await;
+    if let Some(route_events) = input
+        .debug_payload
+        .get("visible_internal_llm_tool_events")
+        .and_then(Value::as_array)
+    {
+        for route_event in route_events {
+            append_runtime_event(
+                service,
+                flow_run_id,
+                debug_stream_events::visible_internal_llm_tool_route(
+                    flow_run_id,
+                    node_run.id,
+                    &node_run.node_id,
+                    route_event,
+                ),
+            )
+            .await;
+        }
+    }
     Ok(node_run)
 }

@@ -167,6 +167,7 @@ pub(super) fn append_llm_tool_result_messages(
     let provider_route = state.get("provider_route").cloned();
     let provider_metadata = state.get("provider_metadata").cloned();
     let visible_internal_transcript = state.get("visible_internal_llm_tool_transcript").cloned();
+    let visible_internal_events = state.get("visible_internal_llm_tool_events").cloned();
     let pending_tool_calls = state
         .get("pending_tool_calls")
         .and_then(Value::as_array)
@@ -284,6 +285,12 @@ pub(super) fn append_llm_tool_result_messages(
             visible_internal_transcript,
         );
     }
+    if let Some(visible_internal_events) = visible_internal_events {
+        callback_state.insert(
+            "visible_internal_llm_tool_events".to_string(),
+            visible_internal_events,
+        );
+    }
     let mut node_state = Map::new();
     node_state.insert(
         LLM_TOOL_CALLBACK_STATE_KEY.to_string(),
@@ -339,6 +346,17 @@ pub(super) fn pending_llm_tool_callback_visible_internal_transcript(
         .map(str::to_string)
 }
 
+pub(super) fn pending_llm_tool_callback_visible_internal_events(
+    node: &CompiledNode,
+    variable_pool: &Map<String, Value>,
+) -> Vec<Value> {
+    pending_llm_tool_callback_state(variable_pool, &node.node_id)
+        .and_then(|state| state.get("visible_internal_llm_tool_events"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
 pub(super) fn set_pending_llm_tool_callback_visible_internal_transcript(
     variable_pool: &mut Map<String, Value>,
     node_id: &str,
@@ -353,6 +371,24 @@ pub(super) fn set_pending_llm_tool_callback_visible_internal_transcript(
     state.insert(
         "visible_internal_llm_tool_transcript".to_string(),
         Value::String(transcript),
+    );
+    Ok(())
+}
+
+pub(super) fn set_pending_llm_tool_callback_visible_internal_events(
+    variable_pool: &mut Map<String, Value>,
+    node_id: &str,
+    events: Vec<Value>,
+) -> Result<()> {
+    let state = variable_pool
+        .get_mut(node_id)
+        .and_then(Value::as_object_mut)
+        .and_then(|node_state| node_state.get_mut(LLM_TOOL_CALLBACK_STATE_KEY))
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| anyhow!("llm tool callback state not found for {node_id}"))?;
+    state.insert(
+        "visible_internal_llm_tool_events".to_string(),
+        Value::Array(events),
     );
     Ok(())
 }
