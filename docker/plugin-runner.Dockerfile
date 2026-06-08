@@ -22,7 +22,7 @@ RUN --mount=type=cache,id=1flowbase-cargo-registry,sharing=locked,target=/usr/lo
       cargo build --release -p plugin-runner --bin plugin-runner \
     && cp /workspace/api/target-cache/release/plugin-runner /workspace/api/plugin-runner
 
-FROM debian:trixie-slim AS runtime
+FROM debian:trixie-slim AS runtime-base
 
 ARG APP_UID=1000
 ARG APP_GID=1000
@@ -35,10 +35,18 @@ RUN apt-get update \
   && groupadd --gid "${APP_GID}" flowbase \
   && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin flowbase
 
-COPY --from=builder /workspace/api/plugin-runner /usr/local/bin/plugin-runner
-
 USER flowbase
 
 EXPOSE 7801
 
 ENTRYPOINT ["/usr/local/bin/plugin-runner"]
+
+FROM runtime-base AS runtime
+
+COPY --from=builder /workspace/api/plugin-runner /usr/local/bin/plugin-runner
+
+FROM runtime-base AS runtime-prebuilt
+
+ARG TARGETARCH
+
+COPY --from=plugin_runner_binaries /${TARGETARCH}/plugin-runner /usr/local/bin/plugin-runner
