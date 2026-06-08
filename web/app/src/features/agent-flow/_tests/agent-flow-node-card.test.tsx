@@ -249,7 +249,12 @@ describe('AgentFlowNodeCard', () => {
     expect(onOpenPicker).toHaveBeenCalledWith('node-llm');
   });
 
-  test('renders LLM tool registrations as embedded bottom handles with hover labels', async () => {
+  test('renders LLM tool registrations as bottom edge handles with hover labels', async () => {
+    const canvasControlStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/canvas-controls.css',
+      'utf8'
+    );
+
     render(
       <AppProviders>
         <AgentFlowNodeCard
@@ -322,6 +327,11 @@ describe('AgentFlowNodeCard', () => {
     expect(toolConnectors).toHaveLength(2);
     expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
     expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'true');
+    expect(canvasControlStyles).toContain(
+      '.agent-flow-node-handle--tool.react-flow__handle:hover'
+    );
+    expect(canvasControlStyles).toContain('scale(');
+    expect(canvasControlStyles).toContain('rgba(22, 119, 255, 0.18)');
     expect(
       within(firstToolHandleSlot).getByLabelText('search_context 工具连接器')
     ).toBe(toolConnectors[0]);

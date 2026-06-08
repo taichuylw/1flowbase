@@ -36,7 +36,20 @@
   transform: translate(-50%, -50%);
   pointer-events: auto;
   cursor: crosshair;
+  transition:
+    transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    background 0.2s ease,
+    box-shadow 0.2s ease;
   z-index: 12;
+}
+
+.agent-flow-node-handle--tool.react-flow__handle:hover,
+.agent-flow-node-handle--tool.react-flow__handle:focus-visible {
+  background: #0958d9;
+  box-shadow:
+    0 0 0 5px rgba(22, 119, 255, 0.18),
+    0 2px 8px rgba(22, 119, 255, 0.38);
+  transform: translate(-50%, -50%) scale(1.18);
 }
 
 .agent-flow-connector-add-icon {
