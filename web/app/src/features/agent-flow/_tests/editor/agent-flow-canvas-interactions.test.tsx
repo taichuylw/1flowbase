@@ -8,6 +8,7 @@ import {
   type FlowNodeType
 } from '@1flowbase/flow-schema';
 import { AgentFlowCanvas } from '../../components/editor/AgentFlowCanvas';
+import { createNodeDocument } from '../../lib/document/node-factory';
 import { AgentFlowEditorStoreProvider } from '../../store/editor/AgentFlowEditorStoreProvider';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { selectWorkingDocument } from '../../store/editor/selectors';
@@ -47,6 +48,10 @@ type MockReactFlowProps = {
   edges?: Array<{
     id: string;
     selected?: boolean;
+    source?: string;
+    target?: string;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
     data?: {
       onInsertNode?: (edgeId: string, nodeType: FlowNodeType) => void;
     };
@@ -501,6 +506,117 @@ describe('AgentFlowCanvas interactions', () => {
         })
       ])
     );
+  });
+
+  test('routes LLM tool connector connections into mounted tool targets without graph edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm', 720, 240);
+    const sourceLlm = document.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+    const initialEdges = [...document.graph.edges];
+
+    if (!sourceLlm) {
+      throw new Error('expected default LLM node');
+    }
+
+    document.graph.nodes.push(mountedLlm);
+    sourceLlm.config = {
+      ...sourceLlm.config,
+      visible_internal_llm_tools_enabled: true,
+      visible_internal_llm_tools: [
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'inspect_visible_context',
+          connector_id: 'inspect_visible_context',
+          target_node_id: '',
+          input_schema: { type: 'object' }
+        }
+      ]
+    };
+
+    const { getState } = renderCanvas(document);
+
+    expect(latestReactFlowProps?.onConnect).toBeTypeOf('function');
+
+    act(() => {
+      latestReactFlowProps?.onConnect?.({
+        source: 'node-llm',
+        target: 'node-mounted-llm',
+        sourceHandle: 'visible_internal_llm_tool:inspect_visible_context',
+        targetHandle: null
+      });
+    });
+
+    const nextSourceLlm = getState().workingDocument.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    expect(nextSourceLlm?.config.visible_internal_llm_tools).toEqual([
+      expect.objectContaining({
+        tool_name: 'inspect_visible_context',
+        target_node_id: 'node-mounted-llm'
+      })
+    ]);
+    expect(getState().workingDocument.graph.edges).toEqual(initialEdges);
+    expect(latestReactFlowProps?.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'llm-tool-node-llm-inspect_visible_context-node-mounted-llm',
+          source: 'node-llm',
+          target: 'node-mounted-llm',
+          sourceHandle: 'visible_internal_llm_tool:inspect_visible_context',
+          targetHandle: null
+        })
+      ])
+    );
+  });
+
+  test('does not open the node picker when an LLM tool connector stops on the pane', () => {
+    const flowDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const sourceLlm = flowDocument.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    if (!sourceLlm) {
+      throw new Error('expected default LLM node');
+    }
+
+    sourceLlm.config = {
+      ...sourceLlm.config,
+      visible_internal_llm_tools_enabled: true,
+      visible_internal_llm_tools: [
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'inspect_visible_context',
+          connector_id: 'inspect_visible_context',
+          target_node_id: '',
+          input_schema: { type: 'object' }
+        }
+      ]
+    };
+
+    const { getState } = renderCanvas(flowDocument);
+
+    act(() => {
+      latestReactFlowProps?.onConnectStart?.(null, {
+        nodeId: 'node-llm',
+        handleType: 'source',
+        handleId: 'visible_internal_llm_tool:inspect_visible_context'
+      });
+      latestReactFlowProps?.onConnectEnd?.({
+        clientX: 420,
+        clientY: 260,
+        target: document.createElement('div')
+      });
+    });
+
+    expect(getState().nodePickerState).toEqual({
+      open: false,
+      anchorNodeId: null,
+      anchorEdgeId: null,
+      anchorCanvasPosition: null
+    });
   });
 
   test('opens the shared node picker when a dragged connection stops on the pane', () => {

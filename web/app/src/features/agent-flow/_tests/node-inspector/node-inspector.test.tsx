@@ -225,6 +225,7 @@ describe('NodeInspector core', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
 
+    expect(within(dialog).queryByLabelText('目标 LLM')).not.toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText('工具名称'), {
       target: { value: 'inspect_image' }
     });
@@ -239,6 +240,7 @@ describe('NodeInspector core', () => {
           visible_internal_llm_tools: [
             expect.objectContaining({
               tool_name: 'inspect_image',
+              target_node_id: 'node-mounted-llm',
               description: 'Inspect uploaded image'
             })
           ]

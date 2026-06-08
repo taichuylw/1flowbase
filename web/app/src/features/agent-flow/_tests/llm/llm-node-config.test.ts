@@ -124,6 +124,13 @@ describe('llm-node-config', () => {
             input_schema: { type: 'object' }
           },
           {
+            type: 'visible_internal_llm_tool',
+            tool_name: 'inspect_image',
+            connector_id: 'inspect_image',
+            target_node_id: ' ',
+            input_schema: { type: 'object' }
+          },
+          {
             type: 'external_tool',
             tool_name: 'leak_external',
             target_node_id: 'node-other'
@@ -142,6 +149,13 @@ describe('llm-node-config', () => {
         connector_id: 'inspect_visible_context',
         target_node_id: 'node-mounted-llm',
         description: 'Read visible context',
+        input_schema: { type: 'object' }
+      },
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_image',
+        connector_id: 'inspect_image',
+        target_node_id: '',
         input_schema: { type: 'object' }
       }
     ]);

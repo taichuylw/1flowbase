@@ -30,7 +30,6 @@
     "source_examples": "source examples ·",
     "llm_parameters": "LLM parameters",
     "mount_tools": "Mount tools",
-    "target_llm": "Target LLM",
     "input_schema": "Input Schema",
     "connector_id": "Connector ID",
     "tool_connector": "tool connector",

@@ -30,7 +30,6 @@
     "source_examples": "个来源实例 ·",
     "llm_parameters": "LLM 参数",
     "mount_tools": "挂载工具",
-    "target_llm": "目标 LLM",
     "input_schema": "输入 Schema",
     "connector_id": "连接器标识",
     "tool_connector": "工具连接器",

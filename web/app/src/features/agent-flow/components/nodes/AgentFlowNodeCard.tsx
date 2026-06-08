@@ -317,7 +317,7 @@ export function AgentFlowNodeCard({
           id={handle.id}
           type="source"
           position={Position.Bottom}
-          isConnectable={false}
+          isConnectable
           aria-label={`${handle.title} ${i18nText('agentFlow', 'auto.tool_connector')}`}
           className="agent-flow-node-handle agent-flow-node-handle--tool"
         />

@@ -1,9 +1,6 @@
-import type {
-  FlowAuthoringDocument,
-  FlowNodeDocument
-} from '@1flowbase/flow-schema';
+import type { FlowNodeDocument } from '@1flowbase/flow-schema';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Input, List, Modal, Select, Space, Switch } from 'antd';
+import { Button, Input, List, Modal, Space, Switch } from 'antd';
 import { useState } from 'react';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
@@ -30,10 +27,6 @@ function getNodeConfig(node: FlowNodeDocument) {
   return isRecord(node.config) ? node.config : {};
 }
 
-function getDocument(adapter: SchemaFieldRendererProps['adapter']) {
-  return adapter.getDerived('document') as FlowAuthoringDocument | null;
-}
-
 function getCurrentNode(adapter: SchemaFieldRendererProps['adapter']) {
   return adapter.getDerived('node') as FlowNodeDocument | null;
 }
@@ -47,8 +40,7 @@ function normalizeConnectorId(value: string) {
 }
 
 function buildNextTool(
-  tools: LlmVisibleInternalTool[],
-  targetNodeId: string | undefined
+  tools: LlmVisibleInternalTool[]
 ): LlmVisibleInternalTool {
   const toolName = createToolName(tools.length);
 
@@ -56,7 +48,7 @@ function buildNextTool(
     type: 'visible_internal_llm_tool',
     tool_name: toolName,
     connector_id: toolName,
-    target_node_id: targetNodeId ?? '',
+    target_node_id: '',
     input_schema: { type: 'object' }
   };
 }
@@ -77,7 +69,6 @@ function parseInputSchema(value: string) {
 
 interface LlmToolRegistrationDraft {
   tool_name: string;
-  target_node_id: string;
   description: string;
   input_schema_text: string;
   connector_id: string;
@@ -86,14 +77,13 @@ interface LlmToolRegistrationDraft {
 function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
   return {
     tool_name: tool.tool_name,
-    target_node_id: tool.target_node_id,
     description: tool.description ?? '',
     input_schema_text: schemaText(tool.input_schema),
     connector_id: tool.connector_id ?? tool.tool_name
   };
 }
 
-function toolFromDraft(draft: LlmToolRegistrationDraft) {
+function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
   const toolName = draft.tool_name.trim();
   const inputSchema = draft.input_schema_text.trim()
     ? parseInputSchema(draft.input_schema_text)
@@ -107,7 +97,7 @@ function toolFromDraft(draft: LlmToolRegistrationDraft) {
     type: 'visible_internal_llm_tool' as const,
     tool_name: toolName,
     connector_id: normalizeConnectorId(draft.connector_id.trim() || toolName),
-    target_node_id: draft.target_node_id,
+    target_node_id: targetNodeId,
     description: draft.description.trim() || undefined,
     input_schema: inputSchema
   };
@@ -119,23 +109,15 @@ export function LlmToolRegistrationsField({
 }: SchemaFieldRendererProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<LlmToolRegistrationDraft | null>(null);
-  const document = getDocument(adapter);
   const currentNode = getCurrentNode(adapter);
 
-  if (!document || !currentNode) {
+  if (!currentNode) {
     return null;
   }
 
   const currentConfig = getNodeConfig(currentNode);
   const enabled = getLlmVisibleInternalToolsEnabled(currentConfig);
   const tools = getLlmVisibleInternalTools(currentConfig);
-  const targetNodes = document.graph.nodes.filter(
-    (node) => node.type === 'llm' && node.id !== currentNode.id
-  );
-  const targetOptions = targetNodes.map((node) => ({
-    value: node.id,
-    label: node.alias || node.id
-  }));
 
   function updateTools(nextTools: LlmVisibleInternalTool[]) {
     adapter.setValue('config.visible_internal_llm_tools', nextTools);
@@ -166,7 +148,9 @@ export function LlmToolRegistrationsField({
     if (!draft) {
       return;
     }
-    const nextTool = toolFromDraft(draft);
+    const currentTargetNodeId =
+      editingIndex === null ? '' : (tools[editingIndex]?.target_node_id ?? '');
+    const nextTool = toolFromDraft(draft, currentTargetNodeId);
 
     if (!nextTool) {
       return;
@@ -252,9 +236,7 @@ export function LlmToolRegistrationsField({
       {enabled ? (
         <Button
           icon={<PlusOutlined />}
-          onClick={() =>
-            openToolEditor(null, buildNextTool(tools, targetNodes[0]?.id))
-          }
+          onClick={() => openToolEditor(null, buildNextTool(tools))}
         >
           {i18nText('agentFlow', 'auto.add_tool_registration')}
         </Button>
@@ -284,17 +266,6 @@ export function LlmToolRegistrationsField({
                       draft.connector_id ||
                       normalizeConnectorId(event.target.value)
                   })
-                }
-              />
-            </label>
-            <label style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.target_llm')}</span>
-              <Select
-                aria-label={i18nText('agentFlow', 'auto.target_llm')}
-                options={targetOptions}
-                value={draft.target_node_id || undefined}
-                onChange={(targetNodeId) =>
-                  updateDraft({ target_node_id: targetNodeId })
                 }
               />
             </label>

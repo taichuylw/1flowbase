@@ -4,6 +4,11 @@ import type {
 } from '@1flowbase/flow-schema';
 
 import { getDefaultIfElseSourceHandle } from '../../if-else-branches';
+import {
+  getLlmVisibleInternalTools,
+  getLlmVisibleInternalToolsEnabled,
+  parseLlmToolSourceHandleId
+} from '../../llm-node-config';
 import { createEdgeDocument } from '../edge-factory';
 import { getEdgeById, getNodeById } from '../selectors';
 import { shiftDownstreamNodesBFS } from './layout';
@@ -28,9 +33,32 @@ export function validateConnection(
 
   return Boolean(
     sourceNode &&
-      targetNode &&
-      sourceNode.id !== targetNode.id &&
-      sourceNode.containerId === targetNode.containerId
+    targetNode &&
+    sourceNode.id !== targetNode.id &&
+    sourceNode.containerId === targetNode.containerId
+  );
+}
+
+export function validateVisibleInternalLlmToolConnection(
+  document: FlowAuthoringDocument,
+  connection: EdgeConnection
+) {
+  const connectorId = parseLlmToolSourceHandleId(connection.sourceHandle);
+
+  if (!connectorId || !validateConnection(document, connection)) {
+    return false;
+  }
+
+  const sourceNode = getNodeById(document, connection.source ?? null);
+  const targetNode = getNodeById(document, connection.target ?? null);
+
+  return Boolean(
+    sourceNode?.type === 'llm' &&
+    targetNode?.type === 'llm' &&
+    getLlmVisibleInternalToolsEnabled(sourceNode.config) &&
+    getLlmVisibleInternalTools(sourceNode.config).some(
+      (tool) => (tool.connector_id || tool.tool_name) === connectorId
+    )
   );
 }
 
@@ -137,6 +165,72 @@ export function connectNodes(
           containerId: sourceNode.containerId
         })
       ]
+    }
+  };
+}
+
+export function connectVisibleInternalLlmTool(
+  document: FlowAuthoringDocument,
+  payload: {
+    connection: EdgeConnection;
+  }
+): FlowAuthoringDocument {
+  const connectorId = parseLlmToolSourceHandleId(
+    payload.connection.sourceHandle
+  );
+
+  if (
+    !connectorId ||
+    !validateVisibleInternalLlmToolConnection(document, payload.connection)
+  ) {
+    return document;
+  }
+
+  const sourceNode = getNodeById(document, payload.connection.source ?? null);
+  const targetNode = getNodeById(document, payload.connection.target ?? null);
+
+  if (!sourceNode || !targetNode) {
+    return document;
+  }
+
+  let changed = false;
+  const nextTools = getLlmVisibleInternalTools(sourceNode.config).map(
+    (tool) => {
+      if ((tool.connector_id || tool.tool_name) !== connectorId) {
+        return tool;
+      }
+
+      if (tool.target_node_id === targetNode.id) {
+        return tool;
+      }
+
+      changed = true;
+      return {
+        ...tool,
+        target_node_id: targetNode.id
+      };
+    }
+  );
+
+  if (!changed) {
+    return document;
+  }
+
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      nodes: document.graph.nodes.map((node) =>
+        node.id === sourceNode.id
+          ? {
+              ...node,
+              config: {
+                ...node.config,
+                visible_internal_llm_tools: nextTools
+              }
+            }
+          : node
+      )
     }
   };
 }

@@ -66,6 +66,7 @@ export const DEFAULT_LLM_RESPONSE_FORMAT: LlmNodeResponseFormat = {
 
 export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS_ENABLED = false;
 export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS: LlmVisibleInternalTool[] = [];
+const LLM_TOOL_SOURCE_HANDLE_PREFIX = 'visible_internal_llm_tool:';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -73,6 +74,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+export function createLlmToolSourceHandleId(connectorId: string) {
+  return `${LLM_TOOL_SOURCE_HANDLE_PREFIX}${connectorId}`;
+}
+
+export function parseLlmToolSourceHandleId(
+  handleId: string | null | undefined
+) {
+  if (!handleId?.startsWith(LLM_TOOL_SOURCE_HANDLE_PREFIX)) {
+    return null;
+  }
+
+  return handleId.slice(LLM_TOOL_SOURCE_HANDLE_PREFIX.length);
+}
+
+export function isLlmToolSourceHandle(handleId: string | null | undefined) {
+  return parseLlmToolSourceHandleId(handleId) !== null;
 }
 
 export function getLlmParameterDefaultValue(
@@ -264,7 +283,7 @@ export function getLlmVisibleInternalTools(
     const toolName = asString(tool.tool_name).trim();
     const targetNodeId = asString(tool.target_node_id).trim();
 
-    if (!toolName || !targetNodeId) {
+    if (!toolName) {
       return [];
     }
 

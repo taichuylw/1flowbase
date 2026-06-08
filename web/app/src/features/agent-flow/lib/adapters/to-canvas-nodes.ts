@@ -8,6 +8,7 @@ import type { NodePickerOption } from '../plugin-node-definitions';
 import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 import { getIfElseBranchesFromBindings } from '../if-else-branches';
 import {
+  createLlmToolSourceHandleId,
   getLlmVisibleInternalTools,
   getLlmVisibleInternalToolsEnabled
 } from '../llm-node-config';
@@ -36,7 +37,7 @@ function llmToolSourceHandles(config: Record<string, unknown>) {
   }
 
   return getLlmVisibleInternalTools(config).map((tool) => ({
-    id: tool.connector_id || tool.tool_name,
+    id: createLlmToolSourceHandleId(tool.connector_id || tool.tool_name),
     title: tool.connector_id || tool.tool_name
   }));
 }

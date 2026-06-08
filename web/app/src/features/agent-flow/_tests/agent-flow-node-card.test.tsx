@@ -249,7 +249,7 @@ describe('AgentFlowNodeCard', () => {
     expect(onOpenPicker).toHaveBeenCalledWith('node-llm');
   });
 
-  test('renders LLM tool registrations as bottom non-topology connectors', () => {
+  test('renders LLM tool registrations as bottom linker connectors', () => {
     render(
       <AppProviders>
         <AgentFlowNodeCard
@@ -315,7 +315,7 @@ describe('AgentFlowNodeCard', () => {
 
     expect(toolConnectors).toHaveLength(2);
     expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
-    expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'false');
+    expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'true');
     expect(
       screen.getByRole('button', { name: '在 LLM 后新增节点' })
     ).toBeInTheDocument();
