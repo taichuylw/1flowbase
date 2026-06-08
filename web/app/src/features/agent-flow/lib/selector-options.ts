@@ -26,6 +26,7 @@ import { i18nText } from '../../../shared/i18n/text';
 
 const visibleInternalLlmToolNodeId = 'visible_internal_llm_tool';
 const visibleInternalLlmToolArgumentsKey = 'arguments';
+const visibleInternalLlmToolDisplayNodeLabel = 'tool';
 
 export interface FlowSelectorOption {
   nodeId: string;
@@ -113,7 +114,6 @@ function visibleInternalLlmToolArgumentOptions(
   document: FlowAuthoringDocument,
   nodeId: string
 ): FlowSelectorOption[] {
-  const nodeLabel = i18nText('agentFlow', 'auto.tool_call_arguments');
   const visitedNodeIds = new Set<string>();
   const queue = [nodeId];
   const optionsByField = new Map<string, FlowSelectorOption>();
@@ -168,7 +168,7 @@ function visibleInternalLlmToolArgumentOptions(
 
         optionsByField.set(trimmedFieldKey, {
           nodeId: visibleInternalLlmToolNodeId,
-          nodeLabel,
+          nodeLabel: visibleInternalLlmToolDisplayNodeLabel,
           outputKey: trimmedFieldKey,
           outputLabel: trimmedFieldKey,
           valueType: jsonSchemaPropertyValueType(property),
@@ -178,7 +178,7 @@ function visibleInternalLlmToolArgumentOptions(
             visibleInternalLlmToolArgumentsKey,
             trimmedFieldKey
           ],
-          displayLabel: formatNodeVariableLabel(nodeLabel, trimmedFieldKey)
+          displayLabel: `${visibleInternalLlmToolDisplayNodeLabel}.${trimmedFieldKey}`
         });
       }
     }

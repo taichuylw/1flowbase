@@ -383,7 +383,7 @@ describe('start node variables', () => {
       expect.arrayContaining([
         expect.objectContaining({
           nodeId: 'visible_internal_llm_tool',
-          nodeLabel: '工具调用参数',
+          nodeLabel: 'tool',
           outputKey: 'task',
           outputLabel: 'task',
           valueType: 'string',
@@ -392,7 +392,7 @@ describe('start node variables', () => {
             description: '给多模态模型任务指示提示词'
           }),
           value: ['visible_internal_llm_tool', 'arguments', 'task'],
-          displayLabel: '工具调用参数/task'
+          displayLabel: 'tool.task'
         }),
         expect.objectContaining({
           outputKey: 'retry_count',
