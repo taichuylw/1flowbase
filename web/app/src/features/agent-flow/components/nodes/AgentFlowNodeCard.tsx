@@ -315,35 +315,27 @@ export function AgentFlowNodeCard({
         key={handle.id}
         style={{ left: getToolConnectorLeft(index) }}
       >
-        <CanvasHandle
-          id={handle.id}
-          type="source"
-          position={Position.Bottom}
-          isConnectable
-          aria-label={`${handle.title} ${i18nText('agentFlow', 'auto.tool_connector')}`}
-          className="agent-flow-node-handle agent-flow-node-handle--tool"
-        />
-      </div>
-    );
-  }
-
-  function renderToolConnectorLabel(
-    handle: { id: string; title: string },
-    index: number
-  ) {
-    const left = getToolConnectorLeft(index);
-
-    return (
-      <div
-        className="agent-flow-node-card__tool-connector"
-        data-testid={`agent-flow-node-tool-label-${index}`}
-        key={`${handle.id}-label`}
-        style={{ left }}
-      >
-        <span className="agent-flow-node-card__tool-connector-line" />
-        <span className="agent-flow-node-card__tool-connector-label">
-          {handle.title}
-        </span>
+        <Tooltip
+          title={handle.title}
+          placement="bottom"
+          color="#ffffff"
+          styles={{
+            body: {
+              color: '#333',
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }
+          }}
+        >
+          <CanvasHandle
+            id={handle.id}
+            type="source"
+            position={Position.Bottom}
+            isConnectable
+            aria-label={`${handle.title} ${i18nText('agentFlow', 'auto.tool_connector')}`}
+            className="agent-flow-node-handle agent-flow-node-handle--tool"
+          />
+        </Tooltip>
       </div>
     );
   }
@@ -430,16 +422,6 @@ export function AgentFlowNodeCard({
       {toolSourceHandles.map((handle, index) =>
         renderToolHandle(handle, index)
       )}
-      {toolSourceHandles.length > 0 ? (
-        <div className="agent-flow-node-card__tool-connectors">
-          <span className="agent-flow-node-card__tool-connectors-title">
-            {i18nText('agentFlow', 'auto.mount_tools')}
-          </span>
-          {toolSourceHandles.map((handle, index) =>
-            renderToolConnectorLabel(handle, index)
-          )}
-        </div>
-      ) : null}
     </>
   );
 }

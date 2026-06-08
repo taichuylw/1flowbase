@@ -249,7 +249,7 @@ describe('AgentFlowNodeCard', () => {
     expect(onOpenPicker).toHaveBeenCalledWith('node-llm');
   });
 
-  test('renders LLM tool registrations as bottom linker connectors', () => {
+  test('renders LLM tool registrations as embedded bottom handles with hover labels', async () => {
     render(
       <AppProviders>
         <AgentFlowNodeCard
@@ -307,16 +307,16 @@ describe('AgentFlowNodeCard', () => {
       </AppProviders>
     );
 
-    expect(screen.getByText('search_context')).toBeInTheDocument();
-    expect(screen.getByText('inspect_image')).toBeInTheDocument();
-    expect(screen.getByText('挂载工具')).toBeInTheDocument();
+    expect(screen.queryByText('search_context')).not.toBeInTheDocument();
+    expect(screen.queryByText('inspect_image')).not.toBeInTheDocument();
+    expect(screen.queryByText('挂载工具')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('agent-flow-node-tool-label-0')
+    ).not.toBeInTheDocument();
 
     const toolConnectors = screen.getAllByLabelText(/工具连接器$/);
     const firstToolHandleSlot = screen.getByTestId(
       'agent-flow-node-tool-handle-0'
-    );
-    const firstToolLabelSlot = screen.getByTestId(
-      'agent-flow-node-tool-label-0'
     );
 
     expect(toolConnectors).toHaveLength(2);
@@ -325,9 +325,8 @@ describe('AgentFlowNodeCard', () => {
     expect(
       within(firstToolHandleSlot).getByLabelText('search_context 工具连接器')
     ).toBe(toolConnectors[0]);
-    expect(
-      within(firstToolLabelSlot).queryByLabelText(/工具连接器$/)
-    ).not.toBeInTheDocument();
+    fireEvent.mouseEnter(toolConnectors[0]);
+    expect(await screen.findByText('search_context')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '在 LLM 后新增节点' })
     ).toBeInTheDocument();

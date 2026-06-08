@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: visible-internal-llm-tool-routing-authoring
-summary: `visible_internal_llm_tool` 是 1flowbase runtime 路由层语义，不是 provider 插件语义；authoring 入口应是 LLM 节点的“挂载工具”开关和节点底部工具注册连接点，连接点贴在节点底边并拉出普通可编排 graph edge。
+summary: `visible_internal_llm_tool` 是 1flowbase runtime 路由层语义，不是 provider 插件语义；authoring 入口应是 LLM 节点的“挂载工具”开关和节点底部内嵌工具连接点，画布默认不显示工具名方块。
 keywords:
   - visible_internal_llm_tool
   - 挂载工具
@@ -12,8 +12,8 @@ keywords:
   - execution_role
   - bottom connector
 created_at: 2026-06-08 10
-updated_at: 2026-06-08 14
-last_verified_at: 2026-06-08 14
+updated_at: 2026-06-08 15
+last_verified_at: 2026-06-08 15
 decision_policy: direct_reference
 scope:
   - api/crates/orchestration-runtime
@@ -28,7 +28,7 @@ scope:
 
 `visible_internal_llm_tool` 是 1flowbase runtime 路由层能力：主 LLM 触发内部工具调用后，由 1flowbase 拦截并定向执行目标 LLM 节点；目标 LLM 节点照常使用自己的 provider/model 配置。provider 插件只接收一次正常 LLM 调用，不应该感知“内部挂载工具”这个产品语义，也不应该为了该能力调整供应商 wire shape。
 
-Authoring 侧不向用户暴露 `LLM 执行角色` 或 `execution_role` 下拉。LLM 节点只提供“挂载工具”开关；开启后编辑工具注册表。每条工具注册在同一个 LLM 节点底部显示一个附属工具连接点，随节点移动，不占用左右主流程连接器。可拖拽的连接点必须贴在 LLM 节点卡片底边，工具名标签可以显示在节点下方，但不能把连接点挂在工具名标签下面。用户从该连接点拉线时，应生成普通可编排 `graph.edges`，`sourceHandle` 使用 `visible_internal_llm_tool:<connector_id>`；这条分支可以继续连接任意后续节点，由 runtime 在主 LLM tool call 时按路由执行，主流程普通 downstream 激活需跳过该 sourceHandle。
+Authoring 侧不向用户暴露 `LLM 执行角色` 或 `execution_role` 下拉。LLM 节点只提供“挂载工具”开关；开启后编辑工具注册表。每条工具注册在同一个 LLM 节点底部显示一个内嵌工具连接点，随节点移动，不占用左右主流程连接器。画布默认只显示底边连接点，不显示“挂载工具”静态文案、竖线、工具名方块或外置工具区；hover 对应连接点时才用 tooltip 显示工具名。用户从该连接点拉线时，应生成普通可编排 `graph.edges`，`sourceHandle` 使用 `visible_internal_llm_tool:<connector_id>`；这条分支可以继续连接任意后续节点，由 runtime 在主 LLM tool call 时按路由执行，主流程普通 downstream 激活需跳过该 sourceHandle。
 
 ## 原因
 
