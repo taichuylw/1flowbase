@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -215,6 +217,40 @@ describe('NodeInspector core', () => {
     expect(
       await screen.findByText('inspect_visible_context')
     ).toBeInTheDocument();
+    const mountToolsField = screen.getByTestId(
+      'inspector-field-config.visible_internal_llm_tools_enabled'
+    );
+    const mountToolsToolbar = within(mountToolsField).getByTestId(
+      'agent-flow-llm-tool-registrations-toolbar'
+    );
+    const addToolButton = within(mountToolsToolbar).getByRole('button', {
+      name: '添加工具'
+    });
+    const mountToolsSwitch = within(mountToolsToolbar).getByRole('switch', {
+      name: '挂载工具'
+    });
+
+    expect(within(mountToolsToolbar).getByText('挂载工具')).toBeInTheDocument();
+    expect(
+      within(addToolButton).getByTestId(
+        'agent-flow-llm-tool-registration-add-icon'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(mountToolsToolbar).queryByText('添加工具')
+    ).not.toBeInTheDocument();
+    expect(mountToolsSwitch).toHaveClass(
+      'agent-flow-llm-tool-registrations__switch'
+    );
+    expect(
+      readFileSync(
+        'src/features/agent-flow/components/editor/styles/inspector.css',
+        'utf8'
+      )
+    ).toMatch(
+      /\.agent-flow-llm-tool-registrations__switch\.ant-switch\s*\{[^}]*margin-left:\s*auto;/s
+    );
+    expect(within(mountToolsField).getAllByText('挂载工具')).toHaveLength(1);
     expect(
       screen.queryByRole('columnheader', { name: '目标 LLM' })
     ).not.toBeInTheDocument();

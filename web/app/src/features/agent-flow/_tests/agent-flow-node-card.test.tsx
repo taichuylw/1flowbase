@@ -340,6 +340,16 @@ describe('AgentFlowNodeCard', () => {
     expect(mainSourceConnector).not.toHaveClass('agent-flow-node-handle--tool');
     expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
     expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'true');
+    expect(
+      within(toolConnectors[0]).getByTestId(
+        'agent-flow-node-tool-connector-icon'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(toolConnectors[1]).getByTestId(
+        'agent-flow-node-tool-connector-icon'
+      )
+    ).toBeInTheDocument();
     expect(canvasStyles).toMatch(
       /\.agent-flow-node-card__tool-handle\s*\{[^}]*pointer-events:\s*none;/s
     );
@@ -347,9 +357,17 @@ describe('AgentFlowNodeCard', () => {
       /\.agent-flow-node-handle--tool\.react-flow__handle\s*\{[^}]*pointer-events:\s*auto;/s
     );
     expect(canvasControlStyles).toContain(
-      '.agent-flow-node-handle--tool.react-flow__handle:hover'
+      '.react-flow__node:hover .agent-flow-node-handle--tool.react-flow__handle'
     );
-    expect(canvasControlStyles).toContain('scale(');
+    expect(canvasControlStyles).toMatch(
+      /\.react-flow__node:hover\s+\.agent-flow-node-handle--tool\.react-flow__handle,[^{]*\.agent-flow-node-handle--tool\.react-flow__handle:focus-visible\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;/s
+    );
+    expect(canvasControlStyles).toMatch(
+      /\.agent-flow-node-handle__tool-icon\s*\{[^}]*opacity:\s*0;/s
+    );
+    expect(canvasControlStyles).toMatch(
+      /\.react-flow__node:hover\s+\.agent-flow-node-handle--tool\s+\.agent-flow-node-handle__tool-icon,[^{]*\.agent-flow-node-handle--tool\.react-flow__handle:focus-visible\s+\.agent-flow-node-handle__tool-icon\s*\{[^}]*opacity:\s*1;/s
+    );
     expect(canvasControlStyles).toContain('rgba(22, 119, 255, 0.18)');
     expect(within(card).getByTestId('agent-flow-node-tool-handle-0')).toBe(
       firstToolHandleSlot

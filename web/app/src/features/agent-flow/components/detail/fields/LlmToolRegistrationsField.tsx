@@ -1,7 +1,7 @@
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Input, List, Modal, Space, Switch } from 'antd';
-import { useState } from 'react';
+import { Button, Input, List, Switch, Typography } from 'antd';
+import { useRef, useState } from 'react';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
@@ -10,6 +10,9 @@ import {
   type LlmVisibleInternalTool
 } from '../../../lib/llm-node-config';
 import { i18nText } from '../../../../../shared/i18n/text';
+import { FloatingSettingsPanel } from '../FloatingSettingsPanel';
+import { JsonSchemaInlineEditor } from './JsonSchemaSettingsPanel';
+import { createDefaultJsonSchema } from './json-schema-utils';
 
 const TOOL_FORM_ROW_STYLE = {
   display: 'grid',
@@ -53,24 +56,10 @@ function buildNextTool(
   };
 }
 
-function schemaText(schema: LlmVisibleInternalTool['input_schema']) {
-  return JSON.stringify(schema ?? { type: 'object' }, null, 2);
-}
-
-function parseInputSchema(value: string) {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 interface LlmToolRegistrationDraft {
   tool_name: string;
   description: string;
-  input_schema_text: string;
+  input_schema: Record<string, unknown>;
   connector_id: string;
 }
 
@@ -78,18 +67,17 @@ function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
   return {
     tool_name: tool.tool_name,
     description: tool.description ?? '',
-    input_schema_text: schemaText(tool.input_schema),
+    input_schema: isRecord(tool.input_schema)
+      ? tool.input_schema
+      : createDefaultJsonSchema(),
     connector_id: tool.connector_id ?? tool.tool_name
   };
 }
 
 function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
   const toolName = draft.tool_name.trim();
-  const inputSchema = draft.input_schema_text.trim()
-    ? parseInputSchema(draft.input_schema_text)
-    : { type: 'object' };
 
-  if (!toolName || !inputSchema) {
+  if (!toolName) {
     return null;
   }
 
@@ -99,7 +87,7 @@ function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
     connector_id: normalizeConnectorId(draft.connector_id.trim() || toolName),
     target_node_id: targetNodeId,
     description: draft.description.trim() || undefined,
-    input_schema: inputSchema
+    input_schema: draft.input_schema
   };
 }
 
@@ -109,6 +97,8 @@ export function LlmToolRegistrationsField({
 }: SchemaFieldRendererProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<LlmToolRegistrationDraft | null>(null);
+  const [schemaEditorValid, setSchemaEditorValid] = useState(true);
+  const toolEditorTriggerRef = useRef<HTMLElement | null>(null);
   const currentNode = getCurrentNode(adapter);
 
   if (!currentNode) {
@@ -123,14 +113,21 @@ export function LlmToolRegistrationsField({
     adapter.setValue('config.visible_internal_llm_tools', nextTools);
   }
 
-  function openToolEditor(index: number | null, tool: LlmVisibleInternalTool) {
+  function openToolEditor(
+    index: number | null,
+    tool: LlmVisibleInternalTool,
+    trigger: HTMLElement | null
+  ) {
+    toolEditorTriggerRef.current = trigger;
     setEditingIndex(index);
     setDraft(draftFromTool(tool));
+    setSchemaEditorValid(true);
   }
 
   function closeToolEditor() {
     setEditingIndex(null);
     setDraft(null);
+    setSchemaEditorValid(true);
   }
 
   function updateDraft(patch: Partial<LlmToolRegistrationDraft>) {
@@ -168,22 +165,63 @@ export function LlmToolRegistrationsField({
     closeToolEditor();
   }
 
-  const schemaInvalid =
-    draft?.input_schema_text.trim() &&
-    parseInputSchema(draft.input_schema_text) === undefined;
   const modalTitle = i18nText('agentFlow', 'auto.edit', {
     value1: i18nText('agentFlow', 'auto.tool_registration')
   });
+  const addToolLabel = i18nText('agentFlow', 'auto.add_tool_registration');
+  const toolEditorFooter = (
+    <div className="agent-flow-llm-tool-registration-panel__footer">
+      <Button onClick={closeToolEditor}>
+        {i18nText('agentFlow', 'auto.cancel')}
+      </Button>
+      <Button
+        disabled={!draft?.tool_name.trim() || !schemaEditorValid}
+        type="primary"
+        onClick={saveDraft}
+      >
+        {i18nText('agentFlow', 'auto.save_tool')}
+      </Button>
+    </div>
+  );
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-      <Switch
-        aria-label={block.label}
-        checked={enabled}
-        onChange={(checked) =>
-          adapter.setValue('config.visible_internal_llm_tools_enabled', checked)
-        }
-      />
+    <div className="agent-flow-llm-tool-registrations">
+      <div
+        className="agent-flow-llm-tool-registrations__toolbar"
+        data-testid="agent-flow-llm-tool-registrations-toolbar"
+      >
+        <Typography.Text
+          strong
+          className="agent-flow-llm-tool-registrations__label"
+        >
+          {block.label}
+        </Typography.Text>
+        <Button
+          aria-label={addToolLabel}
+          className="agent-flow-llm-tool-registrations__add"
+          disabled={!enabled}
+          icon={
+            <PlusOutlined data-testid="agent-flow-llm-tool-registration-add-icon" />
+          }
+          shape="circle"
+          size="small"
+          type="text"
+          onClick={(event) =>
+            openToolEditor(null, buildNextTool(tools), event.currentTarget)
+          }
+        />
+        <Switch
+          aria-label={block.label}
+          checked={enabled}
+          className="agent-flow-llm-tool-registrations__switch"
+          onChange={(checked) =>
+            adapter.setValue(
+              'config.visible_internal_llm_tools_enabled',
+              checked
+            )
+          }
+        />
+      </div>
       {enabled ? (
         <List
           aria-label={i18nText('agentFlow', 'auto.tool_registration')}
@@ -206,7 +244,9 @@ export function LlmToolRegistrationsField({
                     key="edit"
                     size="small"
                     type="text"
-                    onClick={() => openToolEditor(index, tool)}
+                    onClick={(event) =>
+                      openToolEditor(index, tool, event.currentTarget)
+                    }
                   />,
                   <Button
                     aria-label={i18nText('agentFlow', 'auto.delete_item', {
@@ -233,27 +273,23 @@ export function LlmToolRegistrationsField({
           size="small"
         />
       ) : null}
-      {enabled ? (
-        <Button
-          icon={<PlusOutlined />}
-          onClick={() => openToolEditor(null, buildNextTool(tools))}
-        >
-          {i18nText('agentFlow', 'auto.add_tool_registration')}
-        </Button>
-      ) : null}
-      <Modal
-        destroyOnHidden
-        okButtonProps={{
-          disabled: !draft?.tool_name.trim() || Boolean(schemaInvalid)
-        }}
-        okText={i18nText('agentFlow', 'auto.save_tool')}
+      <FloatingSettingsPanel
+        className="agent-flow-llm-tool-registration-panel"
+        closeLabel={i18nText('agentFlow', 'auto.close', {
+          value1: i18nText('agentFlow', 'auto.tool_registration')
+        })}
+        defaultWidth={720}
+        footer={toolEditorFooter}
+        initialHeight={520}
+        minHeight={360}
+        minWidth={560}
         open={draft !== null}
         title={modalTitle}
-        onCancel={closeToolEditor}
-        onOk={saveDraft}
+        triggerRef={toolEditorTriggerRef}
+        onClose={closeToolEditor}
       >
         {draft ? (
-          <form style={{ display: 'grid', gap: 14 }}>
+          <form className="agent-flow-llm-tool-registration-form">
             <label style={TOOL_FORM_ROW_STYLE}>
               <span>{i18nText('agentFlow', 'auto.tool_name')}</span>
               <Input
@@ -279,33 +315,20 @@ export function LlmToolRegistrationsField({
                 }
               />
             </label>
-            <label style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.input_schema')}</span>
-              <Input.TextArea
-                aria-label={i18nText('agentFlow', 'auto.input_schema')}
-                autoSize={{ minRows: 4, maxRows: 8 }}
-                status={schemaInvalid ? 'error' : undefined}
-                value={draft.input_schema_text}
-                onChange={(event) =>
-                  updateDraft({ input_schema_text: event.target.value })
-                }
-              />
-            </label>
-            <label style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.connector_id')}</span>
-              <Input
-                aria-label={i18nText('agentFlow', 'auto.connector_id')}
-                value={draft.connector_id}
-                onChange={(event) =>
-                  updateDraft({
-                    connector_id: normalizeConnectorId(event.target.value)
-                  })
-                }
-              />
-            </label>
+            <div style={TOOL_FORM_ROW_STYLE}>
+              <span>{i18nText('agentFlow', 'auto.input_parameters')}</span>
+              <div className="agent-flow-llm-tool-registration-schema">
+                <JsonSchemaInlineEditor
+                  resetKey={editingIndex ?? 'new'}
+                  schema={draft.input_schema}
+                  onChange={(schema) => updateDraft({ input_schema: schema })}
+                  onValidityChange={setSchemaEditorValid}
+                />
+              </div>
+            </div>
           </form>
         ) : null}
-      </Modal>
-    </Space>
+      </FloatingSettingsPanel>
+    </div>
   );
 }

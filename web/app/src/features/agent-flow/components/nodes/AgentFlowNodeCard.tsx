@@ -1,5 +1,6 @@
 import {
   DeleteOutlined,
+  MergeOutlined,
   MoreOutlined,
   PlayCircleOutlined,
   SwapOutlined
@@ -336,7 +337,13 @@ export function AgentFlowNodeCard({
             isConnectable
             aria-label={`${handle.title} ${i18nText('agentFlow', 'auto.tool_connector')}`}
             className="agent-flow-node-handle agent-flow-node-handle--tool"
-          />
+          >
+            <MergeOutlined
+              aria-hidden="true"
+              className="agent-flow-node-handle__tool-icon"
+              data-testid="agent-flow-node-tool-connector-icon"
+            />
+          </CanvasHandle>
         </Tooltip>
       </div>
     );
