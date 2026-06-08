@@ -22,7 +22,7 @@ RUN --mount=type=cache,id=1flowbase-cargo-registry,sharing=locked,target=/usr/lo
       cargo build --release -p api-server --bin api-server \
     && cp /workspace/api/target-cache/release/api-server /workspace/api/api-server
 
-FROM debian:bookworm-slim AS runtime-base
+FROM debian:trixie-slim AS runtime-base
 
 ARG APP_UID=1000
 ARG APP_GID=1000

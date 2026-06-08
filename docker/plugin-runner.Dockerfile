@@ -22,7 +22,7 @@ RUN --mount=type=cache,id=1flowbase-cargo-registry,sharing=locked,target=/usr/lo
       cargo build --release -p plugin-runner --bin plugin-runner \
     && cp /workspace/api/target-cache/release/plugin-runner /workspace/api/plugin-runner
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 ARG APP_UID=1000
 ARG APP_GID=1000
