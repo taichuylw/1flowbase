@@ -312,10 +312,22 @@ describe('AgentFlowNodeCard', () => {
     expect(screen.getByText('挂载工具')).toBeInTheDocument();
 
     const toolConnectors = screen.getAllByLabelText(/工具连接器$/);
+    const firstToolHandleSlot = screen.getByTestId(
+      'agent-flow-node-tool-handle-0'
+    );
+    const firstToolLabelSlot = screen.getByTestId(
+      'agent-flow-node-tool-label-0'
+    );
 
     expect(toolConnectors).toHaveLength(2);
     expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
     expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'true');
+    expect(
+      within(firstToolHandleSlot).getByLabelText('search_context 工具连接器')
+    ).toBe(toolConnectors[0]);
+    expect(
+      within(firstToolLabelSlot).queryByLabelText(/工具连接器$/)
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '在 LLM 后新增节点' })
     ).toBeInTheDocument();

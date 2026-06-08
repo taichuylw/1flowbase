@@ -31,11 +31,12 @@
 
 .agent-flow-node-handle--tool.react-flow__handle {
   left: 50%;
-  bottom: -7px;
-  transform: translate(-50%, 50%);
-  pointer-events: none;
-  cursor: default;
-  z-index: 9;
+  top: 0;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: crosshair;
+  z-index: 12;
 }
 
 .agent-flow-connector-add-icon {

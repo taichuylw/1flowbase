@@ -227,7 +227,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(100% + 10px);
+  top: 100%;
   min-height: 58px;
   pointer-events: none;
 }
@@ -235,7 +235,7 @@
 .agent-flow-node-card__tool-connectors-title {
   position: absolute;
   left: 50%;
-  top: -3px;
+  top: 4px;
   transform: translateX(-50%);
   color: #60756a;
   font-size: 11px;
@@ -244,9 +244,19 @@
   white-space: nowrap;
 }
 
+.agent-flow-node-card__tool-handle {
+  position: absolute;
+  top: 100%;
+  width: 14px;
+  height: 14px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  z-index: 12;
+}
+
 .agent-flow-node-card__tool-connector {
   position: absolute;
-  top: 8px;
+  top: 18px;
   width: 74px;
   transform: translateX(-50%);
   pointer-events: none;
