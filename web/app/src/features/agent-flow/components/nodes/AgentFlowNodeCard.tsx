@@ -413,15 +413,15 @@ export function AgentFlowNodeCard({
             />
           </Dropdown>
         </div>
+        {toolSourceHandles.map((handle, index) =>
+          renderToolHandle(handle, index)
+        )}
       </div>
       {data.showSourceHandle
         ? sourceHandles.map((handle, index) =>
             renderSourceHandle(handle, index)
           )
         : null}
-      {toolSourceHandles.map((handle, index) =>
-        renderToolHandle(handle, index)
-      )}
     </>
   );
 }

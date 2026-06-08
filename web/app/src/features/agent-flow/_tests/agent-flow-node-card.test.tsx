@@ -323,6 +323,9 @@ describe('AgentFlowNodeCard', () => {
     const firstToolHandleSlot = screen.getByTestId(
       'agent-flow-node-tool-handle-0'
     );
+    const card = screen.getByRole('button', {
+      name: /LLM OpenAI Prod GPT-4/
+    });
 
     expect(toolConnectors).toHaveLength(2);
     expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
@@ -332,6 +335,9 @@ describe('AgentFlowNodeCard', () => {
     );
     expect(canvasControlStyles).toContain('scale(');
     expect(canvasControlStyles).toContain('rgba(22, 119, 255, 0.18)');
+    expect(within(card).getByTestId('agent-flow-node-tool-handle-0')).toBe(
+      firstToolHandleSlot
+    );
     expect(
       within(firstToolHandleSlot).getByLabelText('search_context 工具连接器')
     ).toBe(toolConnectors[0]);
