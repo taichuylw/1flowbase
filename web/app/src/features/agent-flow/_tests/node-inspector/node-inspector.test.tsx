@@ -7,6 +7,7 @@ import { TemplatedNamedBindingsField } from '../../components/bindings/Templated
 import { NodeDetailPanel } from '../../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../../components/inspector/NodeInspector';
+import { createNodeDocument } from '../../lib/document/node-factory';
 import * as nodeSchemaAdapterApi from '../../schema/node-schema-adapter';
 import * as nodeSchemaRegistry from '../../schema/node-schema-registry';
 import { validateDocument } from '../../lib/validate-document';
@@ -168,13 +169,94 @@ describe('NodeInspector core', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    const modelTrigger = await screen.findByRole('button', { name: /模型|model/ });
+    const modelTrigger = await screen.findByRole('button', {
+      name: /模型|model/
+    });
 
     await waitFor(() => {
       expect(
         within(modelTrigger).getByLabelText('上下文 128K')
       ).toBeInTheDocument();
     });
+  });
+
+  test('edits LLM mounted tools through compact rows and a modal form', async () => {
+    const state = createInitialState();
+    let latestDocument = state.draft.document;
+    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm', 720, 240);
+    const llmNodeConfig = getLlmNodeConfig(state.draft.document);
+
+    mountedLlm.alias = '视觉 LLM';
+    state.draft.document.graph.nodes.push(mountedLlm);
+    llmNodeConfig.visible_internal_llm_tools_enabled = true;
+    llmNodeConfig.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_visible_context',
+        connector_id: 'inspect_visible_context',
+        target_node_id: 'node-mounted-llm',
+        description: 'Inspect visible context',
+        input_schema: { type: 'object' }
+      }
+    ];
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(
+      await screen.findByText('inspect_visible_context')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('columnheader', { name: '目标 LLM' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '编辑 inspect_visible_context' })
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
+
+    fireEvent.change(within(dialog).getByLabelText('工具名称'), {
+      target: { value: 'inspect_image' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('描述'), {
+      target: { value: 'Inspect uploaded image' }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存工具' }));
+
+    await waitFor(() => {
+      expect(getLlmNodeConfig(latestDocument)).toEqual(
+        expect.objectContaining({
+          visible_internal_llm_tools: [
+            expect.objectContaining({
+              tool_name: 'inspect_image',
+              description: 'Inspect uploaded image'
+            })
+          ]
+        })
+      );
+    });
+    expect(await screen.findByText('inspect_image')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '删除 inspect_image' }));
+
+    await waitFor(() => {
+      expect(getLlmNodeConfig(latestDocument)).toEqual(
+        expect.objectContaining({
+          visible_internal_llm_tools: []
+        })
+      );
+    });
+    expect(screen.getByText('暂无工具注册')).toBeInTheDocument();
   });
 
   test('collapses generated outputs by default and keeps output contract editing hidden', async () => {
