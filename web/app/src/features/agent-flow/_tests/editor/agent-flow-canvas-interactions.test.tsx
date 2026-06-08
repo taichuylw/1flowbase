@@ -342,6 +342,43 @@ describe('AgentFlowCanvas interactions', () => {
     );
   });
 
+  test('projects default main edges to the right source handle when mounted tool handles exist', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const sourceLlm = document.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    if (!sourceLlm) {
+      throw new Error('expected default LLM node');
+    }
+
+    sourceLlm.config = {
+      ...sourceLlm.config,
+      visible_internal_llm_tools_enabled: true,
+      visible_internal_llm_tools: [
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'inspect_visible_context',
+          connector_id: 'inspect_visible_context',
+          target_node_id: '',
+          input_schema: { type: 'object' }
+        }
+      ]
+    };
+
+    expect(
+      document.graph.edges.find((edge) => edge.id === 'edge-llm-answer')
+        ?.sourceHandle
+    ).toBeNull();
+
+    renderCanvas(document);
+
+    expect(
+      latestReactFlowProps?.edges?.find((edge) => edge.id === 'edge-llm-answer')
+        ?.sourceHandle
+    ).toBe('source-right');
+  });
+
   test('opens with the document viewport and shows a plain percentage label', () => {
     renderCanvas();
 

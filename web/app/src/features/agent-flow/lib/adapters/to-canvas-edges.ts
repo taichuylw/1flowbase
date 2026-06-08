@@ -1,6 +1,7 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
 import type { AgentFlowCanvasEdge } from '../../components/canvas/node-types';
+import { MAIN_SOURCE_HANDLE_ID } from '../canvas-handle-ids';
 import type { NodePickerOption } from '../plugin-node-definitions';
 
 export function toCanvasEdges(
@@ -31,7 +32,7 @@ export function toCanvasEdges(
       selected: edge.id === selectedEdgeId,
       source: edge.source,
       target: edge.target,
-      sourceHandle: edge.sourceHandle,
+      sourceHandle: edge.sourceHandle ?? MAIN_SOURCE_HANDLE_ID,
       targetHandle: edge.targetHandle,
       animated: false,
       style: { stroke: '#b2c8b9', strokeWidth: 2 },

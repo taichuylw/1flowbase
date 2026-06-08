@@ -18,6 +18,7 @@ import { ConnectorAddIcon } from '../canvas/ConnectorAddIcon';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
+import { MAIN_SOURCE_HANDLE_ID } from '../../lib/canvas-handle-ids';
 import { getNodeDefinitionMeta } from '../../lib/node-definitions';
 import { getCommonErrorBranchSourceHandle } from '../../lib/node-error-policy';
 import {
@@ -194,6 +195,7 @@ export function AgentFlowNodeCard({
     handle: { id: string | null; title: string | null },
     index: number
   ) {
+    const sourceHandleId = handle.id ?? MAIN_SOURCE_HANDLE_ID;
     const pickerSourceHandleId = data.pickerSourceHandleId ?? null;
     const pickerOpen = data.pickerOpen && pickerSourceHandleId === handle.id;
     const ariaLabel = handle.title
@@ -257,7 +259,7 @@ export function AgentFlowNodeCard({
             open={!pickerOpen ? undefined : false}
           >
             <CanvasHandle
-              id={handle.id ?? undefined}
+              id={sourceHandleId}
               type="source"
               position={Position.Right}
               aria-expanded={pickerOpen}

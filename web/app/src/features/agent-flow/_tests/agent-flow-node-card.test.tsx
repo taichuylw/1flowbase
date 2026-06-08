@@ -335,6 +335,7 @@ describe('AgentFlowNodeCard', () => {
     });
 
     expect(toolConnectors).toHaveLength(2);
+    expect(mainSourceConnector).toHaveAttribute('id', 'source-right');
     expect(mainSourceConnector).toHaveClass('agent-flow-node-handle--source');
     expect(mainSourceConnector).not.toHaveClass('agent-flow-node-handle--tool');
     expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
