@@ -143,7 +143,7 @@ pub(super) fn visible_internal_llm_provider_tools(node: &CompiledNode) -> Vec<Va
             if let Some(description) = tool.description.clone() {
                 function.insert("description".to_string(), Value::String(description));
             }
-            if let Some(input_schema) = visible_internal_llm_tool_provider_input_schema(&tool) {
+            if let Some(input_schema) = tool.input_schema {
                 function.insert("parameters".to_string(), input_schema);
             }
 
@@ -158,7 +158,7 @@ pub(super) fn visible_internal_llm_provider_tools(node: &CompiledNode) -> Vec<Va
 pub(super) fn visible_internal_llm_node_has_media_tool(node: &CompiledNode) -> bool {
     visible_internal_llm_tools(node)
         .iter()
-        .any(visible_internal_llm_tool_supports_media_contract)
+        .any(visible_internal_llm_tool_has_configured_media_contract)
 }
 
 pub(super) async fn execute_llm_node_with_visible_internal_tools<I>(
@@ -398,7 +398,7 @@ where
         json!({
             "tool_call_id": tool_call_id(tool_call),
             "tool_name": tool.name,
-            "arguments": visible_internal_llm_tool_arguments(tool_call, &inherited_context),
+            "arguments": visible_internal_llm_tool_arguments(tool_call, tool, &inherited_context),
             "context": inherited_context,
         }),
     );
@@ -1583,12 +1583,12 @@ fn sanitize_visible_internal_tool_calls_in_value(
             }
         }
         Value::Object(object) => {
-            if object
+            if let Some(tool) = object
                 .get("name")
                 .and_then(Value::as_str)
-                .is_some_and(|name| visible_internal_llm_tool_name_matches(name, tools))
+                .and_then(|name| visible_internal_llm_tool_by_name(name, tools))
             {
-                sanitize_visible_internal_tool_call_object(object);
+                sanitize_visible_internal_tool_call_object(object, tool);
             }
             if let Some(tool_calls) = object.get_mut("tool_calls") {
                 sanitize_visible_internal_tool_calls_in_value(tool_calls, tools);
@@ -1605,21 +1605,28 @@ fn sanitize_visible_internal_provider_events(
     events: &mut [ProviderStreamEvent],
     tools: &[VisibleInternalLlmTool],
 ) {
-    let mut internal_call_ids = BTreeSet::new();
+    let mut internal_call_ids = BTreeMap::new();
     for event in events.iter() {
         match event {
-            ProviderStreamEvent::ToolCallCommit { call }
-                if visible_internal_llm_tool_name_matches(&call.name, tools) =>
-            {
-                internal_call_ids.insert(call.id.clone());
+            ProviderStreamEvent::ToolCallCommit { call } => {
+                if let Some(tool) = visible_internal_llm_tool_by_name(&call.name, tools) {
+                    internal_call_ids.insert(
+                        call.id.clone(),
+                        visible_internal_llm_tool_has_configured_media_contract(tool),
+                    );
+                }
             }
-            ProviderStreamEvent::ToolCallDelta { call_id, delta }
-                if delta
+            ProviderStreamEvent::ToolCallDelta { call_id, delta } => {
+                if let Some(tool) = delta
                     .get("name")
                     .and_then(Value::as_str)
-                    .is_some_and(|name| visible_internal_llm_tool_name_matches(name, tools)) =>
-            {
-                internal_call_ids.insert(call_id.clone());
+                    .and_then(|name| visible_internal_llm_tool_by_name(name, tools))
+                {
+                    internal_call_ids.insert(
+                        call_id.clone(),
+                        visible_internal_llm_tool_has_configured_media_contract(tool),
+                    );
+                }
             }
             _ => {}
         }
@@ -1627,52 +1634,66 @@ fn sanitize_visible_internal_provider_events(
 
     for event in events {
         match event {
-            ProviderStreamEvent::ToolCallCommit { call }
-                if visible_internal_llm_tool_name_matches(&call.name, tools) =>
-            {
-                call.arguments =
-                    sanitized_visible_internal_llm_tool_arguments_value(&call.arguments);
+            ProviderStreamEvent::ToolCallCommit { call } => {
+                if let Some(tool) = visible_internal_llm_tool_by_name(&call.name, tools) {
+                    call.arguments = sanitized_visible_internal_llm_tool_arguments_value(
+                        &call.arguments,
+                        visible_internal_llm_tool_has_configured_media_contract(tool),
+                    );
+                }
             }
-            ProviderStreamEvent::ToolCallDelta { call_id, delta }
-                if internal_call_ids.contains(call_id)
-                    || delta
+            ProviderStreamEvent::ToolCallDelta { call_id, delta } => {
+                let allow_media = internal_call_ids.get(call_id).copied().or_else(|| {
+                    delta
                         .get("name")
                         .and_then(Value::as_str)
-                        .is_some_and(|name| {
-                            visible_internal_llm_tool_name_matches(name, tools)
-                        }) =>
-            {
-                sanitize_visible_internal_tool_call_delta(delta);
+                        .and_then(|name| visible_internal_llm_tool_by_name(name, tools))
+                        .map(visible_internal_llm_tool_has_configured_media_contract)
+                });
+                if let Some(allow_media) = allow_media {
+                    sanitize_visible_internal_tool_call_delta(delta, allow_media);
+                }
             }
             _ => {}
         }
     }
 }
 
-fn sanitize_visible_internal_tool_call_delta(delta: &mut Value) {
+fn sanitize_visible_internal_tool_call_delta(delta: &mut Value, allow_media: bool) {
     let Some(object) = delta.as_object_mut() else {
         return;
     };
     if let Some(arguments) = object.get("arguments").cloned() {
         object.insert(
             "arguments".to_string(),
-            sanitized_visible_internal_llm_tool_arguments_value(&arguments),
+            sanitized_visible_internal_llm_tool_arguments_value(&arguments, allow_media),
         );
     }
 }
 
-fn sanitize_visible_internal_tool_call_object(object: &mut Map<String, Value>) {
+fn sanitize_visible_internal_tool_call_object(
+    object: &mut Map<String, Value>,
+    tool: &VisibleInternalLlmTool,
+) {
     if let Some(arguments) = object.get("arguments").cloned() {
         object.insert(
             "arguments".to_string(),
-            sanitized_visible_internal_llm_tool_arguments_value(&arguments),
+            sanitized_visible_internal_llm_tool_arguments_value(
+                &arguments,
+                visible_internal_llm_tool_has_configured_media_contract(tool),
+            ),
         );
     }
 }
 
-fn sanitized_visible_internal_llm_tool_arguments_value(arguments: &Value) -> Value {
+fn sanitized_visible_internal_llm_tool_arguments_value(
+    arguments: &Value,
+    allow_media: bool,
+) -> Value {
     let mut arguments = arguments.as_object().cloned().unwrap_or_default();
-    if media_argument_has_items(arguments.get("media")) {
+    if !allow_media {
+        arguments.remove("media");
+    } else if media_argument_has_items(arguments.get("media")) {
         let media = sanitized_visible_internal_llm_tool_media(arguments.get("media"));
         if media.is_empty() {
             arguments.remove("media");
@@ -1683,8 +1704,11 @@ fn sanitized_visible_internal_llm_tool_arguments_value(arguments: &Value) -> Val
     Value::Object(arguments)
 }
 
-fn visible_internal_llm_tool_name_matches(name: &str, tools: &[VisibleInternalLlmTool]) -> bool {
-    tools.iter().any(|tool| tool.name == name)
+fn visible_internal_llm_tool_by_name<'a>(
+    name: &str,
+    tools: &'a [VisibleInternalLlmTool],
+) -> Option<&'a VisibleInternalLlmTool> {
+    tools.iter().find(|tool| tool.name == name)
 }
 
 fn append_output_text(target: &mut String, output_payload: &Value) {
@@ -1826,79 +1850,28 @@ pub(super) fn visible_internal_llm_tool_has_media_argument(
     !visible_internal_llm_tool_media_argument(variable_pool).is_empty()
 }
 
-fn visible_internal_llm_tool_provider_input_schema(tool: &VisibleInternalLlmTool) -> Option<Value> {
-    if !visible_internal_llm_tool_supports_media_contract(tool) {
-        return tool.input_schema.clone();
-    }
-
-    let had_schema = tool.input_schema.is_some();
-    let mut schema = tool.input_schema.clone().unwrap_or_else(|| json!({}));
-    if !schema.is_object() {
-        schema = json!({});
-    }
-    let schema_object = schema
-        .as_object_mut()
-        .expect("schema was normalized to object");
-    schema_object
-        .entry("type".to_string())
-        .or_insert_with(|| Value::String("object".to_string()));
-    let properties = schema_object
-        .entry("properties".to_string())
-        .or_insert_with(|| json!({}));
-    if !properties.is_object() {
-        *properties = json!({});
-    }
-    let properties_object = properties
-        .as_object_mut()
-        .expect("properties was normalized to object");
-    properties_object
-        .entry("task".to_string())
-        .or_insert_with(|| json!({ "type": "string" }));
-    properties_object
-        .entry("media".to_string())
-        .or_insert_with(visible_internal_llm_tool_media_schema);
-    if !had_schema {
-        schema_object.insert("required".to_string(), json!(["task"]));
-    }
-
-    Some(schema)
+fn visible_internal_llm_tool_has_configured_media_contract(tool: &VisibleInternalLlmTool) -> bool {
+    tool.input_schema
+        .as_ref()
+        .and_then(|schema| schema.get("properties"))
+        .and_then(|properties| properties.get("media"))
+        .is_some()
 }
 
-fn visible_internal_llm_tool_supports_media_contract(tool: &VisibleInternalLlmTool) -> bool {
-    tool.name.to_ascii_lowercase().contains("image")
-        || tool
-            .input_schema
-            .as_ref()
-            .and_then(|schema| schema.get("properties"))
-            .and_then(|properties| properties.get("media"))
-            .is_some()
-}
-
-fn visible_internal_llm_tool_media_schema() -> Value {
-    json!({
-        "type": "array",
-        "description": "Workspace image references only. Do not include file bytes, data URLs, remote URLs, or absolute paths.",
-        "items": {
-            "type": "object",
-            "properties": {
-                "kind": { "type": "string", "enum": ["image"] },
-                "source": { "type": "string", "enum": ["workspace_path"] },
-                "path": {
-                    "type": "string",
-                    "description": "Workspace-relative image path, for example uploads/example.png."
-                }
-            },
-            "required": ["kind", "source", "path"]
-        }
-    })
-}
-
-fn visible_internal_llm_tool_arguments(tool_call: &Value, context: &Value) -> Value {
+fn visible_internal_llm_tool_arguments(
+    tool_call: &Value,
+    tool: &VisibleInternalLlmTool,
+    context: &Value,
+) -> Value {
     let mut arguments = tool_call
         .get("arguments")
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
+    if !visible_internal_llm_tool_has_configured_media_contract(tool) {
+        arguments.remove("media");
+        return Value::Object(arguments);
+    }
     if media_argument_has_items(arguments.get("media")) {
         let media = sanitized_visible_internal_llm_tool_media(arguments.get("media"));
         if media.is_empty() {

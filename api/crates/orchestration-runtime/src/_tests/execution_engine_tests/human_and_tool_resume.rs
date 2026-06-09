@@ -1404,6 +1404,25 @@ async fn visible_internal_image_llm_tool_sanitizes_visible_media_arguments() {
         .expect("main llm node should exist");
     main_llm.config["visible_internal_llm_tools"][0]["tool_name"] = json!("image_llm");
     main_llm.config["visible_internal_llm_tools"][0]["connector_id"] = json!("image_llm");
+    main_llm.config["visible_internal_llm_tools"][0]["input_schema"] = json!({
+        "type": "object",
+        "properties": {
+            "task": { "type": "string" },
+            "media": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "kind": { "type": "string", "enum": ["image"] },
+                        "source": { "type": "string", "enum": ["workspace_path"] },
+                        "path": { "type": "string" }
+                    },
+                    "required": ["kind", "source", "path"]
+                }
+            }
+        },
+        "required": ["task"]
+    });
     let mounted_llm = plan
         .nodes
         .get_mut("node-mounted-llm")
@@ -1485,7 +1504,7 @@ async fn visible_internal_image_llm_tool_sanitizes_visible_media_arguments() {
 }
 
 #[tokio::test]
-async fn visible_internal_image_llm_tool_schema_exposes_media_contract() {
+async fn visible_internal_image_llm_tool_schema_does_not_synthesize_media_contract() {
     let (invoker, captured_inputs) =
         sequential_tool_invoker(vec![final_llm_response("main-after")]);
     let mut plan = visible_internal_llm_tool_plan();
@@ -1528,8 +1547,14 @@ async fn visible_internal_image_llm_tool_schema_exposes_media_contract() {
         .map(|tool| &tool["function"]["parameters"])
         .expect("image_llm schema should be registered");
     assert_eq!(
-        image_tool_schema["properties"]["media"]["items"]["properties"]["source"]["enum"][0],
-        json!("workspace_path")
+        image_tool_schema,
+        &json!({
+            "type": "object",
+            "properties": {
+                "task": { "type": "string" }
+            },
+            "required": ["task"]
+        })
     );
 }
 
