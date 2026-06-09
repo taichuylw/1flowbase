@@ -692,8 +692,9 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     const toolCallbackNode = within(logPanel).getByRole('button', {
       name: /lookup_weather/
     });
-    expect(toolCallbackNode).toHaveTextContent('路由模型 mimo-v2.5');
-    expect(toolCallbackNode).toHaveTextContent('已回到主模型');
+    expect(toolCallbackNode).toHaveTextContent('route');
+    expect(toolCallbackNode).not.toHaveTextContent('路由模型 mimo-v2.5');
+    expect(toolCallbackNode).not.toHaveTextContent('weather route said warm');
     fireEvent.click(toolCallbackNode);
 
     await waitFor(() =>
@@ -703,7 +704,13 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       'app-1',
       'artifact-tool-weather'
     );
-    const routeTraceJson = within(logPanel).getByLabelText('智能路由 JSON');
+    const routeNode = within(logPanel).getByTestId('debug-llm-route-node');
+    expect(routeNode).toHaveTextContent('LLM');
+    expect(routeNode).toHaveTextContent('llm');
+    expect(
+      within(logPanel).queryByLabelText('智能路由 JSON')
+    ).not.toBeInTheDocument();
+    const routeTraceJson = within(routeNode).getByLabelText('route JSON');
     expect(routeTraceJson).toHaveTextContent('weather route said warm');
     const routeTraceBlock = routeTraceJson.closest('section');
     expect(routeTraceBlock).not.toBeNull();
@@ -719,9 +726,9 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       )
     );
     await waitFor(() =>
-      expect(
-        within(logPanel).getByLabelText('智能路由 JSON')
-      ).toHaveTextContent('main saw weather route')
+      expect(within(routeNode).getByLabelText('route JSON')).toHaveTextContent(
+        'main saw weather route'
+      )
     );
 
     fireEvent.mouseDown(
