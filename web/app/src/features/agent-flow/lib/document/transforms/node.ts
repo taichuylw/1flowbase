@@ -17,10 +17,18 @@ import { shiftDownstreamNodesBFS } from './layout';
 import {
   createLlmToolSourceHandleId,
   getLlmVisibleInternalTools,
+  isLlmToolSourceHandle,
   type LlmVisibleInternalTool
 } from '../../llm-node-config';
 
 const NODE_GAP_X = 280;
+const NODE_HEIGHT = 96;
+const NODE_GAP_Y = 40;
+const NODE_GRID_SIZE = 20;
+
+function snapNodeCoordinate(value: number) {
+  return Math.round(value / NODE_GRID_SIZE) * NODE_GRID_SIZE;
+}
 
 type NodeFieldValue =
   | string
@@ -379,13 +387,34 @@ export function insertNodeAfter(
     (edge) => edge.sourceHandle === resolvedSourceHandle
   );
   const nextPositionX = anchorNode.position.x + NODE_GAP_X;
+  const mountedToolEdges = isLlmToolSourceHandle(resolvedSourceHandle)
+    ? getOutgoingEdges(document, anchorNodeId)
+        .filter((edge) => isLlmToolSourceHandle(edge.sourceHandle))
+        .map((edge) => getNodeById(document, edge.target)?.position.y)
+        .filter(
+          (positionY): positionY is number => typeof positionY === 'number'
+        )
+        .sort((left, right) => left - right)
+    : [];
+  const nextMountedPositionY =
+    mountedToolEdges.length > 0
+      ? Math.max(
+          anchorNode.position.y + NODE_HEIGHT + NODE_GAP_Y,
+          mountedToolEdges[mountedToolEdges.length - 1] +
+            NODE_HEIGHT +
+            NODE_GAP_Y
+        )
+      : anchorNode.position.y + NODE_HEIGHT + NODE_GAP_Y;
+  const nextMountedGridPositionY = snapNodeCoordinate(nextMountedPositionY);
 
   const insertedNode = {
     ...node,
     containerId: anchorNode.containerId,
     position: {
       x: nextPositionX,
-      y: anchorNode.position.y
+      y: isLlmToolSourceHandle(resolvedSourceHandle)
+        ? nextMountedGridPositionY
+        : anchorNode.position.y
     }
   };
 

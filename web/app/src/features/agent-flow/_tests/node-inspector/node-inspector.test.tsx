@@ -289,7 +289,7 @@ describe('NodeInspector core', () => {
 
     expect(within(dialog).queryByLabelText('目标 LLM')).not.toBeInTheDocument();
     const internalLlmSwitch = within(dialog).getByRole('switch', {
-      name: '内部 LLM 节点'
+      name: '智能路由'
     });
     expect(internalLlmSwitch).not.toBeChecked();
     const saveToolButton = within(dialog).getByRole('button', {

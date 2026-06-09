@@ -1,5 +1,6 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import { getNodeById, getOutgoingEdges } from '../selectors';
+import { isLlmToolSourceHandle } from '../../llm-node-config';
 
 const NODE_WIDTH = 196;
 const NODE_HEIGHT = 96;
@@ -26,6 +27,71 @@ function compareNodesByCanvasOrder(
   }
 
   return left.id.localeCompare(right.id);
+}
+
+function compareEdgesByHandleThenId(
+  left: FlowAuthoringDocument['graph']['edges'][number],
+  right: FlowAuthoringDocument['graph']['edges'][number]
+) {
+  const leftHandle = left.sourceHandle ?? '';
+  const rightHandle = right.sourceHandle ?? '';
+
+  if (leftHandle !== rightHandle) {
+    return leftHandle.localeCompare(rightHandle);
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function collectMountLaneIds(
+  containerEdges: FlowAuthoringDocument['graph']['edges']
+) {
+  const incomingEdgesByNodeId = new Map<
+    string,
+    FlowAuthoringDocument['graph']['edges']
+  >();
+  const laneByNodeId = new Map<string, string>();
+
+  for (const edge of containerEdges) {
+    incomingEdgesByNodeId.set(edge.target, [
+      ...(incomingEdgesByNodeId.get(edge.target) ?? []),
+      edge
+    ]);
+
+    if (isLlmToolSourceHandle(edge.sourceHandle)) {
+      laneByNodeId.set(edge.target, edge.id);
+    }
+  }
+
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const edge of containerEdges) {
+      if (isLlmToolSourceHandle(edge.sourceHandle)) {
+        continue;
+      }
+
+      const sourceLaneId = laneByNodeId.get(edge.source);
+
+      if (!sourceLaneId || laneByNodeId.has(edge.target)) {
+        continue;
+      }
+
+      const incomingEdges = incomingEdgesByNodeId.get(edge.target) ?? [];
+      const allIncomingEdgesStayInLane = incomingEdges.every(
+        (incomingEdge) => laneByNodeId.get(incomingEdge.source) === sourceLaneId
+      );
+
+      if (allIncomingEdgesStayInLane) {
+        laneByNodeId.set(edge.target, sourceLaneId);
+        changed = true;
+      }
+    }
+  }
+
+  return laneByNodeId;
 }
 
 /**
@@ -409,11 +475,34 @@ export function arrangeCanvasLeftToRight(
   }
 
   const positions: Record<string, { x: number; y: number }> = {};
+  const mountEdgesBySourceId = new Map<
+    string,
+    FlowAuthoringDocument['graph']['edges']
+  >();
+  const mountLaneByNodeId = collectMountLaneIds(containerEdges);
+
+  for (const edge of containerEdges) {
+    if (!isLlmToolSourceHandle(edge.sourceHandle)) {
+      continue;
+    }
+
+    mountEdgesBySourceId.set(edge.source, [
+      ...(mountEdgesBySourceId.get(edge.source) ?? []),
+      edge
+    ]);
+  }
 
   for (const [layer, layerNodes] of [...nodesByLayer.entries()].sort(
     ([leftLayer], [rightLayer]) => leftLayer - rightLayer
   )) {
-    const sortedLayerNodes = layerNodes.sort(compareNodesByCanvasOrder);
+    const sortedLayerNodes = layerNodes
+      .filter((node) => !mountLaneByNodeId.has(node.id))
+      .sort(compareNodesByCanvasOrder);
+
+    if (sortedLayerNodes.length === 0) {
+      continue;
+    }
+
     const layerHeight =
       sortedLayerNodes.length * NODE_HEIGHT +
       Math.max(0, sortedLayerNodes.length - 1) * ARRANGE_GAP_Y;
@@ -424,6 +513,99 @@ export function arrangeCanvasLeftToRight(
         x: snapToGrid(ARRANGE_ORIGIN_X + layer * ARRANGE_GAP_X),
         y: snapToGrid(layerTop + index * (NODE_HEIGHT + ARRANGE_GAP_Y))
       };
+    });
+  }
+
+  const nodesByMountLaneId = new Map<string, typeof containerNodes>();
+
+  for (const node of containerNodes) {
+    const laneId = mountLaneByNodeId.get(node.id);
+
+    if (!laneId) {
+      continue;
+    }
+
+    nodesByMountLaneId.set(laneId, [
+      ...(nodesByMountLaneId.get(laneId) ?? []),
+      node
+    ]);
+  }
+
+  const sourceIdsWithMounts = [...mountEdgesBySourceId.keys()].sort(
+    (leftSourceId, rightSourceId) => {
+      const leftLayer = layerByNodeId.get(leftSourceId) ?? 0;
+      const rightLayer = layerByNodeId.get(rightSourceId) ?? 0;
+
+      if (leftLayer !== rightLayer) {
+        return leftLayer - rightLayer;
+      }
+
+      const leftNode = getNodeById(document, leftSourceId);
+      const rightNode = getNodeById(document, rightSourceId);
+
+      if (leftNode && rightNode) {
+        return compareNodesByCanvasOrder(leftNode, rightNode);
+      }
+
+      return leftSourceId.localeCompare(rightSourceId);
+    }
+  );
+
+  for (const sourceId of sourceIdsWithMounts) {
+    const sourcePosition =
+      positions[sourceId] ?? getNodeById(document, sourceId)?.position;
+
+    if (!sourcePosition) {
+      continue;
+    }
+
+    const mountEdges = [...(mountEdgesBySourceId.get(sourceId) ?? [])].sort(
+      (leftEdge, rightEdge) => {
+        const leftTarget = getNodeById(document, leftEdge.target);
+        const rightTarget = getNodeById(document, rightEdge.target);
+
+        if (leftTarget && rightTarget) {
+          const canvasOrder = compareNodesByCanvasOrder(
+            leftTarget,
+            rightTarget
+          );
+
+          if (canvasOrder !== 0) {
+            return canvasOrder;
+          }
+        }
+
+        return compareEdgesByHandleThenId(leftEdge, rightEdge);
+      }
+    );
+
+    mountEdges.forEach((edge, index) => {
+      const laneNodes = nodesByMountLaneId.get(edge.id);
+
+      if (!laneNodes) {
+        return;
+      }
+
+      const laneTop = snapToGrid(
+        sourcePosition.y +
+          NODE_HEIGHT +
+          ARRANGE_GAP_Y +
+          index * (NODE_HEIGHT + ARRANGE_GAP_Y)
+      );
+
+      for (const node of laneNodes.sort(
+        (leftNode, rightNode) =>
+          (layerByNodeId.get(leftNode.id) ?? 0) -
+            (layerByNodeId.get(rightNode.id) ?? 0) ||
+          compareNodesByCanvasOrder(leftNode, rightNode)
+      )) {
+        positions[node.id] = {
+          x: snapToGrid(
+            ARRANGE_ORIGIN_X + (layerByNodeId.get(node.id) ?? 0) * ARRANGE_GAP_X
+          ),
+          y: laneTop
+        };
+      }
     });
   }
 
