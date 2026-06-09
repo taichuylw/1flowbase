@@ -1020,7 +1020,7 @@ where
     let mut failed_attempts = Vec::new();
 
     for (attempt_index, attempt_runtime) in attempt_runtimes.iter().enumerate() {
-        let invocation = match build_provider_invocation(
+        let mut invocation = match build_provider_invocation(
             node,
             attempt_runtime,
             resolved_inputs,
@@ -1052,6 +1052,8 @@ where
                 );
             }
         };
+        inject_visible_internal_llm_tool_media_content_blocks(&mut invocation.input, variable_pool)
+            .await;
         let invocation_messages = build_llm_debug_invocation_messages(
             node,
             resolved_inputs,

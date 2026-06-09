@@ -139,11 +139,11 @@ pub(super) fn visible_internal_llm_provider_tools(node: &CompiledNode) -> Vec<Va
         .into_iter()
         .map(|tool| {
             let mut function = Map::new();
-            function.insert("name".to_string(), Value::String(tool.name));
-            if let Some(description) = tool.description {
+            function.insert("name".to_string(), Value::String(tool.name.clone()));
+            if let Some(description) = tool.description.clone() {
                 function.insert("description".to_string(), Value::String(description));
             }
-            if let Some(input_schema) = tool.input_schema {
+            if let Some(input_schema) = visible_internal_llm_tool_provider_input_schema(&tool) {
                 function.insert("parameters".to_string(), input_schema);
             }
 
@@ -153,6 +153,12 @@ pub(super) fn visible_internal_llm_provider_tools(node: &CompiledNode) -> Vec<Va
             })
         })
         .collect()
+}
+
+pub(super) fn visible_internal_llm_node_has_media_tool(node: &CompiledNode) -> bool {
+    visible_internal_llm_tools(node)
+        .iter()
+        .any(visible_internal_llm_tool_supports_media_contract)
 }
 
 pub(super) async fn execute_llm_node_with_visible_internal_tools<I>(
@@ -197,6 +203,7 @@ where
             invoker,
         )
         .await?;
+        sanitize_visible_internal_llm_execution(&mut execution, &tools);
         provider_events.extend(execution.provider_events.clone());
 
         if execution.error_payload.is_some() {
@@ -384,19 +391,15 @@ where
     I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
     let mut tool_variable_pool = variable_pool.clone();
+    let inherited_context =
+        visible_internal_llm_tool_inherited_context(variable_pool, main_node_id);
     tool_variable_pool.insert(
         VISIBLE_INTERNAL_LLM_TOOL_VARIABLE.to_string(),
         json!({
             "tool_call_id": tool_call_id(tool_call),
             "tool_name": tool.name,
-            "arguments": tool_call
-                .get("arguments")
-                .cloned()
-                .unwrap_or_else(|| json!({})),
-            "context": visible_internal_llm_tool_inherited_context(
-                variable_pool,
-                main_node_id
-            ),
+            "arguments": visible_internal_llm_tool_arguments(tool_call, &inherited_context),
+            "context": inherited_context,
         }),
     );
 
@@ -1560,6 +1563,130 @@ fn visible_internal_tool_calls<'a>(
         .collect()
 }
 
+fn sanitize_visible_internal_llm_execution(
+    execution: &mut LlmNodeExecution,
+    tools: &[VisibleInternalLlmTool],
+) {
+    sanitize_visible_internal_tool_calls_in_value(&mut execution.output_payload, tools);
+    sanitize_visible_internal_tool_calls_in_value(&mut execution.debug_payload, tools);
+    sanitize_visible_internal_provider_events(&mut execution.provider_events, tools);
+}
+
+fn sanitize_visible_internal_tool_calls_in_value(
+    value: &mut Value,
+    tools: &[VisibleInternalLlmTool],
+) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                sanitize_visible_internal_tool_calls_in_value(item, tools);
+            }
+        }
+        Value::Object(object) => {
+            if object
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| visible_internal_llm_tool_name_matches(name, tools))
+            {
+                sanitize_visible_internal_tool_call_object(object);
+            }
+            if let Some(tool_calls) = object.get_mut("tool_calls") {
+                sanitize_visible_internal_tool_calls_in_value(tool_calls, tools);
+            }
+            for value in object.values_mut() {
+                sanitize_visible_internal_tool_calls_in_value(value, tools);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn sanitize_visible_internal_provider_events(
+    events: &mut [ProviderStreamEvent],
+    tools: &[VisibleInternalLlmTool],
+) {
+    let mut internal_call_ids = BTreeSet::new();
+    for event in events.iter() {
+        match event {
+            ProviderStreamEvent::ToolCallCommit { call }
+                if visible_internal_llm_tool_name_matches(&call.name, tools) =>
+            {
+                internal_call_ids.insert(call.id.clone());
+            }
+            ProviderStreamEvent::ToolCallDelta { call_id, delta }
+                if delta
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| visible_internal_llm_tool_name_matches(name, tools)) =>
+            {
+                internal_call_ids.insert(call_id.clone());
+            }
+            _ => {}
+        }
+    }
+
+    for event in events {
+        match event {
+            ProviderStreamEvent::ToolCallCommit { call }
+                if visible_internal_llm_tool_name_matches(&call.name, tools) =>
+            {
+                call.arguments =
+                    sanitized_visible_internal_llm_tool_arguments_value(&call.arguments);
+            }
+            ProviderStreamEvent::ToolCallDelta { call_id, delta }
+                if internal_call_ids.contains(call_id)
+                    || delta
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .is_some_and(|name| {
+                            visible_internal_llm_tool_name_matches(name, tools)
+                        }) =>
+            {
+                sanitize_visible_internal_tool_call_delta(delta);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn sanitize_visible_internal_tool_call_delta(delta: &mut Value) {
+    let Some(object) = delta.as_object_mut() else {
+        return;
+    };
+    if let Some(arguments) = object.get("arguments").cloned() {
+        object.insert(
+            "arguments".to_string(),
+            sanitized_visible_internal_llm_tool_arguments_value(&arguments),
+        );
+    }
+}
+
+fn sanitize_visible_internal_tool_call_object(object: &mut Map<String, Value>) {
+    if let Some(arguments) = object.get("arguments").cloned() {
+        object.insert(
+            "arguments".to_string(),
+            sanitized_visible_internal_llm_tool_arguments_value(&arguments),
+        );
+    }
+}
+
+fn sanitized_visible_internal_llm_tool_arguments_value(arguments: &Value) -> Value {
+    let mut arguments = arguments.as_object().cloned().unwrap_or_default();
+    if media_argument_has_items(arguments.get("media")) {
+        let media = sanitized_visible_internal_llm_tool_media(arguments.get("media"));
+        if media.is_empty() {
+            arguments.remove("media");
+        } else {
+            arguments.insert("media".to_string(), Value::Array(media));
+        }
+    }
+    Value::Object(arguments)
+}
+
+fn visible_internal_llm_tool_name_matches(name: &str, tools: &[VisibleInternalLlmTool]) -> bool {
+    tools.iter().any(|tool| tool.name == name)
+}
+
 fn append_output_text(target: &mut String, output_payload: &Value) {
     if let Some(text) = output_payload.get("text").and_then(Value::as_str) {
         target.push_str(text);
@@ -1635,16 +1762,428 @@ fn visible_internal_llm_tool_llm_resolved_inputs(
         }
     }
     if !inputs.contains_key("tools") {
-        if let Some(tools) = context
-            .get("tools")
-            .and_then(Value::as_array)
-            .filter(|tools| !tools.is_empty())
-        {
-            inputs.insert("tools".to_string(), Value::Array(tools.clone()));
+        if !visible_internal_llm_tool_has_media_argument(variable_pool) {
+            if let Some(tools) = context
+                .get("tools")
+                .and_then(Value::as_array)
+                .filter(|tools| !tools.is_empty())
+            {
+                inputs.insert("tools".to_string(), Value::Array(tools.clone()));
+            }
         }
     }
 
     inputs
+}
+
+pub(super) async fn inject_visible_internal_llm_tool_media_content_blocks(
+    input: &mut ProviderInvocationInput,
+    variable_pool: &Map<String, Value>,
+) {
+    let media_items = visible_internal_llm_tool_media_argument(variable_pool);
+    if media_items.is_empty() {
+        return;
+    }
+
+    let mut injected_blocks = Vec::new();
+    for media in media_items {
+        if let Some(block) = image_content_block_from_workspace_media(&media).await {
+            injected_blocks.push(block);
+        }
+    }
+    if injected_blocks.is_empty() {
+        return;
+    }
+
+    let Some(message) = input
+        .messages
+        .iter_mut()
+        .rev()
+        .find(|message| message.role == ProviderMessageRole::User)
+    else {
+        return;
+    };
+
+    let mut content_blocks = message
+        .content_blocks
+        .take()
+        .and_then(|value| value.as_array().cloned())
+        .unwrap_or_else(|| {
+            let content = message.content.trim();
+            if content.is_empty() {
+                Vec::new()
+            } else {
+                vec![json!({ "type": "text", "text": content })]
+            }
+        });
+    content_blocks.extend(injected_blocks);
+    message.content_blocks = Some(Value::Array(content_blocks));
+}
+
+pub(super) fn visible_internal_llm_tool_has_media_argument(
+    variable_pool: &Map<String, Value>,
+) -> bool {
+    !visible_internal_llm_tool_media_argument(variable_pool).is_empty()
+}
+
+fn visible_internal_llm_tool_provider_input_schema(tool: &VisibleInternalLlmTool) -> Option<Value> {
+    if !visible_internal_llm_tool_supports_media_contract(tool) {
+        return tool.input_schema.clone();
+    }
+
+    let had_schema = tool.input_schema.is_some();
+    let mut schema = tool.input_schema.clone().unwrap_or_else(|| json!({}));
+    if !schema.is_object() {
+        schema = json!({});
+    }
+    let schema_object = schema
+        .as_object_mut()
+        .expect("schema was normalized to object");
+    schema_object
+        .entry("type".to_string())
+        .or_insert_with(|| Value::String("object".to_string()));
+    let properties = schema_object
+        .entry("properties".to_string())
+        .or_insert_with(|| json!({}));
+    if !properties.is_object() {
+        *properties = json!({});
+    }
+    let properties_object = properties
+        .as_object_mut()
+        .expect("properties was normalized to object");
+    properties_object
+        .entry("task".to_string())
+        .or_insert_with(|| json!({ "type": "string" }));
+    properties_object
+        .entry("media".to_string())
+        .or_insert_with(visible_internal_llm_tool_media_schema);
+    if !had_schema {
+        schema_object.insert("required".to_string(), json!(["task"]));
+    }
+
+    Some(schema)
+}
+
+fn visible_internal_llm_tool_supports_media_contract(tool: &VisibleInternalLlmTool) -> bool {
+    tool.name.to_ascii_lowercase().contains("image")
+        || tool
+            .input_schema
+            .as_ref()
+            .and_then(|schema| schema.get("properties"))
+            .and_then(|properties| properties.get("media"))
+            .is_some()
+}
+
+fn visible_internal_llm_tool_media_schema() -> Value {
+    json!({
+        "type": "array",
+        "description": "Workspace image references only. Do not include file bytes, data URLs, remote URLs, or absolute paths.",
+        "items": {
+            "type": "object",
+            "properties": {
+                "kind": { "type": "string", "enum": ["image"] },
+                "source": { "type": "string", "enum": ["workspace_path"] },
+                "path": {
+                    "type": "string",
+                    "description": "Workspace-relative image path, for example uploads/example.png."
+                }
+            },
+            "required": ["kind", "source", "path"]
+        }
+    })
+}
+
+fn visible_internal_llm_tool_arguments(tool_call: &Value, context: &Value) -> Value {
+    let mut arguments = tool_call
+        .get("arguments")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if media_argument_has_items(arguments.get("media")) {
+        let media = sanitized_visible_internal_llm_tool_media(arguments.get("media"));
+        if media.is_empty() {
+            arguments.remove("media");
+        } else {
+            arguments.insert("media".to_string(), Value::Array(media));
+        }
+    }
+    if !media_argument_has_items(arguments.get("media")) {
+        let media = inferred_visible_internal_llm_tool_media(&arguments, context);
+        if !media.is_empty() {
+            arguments.insert("media".to_string(), Value::Array(media));
+        }
+    }
+
+    Value::Object(arguments)
+}
+
+fn inferred_visible_internal_llm_tool_media(
+    arguments: &Map<String, Value>,
+    context: &Value,
+) -> Vec<Value> {
+    let mut paths = BTreeSet::new();
+    let mut media = Vec::new();
+
+    collect_media_refs_from_files(context.get("files"), &mut paths, &mut media);
+    collect_media_refs_from_text(
+        arguments
+            .get("task")
+            .or_else(|| arguments.get("query"))
+            .and_then(Value::as_str),
+        &mut paths,
+        &mut media,
+    );
+    collect_media_refs_from_text(
+        context.get("query").and_then(Value::as_str),
+        &mut paths,
+        &mut media,
+    );
+    if let Some(history) = context.get("history").and_then(Value::as_array) {
+        for message in history {
+            collect_media_refs_from_text(
+                message.get("content").and_then(Value::as_str),
+                &mut paths,
+                &mut media,
+            );
+        }
+    }
+
+    media
+}
+
+fn collect_media_refs_from_files(
+    files: Option<&Value>,
+    paths: &mut BTreeSet<String>,
+    media: &mut Vec<Value>,
+) {
+    let Some(files) = files.and_then(Value::as_array) else {
+        return;
+    };
+    for file in files {
+        let Some(path) = file
+            .get("path")
+            .or_else(|| file.get("file_path"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+        else {
+            continue;
+        };
+        if !looks_like_image_path(path) || !paths.insert(path.to_string()) {
+            continue;
+        }
+        media.push(workspace_path_media_ref(path));
+    }
+}
+
+fn collect_media_refs_from_text(
+    text: Option<&str>,
+    paths: &mut BTreeSet<String>,
+    media: &mut Vec<Value>,
+) {
+    let Some(text) = text else {
+        return;
+    };
+    let Ok(pattern) = regex::Regex::new(r"(?i)[A-Za-z0-9_./\\:-]+\.(png|jpe?g|gif|webp|bmp)")
+    else {
+        return;
+    };
+    for capture in pattern.find_iter(text) {
+        let path = capture
+            .as_str()
+            .trim_matches(|character: char| {
+                matches!(
+                    character,
+                    '"' | '\'' | '`' | ',' | '，' | '.' | '。' | ')' | '）' | ']' | '】'
+                )
+            })
+            .replace('\\', "/");
+        if !path.is_empty() && paths.insert(path.clone()) {
+            media.push(workspace_path_media_ref(&path));
+        }
+    }
+}
+
+fn workspace_path_media_ref(path: &str) -> Value {
+    json!({
+        "kind": "image",
+        "source": "workspace_path",
+        "path": visible_workspace_media_path(path),
+    })
+}
+
+fn visible_workspace_media_path(path: &str) -> String {
+    let normalized = path.trim().replace('\\', "/");
+    let normalized = normalized.trim_start_matches("./");
+    let requested_path = std::path::Path::new(normalized);
+    if !requested_path.is_absolute() {
+        return normalized.to_string();
+    }
+
+    let Ok(canonical) = std::fs::canonicalize(requested_path) else {
+        return normalized.to_string();
+    };
+    let Some(current_dir) = std::env::current_dir().ok() else {
+        return normalized.to_string();
+    };
+    let roots = [
+        Some(current_dir.clone()),
+        current_dir.parent().map(Into::into),
+    ];
+    for root in roots.into_iter().flatten() {
+        let Ok(canonical_root) = std::fs::canonicalize(root) else {
+            continue;
+        };
+        let Ok(relative) = canonical.strip_prefix(&canonical_root) else {
+            continue;
+        };
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        if !relative.is_empty() {
+            return relative;
+        }
+    }
+
+    normalized.to_string()
+}
+
+fn visible_internal_llm_tool_media_argument(variable_pool: &Map<String, Value>) -> Vec<Value> {
+    variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|value| value.get("arguments"))
+        .and_then(|arguments| arguments.get("media"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn media_argument_has_items(media: Option<&Value>) -> bool {
+    media
+        .and_then(Value::as_array)
+        .is_some_and(|media| !media.is_empty())
+}
+
+fn sanitized_visible_internal_llm_tool_media(media: Option<&Value>) -> Vec<Value> {
+    let Some(items) = media.and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut paths = BTreeSet::new();
+    items
+        .iter()
+        .filter_map(|item| {
+            let path = sanitized_workspace_path_media_ref(item)?;
+            let path_key = path
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            paths.insert(path_key).then_some(path)
+        })
+        .collect()
+}
+
+fn sanitized_workspace_path_media_ref(media: &Value) -> Option<Value> {
+    if media.get("kind").and_then(Value::as_str) != Some("image")
+        || media.get("source").and_then(Value::as_str) != Some("workspace_path")
+    {
+        return None;
+    }
+    let path = media.get("path").and_then(Value::as_str)?.trim();
+    if path.is_empty() || !looks_like_image_path(path) {
+        return None;
+    }
+    Some(workspace_path_media_ref(path))
+}
+
+async fn image_content_block_from_workspace_media(media: &Value) -> Option<Value> {
+    if media.get("kind").and_then(Value::as_str) != Some("image")
+        || media.get("source").and_then(Value::as_str) != Some("workspace_path")
+    {
+        return None;
+    }
+    let raw_path = media.get("path").and_then(Value::as_str)?.trim();
+    if raw_path.is_empty() || !looks_like_image_path(raw_path) {
+        return None;
+    }
+    let resolved_path = resolve_workspace_media_path(raw_path).await?;
+    let bytes = tokio::fs::read(&resolved_path).await.ok()?;
+    let media_type = image_media_type_from_path(&resolved_path)?;
+    use base64::Engine as _;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Some(json!({
+        "type": "image_url",
+        "image_url": {
+            "url": format!("data:{media_type};base64,{encoded}")
+        }
+    }))
+}
+
+async fn resolve_workspace_media_path(raw_path: &str) -> Option<std::path::PathBuf> {
+    let normalized = raw_path.replace('\\', "/");
+    let requested_path = std::path::Path::new(&normalized);
+    if !workspace_media_path_shape_allowed(requested_path) {
+        return None;
+    }
+
+    let current_dir = std::env::current_dir().ok()?;
+    let mut roots = vec![current_dir.clone()];
+    if let Some(parent) = current_dir.parent() {
+        roots.push(parent.to_path_buf());
+    }
+    let canonical_roots = roots
+        .into_iter()
+        .filter_map(|root| std::fs::canonicalize(root).ok())
+        .collect::<Vec<_>>();
+
+    if requested_path.is_absolute() {
+        let canonical = tokio::fs::canonicalize(requested_path).await.ok()?;
+        return canonical_roots
+            .iter()
+            .any(|root| canonical.starts_with(root))
+            .then_some(canonical);
+    }
+
+    for root in canonical_roots {
+        let candidate = root.join(requested_path);
+        let Ok(canonical) = tokio::fs::canonicalize(candidate).await else {
+            continue;
+        };
+        if canonical.starts_with(&root) {
+            return Some(canonical);
+        }
+    }
+    None
+}
+
+fn workspace_media_path_shape_allowed(path: &std::path::Path) -> bool {
+    path.components().all(|component| {
+        matches!(
+            component,
+            std::path::Component::Normal(_)
+                | std::path::Component::CurDir
+                | std::path::Component::RootDir
+        )
+    })
+}
+
+fn looks_like_image_path(path: &str) -> bool {
+    let path = path.trim().to_ascii_lowercase();
+    matches!(
+        std::path::Path::new(&path)
+            .extension()
+            .and_then(|extension| extension.to_str()),
+        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp")
+    )
+}
+
+fn image_media_type_from_path(path: &std::path::Path) -> Option<String> {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("png") => Some("image/png".to_string()),
+        Some("jpg" | "jpeg") => Some("image/jpeg".to_string()),
+        Some("gif") => Some("image/gif".to_string()),
+        Some("webp") => Some("image/webp".to_string()),
+        Some("bmp") => Some("image/bmp".to_string()),
+        _ => None,
+    }
 }
 
 fn visible_internal_llm_tool_inherited_context(

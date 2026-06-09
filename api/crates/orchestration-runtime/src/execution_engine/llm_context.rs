@@ -560,6 +560,15 @@ fn external_provider_tools(
     variable_pool: &Map<String, Value>,
     runtime_context: &ExecutionRuntimeContext,
 ) -> Vec<Value> {
+    if visible_internal_llm_tool_has_media_argument(variable_pool) {
+        return Vec::new();
+    }
+    if visible_internal_llm_node_has_media_tool(node)
+        && media_route_context_mentions_image_path(resolved_inputs, variable_pool)
+    {
+        return Vec::new();
+    }
+
     for candidate in [
         rendered_templates.get("tools"),
         resolved_inputs.get("tools"),
@@ -600,6 +609,47 @@ fn external_provider_tools(
                 })
         })
         .unwrap_or_else(|| runtime_context.tools.clone())
+}
+
+fn media_route_context_mentions_image_path(
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> bool {
+    ["query", "task"].iter().any(|key| {
+        resolved_inputs
+            .get(*key)
+            .and_then(Value::as_str)
+            .is_some_and(text_mentions_image_path)
+    }) || resolved_inputs
+        .get("files")
+        .is_some_and(files_mention_image_path)
+        || variable_pool.values().any(|payload| {
+            ["query", "task"].iter().any(|key| {
+                payload
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .is_some_and(text_mentions_image_path)
+            }) || payload.get("files").is_some_and(files_mention_image_path)
+        })
+}
+
+fn files_mention_image_path(files: &Value) -> bool {
+    files.as_array().is_some_and(|files| {
+        files.iter().any(|file| {
+            file.get("path")
+                .or_else(|| file.get("file_path"))
+                .and_then(Value::as_str)
+                .is_some_and(text_mentions_image_path)
+        })
+    })
+}
+
+fn text_mentions_image_path(text: &str) -> bool {
+    let Ok(pattern) = regex::Regex::new(r"(?i)[A-Za-z0-9_./\\:-]+\.(png|jpe?g|gif|webp|bmp)")
+    else {
+        return false;
+    };
+    pattern.is_match(text)
 }
 
 pub(super) fn run_level_provider_tools(

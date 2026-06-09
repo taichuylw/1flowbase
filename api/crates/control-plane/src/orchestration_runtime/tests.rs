@@ -269,7 +269,7 @@ async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_i
 }
 
 #[tokio::test]
-async fn orchestration_runtime_rejects_content_blocks_when_selected_model_is_not_multimodal() {
+async fn orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal() {
     let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
     let (provider_instance_id, _) = repository.seed_included_provider_instances();
     let invoker = RuntimeProviderInvoker {
@@ -314,16 +314,16 @@ async fn orchestration_runtime_rejects_content_blocks_when_selected_model_is_not
         ..ProviderInvocationInput::default()
     };
 
-    let error = orchestration_runtime::execution_engine::ProviderInvoker::invoke_llm(
+    let output = orchestration_runtime::execution_engine::ProviderInvoker::invoke_llm(
         &invoker, &runtime, input,
     )
     .await
-    .expect_err("non-multimodal model should reject content_blocks");
+    .expect("non-multimodal model should receive textualized media context");
 
-    assert!(matches!(
-        error.downcast_ref::<ControlPlaneError>(),
-        Some(ControlPlaneError::Conflict("model_multimodal_unsupported"))
-    ));
+    let content = output.result.final_content.unwrap_or_default();
+    assert!(content.contains("\"error_code\":\"message_media_unsupported\""));
+    assert!(content.contains("\"url\":\"https://example.com/cat.png\""));
+    assert!(!content.contains("content_blocks"));
 }
 
 #[test]
@@ -352,6 +352,12 @@ fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
                             "media_type": "image/png",
                             "data": "aW1hZ2U="
                         }
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/png;base64,SHOULD_NOT_BE_VISIBLE"
+                        }
                     }
                 ])),
             },
@@ -359,7 +365,7 @@ fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
         ..ProviderInvocationInput::default()
     };
 
-    provider_invoker::textualize_tool_result_content_blocks_for_text_model(&mut input);
+    provider_invoker::textualize_media_content_blocks_for_text_model(&mut input);
 
     let tool_message = &input.messages[1];
     assert!(tool_message.content_blocks.is_none());
@@ -370,4 +376,8 @@ fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
         .content
         .contains("\"media_type\":\"image/png\""));
     assert!(!tool_message.content.contains("aW1hZ2U="));
+    assert!(tool_message
+        .content
+        .contains("\"url\":\"data:image/png;base64,[redacted]\""));
+    assert!(!tool_message.content.contains("SHOULD_NOT_BE_VISIBLE"));
 }
