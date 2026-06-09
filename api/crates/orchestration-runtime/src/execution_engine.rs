@@ -730,7 +730,7 @@ where
                     provider_events: Vec::new(),
                 });
             }
-            "template_transform" | "answer" => {
+            "template_transform" | "answer" | "tool_result" => {
                 let output_key = first_output_key(node);
                 let output_value =
                     rendered_templates

@@ -94,3 +94,72 @@ async fn save_draft_only_appends_history_for_logical_changes() {
     assert_eq!(logical_state.versions.len(), 2);
     assert_eq!(logical_state.versions[1].summary, "update llm prompt");
 }
+
+#[tokio::test]
+async fn save_draft_rejects_invalid_visible_internal_llm_tool_identifiers() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+    let initial = service
+        .get_or_create_editor_state(owner_id, application.id)
+        .await
+        .unwrap();
+    let mut document = initial.draft.document.clone();
+
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "查看图片",
+            "connector_id": "image-llm",
+            "target_node_id": "node-answer"
+        }
+    ]);
+
+    let error = service
+        .save_draft(SaveFlowDraftCommand {
+            actor_user_id: owner_id,
+            application_id: application.id,
+            document,
+            change_kind: FlowChangeKind::Logical,
+            summary: "add mounted tool".into(),
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "invalid input: visible_internal_llm_tools.tool_name"
+    );
+
+    let mut document = initial.draft.document.clone();
+
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "image_llm",
+            "connector_id": "image-llm",
+            "target_node_id": "node-answer"
+        }
+    ]);
+
+    let error = service
+        .save_draft(SaveFlowDraftCommand {
+            actor_user_id: owner_id,
+            application_id: application.id,
+            document,
+            change_kind: FlowChangeKind::Logical,
+            summary: "add mounted tool".into(),
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "invalid input: visible_internal_llm_tools.connector_id"
+    );
+}

@@ -7,6 +7,7 @@ import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/r
 import {
   getLlmVisibleInternalTools,
   getLlmVisibleInternalToolsEnabled,
+  isLlmToolIdentifier,
   type LlmVisibleInternalTool
 } from '../../../lib/llm-node-config';
 import { i18nText } from '../../../../../shared/i18n/text';
@@ -20,6 +21,11 @@ const TOOL_FORM_ROW_STYLE = {
   color: '#31483a',
   fontSize: 13,
   fontWeight: 600
+} as const;
+
+const TOOL_FORM_ERROR_STYLE = {
+  fontSize: 12,
+  fontWeight: 400
 } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,14 +44,23 @@ function createToolName(index: number) {
   return `tool_${index + 1}`;
 }
 
-function normalizeConnectorId(value: string) {
-  return value.replace(/[^A-Za-z0-9_-]/g, '_');
+function createNextToolName(tools: LlmVisibleInternalTool[]) {
+  const usedIdentifiers = new Set(
+    tools.flatMap((tool) => [tool.tool_name, tool.connector_id ?? ''])
+  );
+  let index = 0;
+
+  while (usedIdentifiers.has(createToolName(index))) {
+    index += 1;
+  }
+
+  return createToolName(index);
 }
 
 function buildNextTool(
   tools: LlmVisibleInternalTool[]
 ): LlmVisibleInternalTool {
-  const toolName = createToolName(tools.length);
+  const toolName = createNextToolName(tools);
 
   return {
     type: 'visible_internal_llm_tool',
@@ -76,19 +91,37 @@ function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
 
 function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
   const toolName = draft.tool_name.trim();
+  const connectorId = draft.connector_id.trim();
 
-  if (!toolName) {
+  if (!isLlmToolIdentifier(toolName) || !isLlmToolIdentifier(connectorId)) {
     return null;
   }
 
   return {
     type: 'visible_internal_llm_tool' as const,
     tool_name: toolName,
-    connector_id: normalizeConnectorId(draft.connector_id.trim() || toolName),
+    connector_id: connectorId,
     target_node_id: targetNodeId,
     description: draft.description.trim() || undefined,
     input_schema: draft.input_schema
   };
+}
+
+function identifierError(
+  value: string,
+  existingIdentifiers: Set<string>
+): string | null {
+  const trimmedValue = value.trim();
+
+  if (!isLlmToolIdentifier(trimmedValue)) {
+    return i18nText('agentFlow', 'auto.tool_identifier_rule');
+  }
+
+  if (existingIdentifiers.has(trimmedValue)) {
+    return i18nText('agentFlow', 'auto.tool_identifier_duplicate');
+  }
+
+  return null;
 }
 
 export function LlmToolRegistrationsField({
@@ -108,6 +141,24 @@ export function LlmToolRegistrationsField({
   const currentConfig = getNodeConfig(currentNode);
   const enabled = getLlmVisibleInternalToolsEnabled(currentConfig);
   const tools = getLlmVisibleInternalTools(currentConfig);
+  const existingToolNames = new Set(
+    tools.flatMap((tool, index) =>
+      index === editingIndex ? [] : [tool.tool_name]
+    )
+  );
+  const existingConnectorIds = new Set(
+    tools.flatMap((tool, index) =>
+      index === editingIndex ? [] : [tool.connector_id || tool.tool_name]
+    )
+  );
+  const toolNameError = draft
+    ? identifierError(draft.tool_name, existingToolNames)
+    : null;
+  const connectorIdError = draft
+    ? identifierError(draft.connector_id, existingConnectorIds)
+    : null;
+  const toolEditorValid =
+    draft !== null && !toolNameError && !connectorIdError && schemaEditorValid;
 
   function updateTools(nextTools: LlmVisibleInternalTool[]) {
     adapter.setValue('config.visible_internal_llm_tools', nextTools);
@@ -174,11 +225,7 @@ export function LlmToolRegistrationsField({
       <Button onClick={closeToolEditor}>
         {i18nText('agentFlow', 'auto.cancel')}
       </Button>
-      <Button
-        disabled={!draft?.tool_name.trim() || !schemaEditorValid}
-        type="primary"
-        onClick={saveDraft}
-      >
+      <Button disabled={!toolEditorValid} type="primary" onClick={saveDraft}>
         {i18nText('agentFlow', 'auto.save_tool')}
       </Button>
     </div>
@@ -294,16 +341,36 @@ export function LlmToolRegistrationsField({
               <span>{i18nText('agentFlow', 'auto.tool_name')}</span>
               <Input
                 aria-label={i18nText('agentFlow', 'auto.tool_name')}
+                status={toolNameError ? 'error' : undefined}
                 value={draft.tool_name}
                 onChange={(event) =>
                   updateDraft({
                     tool_name: event.target.value,
-                    connector_id:
-                      draft.connector_id ||
-                      normalizeConnectorId(event.target.value)
+                    connector_id: draft.connector_id || event.target.value
                   })
                 }
               />
+              {toolNameError ? (
+                <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>
+                  {toolNameError}
+                </Typography.Text>
+              ) : null}
+            </label>
+            <label style={TOOL_FORM_ROW_STYLE}>
+              <span>{i18nText('agentFlow', 'auto.tool_identifier')}</span>
+              <Input
+                aria-label={i18nText('agentFlow', 'auto.tool_identifier')}
+                status={connectorIdError ? 'error' : undefined}
+                value={draft.connector_id}
+                onChange={(event) =>
+                  updateDraft({ connector_id: event.target.value })
+                }
+              />
+              {connectorIdError ? (
+                <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>
+                  {connectorIdError}
+                </Typography.Text>
+              ) : null}
             </label>
             <label style={TOOL_FORM_ROW_STYLE}>
               <span>{i18nText('agentFlow', 'auto.description')}</span>

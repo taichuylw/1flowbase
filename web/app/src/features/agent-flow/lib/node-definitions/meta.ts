@@ -43,6 +43,10 @@ export const nodeDefinitionMeta: NodeDefinitionMetaMap = {
     summary: i18nText("agentFlow", "auto.call_external_tool_capabilities_return_tool_execution_results"),
     helpHref: '/docs/agentflow/nodes/tool'
   },
+  tool_result: {
+    summary: i18nText('agentFlow', 'auto.define_tool_call_return_content'),
+    helpHref: '/docs/agentflow/nodes/tool-result'
+  },
   ...dataModelNodeMeta,
   variable_assigner: {
     summary: i18nText("agentFlow", "auto.assign_conversation_variable_current_run"),

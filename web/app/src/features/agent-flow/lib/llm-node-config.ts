@@ -36,6 +36,8 @@ export interface LlmNodeExternalReasoningPolicy {
   follow_external_reasoning: boolean;
 }
 
+export type LlmInternalLlmNodePolicy = 'forbidden' | 'allowed';
+
 export interface LlmVisibleInternalTool {
   type: 'visible_internal_llm_tool';
   tool_name: string;
@@ -66,6 +68,9 @@ export const DEFAULT_LLM_RESPONSE_FORMAT: LlmNodeResponseFormat = {
 
 export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS_ENABLED = false;
 export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS: LlmVisibleInternalTool[] = [];
+export const DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY: LlmInternalLlmNodePolicy =
+  'forbidden';
+export const LLM_TOOL_IDENTIFIER_MAX_LENGTH = 64;
 const LLM_TOOL_SOURCE_HANDLE_PREFIX = 'visible_internal_llm_tool:';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -92,6 +97,14 @@ export function parseLlmToolSourceHandleId(
 
 export function isLlmToolSourceHandle(handleId: string | null | undefined) {
   return parseLlmToolSourceHandleId(handleId) !== null;
+}
+
+export function isLlmToolIdentifier(value: string) {
+  return (
+    value.length > 0 &&
+    value.length <= LLM_TOOL_IDENTIFIER_MAX_LENGTH &&
+    /^[A-Za-z0-9_]+$/.test(value)
+  );
 }
 
 export function getLlmParameterDefaultValue(
@@ -264,6 +277,14 @@ export function getLlmVisibleInternalToolsEnabled(
   config: Record<string, unknown>
 ): boolean {
   return config.visible_internal_llm_tools_enabled === true;
+}
+
+export function getLlmInternalLlmNodePolicy(
+  config: Record<string, unknown>
+): LlmInternalLlmNodePolicy {
+  return config.internal_llm_node_policy === 'allowed'
+    ? 'allowed'
+    : DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY;
 }
 
 export function getLlmVisibleInternalTools(

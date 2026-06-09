@@ -905,6 +905,58 @@ async fn visible_internal_llm_tool_executes_composed_connector_branch() {
 }
 
 #[tokio::test]
+async fn visible_internal_llm_tool_returns_tool_result_node_content() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({ "query": "image?" }),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        final_llm_response("mounted-visible "),
+        final_llm_response("main-after"),
+    ]);
+    let plan = visible_internal_llm_tool_plan_with_result();
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({ "node-start": { "query": "describe the picture", "history": [] } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "expected completed run, got {:?}",
+        outcome.stop_reason
+    );
+    assert_eq!(
+        outcome.variable_pool["node-answer"]["answer"],
+        json!("main-before tool-result: mounted-visible main-after")
+    );
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    let tool_result = captured[2]
+        .messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_visible")
+        })
+        .expect("main llm recall should include the explicit tool result");
+    assert_eq!(tool_result.content, "tool-result: mounted-visible ");
+}
+
+#[tokio::test]
 async fn visible_internal_llm_tool_branch_llm_can_wait_for_external_tool_callback() {
     let (waiting_invoker, waiting_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {
@@ -1022,7 +1074,7 @@ async fn visible_internal_llm_tool_branch_llm_can_wait_for_external_tool_callbac
     );
     assert_eq!(
         resumed.variable_pool["node-answer"]["answer"],
-        json!("main-before need toolsmounted-after-tool main-after")
+        json!("main-before mounted-after-tool main-after")
     );
 
     let captured_resumed = resumed_inputs
@@ -1051,10 +1103,7 @@ async fn visible_internal_llm_tool_branch_llm_can_wait_for_external_tool_callbac
                 && message.tool_call_id.as_deref() == Some("call_visible")
         })
         .expect("main llm recall should include mounted llm output as hidden tool result");
-    assert_eq!(
-        main_internal_tool_result.content,
-        "need toolsmounted-after-tool "
-    );
+    assert_eq!(main_internal_tool_result.content, "mounted-after-tool ");
 }
 
 #[tokio::test]
@@ -1593,7 +1642,7 @@ async fn visible_internal_llm_tool_callback_resume_keeps_completed_hidden_tool_r
     );
     assert_eq!(
         resumed.variable_pool["node-answer"]["answer"],
-        json!("main-before first-mounted need toolssecond-mounted-after-tool main-after")
+        json!("main-before first-mounted second-mounted-after-tool main-after")
     );
 
     let captured_resumed = resumed_inputs
@@ -1619,7 +1668,7 @@ async fn visible_internal_llm_tool_callback_resume_keeps_completed_hidden_tool_r
         .expect("main llm recall should include second hidden tool result");
     assert_eq!(
         second_hidden_tool_result.content,
-        "need toolssecond-mounted-after-tool "
+        "second-mounted-after-tool "
     );
 }
 
@@ -1801,12 +1850,31 @@ async fn multi_round_llm_tool_callbacks_keep_previous_round_debug_evidence() {
     );
 }
 
+fn visible_internal_llm_tool_plan_with_result() -> CompiledPlan {
+    let mut plan = visible_internal_llm_tool_plan();
+    let tool_result = plan
+        .nodes
+        .get_mut("node-tool-result")
+        .expect("tool result node should exist");
+    tool_result.bindings = BTreeMap::from([(
+        "result_template".to_string(),
+        CompiledBinding {
+            kind: "templated_text".to_string(),
+            selector_paths: vec![vec!["node-mounted-llm".to_string(), "text".to_string()]],
+            raw_value: json!("tool-result: {{ node-mounted-llm.text }}"),
+        },
+    )]);
+
+    plan
+}
+
 fn visible_internal_llm_tool_plan() -> CompiledPlan {
     let mut plan = llm_answer_plan();
     plan.topological_order = vec![
         "node-start".to_string(),
         "node-llm".to_string(),
         "node-mounted-llm".to_string(),
+        "node-tool-result".to_string(),
         "node-answer".to_string(),
     ];
     let main_llm = plan
@@ -1814,6 +1882,7 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
         .get_mut("node-llm")
         .expect("main llm node should exist");
     main_llm.config["visible_internal_llm_tools_enabled"] = json!(true);
+    main_llm.config["internal_llm_node_policy"] = json!("allowed");
     main_llm.config["visible_internal_llm_tools"] = json!([
         {
             "type": "visible_internal_llm_tool",
@@ -1841,7 +1910,7 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
             alias: "Mounted LLM".to_string(),
             container_id: None,
             dependency_node_ids: Vec::new(),
-            downstream_node_ids: Vec::new(),
+            downstream_node_ids: vec!["node-tool-result".to_string()],
             bindings: BTreeMap::from([(
                 "prompt_messages".to_string(),
                 CompiledBinding {
@@ -1891,6 +1960,36 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
             code_runtime: None,
         },
     );
+    plan.nodes.insert(
+        "node-tool-result".to_string(),
+        CompiledNode {
+            node_id: "node-tool-result".to_string(),
+            node_type: "tool_result".to_string(),
+            alias: "Tool Result".to_string(),
+            container_id: None,
+            dependency_node_ids: vec!["node-mounted-llm".to_string()],
+            downstream_node_ids: Vec::new(),
+            bindings: BTreeMap::from([(
+                "result_template".to_string(),
+                CompiledBinding {
+                    kind: "templated_text".to_string(),
+                    selector_paths: vec![vec!["node-mounted-llm".to_string(), "text".to_string()]],
+                    raw_value: json!("{{ node-mounted-llm.text }}"),
+                },
+            )]),
+            outputs: vec![CompiledOutput {
+                key: "result".to_string(),
+                title: "Tool Result".to_string(),
+                value_type: "string".to_string(),
+                selector: Vec::new(),
+                json_schema: None,
+            }],
+            config: json!({}),
+            plugin_runtime: None,
+            llm_runtime: None,
+            code_runtime: None,
+        },
+    );
     plan.edges.push(CompiledEdge {
         edge_id: "edge-start-llm".to_string(),
         source: "node-start".to_string(),
@@ -1912,6 +2011,13 @@ fn visible_internal_llm_tool_plan() -> CompiledPlan {
         source_handle: Some("visible_internal_llm_tool:inspect_visible_context".to_string()),
         target_handle: None,
     });
+    plan.edges.push(CompiledEdge {
+        edge_id: "edge-mounted-tool-result".to_string(),
+        source: "node-mounted-llm".to_string(),
+        target: "node-tool-result".to_string(),
+        source_handle: None,
+        target_handle: None,
+    });
 
     plan
 }
@@ -1923,6 +2029,7 @@ fn visible_internal_llm_tool_chain_plan() -> CompiledPlan {
         "node-llm".to_string(),
         "node-tool-transform".to_string(),
         "node-mounted-llm".to_string(),
+        "node-tool-result".to_string(),
         "node-answer".to_string(),
     ];
 

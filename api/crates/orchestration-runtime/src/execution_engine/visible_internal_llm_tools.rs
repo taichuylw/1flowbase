@@ -5,6 +5,7 @@ const VISIBLE_INTERNAL_LLM_TOOL_VARIABLE: &str = "visible_internal_llm_tool";
 const VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX: &str = "visible_internal_llm_tool:";
 const VISIBLE_INTERNAL_LLM_TOOL_CALLBACK_STATE_KEY: &str = "__visible_internal_llm_tool_callback";
 const MAX_VISIBLE_INTERNAL_LLM_TOOL_ROUNDS: usize = 8;
+const TOOL_RESULT_NODE_TYPE: &str = "tool_result";
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct VisibleInternalLlmTool {
@@ -413,7 +414,7 @@ where
 
 async fn execute_visible_internal_llm_tool_branch<I>(
     plan: &CompiledPlan,
-    mut variable_pool: Map<String, Value>,
+    variable_pool: Map<String, Value>,
     runtime_context: &ExecutionRuntimeContext,
     invoker: &I,
     main_node_id: &str,
@@ -452,10 +453,40 @@ where
         });
     }
 
-    let mut active_node_ids = BTreeSet::from([tool.target_node_id.clone()]);
-    let mut provider_events = Vec::new();
-    let mut branch_text = String::new();
+    let active_node_ids = BTreeSet::from([tool.target_node_id.clone()]);
 
+    continue_visible_internal_llm_tool_branch(
+        plan,
+        variable_pool,
+        active_node_ids,
+        runtime_context,
+        invoker,
+        main_node_id,
+        tool_call,
+        tool,
+        String::new(),
+        Vec::new(),
+        route_events,
+    )
+    .await
+}
+
+async fn continue_visible_internal_llm_tool_branch<I>(
+    plan: &CompiledPlan,
+    mut variable_pool: Map<String, Value>,
+    mut active_node_ids: BTreeSet<String>,
+    runtime_context: &ExecutionRuntimeContext,
+    invoker: &I,
+    main_node_id: &str,
+    tool_call: &Value,
+    tool: &VisibleInternalLlmTool,
+    mut branch_text: String,
+    mut provider_events: Vec<ProviderStreamEvent>,
+    mut route_events: Vec<Value>,
+) -> Result<VisibleInternalLlmToolBranchExecution>
+where
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
+{
     for node_id in &plan.topological_order {
         if !active_node_ids.contains(node_id) {
             continue;
@@ -575,6 +606,15 @@ where
             node.node_id.clone(),
             project_node_variable_payload(node, &output_payload)?,
         );
+        if node.node_type == TOOL_RESULT_NODE_TYPE {
+            return Ok(VisibleInternalLlmToolBranchExecution::Completed(
+                VisibleInternalLlmToolOutput {
+                    text: branch_text,
+                    provider_events,
+                    route_events,
+                },
+            ));
+        }
         activate_downstream_nodes(plan, &mut active_node_ids, node, None);
     }
 
@@ -640,7 +680,7 @@ where
                 execution.output_payload,
             ))
         }
-        "template_transform" | "answer" => {
+        "template_transform" | "answer" | TOOL_RESULT_NODE_TYPE => {
             let output_key = first_output_key(node);
             let output_value = rendered_templates
                 .values()
@@ -870,6 +910,12 @@ where
                 state.branch_text,
                 visible_internal_llm_tool_output_text(&output_payload)
             );
+            let tool = VisibleInternalLlmTool {
+                name: state.tool_name.clone(),
+                description: None,
+                target_node_id: state.target_node_id.clone(),
+                input_schema: None,
+            };
             variable_pool.insert(
                 node.node_id.clone(),
                 project_node_variable_payload(node, &output_payload)?,
@@ -878,12 +924,7 @@ where
                 "visible_internal_llm_tool_completed",
                 &state.main_node_id,
                 &state.tool_call,
-                &VisibleInternalLlmTool {
-                    name: state.tool_name.clone(),
-                    description: None,
-                    target_node_id: state.target_node_id.clone(),
-                    input_schema: None,
-                },
+                &tool,
                 json!({
                     "node_id": node.node_id,
                     "provider_route": output_payload
@@ -892,13 +933,164 @@ where
                         .unwrap_or(Value::Null),
                 }),
             ));
+
+            let mut active_node_ids = BTreeSet::new();
+            activate_downstream_nodes(plan, &mut active_node_ids, node, None);
+            let branch_execution = if active_node_ids.is_empty() {
+                VisibleInternalLlmToolBranchExecution::Completed(VisibleInternalLlmToolOutput {
+                    text: branch_text,
+                    provider_events,
+                    route_events,
+                })
+            } else {
+                continue_visible_internal_llm_tool_branch(
+                    plan,
+                    variable_pool.clone(),
+                    active_node_ids,
+                    runtime_context,
+                    invoker,
+                    &state.main_node_id,
+                    &state.tool_call,
+                    &tool,
+                    branch_text,
+                    provider_events,
+                    route_events,
+                )
+                .await?
+            };
+
+            let (branch_output, branch_variable_pool) = match branch_execution {
+                VisibleInternalLlmToolBranchExecution::Completed(output) => (output, variable_pool),
+                VisibleInternalLlmToolBranchExecution::Waiting {
+                    mut wait,
+                    branch_text,
+                    route_events,
+                } => {
+                    insert_visible_internal_llm_tool_callback_state(
+                        &mut wait.checkpoint_variable_pool,
+                        VisibleInternalLlmToolCallbackStateInput {
+                            main_node_id: &state.main_node_id,
+                            tool_call: &state.tool_call,
+                            tool_name: &state.tool_name,
+                            target_node_id: &state.target_node_id,
+                            main_visible_transcript: &state.main_visible_transcript,
+                            branch_text: &branch_text,
+                            route_events: &route_events,
+                            completed_tool_results: &state.completed_tool_results,
+                            remaining_tool_calls: &state.remaining_tool_calls,
+                        },
+                    );
+                    return Ok(VisibleInternalLlmToolResume::Waiting(wait));
+                }
+                VisibleInternalLlmToolBranchExecution::Failed {
+                    error_payload,
+                    route_events,
+                } => {
+                    if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
+                        let mut completed_tool_results = state.completed_tool_results.clone();
+                        completed_tool_results.push(visible_internal_llm_tool_result(
+                            &state.tool_call,
+                            &state.tool_name,
+                            visible_internal_llm_tool_error_result_content(&error_payload),
+                        ));
+                        let visible_transcript =
+                            format!("{}{}", state.main_visible_transcript, state.branch_text);
+                        match execute_remaining_visible_internal_llm_tool_calls(
+                            plan,
+                            &variable_pool,
+                            runtime_context,
+                            invoker,
+                            &state.main_node_id,
+                            completed_tool_results,
+                            visible_transcript,
+                            state.remaining_tool_calls.clone(),
+                        )
+                        .await?
+                        {
+                            VisibleInternalLlmToolRemainingExecution::Completed {
+                                tool_results,
+                                visible_transcript,
+                                provider_events: _remaining_provider_events,
+                                route_events: remaining_route_events,
+                            } => {
+                                let mut route_events = route_events;
+                                route_events.extend(remaining_route_events);
+                                append_llm_tool_result_messages(
+                                    &mut variable_pool,
+                                    &state.main_node_id,
+                                    &json!({ "tool_results": tool_results }),
+                                )?;
+                                set_pending_llm_tool_callback_visible_internal_transcript(
+                                    &mut variable_pool,
+                                    &state.main_node_id,
+                                    visible_transcript,
+                                )?;
+                                set_pending_llm_tool_callback_visible_internal_events(
+                                    &mut variable_pool,
+                                    &state.main_node_id,
+                                    route_events,
+                                )?;
+                                variable_pool.remove(VISIBLE_INTERNAL_LLM_TOOL_CALLBACK_STATE_KEY);
+                                return Ok(VisibleInternalLlmToolResume::Ready(variable_pool));
+                            }
+                            VisibleInternalLlmToolRemainingExecution::Waiting(wait) => {
+                                return Ok(VisibleInternalLlmToolResume::Waiting(wait));
+                            }
+                            VisibleInternalLlmToolRemainingExecution::Failed {
+                                error_payload,
+                                provider_events: remaining_provider_events,
+                                route_events: remaining_route_events,
+                            } => {
+                                let mut route_events = route_events;
+                                route_events.extend(remaining_route_events);
+                                let main_node =
+                                    plan.nodes.get(&state.main_node_id).ok_or_else(|| {
+                                        anyhow!("visible internal llm tool main node not found")
+                                    })?;
+                                let execution = visible_internal_llm_tool_failure(
+                                    main_node,
+                                    remaining_provider_events,
+                                    error_payload,
+                                    route_events,
+                                )?;
+                                return Ok(VisibleInternalLlmToolResume::Failed {
+                                    node_id: main_node.node_id.clone(),
+                                    node_alias: main_node.alias.clone(),
+                                    execution,
+                                });
+                            }
+                        }
+                    }
+
+                    let main_node = plan
+                        .nodes
+                        .get(&state.main_node_id)
+                        .ok_or_else(|| anyhow!("visible internal llm tool main node not found"))?;
+                    let execution = visible_internal_llm_tool_failure(
+                        main_node,
+                        Vec::new(),
+                        error_payload,
+                        route_events,
+                    )?;
+                    return Ok(VisibleInternalLlmToolResume::Failed {
+                        node_id: main_node.node_id.clone(),
+                        node_alias: main_node.alias.clone(),
+                        execution,
+                    });
+                }
+            };
+
+            variable_pool = branch_variable_pool;
+            provider_events = branch_output.provider_events;
+            route_events = branch_output.route_events;
             let mut completed_tool_results = state.completed_tool_results.clone();
             completed_tool_results.push(visible_internal_llm_tool_result(
                 &state.tool_call,
                 &state.tool_name,
-                branch_text.clone(),
+                branch_output.text.clone(),
             ));
-            let visible_transcript = format!("{}{}", state.main_visible_transcript, branch_text);
+            let visible_transcript =
+                format!("{}{}", state.main_visible_transcript, branch_output.text);
             match execute_remaining_visible_internal_llm_tool_calls(
                 plan,
                 &variable_pool,

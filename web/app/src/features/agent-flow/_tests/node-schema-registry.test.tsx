@@ -265,6 +265,19 @@ describe('agent-flow node schema registry', () => {
           kind: 'builtin',
           type: 'answer',
           label: 'Answer'
+        }),
+        expect.objectContaining({
+          kind: 'builtin',
+          type: 'tool_result',
+          label: 'Tool Result'
+        })
+      ])
+    );
+    expect(BUILTIN_NODE_PICKER_OPTIONS).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          kind: 'builtin',
+          type: 'tool'
         })
       ])
     );
@@ -646,6 +659,7 @@ describe('agent-flow node schema registry', () => {
       'code',
       'http_request',
       'tool',
+      'tool_result',
       'plugin_node',
       'human_input',
       'data_model_list',

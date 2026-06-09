@@ -11,6 +11,7 @@ import { TemplatedNamedBindingsField } from '../../components/bindings/Templated
 import { NodeDetailPanel } from '../../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../../components/inspector/NodeInspector';
+import { createEdgeDocument } from '../../lib/document/edge-factory';
 import { createNodeDocument } from '../../lib/document/node-factory';
 import * as nodeSchemaAdapterApi from '../../schema/node-schema-adapter';
 import * as nodeSchemaRegistry from '../../schema/node-schema-registry';
@@ -218,6 +219,14 @@ describe('NodeInspector core', () => {
         input_schema: { type: 'object' }
       }
     ];
+    state.draft.document.graph.edges.push(
+      createEdgeDocument({
+        id: 'edge-llm-mounted-tool',
+        source: 'node-llm',
+        target: 'node-mounted-llm',
+        sourceHandle: 'visible_internal_llm_tool:inspect_visible_context'
+      })
+    );
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={state}>
@@ -279,13 +288,27 @@ describe('NodeInspector core', () => {
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
 
     expect(within(dialog).queryByLabelText('目标 LLM')).not.toBeInTheDocument();
+    const saveToolButton = within(dialog).getByRole('button', {
+      name: '保存工具'
+    });
+
+    fireEvent.change(within(dialog).getByLabelText('工具标识'), {
+      target: { value: 'inspect-image' }
+    });
+    expect(saveToolButton).toBeDisabled();
+    expect(
+      within(dialog).getByText('仅支持 1-64 位数字、大小写字母、下划线。')
+    ).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('工具标识'), {
+      target: { value: 'inspect_image' }
+    });
     fireEvent.change(within(dialog).getByLabelText('工具名称'), {
       target: { value: 'inspect_image' }
     });
     fireEvent.change(within(dialog).getByLabelText('描述'), {
       target: { value: 'Inspect uploaded image' }
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: '保存工具' }));
+    fireEvent.click(saveToolButton);
 
     await waitFor(() => {
       expect(getLlmNodeConfig(latestDocument)).toEqual(
@@ -293,6 +316,7 @@ describe('NodeInspector core', () => {
           visible_internal_llm_tools: [
             expect.objectContaining({
               tool_name: 'inspect_image',
+              connector_id: 'inspect_image',
               target_node_id: 'node-mounted-llm',
               description: 'Inspect uploaded image'
             })
@@ -300,6 +324,14 @@ describe('NodeInspector core', () => {
         })
       );
     });
+    expect(latestDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-llm-mounted-tool',
+          sourceHandle: 'visible_internal_llm_tool:inspect_image'
+        })
+      ])
+    );
     expect(await screen.findByText('inspect_image')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '删除 inspect_image' }));

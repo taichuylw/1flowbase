@@ -26,6 +26,11 @@ export const llmNodeDefinition: NodeDefinition = {
           editor: 'llm_tool_registrations'
         },
         {
+          key: 'config.internal_llm_node_policy',
+          label: i18nText('agentFlow', 'auto.internal_llm_node_policy'),
+          editor: 'static_select'
+        },
+        {
           key: 'config.context_policy',
           label: '上下文',
           editor: 'llm_context_policy'

@@ -510,7 +510,9 @@ describe('agent flow document transforms', () => {
 
     const next = replaceNodeWithOption(document, {
       nodeId: 'node-llm',
-      option: BUILTIN_NODE_PICKER_OPTIONS.find((option) => option.type === 'tool')!
+      option: BUILTIN_NODE_PICKER_OPTIONS.find(
+        (option) => option.type === 'tool_result'
+      )!
     });
     const replacedNode = next.graph.nodes.find(
       (node) => node.id === 'node-llm'
@@ -519,8 +521,8 @@ describe('agent flow document transforms', () => {
     expect(replacedNode).toEqual(
       expect.objectContaining({
         id: 'node-llm',
-        type: 'tool',
-        alias: 'Tool',
+        type: 'tool_result',
+        alias: 'Tool Result',
         position: originalNode?.position,
         containerId: originalNode?.containerId
       })

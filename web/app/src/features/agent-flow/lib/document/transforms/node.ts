@@ -14,6 +14,11 @@ import {
   getIfElseBranches
 } from '../../if-else-branches';
 import { shiftDownstreamNodesBFS } from './layout';
+import {
+  createLlmToolSourceHandleId,
+  getLlmVisibleInternalTools,
+  type LlmVisibleInternalTool
+} from '../../llm-node-config';
 
 const NODE_GAP_X = 280;
 
@@ -24,6 +29,7 @@ type NodeFieldValue =
   | null
   | FlowBinding
   | Record<string, unknown>
+  | LlmVisibleInternalTool[]
   | string[]
   | string[][];
 
@@ -46,7 +52,9 @@ function deriveLlmOutputs(
       (output) => output.key === derivedOutput.key
     );
 
-    return currentOutput ? { ...derivedOutput, ...currentOutput } : derivedOutput;
+    return currentOutput
+      ? { ...derivedOutput, ...currentOutput }
+      : derivedOutput;
   });
 }
 
@@ -66,6 +74,74 @@ export function replaceNodeOutputs(
               outputs
             }
           : node
+      )
+    }
+  };
+}
+
+function llmToolConnectorId(tool: LlmVisibleInternalTool) {
+  return tool.connector_id || tool.tool_name;
+}
+
+export function updateLlmVisibleInternalTools(
+  document: FlowAuthoringDocument,
+  nodeId: string,
+  nextTools: LlmVisibleInternalTool[]
+): FlowAuthoringDocument {
+  const node = getNodeById(document, nodeId);
+
+  if (!node || node.type !== 'llm') {
+    return document;
+  }
+
+  const currentTools = getLlmVisibleInternalTools(node.config);
+  const nextDocument = updateNodeField(document, {
+    nodeId,
+    fieldKey: 'config.visible_internal_llm_tools',
+    value: nextTools
+  });
+  const sourceHandleUpdates = new Map<string, string>();
+
+  for (const [index, nextTool] of nextTools.entries()) {
+    const currentTool = currentTools[index];
+
+    if (!currentTool) {
+      continue;
+    }
+
+    const currentConnectorId = llmToolConnectorId(currentTool);
+    const nextConnectorId = llmToolConnectorId(nextTool);
+
+    if (
+      currentConnectorId &&
+      nextConnectorId &&
+      currentConnectorId !== nextConnectorId
+    ) {
+      sourceHandleUpdates.set(
+        createLlmToolSourceHandleId(currentConnectorId),
+        createLlmToolSourceHandleId(nextConnectorId)
+      );
+    }
+  }
+
+  if (sourceHandleUpdates.size === 0) {
+    return nextDocument;
+  }
+
+  return {
+    ...nextDocument,
+    graph: {
+      ...nextDocument.graph,
+      edges: nextDocument.graph.edges.map((edge) =>
+        edge.source === nodeId &&
+        edge.sourceHandle &&
+        sourceHandleUpdates.has(edge.sourceHandle)
+          ? {
+              ...edge,
+              sourceHandle:
+                sourceHandleUpdates.get(edge.sourceHandle) ?? edge.sourceHandle
+            }
+          : edge
       )
     }
   };

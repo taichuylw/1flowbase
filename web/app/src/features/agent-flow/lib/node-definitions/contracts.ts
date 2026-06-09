@@ -328,6 +328,7 @@ function createLlmContract(): NodeRuntimeUiContract {
         follow_external_reasoning: false
       },
       visible_internal_llm_tools_enabled: false,
+      internal_llm_node_policy: 'forbidden',
       visible_internal_llm_tools: [],
       response_format: {
         mode: 'text'
@@ -362,6 +363,22 @@ function createLlmContract(): NodeRuntimeUiContract {
           title: i18nText('agentFlow', 'auto.mount_tools'),
           renderer: 'llm_tool_registrations',
           valueType: 'boolean'
+        }),
+        panelField({
+          key: 'config.internal_llm_node_policy',
+          title: i18nText('agentFlow', 'auto.internal_llm_node_policy'),
+          renderer: 'static_select',
+          valueType: 'string',
+          options: [
+            {
+              label: i18nText('agentFlow', 'auto.internal_llm_node_forbidden'),
+              value: 'forbidden'
+            },
+            {
+              label: i18nText('agentFlow', 'auto.internal_llm_node_allowed'),
+              value: 'allowed'
+            }
+          ]
         }),
         panelField({
           key: 'config.context_policy',
@@ -743,6 +760,37 @@ function createToolContract(): NodeRuntimeUiContract {
   });
 }
 
+function createToolResultContract(): NodeRuntimeUiContract {
+  const outputs = [
+    {
+      key: 'result',
+      title: i18nText('agentFlow', 'auto.tool_result_output'),
+      valueType: 'string'
+    }
+  ];
+
+  return createNodeRuntimeContract({
+    type: 'tool_result',
+    title: 'Tool Result',
+    description: i18nText('agentFlow', 'auto.define_tool_call_return_content'),
+    category: 'io',
+    config: {},
+    outputs,
+    panelSections: [
+      basicsPanelSection,
+      panelSection('inputs', 'Inputs', [
+        panelField({
+          key: 'bindings.result_template',
+          title: i18nText('agentFlow', 'auto.tool_result_content'),
+          renderer: 'templated_text',
+          required: true
+        })
+      ]),
+      outputsPanelSection(outputs)
+    ]
+  });
+}
+
 function createPluginNodeContract(): NodeRuntimeUiContract {
   const outputs = [
     {
@@ -1053,6 +1101,7 @@ export const builtinNodeRuntimeContractTypes = [
   'template_transform',
   'http_request',
   'tool',
+  'tool_result',
   'data_model_list',
   'data_model_get',
   'data_model_create',
@@ -1080,6 +1129,7 @@ export const BUILTIN_NODE_RUNTIME_CONTRACTS: Record<
   template_transform: createTemplateTransformContract(),
   http_request: createHttpRequestContract(),
   tool: createToolContract(),
+  tool_result: createToolResultContract(),
   data_model_list: createDataModelContract('data_model_list'),
   data_model_get: createDataModelContract('data_model_get'),
   data_model_create: createDataModelContract('data_model_create'),

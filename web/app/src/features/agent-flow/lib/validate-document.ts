@@ -7,6 +7,7 @@ import type {
   FlowBinding,
   FlowConditionGroupDocument,
   FlowConditionRuleDocument,
+  FlowEdgeDocument,
   FlowNodeDocument,
   IfElseBranchDocument
 } from '@1flowbase/flow-schema';
@@ -17,7 +18,14 @@ import {
   extractDataModelQuerySelectors,
   getActiveNodeBindings
 } from './data-model-query-binding';
-import { getLlmModelProvider } from './llm-node-config';
+import {
+  createLlmToolSourceHandleId,
+  getLlmInternalLlmNodePolicy,
+  getLlmModelProvider,
+  getLlmVisibleInternalTools,
+  getLlmVisibleInternalToolsEnabled,
+  isLlmToolSourceHandle
+} from './llm-node-config';
 import {
   ERROR_BRANCH_SOURCE_HANDLE,
   nodeUsesErrorBranch
@@ -333,6 +341,120 @@ function pushFieldIssue(
     title,
     message
   });
+}
+
+function collectVisibleInternalToolBranchNodeIds(
+  startNodeId: string,
+  nodeById: Map<string, FlowNodeDocument>,
+  edges: FlowEdgeDocument[]
+): Set<string> {
+  const visited = new Set<string>();
+  const queue = [startNodeId];
+
+  while (queue.length > 0) {
+    const nodeId = queue.shift();
+
+    if (!nodeId || visited.has(nodeId)) {
+      continue;
+    }
+
+    visited.add(nodeId);
+
+    const node = nodeById.get(nodeId);
+    if (node?.type === 'tool_result') {
+      continue;
+    }
+
+    for (const edge of edges) {
+      if (edge.source !== nodeId) {
+        continue;
+      }
+
+      if (
+        edge.sourceHandle === ERROR_BRANCH_SOURCE_HANDLE ||
+        isLlmToolSourceHandle(edge.sourceHandle)
+      ) {
+        continue;
+      }
+
+      queue.push(edge.target);
+    }
+  }
+
+  return visited;
+}
+
+function validateVisibleInternalLlmToolBranches(
+  issues: AgentFlowIssue[],
+  node: FlowNodeDocument,
+  nodeById: Map<string, FlowNodeDocument>,
+  edges: FlowEdgeDocument[]
+) {
+  if (
+    node.type !== 'llm' ||
+    !getLlmVisibleInternalToolsEnabled(node.config)
+  ) {
+    return;
+  }
+
+  const allowInternalLlm =
+    getLlmInternalLlmNodePolicy(node.config) === 'allowed';
+
+  for (const tool of getLlmVisibleInternalTools(node.config)) {
+    const connectorId = tool.connector_id || tool.tool_name;
+    const sourceHandle = createLlmToolSourceHandleId(connectorId);
+    const connectorEdges = edges.filter(
+      (edge) => edge.source === node.id && edge.sourceHandle === sourceHandle
+    );
+
+    for (const edge of connectorEdges) {
+      const reachableNodeIds = collectVisibleInternalToolBranchNodeIds(
+        edge.target,
+        nodeById,
+        edges
+      );
+      const toolResultNodeIds = [...reachableNodeIds].filter(
+        (nodeId) => nodeById.get(nodeId)?.type === 'tool_result'
+      );
+
+      if (toolResultNodeIds.length === 0) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.visible_internal_llm_tools_enabled',
+          i18nText('agentFlow', 'auto.tool_result_required'),
+          i18nText('agentFlow', 'auto.tool_result_required'),
+          'inputs'
+        );
+      } else if (toolResultNodeIds.length > 1) {
+        pushFieldIssue(
+          issues,
+          node,
+          'config.visible_internal_llm_tools_enabled',
+          i18nText('agentFlow', 'auto.tool_result_duplicate'),
+          i18nText('agentFlow', 'auto.tool_result_duplicate'),
+          'inputs'
+        );
+      }
+
+      if (!allowInternalLlm) {
+        const reachesLlmNode = [...reachableNodeIds].some(
+          (nodeId) => nodeId !== node.id && nodeById.get(nodeId)?.type === 'llm'
+        );
+
+        if (reachesLlmNode) {
+          pushFieldIssue(
+            issues,
+            node,
+            'config.internal_llm_node_policy',
+            i18nText('agentFlow', 'auto.internal_llm_node_policy'),
+            i18nText('agentFlow', 'auto.internal_llm_node_forbidden_message'),
+            'inputs'
+          );
+        }
+      }
+    }
+  }
 }
 
 function isRuntimeSelectorSource(source: string) {
@@ -916,6 +1038,13 @@ export function validateDocument(
     }
 
     if (node.type === 'llm') {
+      validateVisibleInternalLlmToolBranches(
+        issues,
+        node,
+        nodeById,
+        document.graph.edges
+      );
+
       const modelProvider = getLlmModelProvider(node.config);
       const providerCode = modelProvider.provider_code.trim();
       const model = modelProvider.model_id.trim();

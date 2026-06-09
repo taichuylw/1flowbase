@@ -13,6 +13,7 @@ export type BuiltinFlowNodeType =
   | 'template_transform'
   | 'http_request'
   | 'tool'
+  | 'tool_result'
   | 'data_model_list'
   | 'data_model_get'
   | 'data_model_create'
@@ -526,6 +527,7 @@ export function createDefaultAgentFlowDocument({
               follow_external_reasoning: false
             },
             visible_internal_llm_tools_enabled: false,
+            internal_llm_node_policy: 'forbidden',
             visible_internal_llm_tools: [],
             response_format: {
               mode: 'text'
