@@ -328,7 +328,6 @@ function createLlmContract(): NodeRuntimeUiContract {
         follow_external_reasoning: false
       },
       visible_internal_llm_tools_enabled: false,
-      internal_llm_node_policy: 'forbidden',
       visible_internal_llm_tools: [],
       response_format: {
         mode: 'text'
@@ -363,22 +362,6 @@ function createLlmContract(): NodeRuntimeUiContract {
           title: i18nText('agentFlow', 'auto.mount_tools'),
           renderer: 'llm_tool_registrations',
           valueType: 'boolean'
-        }),
-        panelField({
-          key: 'config.internal_llm_node_policy',
-          title: i18nText('agentFlow', 'auto.internal_llm_node_policy'),
-          renderer: 'static_select',
-          valueType: 'string',
-          options: [
-            {
-              label: i18nText('agentFlow', 'auto.internal_llm_node_forbidden'),
-              value: 'forbidden'
-            },
-            {
-              label: i18nText('agentFlow', 'auto.internal_llm_node_allowed'),
-              value: 'allowed'
-            }
-          ]
         }),
         panelField({
           key: 'config.context_policy',

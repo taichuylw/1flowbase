@@ -50,12 +50,12 @@ fn compile_visible_internal_llm_tool_entry_from_source_handle_edge() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
-    document["graph"]["nodes"][1]["config"]["internal_llm_node_policy"] = json!("allowed");
     document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
         {
             "type": "visible_internal_llm_tool",
             "tool_name": "inspect_visible_context",
             "connector_id": "inspect_visible_context",
+            "internal_llm_node_policy": "allowed",
             "input_schema": { "type": "object" }
         }
     ]);
@@ -237,7 +237,7 @@ fn compile_flags_visible_internal_llm_tool_without_tool_result_node() {
 }
 
 #[test]
-fn compile_flags_visible_internal_llm_tool_branch_llm_without_allowed_policy() {
+fn compile_flags_visible_internal_llm_tool_branch_llm_without_tool_allowed_policy() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
     document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
@@ -329,6 +329,17 @@ fn compile_flags_visible_internal_llm_tool_branch_llm_without_allowed_policy() {
     let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
 
     assert!(plan.compile_issues.iter().any(|issue| {
+        issue.code == CompileIssueCode::InvalidVisibleInternalLlmTool
+            && issue.node_id == "node-llm"
+            && issue.message.contains("internal_llm_node_policy")
+    }));
+
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"][0]
+        ["internal_llm_node_policy"] = json!("allowed");
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(!plan.compile_issues.iter().any(|issue| {
         issue.code == CompileIssueCode::InvalidVisibleInternalLlmTool
             && issue.node_id == "node-llm"
             && issue.message.contains("internal_llm_node_policy")

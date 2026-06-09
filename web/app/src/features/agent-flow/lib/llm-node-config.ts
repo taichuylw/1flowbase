@@ -45,6 +45,7 @@ export interface LlmVisibleInternalTool {
   target_node_id: string;
   description?: string;
   input_schema?: Record<string, unknown>;
+  internal_llm_node_policy?: LlmInternalLlmNodePolicy;
 }
 
 export const DEFAULT_LLM_CONTEXT_POLICY: LlmNodeContextPolicy = {
@@ -279,10 +280,10 @@ export function getLlmVisibleInternalToolsEnabled(
   return config.visible_internal_llm_tools_enabled === true;
 }
 
-export function getLlmInternalLlmNodePolicy(
-  config: Record<string, unknown>
+export function getLlmToolInternalLlmNodePolicy(
+  tool: Pick<LlmVisibleInternalTool, 'internal_llm_node_policy'>
 ): LlmInternalLlmNodePolicy {
-  return config.internal_llm_node_policy === 'allowed'
+  return tool.internal_llm_node_policy === 'allowed'
     ? 'allowed'
     : DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY;
 }
@@ -317,7 +318,11 @@ export function getLlmVisibleInternalTools(
         description: asString(tool.description).trim() || undefined,
         input_schema: isRecord(tool.input_schema)
           ? (tool.input_schema as Record<string, unknown>)
-          : undefined
+          : undefined,
+        internal_llm_node_policy:
+          tool.internal_llm_node_policy === 'allowed'
+            ? 'allowed'
+            : DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY
       }
     ];
   });

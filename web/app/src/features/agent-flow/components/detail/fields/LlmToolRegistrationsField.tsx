@@ -5,9 +5,11 @@ import { useRef, useState } from 'react';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
+  DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
   getLlmVisibleInternalTools,
   getLlmVisibleInternalToolsEnabled,
   isLlmToolIdentifier,
+  type LlmInternalLlmNodePolicy,
   type LlmVisibleInternalTool
 } from '../../../lib/llm-node-config';
 import { i18nText } from '../../../../../shared/i18n/text';
@@ -26,6 +28,12 @@ const TOOL_FORM_ROW_STYLE = {
 const TOOL_FORM_ERROR_STYLE = {
   fontSize: 12,
   fontWeight: 400
+} as const;
+
+const TOOL_FORM_SWITCH_ROW_STYLE = {
+  ...TOOL_FORM_ROW_STYLE,
+  alignItems: 'center',
+  gridTemplateColumns: 'minmax(0, 1fr) auto'
 } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -67,6 +75,7 @@ function buildNextTool(
     tool_name: toolName,
     connector_id: toolName,
     target_node_id: '',
+    internal_llm_node_policy: DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
     input_schema: { type: 'object' }
   };
 }
@@ -76,6 +85,7 @@ interface LlmToolRegistrationDraft {
   description: string;
   input_schema: Record<string, unknown>;
   connector_id: string;
+  internal_llm_node_policy: LlmInternalLlmNodePolicy;
 }
 
 function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
@@ -85,7 +95,9 @@ function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
     input_schema: isRecord(tool.input_schema)
       ? tool.input_schema
       : createDefaultJsonSchema(),
-    connector_id: tool.connector_id ?? tool.tool_name
+    connector_id: tool.connector_id ?? tool.tool_name,
+    internal_llm_node_policy:
+      tool.internal_llm_node_policy ?? DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY
   };
 }
 
@@ -103,6 +115,7 @@ function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
     connector_id: connectorId,
     target_node_id: targetNodeId,
     description: draft.description.trim() || undefined,
+    internal_llm_node_policy: draft.internal_llm_node_policy,
     input_schema: draft.input_schema
   };
 }
@@ -382,6 +395,21 @@ export function LlmToolRegistrationsField({
                 }
               />
             </label>
+            <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
+              <span>{i18nText('agentFlow', 'auto.internal_llm_node_policy')}</span>
+              <Switch
+                aria-label={i18nText(
+                  'agentFlow',
+                  'auto.internal_llm_node_policy'
+                )}
+                checked={draft.internal_llm_node_policy === 'allowed'}
+                onChange={(checked) =>
+                  updateDraft({
+                    internal_llm_node_policy: checked ? 'allowed' : 'forbidden'
+                  })
+                }
+              />
+            </div>
             <div style={TOOL_FORM_ROW_STYLE}>
               <span>{i18nText('agentFlow', 'auto.input_parameters')}</span>
               <div className="agent-flow-llm-tool-registration-schema">

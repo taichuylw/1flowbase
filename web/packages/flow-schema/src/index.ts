@@ -527,7 +527,6 @@ export function createDefaultAgentFlowDocument({
               follow_external_reasoning: false
             },
             visible_internal_llm_tools_enabled: false,
-            internal_llm_node_policy: 'forbidden',
             visible_internal_llm_tools: [],
             response_format: {
               mode: 'text'

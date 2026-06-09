@@ -561,9 +561,8 @@ fn validate_visible_internal_llm_tool_branches(
             continue;
         }
 
-        let allow_internal_llm = internal_llm_node_policy_allows(node);
-
         for tool in visible_internal_llm_tool_entries(node) {
+            let allow_internal_llm = visible_internal_llm_tool_allows_internal_llm_node(tool);
             let connector_id = visible_internal_llm_tool_connector_id(tool)
                 .unwrap_or_else(|| "unknown".to_string());
             let Some(target_node_id) = tool
@@ -703,10 +702,9 @@ fn visible_internal_llm_tool_branch_node_ids(
     visited
 }
 
-fn internal_llm_node_policy_allows(node: &CompiledNode) -> bool {
-    node.config
-        .get("internal_llm_node_policy")
-        .or_else(|| node.config.get("internalLlmNodePolicy"))
+fn visible_internal_llm_tool_allows_internal_llm_node(tool: &Value) -> bool {
+    tool.get("internal_llm_node_policy")
+        .or_else(|| tool.get("internalLlmNodePolicy"))
         .and_then(Value::as_str)
         .map(str::trim)
         == Some(INTERNAL_LLM_NODE_POLICY_ALLOWED)

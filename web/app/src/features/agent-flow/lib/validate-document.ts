@@ -20,7 +20,7 @@ import {
 } from './data-model-query-binding';
 import {
   createLlmToolSourceHandleId,
-  getLlmInternalLlmNodePolicy,
+  getLlmToolInternalLlmNodePolicy,
   getLlmModelProvider,
   getLlmVisibleInternalTools,
   getLlmVisibleInternalToolsEnabled,
@@ -397,10 +397,11 @@ function validateVisibleInternalLlmToolBranches(
     return;
   }
 
-  const allowInternalLlm =
-    getLlmInternalLlmNodePolicy(node.config) === 'allowed';
-
-  for (const tool of getLlmVisibleInternalTools(node.config)) {
+  for (const [toolIndex, tool] of getLlmVisibleInternalTools(
+    node.config
+  ).entries()) {
+    const allowInternalLlm =
+      getLlmToolInternalLlmNodePolicy(tool) === 'allowed';
     const connectorId = tool.connector_id || tool.tool_name;
     const sourceHandle = createLlmToolSourceHandleId(connectorId);
     const connectorEdges = edges.filter(
@@ -446,7 +447,7 @@ function validateVisibleInternalLlmToolBranches(
           pushFieldIssue(
             issues,
             node,
-            'config.internal_llm_node_policy',
+            `config.visible_internal_llm_tools.${toolIndex}.internal_llm_node_policy`,
             i18nText('agentFlow', 'auto.internal_llm_node_policy'),
             i18nText('agentFlow', 'auto.internal_llm_node_forbidden_message'),
             'inputs'

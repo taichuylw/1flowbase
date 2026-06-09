@@ -305,6 +305,10 @@ describe('agent-flow node schema registry', () => {
       schema.detail.tabs.config.blocks,
       'config.execution_role'
     );
+    const internalLlmField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.internal_llm_node_policy'
+    );
     const mountToolsField = findFieldBlock(
       schema.detail.tabs.config.blocks,
       'config.visible_internal_llm_tools_enabled'
@@ -317,6 +321,7 @@ describe('agent-flow node schema registry', () => {
       })
     );
     expect(executionRoleField).toBeNull();
+    expect(internalLlmField).toBeNull();
     expect(mountToolsField).toEqual(
       expect.objectContaining({
         renderer: 'llm_tool_registrations'

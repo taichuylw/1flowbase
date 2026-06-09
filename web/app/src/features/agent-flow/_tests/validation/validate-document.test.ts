@@ -890,7 +890,7 @@ describe('validateDocument', () => {
     );
   });
 
-  test('requires an allowed policy before mounted tool branches can contain LLM nodes', () => {
+  test('requires an allowed tool policy before mounted tool branches can contain LLM nodes', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
 
@@ -951,18 +951,20 @@ describe('validateDocument', () => {
       expect.arrayContaining([
         expect.objectContaining({
           nodeId: 'node-llm',
-          fieldKey: 'config.internal_llm_node_policy'
+          fieldKey: 'config.visible_internal_llm_tools.0.internal_llm_node_policy'
         })
       ])
     );
 
-    llmNode.config.internal_llm_node_policy = 'allowed';
+    const visibleInternalTools = llmNode.config
+      .visible_internal_llm_tools as Array<Record<string, unknown>>;
+    visibleInternalTools[0].internal_llm_node_policy = 'allowed';
 
     expect(validateDocument(document)).toEqual(
       expect.not.arrayContaining([
         expect.objectContaining({
           nodeId: 'node-llm',
-          fieldKey: 'config.internal_llm_node_policy'
+          fieldKey: 'config.visible_internal_llm_tools.0.internal_llm_node_policy'
         })
       ])
     );

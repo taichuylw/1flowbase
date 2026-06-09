@@ -288,6 +288,10 @@ describe('NodeInspector core', () => {
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
 
     expect(within(dialog).queryByLabelText('目标 LLM')).not.toBeInTheDocument();
+    const internalLlmSwitch = within(dialog).getByRole('switch', {
+      name: '内部 LLM 节点'
+    });
+    expect(internalLlmSwitch).not.toBeChecked();
     const saveToolButton = within(dialog).getByRole('button', {
       name: '保存工具'
     });
@@ -308,6 +312,7 @@ describe('NodeInspector core', () => {
     fireEvent.change(within(dialog).getByLabelText('描述'), {
       target: { value: 'Inspect uploaded image' }
     });
+    fireEvent.click(internalLlmSwitch);
     fireEvent.click(saveToolButton);
 
     await waitFor(() => {
@@ -318,7 +323,8 @@ describe('NodeInspector core', () => {
               tool_name: 'inspect_image',
               connector_id: 'inspect_image',
               target_node_id: 'node-mounted-llm',
-              description: 'Inspect uploaded image'
+              description: 'Inspect uploaded image',
+              internal_llm_node_policy: 'allowed'
             })
           ]
         })
