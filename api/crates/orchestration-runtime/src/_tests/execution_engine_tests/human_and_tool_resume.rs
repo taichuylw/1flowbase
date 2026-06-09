@@ -1213,7 +1213,16 @@ async fn visible_internal_image_llm_tool_injects_workspace_path_media_blocks() {
             tool_calls: vec![ProviderToolCall {
                 id: "call_visible".to_string(),
                 name: "inspect_visible_context".to_string(),
-                arguments: json!({ "task": "看一下这幅图内容是什么" }),
+                arguments: json!({
+                    "task": "看一下这幅图内容是什么",
+                    "media": [
+                        {
+                            "kind": "image",
+                            "source": "workspace_path",
+                            "path": relative_image_path
+                        }
+                    ]
+                }),
                 provider_metadata: json!({}),
             }],
             finish_reason: Some(ProviderFinishReason::ToolCall),
@@ -1350,7 +1359,7 @@ async fn visible_internal_image_llm_tool_injects_workspace_path_media_blocks() {
 }
 
 #[tokio::test]
-async fn visible_internal_image_llm_tool_sanitizes_visible_media_arguments() {
+async fn visible_internal_image_llm_tool_preserves_visible_media_arguments() {
     let media_dir = std::env::current_dir()
         .expect("test current dir should be available")
         .join("target")
@@ -1364,7 +1373,6 @@ async fn visible_internal_image_llm_tool_sanitizes_visible_media_arguments() {
         .expect("test image should be written");
     let relative_image_path = "target/visible-internal-media/sanitize.png";
 
-    let leaked_payload = "SHOULD_NOT_BE_VISIBLE";
     let (invoker, captured_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {
             final_content: Some("main-before ".to_string()),
@@ -1379,13 +1387,12 @@ async fn visible_internal_image_llm_tool_sanitizes_visible_media_arguments() {
                             "source": "workspace_path",
                             "path": image_path.to_string_lossy(),
                             "media_type": "image/png",
-                            "url": format!("data:image/png;base64,{leaked_payload}"),
-                            "data": leaked_payload
+                            "custom_note": "keep-me"
                         },
                         {
                             "kind": "image",
                             "source": "url",
-                            "url": format!("data:image/png;base64,{leaked_payload}")
+                            "url": "https://example.test/image.png"
                         }
                     ]
                 }),
@@ -1404,25 +1411,6 @@ async fn visible_internal_image_llm_tool_sanitizes_visible_media_arguments() {
         .expect("main llm node should exist");
     main_llm.config["visible_internal_llm_tools"][0]["tool_name"] = json!("image_llm");
     main_llm.config["visible_internal_llm_tools"][0]["connector_id"] = json!("image_llm");
-    main_llm.config["visible_internal_llm_tools"][0]["input_schema"] = json!({
-        "type": "object",
-        "properties": {
-            "task": { "type": "string" },
-            "media": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "kind": { "type": "string", "enum": ["image"] },
-                        "source": { "type": "string", "enum": ["workspace_path"] },
-                        "path": { "type": "string" }
-                    },
-                    "required": ["kind", "source", "path"]
-                }
-            }
-        },
-        "required": ["task"]
-    });
     let mounted_llm = plan
         .nodes
         .get_mut("node-mounted-llm")
@@ -1472,16 +1460,29 @@ async fn visible_internal_image_llm_tool_sanitizes_visible_media_arguments() {
         .expect("main debug payload should include route events");
     assert_eq!(
         route_events[0]["arguments"]["media"],
-        json!([{ "kind": "image", "source": "workspace_path", "path": relative_image_path }])
+        json!([
+            {
+                "kind": "image",
+                "source": "workspace_path",
+                "path": image_path.to_string_lossy(),
+                "media_type": "image/png",
+                "custom_note": "keep-me"
+            },
+            {
+                "kind": "image",
+                "source": "url",
+                "url": "https://example.test/image.png"
+            }
+        ])
     );
     let persisted_main_payload = serde_json::to_string(&json!([
         main_trace.output_payload,
         main_trace.debug_payload
     ]))
     .expect("trace payload should serialize");
-    assert!(!persisted_main_payload.contains(leaked_payload));
-    assert!(!persisted_main_payload.contains("media_type"));
-    assert!(!persisted_main_payload.contains(image_path.to_string_lossy().as_ref()));
+    assert!(persisted_main_payload.contains("keep-me"));
+    assert!(persisted_main_payload.contains("media_type"));
+    assert!(persisted_main_payload.contains(image_path.to_string_lossy().as_ref()));
 
     let captured = captured_inputs
         .lock()
