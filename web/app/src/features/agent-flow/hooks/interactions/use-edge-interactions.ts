@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import {
   createNextNodeId,
-  createNodeDocument
+  createNodeDocumentWithCountedAlias
 } from '../../lib/document/node-factory';
 import { isLlmToolSourceHandle } from '../../lib/llm-node-config';
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
@@ -103,7 +103,8 @@ export function useEdgeInteractions() {
       });
     },
     insertOnEdge(edgeId: string, option: NodePickerOption) {
-      const nextNode = createNodeDocument(
+      const nextNode = createNodeDocumentWithCountedAlias(
+        document,
         option,
         createNextNodeId(document, option)
       );
@@ -137,7 +138,8 @@ export function useEdgeInteractions() {
           (anchorCanvasPosition.y - document.editor.viewport.y) / zoom
         )
       };
-      const nextNode = createNodeDocument(
+      const nextNode = createNodeDocumentWithCountedAlias(
+        document,
         option,
         createNextNodeId(document, option),
         flowPosition.x,

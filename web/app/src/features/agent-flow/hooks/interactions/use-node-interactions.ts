@@ -1,6 +1,6 @@
 import {
   createNextNodeId,
-  createNodeDocument
+  createNodeDocumentWithCountedAlias
 } from '../../lib/document/node-factory';
 import {
   insertNodeAfter,
@@ -93,7 +93,8 @@ export function useNodeInteractions() {
         return;
       }
 
-      const nextNode = createNodeDocument(
+      const nextNode = createNodeDocumentWithCountedAlias(
+        document,
         option,
         createNextNodeId(document, option),
         anchorNode.position.x + 280,

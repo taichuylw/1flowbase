@@ -46,6 +46,34 @@ function createNodeDocumentFromRuntimeContract(
   };
 }
 
+function isSameNodeAliasFamily(
+  existingNode: FlowNodeDocument,
+  nextNode: FlowNodeDocument
+) {
+  if (nextNode.type !== 'plugin_node') {
+    return existingNode.type === nextNode.type;
+  }
+
+  return (
+    existingNode.type === 'plugin_node' &&
+    existingNode.plugin_unique_identifier === nextNode.plugin_unique_identifier &&
+    existingNode.contribution_code === nextNode.contribution_code
+  );
+}
+
+function createCountedNodeAlias(
+  document: FlowAuthoringDocument,
+  nextNode: FlowNodeDocument
+) {
+  const sameFamilyNodeCount = document.graph.nodes.filter((node) =>
+    isSameNodeAliasFamily(node, nextNode)
+  ).length;
+
+  return sameFamilyNodeCount > 0
+    ? `${nextNode.alias}${sameFamilyNodeCount}`
+    : nextNode.alias;
+}
+
 export function createNodeDocument(
   nodeTypeOrOption: NodeFactoryInput,
   id: string,
@@ -90,6 +118,21 @@ export function createNodeDocument(
   }
 
   throw new Error(`Missing runtime contract for node type: ${nodeTypeOrOption}`);
+}
+
+export function createNodeDocumentWithCountedAlias(
+  document: FlowAuthoringDocument,
+  nodeTypeOrOption: NodeFactoryInput,
+  id: string,
+  x = 0,
+  y = 0
+): FlowNodeDocument {
+  const node = createNodeDocument(nodeTypeOrOption, id, x, y);
+
+  return {
+    ...node,
+    alias: createCountedNodeAlias(document, node)
+  };
 }
 
 export function createNextNodeId(
