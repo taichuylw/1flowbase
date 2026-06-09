@@ -17,9 +17,10 @@ use control_plane::application_public_api::{
         map_messages_request, sanitize_anthropic_compat_assistant_text, AnthropicCompatError,
     },
     native::{
-        ApplicationNativeRunService, CreateNativeRunCommand, NativeRunRequest, NativeRunResult,
-        NativeRunStatus, NativeRunValidationError,
+        ApplicationNativeRunService, CreateNativeRunCommand, GetNativeRunCommand, NativeRunRequest,
+        NativeRunResult, NativeRunStatus, NativeRunValidationError,
     },
+    run_service::ApplicationPublishedRunControlRepository,
 };
 use control_plane::orchestration_runtime::OrchestrationRuntimeService;
 use serde::Serialize;
@@ -139,6 +140,11 @@ struct AnthropicToolResumeRequest {
     tool_results: Value,
 }
 
+struct AnthropicToolResumePlan {
+    initial_run: NativeRunResult,
+    command: ResumePublishedCallbackCommand,
+}
+
 struct AnthropicDecodedToolResult {
     callback_task_id: Uuid,
     original_tool_use_id: String,
@@ -187,6 +193,23 @@ pub async fn create_message(
         return Ok(Json(to_anthropic_response(run, model)).into_response());
     }
     if let Some(resume) = anthropic_tool_resume_request(&value)? {
+        if response_mode.as_deref() == Some("streaming") {
+            let resume_plan = prepare_anthropic_tool_resume(
+                state.clone(),
+                &bearer_token,
+                resume.callback_task_id,
+                resume.tool_results,
+            )
+            .await?;
+            return compat_sse::start_anthropic_resume_stream(
+                state,
+                resume_plan.initial_run,
+                model,
+                resume_plan.command,
+            )
+            .await
+            .map_err(Into::into);
+        }
         let run = resume_anthropic_tool_call(
             state,
             &bearer_token,
@@ -355,6 +378,45 @@ async fn resume_anthropic_tool_call(
 
 fn anthropic_tool_resume_response_payload(tool_results: Value) -> Value {
     json!({ "tool_results": tool_results })
+}
+
+async fn prepare_anthropic_tool_resume(
+    state: Arc<ApiState>,
+    bearer_token: &str,
+    callback_task_id: Uuid,
+    tool_results: Value,
+) -> Result<AnthropicToolResumePlan, AnthropicRouteError> {
+    let callback_task = state
+        .store
+        .get_published_callback_task(callback_task_id)
+        .await
+        .map_err(native::service_error)?
+        .ok_or_else(|| {
+            native::NativeApiError::new(
+                StatusCode::NOT_FOUND,
+                "callback_task",
+                "callback task was not found",
+            )
+        })?;
+    let initial_run = ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .get_native_run(GetNativeRunCommand {
+            bearer_token: bearer_token.to_string(),
+            run_id: callback_task.flow_run_id,
+        })
+        .await
+        .map_err(native::native_error)?;
+
+    Ok(AnthropicToolResumePlan {
+        initial_run,
+        command: ResumePublishedCallbackCommand {
+            bearer_token: bearer_token.to_string(),
+            target: PublishedCallbackResumeTarget::CallbackTask { callback_task_id },
+            source: PublishedCallbackResumeSource::AnthropicMessages,
+            response_payload: anthropic_tool_resume_response_payload(tool_results),
+            response_mode: Some("streaming".into()),
+        },
+    })
 }
 
 fn to_anthropic_response(run: NativeRunResult, model: String) -> AnthropicMessageResponse {
