@@ -352,9 +352,12 @@ describe('NodeInspector core', () => {
     expect(screen.getByText('暂无工具注册')).toBeInTheDocument();
   });
 
-  test('keeps the floating tool editor drag handle visible while the body crosses the bottom boundary', async () => {
+  test('keeps the floating tool editor drag handle visible while the body crosses viewport boundaries', async () => {
     const state = createInitialState();
     const llmNodeConfig = getLlmNodeConfig(state.draft.document);
+    const margin = 16;
+    const dragHandleWidth = 180;
+    const dragHandleHeight = 42;
 
     llmNodeConfig.visible_internal_llm_tools_enabled = true;
     llmNodeConfig.visible_internal_llm_tools = [
@@ -388,27 +391,71 @@ describe('NodeInspector core', () => {
       'agent-flow-llm-tool-registration-drag-handle'
     );
 
+    vi.spyOn(dragHandle, 'getBoundingClientRect').mockReturnValue({
+      bottom: dragHandleHeight,
+      height: dragHandleHeight,
+      left: 0,
+      right: dragHandleWidth,
+      top: 0,
+      width: dragHandleWidth,
+      x: 0,
+      y: 0,
+      toJSON: () => ({})
+    } as DOMRect);
+
     const panelHeight = Number.parseFloat(dialog.style.height);
-    const fullPanelMaxTop = window.innerHeight - panelHeight - 16;
+    const panelWidth = Number.parseFloat(dialog.style.width);
+    const fullPanelMaxLeft = window.innerWidth - panelWidth - margin;
+    const fullPanelMaxTop = window.innerHeight - panelHeight - margin;
 
     fireEvent.mouseDown(dragHandle, {
       button: 0,
       clientX: 24,
-      clientY: 20
+      clientY: 24
     });
     fireEvent.mouseMove(window, {
-      clientX: 24,
+      clientX: window.innerWidth + 200,
+      clientY: 24
+    });
+    fireEvent.mouseUp(window);
+
+    await waitFor(() =>
+      expect(Number.parseFloat(dialog.style.left)).toBeGreaterThan(
+        fullPanelMaxLeft
+      )
+    );
+
+    const panelLeft = Number.parseFloat(dialog.style.left);
+
+    expect(panelLeft).toBeGreaterThanOrEqual(margin);
+    expect(panelLeft + dragHandleWidth).toBeLessThanOrEqual(
+      window.innerWidth - margin
+    );
+    expect(panelLeft + panelWidth).toBeGreaterThan(window.innerWidth);
+
+    fireEvent.mouseDown(dragHandle, {
+      button: 0,
+      clientX: window.innerWidth - margin - 24,
+      clientY: 24
+    });
+    fireEvent.mouseMove(window, {
+      clientX: window.innerWidth - margin - 24,
       clientY: window.innerHeight + 200
     });
     fireEvent.mouseUp(window);
 
-    await waitFor(() => {
-      const panelTop = Number.parseFloat(dialog.style.top);
+    await waitFor(() =>
+      expect(Number.parseFloat(dialog.style.top)).toBeGreaterThan(
+        fullPanelMaxTop
+      )
+    );
 
-      expect(panelTop).toBeGreaterThan(fullPanelMaxTop);
-      expect(panelTop + 48).toBeLessThanOrEqual(window.innerHeight - 16);
-      expect(panelTop + panelHeight).toBeGreaterThan(window.innerHeight);
-    });
+    const panelTop = Number.parseFloat(dialog.style.top);
+
+    expect(panelTop + dragHandleHeight).toBeLessThanOrEqual(
+      window.innerHeight - margin
+    );
+    expect(panelTop + panelHeight).toBeGreaterThan(window.innerHeight);
   });
 
   test('collapses generated outputs by default and keeps output contract editing hidden', async () => {

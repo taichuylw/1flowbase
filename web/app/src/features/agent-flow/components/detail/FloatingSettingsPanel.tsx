@@ -55,7 +55,7 @@ const DEFAULT_MIN_HEIGHT = 240;
 const DEFAULT_GAP = 24;
 const DEFAULT_MARGIN = 16;
 const FALLBACK_HEIGHT = 360;
-const FALLBACK_VISIBLE_DRAG_HANDLE_HEIGHT = 48;
+const FALLBACK_VISIBLE_DRAG_HANDLE_SIZE = 48;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -135,11 +135,14 @@ function clampPosition(
 function clampDraggedPosition(
   position: FloatingPanelPosition,
   bounds: FloatingPanelBounds,
-  panelWidth: number,
+  visibleDragHandleWidth: number,
   visibleDragHandleHeight: number,
   margin: number
 ) {
-  const maxLeft = Math.max(margin, bounds.width - panelWidth - margin);
+  const maxLeft = Math.max(
+    margin,
+    bounds.width - visibleDragHandleWidth - margin
+  );
   const maxTop = Math.max(
     margin,
     bounds.height - visibleDragHandleHeight - margin
@@ -372,9 +375,11 @@ export function FloatingSettingsPanel({
     event.preventDefault();
 
     const bounds = resolveBounds(panelContainer);
+    const dragHandleRect = event.currentTarget.getBoundingClientRect();
+    const dragHandleWidth =
+      dragHandleRect.width || FALLBACK_VISIBLE_DRAG_HANDLE_SIZE;
     const dragHandleHeight =
-      event.currentTarget.getBoundingClientRect().height ||
-      FALLBACK_VISIBLE_DRAG_HANDLE_HEIGHT;
+      dragHandleRect.height || FALLBACK_VISIBLE_DRAG_HANDLE_SIZE;
     const offsetX = event.clientX - bounds.left - panelPosition.left;
     const offsetY = event.clientY - bounds.top - panelPosition.top;
     const previousCursor = document.body.style.cursor;
@@ -392,7 +397,7 @@ export function FloatingSettingsPanel({
             top: moveEvent.clientY - bounds.top - offsetY
           },
           bounds,
-          panelWidth,
+          dragHandleWidth,
           dragHandleHeight,
           margin
         )
