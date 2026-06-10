@@ -712,10 +712,8 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     ).not.toBeInTheDocument();
     const routeTraceJson = within(routeNode).getByLabelText('route JSON');
     expect(routeTraceJson).toHaveTextContent('weather route said warm');
-    const routeTraceBlock = routeTraceJson.closest('section');
-    expect(routeTraceBlock).not.toBeNull();
     fireEvent.click(
-      within(routeTraceBlock as HTMLElement).getByRole('button', {
+      within(routeNode).getByRole('button', {
         name: '加载完整值'
       })
     );

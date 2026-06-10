@@ -354,9 +354,9 @@ test('container image workflow scans temporary image tags before official promot
     workflow,
     /publish:\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+packages: write/u,
   );
-  for (const component of ['web', 'api-server', 'plugin-runner']) {
-    assert.match(workflow, new RegExp(`component: ${component}`, 'u'));
-  }
+  assert.match(workflow, /component: web/u);
+  assert.match(workflow, /publish-api-server:/u);
+  assert.match(workflow, /publish-plugin-runner:/u);
 
   assert.match(workflow, /scan_tag=scan-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-\$\{\{ github\.sha \}\}/u);
   assert.match(workflow, /echo "scan_image_ref=ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:\$scan_tag"/u);
@@ -413,7 +413,7 @@ test('container image workflow records a CD quality gate artifact for Trivy repo
 
   assert.match(
     workflow,
-    /report:\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs:\n\s+- publish\n\s+- publish-api-server\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+actions: read\n\s+issues: write/u,
+    /report:\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs:\n\s+- publish\n\s+- publish-api-server\n\s+- publish-plugin-runner\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+actions: read\n\s+issues: write/u,
   );
   assert.match(workflow, /pattern: test-governance-trivy-\*/u);
   assert.match(workflow, /path: tmp\/test-governance/u);

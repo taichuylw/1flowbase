@@ -379,7 +379,10 @@ export function AgentFlowNodeCard({
           }
         }}
       >
-        <div className="agent-flow-node-card__content">
+        <div
+          className="agent-flow-node-card__content"
+          data-testid={`agent-flow-node-content-${data.nodeId}`}
+        >
           <SchemaRenderer
             adapter={cardAdapter}
             blocks={data.nodeSchema.card.blocks}

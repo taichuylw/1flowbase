@@ -206,7 +206,7 @@ describe('AgentFlowNodeCard', () => {
     const card = screen.getByRole('button', {
       name: /LLM OpenAI Prod GPT-4/
     });
-    const content = card.querySelector('.agent-flow-node-card__content');
+    const content = screen.getByTestId('agent-flow-node-content-node-llm');
     const quickActions = screen.getByTestId(
       'agent-flow-node-quick-actions-node-llm'
     );
@@ -215,12 +215,9 @@ describe('AgentFlowNodeCard', () => {
     );
 
     expect(content).toBeInTheDocument();
-    expect(content).toContainElement(
-      card.querySelector('.agent-flow-node-card__header') as HTMLElement
-    );
-    expect(content).toContainElement(
-      card.querySelector('.agent-flow-node-card__model') as HTMLElement
-    );
+    expect(within(content).getByText('LLM')).toBeInTheDocument();
+    expect(within(content).getByText('OpenAI Prod')).toBeInTheDocument();
+    expect(within(content).getByText('GPT-4')).toBeInTheDocument();
     expect(card).toContainElement(quickActions);
     expect(content).not.toContainElement(quickActions);
     expect(card).toContainElement(toolHandleSlot);
