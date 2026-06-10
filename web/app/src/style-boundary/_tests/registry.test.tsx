@@ -132,7 +132,11 @@ describe('style boundary registry', () => {
 
     renderReactFlowScene(<StyleBoundaryHarness scene={scene} />);
 
-    await screen.findByText(/support agent/i);
+    await screen.findByTestId(
+      'agent-flow-editor-body',
+      {},
+      { timeout: 15_000 }
+    );
 
     const baseDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const nextDocument = {

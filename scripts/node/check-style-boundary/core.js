@@ -35,6 +35,10 @@ const STYLE_BOUNDARY_USER_PERMISSIONS = [
   'role_permission.view.all',
   'role_permission.manage.all'
 ];
+const NODE_DETAIL_DOCK_SCENE_IDS = new Set([
+  'component.agent-flow-node-detail',
+  'page.application-detail'
+]);
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -811,24 +815,24 @@ async function collectRelationshipMeasurements(page, assertions = []) {
 }
 
 async function prepareSceneForAssertions(page, scene) {
-  if (scene.id !== 'page.application-detail') {
+  if (!NODE_DETAIL_DOCK_SCENE_IDS.has(scene.id)) {
     return;
   }
 
-  if (await isApplicationDetailDockVisible(page)) {
+  if (await isNodeDetailDockVisible(page)) {
     return;
   }
 
-  const opened = await openApplicationDetailDock(page);
+  const opened = await openNodeDetailDock(page);
 
   if (!opened) {
     throw new Error(
-      'style-boundary page.application-detail failed to open the node detail dock'
+      `style-boundary ${scene.id} failed to open the node detail dock`
     );
   }
 }
 
-async function isApplicationDetailDockVisible(page) {
+async function isNodeDetailDockVisible(page) {
   const detailDock = page.locator('.agent-flow-editor__detail-dock').first();
   return (
     (await detailDock.count()) > 0 &&
@@ -836,7 +840,7 @@ async function isApplicationDetailDockVisible(page) {
   );
 }
 
-async function openApplicationDetailDock(page) {
+async function openNodeDetailDock(page) {
   const nodeSelector = '.agent-flow-node-card--type-llm';
   const dockSelector = '.agent-flow-editor__detail-dock';
 
@@ -876,14 +880,14 @@ async function openApplicationDetailDock(page) {
       continue;
     }
 
-    if (await isApplicationDetailDockVisible(page)) {
+    if (await isNodeDetailDockVisible(page)) {
       return true;
     }
 
     await page.waitForTimeout(250);
   }
 
-  return isApplicationDetailDockVisible(page);
+  return isNodeDetailDockVisible(page);
 }
 
 async function runScene(browser, baseUrl, scene) {

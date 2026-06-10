@@ -1,6 +1,6 @@
 import type { FlowNodeDocument, FlowNodeType } from '@1flowbase/flow-schema';
 
-import { i18nText } from '../../../shared/i18n/text';
+import { i18nText } from '../../../../shared/i18n/text';
 
 export const ERROR_BRANCH_SOURCE_HANDLE = 'error';
 

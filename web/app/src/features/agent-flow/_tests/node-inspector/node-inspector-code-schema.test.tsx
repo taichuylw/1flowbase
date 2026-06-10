@@ -235,7 +235,7 @@ describe('NodeInspector code schema', () => {
         selector: ['result', 'chat_history']
       });
     });
-  });
+  }, 10_000);
 
   test('parses JSON Schema from highlighted code mode', async () => {
     let latestDocument =

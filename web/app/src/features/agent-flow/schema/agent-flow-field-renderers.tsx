@@ -27,7 +27,7 @@ import {
   TemplatedNamedBindingsField,
   type TemplatedNamedBindingValue
 } from '../components/bindings/TemplatedNamedBindingsField';
-import { OutputContractDefinitionField } from '../components/detail/fields/OutputContractDefinitionField';
+import { OutputContractDefinitionField } from '../components/detail/fields/output-contract/OutputContractDefinitionField';
 import { CodeSourceField } from '../components/detail/fields/CodeSourceField';
 import { DataModelField } from '../components/detail/fields/DataModelField';
 import { LlmModelField } from '../components/detail/fields/LlmModelField';

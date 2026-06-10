@@ -2,12 +2,12 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
-import { appI18n } from '../../../shared/i18n/app-i18n';
-import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
-import * as runtimeApi from '../api/runtime';
-import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
-import { createNodeDocument } from '../lib/document/node-factory';
-import { renderReactFlowScene } from '../../../test/renderers/render-react-flow-scene';
+import { appI18n } from '../../../../shared/i18n/app-i18n';
+import { resetAuthStore, useAuthStore } from '../../../../state/auth-store';
+import * as runtimeApi from '../../api/runtime';
+import { AgentFlowEditorShell } from '../../components/editor/AgentFlowEditorShell';
+import { createNodeDocument } from '../../lib/document/node-factory';
+import { renderReactFlowScene } from '../../../../test/renderers/render-react-flow-scene';
 
 function createInitialState() {
   return {
@@ -180,7 +180,9 @@ async function selectLlmNode() {
 
 async function selectCodeNode() {
   fireEvent.click(
-    await screen.findByText('Code', { selector: '.agent-flow-node-card__title' })
+    await screen.findByText('Code', {
+      selector: '.agent-flow-node-card__title'
+    })
   );
 }
 
@@ -245,14 +247,15 @@ describe('node last run runtime', () => {
     resetAuthStore();
     authenticate();
 
-    vi
-      .spyOn(runtimeApi, 'fetchNodeLastRun')
+    vi.spyOn(runtimeApi, 'fetchNodeLastRun')
       .mockResolvedValueOnce(null)
       .mockResolvedValue(sampleNodeLastRun());
-    vi
-      .spyOn(runtimeApi, 'fetchApplicationRunDetail')
-      .mockResolvedValue(sampleRunDetail());
-    vi.spyOn(runtimeApi, 'startNodeDebugPreview').mockResolvedValue(sampleNodeLastRun());
+    vi.spyOn(runtimeApi, 'fetchApplicationRunDetail').mockResolvedValue(
+      sampleRunDetail()
+    );
+    vi.spyOn(runtimeApi, 'startNodeDebugPreview').mockResolvedValue(
+      sampleNodeLastRun()
+    );
     vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot').mockResolvedValue({
       variable_cache: {}
     });
@@ -288,7 +291,9 @@ describe('node last run runtime', () => {
 
     await selectLlmNode();
 
-    fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '运行当前节点' })
+    );
 
     await waitFor(() => {
       expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalled();
@@ -301,16 +306,21 @@ describe('node last run runtime', () => {
     });
     fireEvent.click(screen.getByRole('tab', { name: '上次运行' }));
 
-    await waitFor(() => {
-      expect(screen.getByText('运行摘要')).toBeInTheDocument();
-      expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('总结退款政策');
-      expect(screen.getByText('token')).toBeInTheDocument();
-      expect(screen.getByText('耗时(ms)')).toBeInTheDocument();
-      expect(screen.getByText('128')).toBeInTheDocument();
-      expect(screen.getByLabelText('输出 JSON')).toHaveTextContent(
-        'raw_response_ref'
-      );
-    }, { timeout: 5_000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText('运行摘要')).toBeInTheDocument();
+        expect(screen.getByLabelText('输入 JSON')).toHaveTextContent(
+          '总结退款政策'
+        );
+        expect(screen.getByText('token')).toBeInTheDocument();
+        expect(screen.getByText('耗时(ms)')).toBeInTheDocument();
+        expect(screen.getByText('128')).toBeInTheDocument();
+        expect(screen.getByLabelText('输出 JSON')).toHaveTextContent(
+          'raw_response_ref'
+        );
+      },
+      { timeout: 5_000 }
+    );
     expect(screen.queryByText('运行模式')).not.toBeInTheDocument();
     expect(screen.queryByText('目标节点')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('指标 JSON')).not.toBeInTheDocument();
@@ -319,8 +329,12 @@ describe('node last run runtime', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /查看缓存/ }));
 
-    expect(await screen.findByRole('region', { name: '变量缓存' })).toBeInTheDocument();
-    const resizeHandle = screen.getByRole('separator', { name: '调整变量缓存高度' });
+    expect(
+      await screen.findByRole('region', { name: '变量缓存' })
+    ).toBeInTheDocument();
+    const resizeHandle = screen.getByRole('separator', {
+      name: '调整变量缓存高度'
+    });
     expect(resizeHandle).toBeInTheDocument();
     fireEvent.mouseDown(resizeHandle, { clientY: 100 });
     fireEvent.mouseMove(window, { clientY: 150 });
@@ -331,7 +345,9 @@ describe('node last run runtime', () => {
     const variableSidebar = screen.getByTestId(
       'agent-flow-editor-variable-cache-sidebar'
     );
-    expect(within(variableSidebar).getByText('Start/query')).toBeInTheDocument();
+    expect(
+      within(variableSidebar).getByText('Start/query')
+    ).toBeInTheDocument();
     expect(within(variableSidebar).getByText('LLM/text')).toBeInTheDocument();
   }, 30_000);
 
@@ -410,7 +426,9 @@ describe('node last run runtime', () => {
 
     await selectCodeNode();
 
-    fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '运行当前节点' })
+    );
 
     await waitFor(() => {
       expect(runtimeApi.startNodeDebugPreview).toHaveBeenCalledWith(
@@ -429,9 +447,9 @@ describe('node last run runtime', () => {
   }, 30_000);
 
   test('shows API errors when Code node preview fails', async () => {
-    vi
-      .spyOn(runtimeApi, 'startNodeDebugPreview')
-      .mockRejectedValueOnce(new Error('Code 输出契约不兼容'));
+    vi.spyOn(runtimeApi, 'startNodeDebugPreview').mockRejectedValueOnce(
+      new Error('Code 输出契约不兼容')
+    );
 
     renderReactFlowScene(
       <AgentFlowEditorShell
@@ -443,7 +461,9 @@ describe('node last run runtime', () => {
 
     await selectCodeNode();
 
-    fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '运行当前节点' })
+    );
 
     expect(await screen.findByText('Code 输出契约不兼容')).toBeInTheDocument();
   }, 30_000);
@@ -459,7 +479,9 @@ describe('node last run runtime', () => {
 
     await selectLlmNode();
 
-    fireEvent.click(await screen.findByRole('button', { name: '运行当前节点' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '运行当前节点' })
+    );
 
     const variableDialog = await screen.findByRole('dialog', {
       name: '输入节点引用变量'

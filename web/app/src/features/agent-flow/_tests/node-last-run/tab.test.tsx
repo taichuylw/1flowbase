@@ -2,11 +2,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
-import { AppProviders } from '../../../app/AppProviders';
-import * as runtimeApi from '../api/runtime';
-import { NodeLastRunTab } from '../components/detail/tabs/NodeLastRunTab';
-import { createAgentFlowNodeSchemaAdapter } from '../schema/node-schema-adapter';
-import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
+import { AppProviders } from '../../../../app/AppProviders';
+import * as runtimeApi from '../../api/runtime';
+import { NodeLastRunTab } from '../../components/detail/tabs/NodeLastRunTab';
+import { createAgentFlowNodeSchemaAdapter } from '../../schema/node-schema-adapter';
+import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 
 function createNodeLastRunSchemaProps() {
   const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

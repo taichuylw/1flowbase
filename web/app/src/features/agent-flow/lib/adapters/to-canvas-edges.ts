@@ -1,7 +1,7 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
 import type { AgentFlowCanvasEdge } from '../../components/canvas/node-types';
-import { MAIN_SOURCE_HANDLE_ID } from '../canvas-handle-ids';
+import { MAIN_SOURCE_HANDLE_ID } from '../canvas/handle-ids';
 import type { NodePickerOption } from '../plugin-node-definitions';
 
 export function toCanvasEdges(

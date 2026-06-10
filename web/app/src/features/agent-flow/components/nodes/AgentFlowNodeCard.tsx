@@ -19,9 +19,9 @@ import { ConnectorAddIcon } from '../canvas/ConnectorAddIcon';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
-import { MAIN_SOURCE_HANDLE_ID } from '../../lib/canvas-handle-ids';
+import { MAIN_SOURCE_HANDLE_ID } from '../../lib/canvas/handle-ids';
 import { getNodeDefinitionMeta } from '../../lib/node-definitions';
-import { getCommonErrorBranchSourceHandle } from '../../lib/node-error-policy';
+import { getCommonErrorBranchSourceHandle } from '../../lib/policy/node-error-policy';
 import {
   getNodePickerOptionDescription,
   getNodePickerOptionKey

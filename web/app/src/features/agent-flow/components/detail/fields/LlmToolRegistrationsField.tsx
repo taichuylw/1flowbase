@@ -14,8 +14,8 @@ import {
 } from '../../../lib/llm-node-config';
 import { i18nText } from '../../../../../shared/i18n/text';
 import { FloatingSettingsPanel } from '../FloatingSettingsPanel';
-import { JsonSchemaInlineEditor } from './JsonSchemaSettingsPanel';
-import { createDefaultJsonSchema } from './json-schema-utils';
+import { JsonSchemaInlineEditor } from './json-schema/JsonSchemaSettingsPanel';
+import { createDefaultJsonSchema } from './json-schema/json-schema-utils';
 
 const TOOL_FORM_ROW_STYLE = {
   display: 'grid',
@@ -396,7 +396,9 @@ export function LlmToolRegistrationsField({
               />
             </label>
             <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.internal_llm_node_policy')}</span>
+              <span>
+                {i18nText('agentFlow', 'auto.internal_llm_node_policy')}
+              </span>
               <Switch
                 aria-label={i18nText(
                   'agentFlow',

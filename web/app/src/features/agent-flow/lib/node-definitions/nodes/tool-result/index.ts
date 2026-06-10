@@ -1,6 +1,6 @@
-import { basicFields } from '../base';
-import type { NodeDefinition } from '../types';
-import { i18nText } from '../../../../../shared/i18n/text';
+import { basicFields } from '../../base';
+import type { NodeDefinition } from '../../types';
+import { i18nText } from '../../../../../../shared/i18n/text';
 
 export const toolResultNodeDefinition: NodeDefinition = {
   label: 'Tool Result',

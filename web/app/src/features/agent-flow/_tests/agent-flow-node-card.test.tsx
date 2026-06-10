@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AppProviders } from '../../../app/AppProviders';
 import { AgentFlowNodeCard } from '../components/nodes/AgentFlowNodeCard';
-import { ERROR_BRANCH_SOURCE_HANDLE } from '../lib/node-error-policy';
+import { ERROR_BRANCH_SOURCE_HANDLE } from '../lib/policy/node-error-policy';
 import type { NodePickerOption } from '../lib/plugin-node-definitions';
 import { resolveAgentFlowNodeSchema } from '../schema/node-schema-registry';
 
@@ -210,9 +210,7 @@ describe('AgentFlowNodeCard', () => {
     const quickActions = screen.getByTestId(
       'agent-flow-node-quick-actions-node-llm'
     );
-    const toolHandleSlot = screen.getByTestId(
-      'agent-flow-node-tool-handle-0'
-    );
+    const toolHandleSlot = screen.getByTestId('agent-flow-node-tool-handle-0');
 
     expect(content).toBeInTheDocument();
     expect(within(content).getByText('LLM')).toBeInTheDocument();

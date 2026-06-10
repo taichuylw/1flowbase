@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { parseHttpRequestCurlCommand } from '../lib/http-request/curl';
+import { parseHttpRequestCurlCommand } from '../../lib/http-request/curl';
 
 describe('parseHttpRequestCurlCommand', () => {
   test('extracts method url headers query and json body', () => {

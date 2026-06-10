@@ -9,9 +9,9 @@ import { useState } from 'react';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import type { FlowBinding } from '@1flowbase/flow-schema';
-import { HttpRequestBodyField } from '../components/detail/fields/HttpRequestBodyField';
-import { HttpRequestKeyValuesField } from '../components/detail/fields/HttpRequestKeyValuesField';
-import type { FlowSelectorOption } from '../lib/selector-options';
+import { HttpRequestBodyField } from '../../components/detail/fields/HttpRequestBodyField';
+import { HttpRequestKeyValuesField } from '../../components/detail/fields/HttpRequestKeyValuesField';
+import type { FlowSelectorOption } from '../../lib/selector-options';
 
 const startQueryOption: FlowSelectorOption = {
   nodeId: 'node-start',
@@ -26,13 +26,11 @@ const startQueryOption: FlowSelectorOption = {
 const textPrototype = Text.prototype as unknown as {
   getBoundingClientRect?: () => DOMRect;
 };
-const originalTextGetBoundingClientRect =
-  textPrototype.getBoundingClientRect;
+const originalTextGetBoundingClientRect = textPrototype.getBoundingClientRect;
 const rangePrototype = Range.prototype as unknown as {
   getBoundingClientRect?: () => DOMRect;
 };
-const originalRangeGetBoundingClientRect =
-  rangePrototype.getBoundingClientRect;
+const originalRangeGetBoundingClientRect = rangePrototype.getBoundingClientRect;
 
 beforeAll(() => {
   textPrototype.getBoundingClientRect = () => new DOMRect();
@@ -72,9 +70,7 @@ function HttpRequestKeyValuesHarness() {
         value={value}
         onChange={setValue}
       />
-      <output data-testid="params-value">
-        {JSON.stringify(value)}
-      </output>
+      <output data-testid="params-value">{JSON.stringify(value)}</output>
     </>
   );
 }

@@ -7,15 +7,15 @@ import { Button, Empty, Input, Select, Tooltip, Typography } from 'antd';
 import { useRef, useState } from 'react';
 
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
-import { useStableListItemKeys } from '../../../hooks/interactions/use-stable-list-item-keys';
-import { outputTypeSupportsJsonSchema } from '../../../lib/output-contract/schema';
-import { isOutputVariableKeyAllowed } from '../../../lib/output-contract/variable-key';
-import { i18nText } from '../../../../../shared/i18n/text';
-import { JsonSchemaSettingsPanel } from './JsonSchemaSettingsPanel';
+import { useStableListItemKeys } from '../../../../hooks/interactions/use-stable-list-item-keys';
+import { outputTypeSupportsJsonSchema } from '../../../../lib/output-contract/schema';
+import { isOutputVariableKeyAllowed } from '../../../../lib/output-contract/variable-key';
+import { i18nText } from '../../../../../../shared/i18n/text';
+import { JsonSchemaSettingsPanel } from '../json-schema/JsonSchemaSettingsPanel';
 import {
   createDefaultJsonSchema,
   type JsonSchemaRootType
-} from './json-schema-utils';
+} from '../json-schema/json-schema-utils';
 
 const valueTypeOptions = [
   { value: 'string', label: 'String' },
