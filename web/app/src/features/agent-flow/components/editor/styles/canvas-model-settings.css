@@ -551,6 +551,12 @@
   width: 100%;
 }
 
+.agent-flow-json-schema-settings__field-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .agent-flow-json-schema-settings__field-children {
   display: flex;
   flex-direction: column;
@@ -560,10 +566,6 @@
 
 .agent-flow-json-schema-settings__add-field {
   width: fit-content;
-}
-
-.agent-flow-json-schema-settings__add-child-field {
-  width: 32px;
 }
 
 .agent-flow-json-schema-settings__editor {

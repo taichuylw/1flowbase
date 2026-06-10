@@ -26,19 +26,38 @@ const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
 type SchemaEditorTab = 'fields' | 'json';
 type SchemaFieldType = 'string' | 'number' | 'boolean' | 'object' | 'array';
+type SchemaArrayItemType = 'string' | 'number' | 'object';
+type SchemaEnumValueType = 'string' | 'number';
+type SchemaEnumArrayTypeOptionValue = `array_${SchemaEnumValueType}`;
+type SchemaFieldTypeOptionValue =
+  | Exclude<SchemaFieldType, 'array'>
+  | `array_${SchemaArrayItemType}`;
 
 const schemaFieldTypeOptions = [
   { value: 'string', label: 'String' },
   { value: 'number', label: 'Number' },
   { value: 'boolean', label: 'Boolean' },
   { value: 'object', label: 'Object' },
-  { value: 'array', label: 'Array' }
-] satisfies Array<{ value: SchemaFieldType; label: string }>;
+  { value: 'array_string', label: 'Array<String>' },
+  { value: 'array_number', label: 'Array<Number>' },
+  { value: 'array_object', label: 'Array<Object>' }
+] satisfies Array<{ value: SchemaFieldTypeOptionValue; label: string }>;
+
+const schemaEnumValueTypeOptions = [
+  { value: 'string', label: 'String' },
+  { value: 'number', label: 'Number' }
+] satisfies Array<{ value: SchemaEnumValueType; label: string }>;
+
+const schemaEnumArrayTypeOptions = [
+  { value: 'array_string', label: 'Array<String>' },
+  { value: 'array_number', label: 'Array<Number>' }
+] satisfies Array<{ value: SchemaEnumArrayTypeOptionValue; label: string }>;
 
 interface SchemaFieldRow {
   id: string;
   key: string;
   type: SchemaFieldType;
+  arrayItemType?: SchemaArrayItemType;
   description: string;
   required: boolean;
   children?: SchemaFieldRow[];
@@ -81,28 +100,99 @@ function stringifySchema(schema: Record<string, unknown>) {
 }
 
 function schemaFieldType(value: unknown): SchemaFieldType {
-  return schemaFieldTypeOptions.some((option) => option.value === value)
+  return ['string', 'number', 'boolean', 'object', 'array'].includes(
+    String(value)
+  )
     ? (value as SchemaFieldType)
     : 'string';
 }
 
-function stringEnumValues(schema: Record<string, unknown> | undefined) {
+function schemaArrayItemType(
+  schema: Record<string, unknown> | undefined
+): SchemaArrayItemType {
+  if (schema?.type === 'string' || schema?.type === 'number') {
+    return schema.type;
+  }
+
+  return 'object';
+}
+
+function schemaEnumValues(
+  schema: Record<string, unknown> | undefined,
+  valueType: SchemaEnumValueType
+) {
   if (!Array.isArray(schema?.enum)) {
     return undefined;
   }
 
-  return schema.enum.every((value) => typeof value === 'string')
-    ? (schema.enum as string[])
+  return schema.enum.every((value) => typeof value === valueType)
+    ? schema.enum.map((value) => String(value))
     : undefined;
 }
 
-function propertySchemaForType(type: SchemaFieldType): Record<string, unknown> {
-  if (type === 'object') {
-    return { type: 'object', properties: {} };
+function schemaFieldTypeOptionValue(
+  row: SchemaFieldRow
+): SchemaFieldTypeOptionValue {
+  if (row.type === 'array') {
+    return `array_${row.arrayItemType ?? 'object'}`;
   }
 
-  if (type === 'array') {
-    return { type: 'array', items: {} };
+  return row.type;
+}
+
+function schemaFieldTypePatch(
+  value: SchemaFieldTypeOptionValue
+): Pick<SchemaFieldRow, 'type'> &
+  Partial<Pick<SchemaFieldRow, 'arrayItemType'>> {
+  if (value === 'array_string') {
+    return { type: 'array', arrayItemType: 'string' };
+  }
+
+  if (value === 'array_number') {
+    return { type: 'array', arrayItemType: 'number' };
+  }
+
+  if (value === 'array_object') {
+    return { type: 'array', arrayItemType: 'object' };
+  }
+
+  return { type: value };
+}
+
+function schemaEnumValueTypeForRow(
+  row: SchemaFieldRow
+): SchemaEnumValueType | undefined {
+  if (row.type === 'string' || row.type === 'number') {
+    return row.type;
+  }
+
+  if (
+    row.type === 'array' &&
+    (row.arrayItemType === 'string' || row.arrayItemType === 'number')
+  ) {
+    return row.arrayItemType;
+  }
+
+  return undefined;
+}
+
+function schemaEnumArrayTypeOptionValue(
+  valueType: SchemaEnumValueType
+): SchemaEnumArrayTypeOptionValue {
+  return `array_${valueType}`;
+}
+
+function schemaEnumValueTypeFromArrayOption(
+  value: SchemaEnumArrayTypeOptionValue
+): SchemaEnumValueType {
+  return value === 'array_number' ? 'number' : 'string';
+}
+
+function propertySchemaForType(
+  type: Exclude<SchemaFieldType, 'array'>
+): Record<string, unknown> {
+  if (type === 'object') {
+    return { type: 'object', properties: {} };
   }
 
   return { type };
@@ -145,23 +235,33 @@ function schemaRowFromProperty(
       description,
       required,
       baseSchema,
-      enumValues: stringEnumValues(baseSchema),
       children: schemaRowsFromObjectSchema(property)
     };
   }
 
   if (type === 'array') {
-    const items = baseSchema?.items;
+    const items = isRecord(baseSchema?.items) ? baseSchema.items : undefined;
+    const arrayItemType = schemaArrayItemType(items);
+    const enumValueType =
+      arrayItemType === 'string' || arrayItemType === 'number'
+        ? arrayItemType
+        : undefined;
 
     return {
       id: createSchemaFieldRowId(),
       key,
       type,
+      arrayItemType,
       description,
       required,
       baseSchema,
-      enumValues: stringEnumValues(baseSchema),
-      children: schemaRowsFromObjectSchema(items)
+      enumValues: enumValueType
+        ? schemaEnumValues(items, enumValueType)
+        : undefined,
+      children:
+        arrayItemType === 'object'
+          ? schemaRowsFromObjectSchema(items)
+          : undefined
     };
   }
 
@@ -171,7 +271,10 @@ function schemaRowFromProperty(
     type,
     description,
     required,
-    enumValues: stringEnumValues(baseSchema),
+    enumValues:
+      type === 'string' || type === 'number'
+        ? schemaEnumValues(baseSchema, type)
+        : undefined,
     baseSchema
   };
 }
@@ -204,21 +307,43 @@ function withDescription(schema: Record<string, unknown>, description: string) {
 }
 
 function compatibleBaseSchema(row: SchemaFieldRow) {
+  if (row.type === 'array') {
+    return row.baseSchema?.type === row.type &&
+      schemaArrayItemType(
+        isRecord(row.baseSchema.items) ? row.baseSchema.items : undefined
+      ) === (row.arrayItemType ?? 'object')
+      ? row.baseSchema
+      : undefined;
+  }
+
   return row.baseSchema?.type === row.type ? row.baseSchema : undefined;
 }
 
-function withStringEnum(
+function typedEnumValues(enumValues: string[], valueType: SchemaEnumValueType) {
+  if (valueType === 'number') {
+    return enumValues
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+  }
+
+  return enumValues;
+}
+
+function withTypedEnum(
   schema: Record<string, unknown>,
-  enumValues: string[] | undefined
+  enumValues: string[] | undefined,
+  valueType: SchemaEnumValueType | undefined
 ) {
   const nextSchema = { ...schema };
 
-  if (enumValues === undefined) {
+  if (enumValues === undefined || valueType === undefined) {
     return nextSchema;
   }
 
-  if (enumValues.length > 0) {
-    nextSchema.enum = enumValues;
+  const schemaValues = typedEnumValues(enumValues, valueType);
+
+  if (schemaValues.length > 0) {
+    nextSchema.enum = schemaValues;
   } else {
     delete nextSchema.enum;
   }
@@ -237,27 +362,40 @@ function propertySchemaFromRow(row: SchemaFieldRow): Record<string, unknown> {
   }
 
   if (row.type === 'array') {
+    const arrayItemType = row.arrayItemType ?? 'object';
     const baseItemsSchema = isRecord(baseSchema?.items)
       ? baseSchema.items
       : undefined;
+    const items =
+      arrayItemType === 'object'
+        ? objectSchemaFromRows(row.children ?? [], baseItemsSchema)
+        : withTypedEnum(
+            {
+              ...(baseItemsSchema ?? {}),
+              type: arrayItemType
+            },
+            row.enumValues,
+            arrayItemType
+          );
 
     return withDescription(
       {
         ...(baseSchema ?? {}),
         type: 'array',
-        items: objectSchemaFromRows(row.children ?? [], baseItemsSchema)
+        items
       },
       row.description
     );
   }
 
   return withDescription(
-    withStringEnum(
+    withTypedEnum(
       {
         ...(baseSchema ?? {}),
         ...propertySchemaForType(row.type)
       },
-      row.type === 'string' ? row.enumValues : undefined
+      row.enumValues,
+      schemaEnumValueTypeForRow(row)
     ),
     row.description
   );
@@ -547,26 +685,73 @@ export const JsonSchemaEditorContent = forwardRef<
     });
   }
 
-  function updateSchemaRow(path: number[], patch: Partial<SchemaFieldRow>) {
-    const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) => {
-      const nextType = patch.type ?? row.type;
-      const typeChanged = patch.type !== undefined && patch.type !== row.type;
+  function applySchemaRowPatch(
+    row: SchemaFieldRow,
+    patch: Partial<SchemaFieldRow>
+  ): SchemaFieldRow {
+    const nextType = patch.type ?? row.type;
+    const nextArrayItemType =
+      nextType === 'array'
+        ? (patch.arrayItemType ?? row.arrayItemType ?? 'object')
+        : undefined;
+    const typeChanged = patch.type !== undefined && patch.type !== row.type;
+    const arrayItemTypeChanged =
+      patch.arrayItemType !== undefined &&
+      patch.arrayItemType !== row.arrayItemType;
+    const nextSupportsChildren =
+      nextType === 'object' ||
+      (nextType === 'array' && nextArrayItemType === 'object');
+    const nextSupportsEnum =
+      nextType === 'string' ||
+      nextType === 'number' ||
+      (nextType === 'array' &&
+        (nextArrayItemType === 'string' || nextArrayItemType === 'number'));
 
-      return {
-        ...row,
-        ...patch,
-        baseSchema: typeChanged
+    return {
+      ...row,
+      ...patch,
+      arrayItemType: nextArrayItemType,
+      baseSchema:
+        typeChanged || arrayItemTypeChanged
           ? undefined
           : (patch.baseSchema ?? row.baseSchema),
-        enumValues: typeChanged
-          ? undefined
-          : (patch.enumValues ?? row.enumValues),
-        children:
-          nextType === 'object' || nextType === 'array'
-            ? (patch.children ?? row.children ?? [])
-            : undefined
-      };
-    });
+      enumValues: nextSupportsEnum
+        ? (patch.enumValues ?? row.enumValues)
+        : undefined,
+      children: nextSupportsChildren
+        ? (patch.children ?? row.children ?? [])
+        : undefined
+    };
+  }
+
+  function updateSchemaRow(path: number[], patch: Partial<SchemaFieldRow>) {
+    const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) =>
+      applySchemaRowPatch(row, patch)
+    );
+
+    setSchemaRows(nextRows);
+    notifyValidSchema(schemaFromRows(schemaRoot, nextRows, schemaBase));
+  }
+
+  function updateSchemaRowType(
+    path: number[],
+    typeValue: SchemaFieldTypeOptionValue
+  ) {
+    updateSchemaRow(path, schemaFieldTypePatch(typeValue));
+  }
+
+  function updateSchemaRowEnumValueType(
+    path: number[],
+    valueType: SchemaEnumValueType
+  ) {
+    const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) =>
+      applySchemaRowPatch(
+        row,
+        row.type === 'array'
+          ? { type: 'array', arrayItemType: valueType }
+          : { type: valueType }
+      )
+    );
 
     setSchemaRows(nextRows);
     notifyValidSchema(schemaFromRows(schemaRoot, nextRows, schemaBase));
@@ -575,10 +760,15 @@ export const JsonSchemaEditorContent = forwardRef<
   function addSchemaRowEnumValue(path: number[]) {
     const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) => {
       const enumValues = row.enumValues ?? [];
+      const enumValueType = schemaEnumValueTypeForRow(row);
+      const nextValue =
+        enumValueType === 'number'
+          ? String(enumValues.length + 1)
+          : `value_${enumValues.length + 1}`;
 
       return {
         ...row,
-        enumValues: [...enumValues, `value_${enumValues.length + 1}`]
+        enumValues: [...enumValues, nextValue]
       };
     });
 
@@ -878,66 +1068,125 @@ export const JsonSchemaEditorContent = forwardRef<
     pathLabel: string,
     parentPath: number[]
   ) {
-    if (row.type !== 'string') {
+    const enumValueType = schemaEnumValueTypeForRow(row);
+
+    if (!enumValueType) {
       return null;
     }
+    const enumValues = row.enumValues ?? [];
+
+    if (enumValues.length === 0) {
+      return null;
+    }
+    const enumArrayValue = readonlySchemaValue(
+      typedEnumValues(enumValues, enumValueType)
+    );
 
     return (
       <div
         className="agent-flow-json-schema-settings__field-children"
         style={{ paddingLeft: (parentPath.length + 1) * 18 }}
       >
-        {(row.enumValues ?? []).map((enumValue, enumIndex) => {
-          const enumLabel = `${pathLabel}.${enumIndex + 1}`;
-
-          return (
-            <div
-              className="agent-flow-json-schema-settings__field-row"
-              key={`${row.id}-enum-${enumIndex}`}
-            >
-              <Input
-                aria-label={i18nText('agentFlow', 'auto.schema_enum_name', {
-                  value1: enumLabel
-                })}
-                disabled
-                value={`enum[${enumIndex + 1}]`}
-              />
-              <Input
-                aria-label={i18nText('agentFlow', 'auto.schema_enum_value', {
-                  value1: enumLabel
-                })}
-                value={enumValue}
-                onChange={(event) =>
-                  updateSchemaRowEnumValue(path, enumIndex, event.target.value)
+        <div className="agent-flow-json-schema-settings__field-node">
+          <div className="agent-flow-json-schema-settings__field-row">
+            <Input
+              aria-label={i18nText('agentFlow', 'auto.schema_enum_field_name', {
+                value1: pathLabel
+              })}
+              disabled
+              value="enum"
+            />
+            <Input
+              aria-label={i18nText(
+                'agentFlow',
+                'auto.schema_enum_field_value',
+                {
+                  value1: pathLabel
                 }
-              />
-              <Input disabled value="String" />
-              <Checkbox disabled checked={false} />
-              <Button
-                aria-label={i18nText(
-                  'agentFlow',
-                  'auto.delete_schema_enum_value',
-                  { value1: enumLabel }
-                )}
-                danger
-                icon={<DeleteOutlined />}
-                size="small"
-                type="text"
-                onClick={() => removeSchemaRowEnumValue(path, enumIndex)}
-              />
-            </div>
-          );
-        })}
-        <Button
-          aria-label={i18nText('agentFlow', 'auto.add_schema_enum_value', {
-            value1: row.key || pathLabel
-          })}
-          className="agent-flow-json-schema-settings__add-child-field"
-          icon={<PlusOutlined />}
-          size="small"
-          type="dashed"
-          onClick={() => addSchemaRowEnumValue(path)}
-        />
+              )}
+              disabled
+              value={enumArrayValue}
+            />
+            <Select
+              aria-label={i18nText('agentFlow', 'auto.schema_enum_field_type', {
+                value1: pathLabel
+              })}
+              options={schemaEnumArrayTypeOptions}
+              value={schemaEnumArrayTypeOptionValue(enumValueType)}
+              onChange={(valueType) =>
+                updateSchemaRowEnumValueType(
+                  path,
+                  schemaEnumValueTypeFromArrayOption(valueType)
+                )
+              }
+            />
+            <Checkbox disabled checked={false} />
+            <div className="agent-flow-json-schema-settings__field-actions" />
+          </div>
+          <div
+            className="agent-flow-json-schema-settings__field-children"
+            style={{ paddingLeft: 18 }}
+          >
+            {enumValues.map((enumValue, enumIndex) => {
+              const enumLabel = `${pathLabel}.${enumIndex + 1}`;
+
+              return (
+                <div
+                  className="agent-flow-json-schema-settings__field-row"
+                  key={`${row.id}-enum-${enumIndex}`}
+                >
+                  <Input
+                    aria-label={i18nText('agentFlow', 'auto.schema_enum_name', {
+                      value1: enumLabel
+                    })}
+                    disabled
+                    value={`enum[${enumIndex + 1}]`}
+                  />
+                  <Input
+                    aria-label={i18nText(
+                      'agentFlow',
+                      'auto.schema_enum_value',
+                      {
+                        value1: enumLabel
+                      }
+                    )}
+                    value={enumValue}
+                    onChange={(event) =>
+                      updateSchemaRowEnumValue(
+                        path,
+                        enumIndex,
+                        event.target.value
+                      )
+                    }
+                  />
+                  <Select
+                    aria-label={i18nText('agentFlow', 'auto.schema_enum_type', {
+                      value1: enumLabel
+                    })}
+                    options={schemaEnumValueTypeOptions}
+                    value={enumValueType}
+                    onChange={(valueType) =>
+                      updateSchemaRowEnumValueType(path, valueType)
+                    }
+                  />
+                  <Checkbox disabled checked={false} />
+                  <Button
+                    aria-label={i18nText(
+                      'agentFlow',
+                      'auto.delete_schema_enum_value',
+                      { value1: enumLabel }
+                    )}
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    type="text"
+                    onClick={() => removeSchemaRowEnumValue(path, enumIndex)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     );
   }
@@ -946,7 +1195,11 @@ export const JsonSchemaEditorContent = forwardRef<
     return rows.map((row, index) => {
       const path = [...parentPath, index];
       const pathLabel = path.map((item) => item + 1).join('.');
-      const hasChildren = row.type === 'object' || row.type === 'array';
+      const hasChildren =
+        row.type === 'object' ||
+        (row.type === 'array' && (row.arrayItemType ?? 'object') === 'object');
+      const canAddEnum = schemaEnumValueTypeForRow(row) !== undefined;
+      const childRows = row.children ?? [];
 
       return (
         <div
@@ -988,8 +1241,8 @@ export const JsonSchemaEditorContent = forwardRef<
                 value1: pathLabel
               })}
               options={schemaFieldTypeOptions}
-              value={row.type}
-              onChange={(type) => updateSchemaRow(path, { type })}
+              value={schemaFieldTypeOptionValue(row)}
+              onChange={(type) => updateSchemaRowType(path, type)}
             />
             <Checkbox
               aria-label={i18nText('agentFlow', 'auto.schema_field_required', {
@@ -1002,38 +1255,58 @@ export const JsonSchemaEditorContent = forwardRef<
                 })
               }
             />
-            <Button
-              aria-label={i18nText('agentFlow', 'auto.delete_schema_field', {
+            <div
+              aria-label={i18nText('agentFlow', 'auto.schema_field_actions', {
                 value1: row.key || pathLabel
               })}
-              danger
-              icon={<DeleteOutlined />}
-              size="small"
-              type="text"
-              onClick={() => removeSchemaRow(path)}
-            />
+              className="agent-flow-json-schema-settings__field-actions"
+              role="group"
+            >
+              {canAddEnum ? (
+                <Button
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.add_schema_enum_value',
+                    { value1: row.key || pathLabel }
+                  )}
+                  icon={<PlusOutlined />}
+                  size="small"
+                  type="text"
+                  onClick={() => addSchemaRowEnumValue(path)}
+                />
+              ) : null}
+              {hasChildren ? (
+                <Button
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.add_child_schema_field',
+                    { value1: row.key || pathLabel }
+                  )}
+                  icon={<PlusOutlined />}
+                  size="small"
+                  type="text"
+                  onClick={() => addSchemaRow(path)}
+                />
+              ) : null}
+              <Button
+                aria-label={i18nText('agentFlow', 'auto.delete_schema_field', {
+                  value1: row.key || pathLabel
+                })}
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+                type="text"
+                onClick={() => removeSchemaRow(path)}
+              />
+            </div>
           </div>
           {renderSchemaEnumRows(row, path, pathLabel, parentPath)}
-          {hasChildren ? (
+          {hasChildren && childRows.length > 0 ? (
             <div
               className="agent-flow-json-schema-settings__field-children"
               style={{ paddingLeft: (parentPath.length + 1) * 18 }}
             >
-              {row.children && row.children.length > 0
-                ? renderSchemaRows(row.children, path)
-                : null}
-              <Button
-                aria-label={i18nText(
-                  'agentFlow',
-                  'auto.add_child_schema_field',
-                  { value1: row.key || pathLabel }
-                )}
-                className="agent-flow-json-schema-settings__add-child-field"
-                icon={<PlusOutlined />}
-                size="small"
-                type="dashed"
-                onClick={() => addSchemaRow(path)}
-              />
+              {renderSchemaRows(childRows, path)}
             </div>
           ) : null}
         </div>

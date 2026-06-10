@@ -9,9 +9,15 @@ import {
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 
 export function useEditorShortcuts() {
-  const workingDocument = useAgentFlowEditorStore((state) => state.workingDocument);
-  const selectedNodeId = useAgentFlowEditorStore((state) => state.selectedNodeId);
-  const selectedEdgeId = useAgentFlowEditorStore((state) => state.selectedEdgeId);
+  const workingDocument = useAgentFlowEditorStore(
+    (state) => state.workingDocument
+  );
+  const selectedNodeId = useAgentFlowEditorStore(
+    (state) => state.selectedNodeId
+  );
+  const selectedEdgeId = useAgentFlowEditorStore(
+    (state) => state.selectedEdgeId
+  );
   const setSelection = useAgentFlowEditorStore((state) => state.setSelection);
   const setWorkingDocument = useAgentFlowEditorStore(
     (state) => state.setWorkingDocument
@@ -32,13 +38,20 @@ export function useEditorShortcuts() {
         return false;
       }
 
-      const isContentEditable = target.isContentEditable
-        || target.getAttribute('contenteditable') === 'true';
+      const isContentEditable =
+        target.isContentEditable ||
+        target.closest('[contenteditable="true"]') !== null;
+      const isEditorSurface =
+        target.closest('.monaco-editor') !== null ||
+        target.closest('.cm-editor') !== null ||
+        target.closest('[role="textbox"]') !== null;
 
       return (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
-        isContentEditable
+        target instanceof HTMLSelectElement ||
+        isContentEditable ||
+        isEditorSurface
       );
     }
 
