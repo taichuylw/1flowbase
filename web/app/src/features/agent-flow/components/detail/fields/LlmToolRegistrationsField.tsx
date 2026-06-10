@@ -339,6 +339,7 @@ export function LlmToolRegistrationsField({
           value1: i18nText('agentFlow', 'auto.tool_registration')
         })}
         defaultWidth={720}
+        dragHandleTestId="agent-flow-llm-tool-registration-drag-handle"
         footer={toolEditorFooter}
         initialHeight={520}
         minHeight={360}

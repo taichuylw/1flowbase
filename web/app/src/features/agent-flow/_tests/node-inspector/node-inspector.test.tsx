@@ -352,6 +352,65 @@ describe('NodeInspector core', () => {
     expect(screen.getByText('暂无工具注册')).toBeInTheDocument();
   });
 
+  test('keeps the floating tool editor drag handle visible while the body crosses the bottom boundary', async () => {
+    const state = createInitialState();
+    const llmNodeConfig = getLlmNodeConfig(state.draft.document);
+
+    llmNodeConfig.visible_internal_llm_tools_enabled = true;
+    llmNodeConfig.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_visible_context',
+        connector_id: 'inspect_visible_context',
+        target_node_id: 'node-llm',
+        description: 'Inspect visible context',
+        input_schema: { type: 'object' }
+      }
+    ];
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: '编辑 inspect_visible_context'
+      })
+    );
+
+    const dialog = await screen.findByRole('dialog', {
+      name: '编辑 工具注册'
+    });
+    const dragHandle = within(dialog).getByTestId(
+      'agent-flow-llm-tool-registration-drag-handle'
+    );
+
+    const panelHeight = Number.parseFloat(dialog.style.height);
+    const fullPanelMaxTop = window.innerHeight - panelHeight - 16;
+
+    fireEvent.mouseDown(dragHandle, {
+      button: 0,
+      clientX: 24,
+      clientY: 20
+    });
+    fireEvent.mouseMove(window, {
+      clientX: 24,
+      clientY: window.innerHeight + 200
+    });
+    fireEvent.mouseUp(window);
+
+    await waitFor(() => {
+      const panelTop = Number.parseFloat(dialog.style.top);
+
+      expect(panelTop).toBeGreaterThan(fullPanelMaxTop);
+      expect(panelTop + 48).toBeLessThanOrEqual(window.innerHeight - 16);
+      expect(panelTop + panelHeight).toBeGreaterThan(window.innerHeight);
+    });
+  });
+
   test('collapses generated outputs by default and keeps output contract editing hidden', async () => {
     renderWithProviders(
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
