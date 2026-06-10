@@ -30,7 +30,11 @@ vi.mock('antd', async () => {
       zIndex?: number;
     }) =>
       open ? (
-        <div aria-label={String(title)} data-testid="mock-modal" data-z-index={zIndex}>
+        <div
+          aria-label={String(title)}
+          data-testid="mock-modal"
+          data-z-index={zIndex}
+        >
           {children}
         </div>
       ) : null
@@ -57,7 +61,12 @@ vi.mock('antd', async () => {
       icon?: ReactNode;
       onClick?: () => void;
     }) => (
-      <button aria-label={ariaLabel} disabled={disabled} onClick={onClick} type="button">
+      <button
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={onClick}
+        type="button"
+      >
         {icon}
       </button>
     ),
@@ -76,9 +85,14 @@ describe('JsonPreviewBlock', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '放大查看工具调用 JSON' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: '放大查看工具调用 JSON' })
+    );
 
-    expect(screen.getByTestId('mock-modal')).toHaveAttribute('data-z-index', '1060');
+    expect(screen.getByTestId('mock-modal')).toHaveAttribute(
+      'data-z-index',
+      '1060'
+    );
     expect(antdMocks.Modal.mock.calls.at(-1)?.[0]).toMatchObject({
       zIndex: 1060
     });
