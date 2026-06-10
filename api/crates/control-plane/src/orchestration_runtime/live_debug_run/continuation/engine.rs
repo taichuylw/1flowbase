@@ -1,4 +1,6 @@
+use super::completion::{finish_continued_flow_run, ContinuedFlowCompletion};
 use super::helpers::*;
+use super::waiting_nodes::{wait_for_human_input, wait_for_tool_callback, WaitingNodeContext};
 use super::*;
 use crate::orchestration_runtime::answer_presentation::AnswerPresentationCursor;
 
@@ -883,230 +885,38 @@ where
                 .await?;
             }
             "human_input" => {
-                update_node_run_and_emit(
-                    service,
-                    flow_run.id,
-                    &UpdateNodeRunInput {
-                        node_run_id: node_run.id,
-                        status: domain::NodeRunStatus::WaitingHuman,
-                        output_payload: json!({}),
-                        error_payload: None,
-                        metrics_payload: json!({ "preview_mode": true, "waiting": "human_input" }),
-                        debug_payload: json!({}),
-                        finished_at: None,
+                return wait_for_human_input(
+                    WaitingNodeContext {
+                        service,
+                        command,
+                        flow_run: &flow_run,
+                        compiled_plan: &compiled_plan,
+                        variable_pool: &variable_pool,
+                        active_node_ids: &active_node_ids,
+                        node_id,
+                        node,
+                        node_run: &node_run,
                     },
-                )
-                .await?;
-
-                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
-                    .await?
-                {
-                    return load_run_detail(
-                        &service.repository,
-                        command.application_id,
-                        flow_run.id,
-                    )
-                    .await;
-                }
-
-                let prompt = rendered_templates
-                    .get("prompt")
-                    .and_then(Value::as_str)
-                    .unwrap_or("请提供人工输入");
-                ensure_flow_run_transition(
-                    domain::FlowRunStatus::Running,
-                    domain::FlowRunStatus::WaitingHuman,
-                    "continue_flow_debug_run",
-                )?;
-                let answer_output_payload = materialize_ready_answer_node_run(
-                    service,
-                    flow_run.id,
-                    &compiled_plan,
-                    &variable_pool,
-                )
-                .await?
-                .unwrap_or_else(|| json!({}));
-                let next_index = next_node_index(&compiled_plan, node_id)?;
-                orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
-                    &compiled_plan,
-                    &mut active_node_ids,
-                    node,
-                    None,
-                );
-                service
-                    .repository
-                    .create_checkpoint(&CreateCheckpointInput {
-                        flow_run_id: flow_run.id,
-                        node_run_id: Some(node_run.id),
-                        status: "waiting_human".to_string(),
-                        reason: "等待人工输入".to_string(),
-                        locator_payload: CheckpointLocatorPayload::from_runtime_position(
-                            &node.node_id,
-                            next_index,
-                            orchestration_runtime::execution_engine::branching::checkpoint_active_node_ids(
-                                &active_node_ids,
-                            ),
-                        )
-                        .into_json(),
-                        variable_snapshot: Value::Object(variable_pool.clone()),
-                        external_ref_payload: Some(json!({ "prompt": prompt })),
-                    })
-                    .await?;
-                if service
-                    .repository
-                    .update_flow_run_if_status(
-                        &UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::WaitingHuman,
-                            output_payload: answer_output_payload,
-                            error_payload: None,
-                            finished_at: None,
-                        },
-                        domain::FlowRunStatus::Running,
-                    )
-                    .await?
-                    .is_none()
-                {
-                    return load_run_detail(
-                        &service.repository,
-                        command.application_id,
-                        flow_run.id,
-                    )
-                    .await;
-                }
-                append_runtime_event(
-                    service,
-                    flow_run.id,
-                    debug_stream_events::waiting_human(flow_run.id, node_run.id, &node.node_id),
+                    &rendered_templates,
                 )
                 .await;
-                close_runtime_event_stream(
-                    service,
-                    flow_run.id,
-                    RuntimeEventCloseReason::WaitingHuman,
-                )
-                .await;
-                return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                    .await;
             }
             "tool" => {
-                let request_payload = Value::Object(resolved_inputs.clone());
-                update_node_run_and_emit(
-                    service,
-                    flow_run.id,
-                    &UpdateNodeRunInput {
-                        node_run_id: node_run.id,
-                        status: domain::NodeRunStatus::WaitingCallback,
-                        output_payload: json!({}),
-                        error_payload: None,
-                        metrics_payload: json!({ "preview_mode": true, "waiting": node.node_type }),
-                        debug_payload: json!({}),
-                        finished_at: None,
+                return wait_for_tool_callback(
+                    WaitingNodeContext {
+                        service,
+                        command,
+                        flow_run: &flow_run,
+                        compiled_plan: &compiled_plan,
+                        variable_pool: &variable_pool,
+                        active_node_ids: &active_node_ids,
+                        node_id,
+                        node,
+                        node_run: &node_run,
                     },
-                )
-                .await?;
-
-                if is_run_cancelled(&service.repository, command.application_id, flow_run.id)
-                    .await?
-                {
-                    return load_run_detail(
-                        &service.repository,
-                        command.application_id,
-                        flow_run.id,
-                    )
-                    .await;
-                }
-
-                ensure_flow_run_transition(
-                    domain::FlowRunStatus::Running,
-                    domain::FlowRunStatus::WaitingCallback,
-                    "continue_flow_debug_run",
-                )?;
-                let answer_output_payload = materialize_ready_answer_node_run(
-                    service,
-                    flow_run.id,
-                    &compiled_plan,
-                    &variable_pool,
-                )
-                .await?
-                .unwrap_or_else(|| json!({}));
-                let next_index = next_node_index(&compiled_plan, node_id)?;
-                orchestration_runtime::execution_engine::branching::activate_downstream_nodes(
-                    &compiled_plan,
-                    &mut active_node_ids,
-                    node,
-                    None,
-                );
-                service
-                    .repository
-                    .create_checkpoint(&CreateCheckpointInput {
-                        flow_run_id: flow_run.id,
-                        node_run_id: Some(node_run.id),
-                        status: "waiting_callback".to_string(),
-                        reason: "等待 callback 回填".to_string(),
-                        locator_payload: CheckpointLocatorPayload::from_runtime_position(
-                            &node.node_id,
-                            next_index,
-                            orchestration_runtime::execution_engine::branching::checkpoint_active_node_ids(
-                                &active_node_ids,
-                            ),
-                        )
-                        .into_json(),
-                        variable_snapshot: Value::Object(variable_pool.clone()),
-                        external_ref_payload: Some(request_payload.clone()),
-                    })
-                    .await?;
-                let callback_task = service
-                    .repository
-                    .create_callback_task(&CreateCallbackTaskInput {
-                        flow_run_id: flow_run.id,
-                        node_run_id: node_run.id,
-                        callback_kind: node.node_type.clone(),
-                        request_payload: request_payload.clone(),
-                        external_ref_payload: Some(request_payload),
-                    })
-                    .await?;
-                if service
-                    .repository
-                    .update_flow_run_if_status(
-                        &UpdateFlowRunInput {
-                            flow_run_id: flow_run.id,
-                            status: domain::FlowRunStatus::WaitingCallback,
-                            output_payload: answer_output_payload,
-                            error_payload: None,
-                            finished_at: None,
-                        },
-                        domain::FlowRunStatus::Running,
-                    )
-                    .await?
-                    .is_none()
-                {
-                    return load_run_detail(
-                        &service.repository,
-                        command.application_id,
-                        flow_run.id,
-                    )
-                    .await;
-                }
-                append_runtime_event(
-                    service,
-                    flow_run.id,
-                    debug_stream_events::waiting_callback_with_task(
-                        flow_run.id,
-                        node_run.id,
-                        &node.node_id,
-                        &callback_task,
-                    ),
+                    &resolved_inputs,
                 )
                 .await;
-                close_runtime_event_stream(
-                    service,
-                    flow_run.id,
-                    RuntimeEventCloseReason::WaitingCallback,
-                )
-                .await;
-                return load_run_detail(&service.repository, command.application_id, flow_run.id)
-                    .await;
             }
             "http_request" => {
                 let http_file_persister = service.http_response_file_persister(actor.clone());
@@ -1340,100 +1150,15 @@ where
         );
     }
 
-    if is_run_cancelled(&service.repository, command.application_id, flow_run.id).await? {
-        return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
-    }
-
-    if let Some(error_payload) = pending_failure {
-        ensure_flow_run_transition(
-            domain::FlowRunStatus::Running,
-            domain::FlowRunStatus::Failed,
-            "continue_flow_debug_run",
-        )?;
-        let updated = service
-            .repository
-            .update_flow_run_if_status(
-                &UpdateFlowRunInput {
-                    flow_run_id: flow_run.id,
-                    status: domain::FlowRunStatus::Failed,
-                    output_payload: last_output_payload.clone(),
-                    error_payload: Some(error_payload.clone()),
-                    finished_at: Some(OffsetDateTime::now_utc()),
-                },
-                domain::FlowRunStatus::Running,
-            )
-            .await?;
-        let Some(updated_flow_run) = updated else {
-            return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
-        };
-        emit_flow_failed_and_close(service, flow_run.id, error_payload.clone()).await;
-        service
-            .repository
-            .append_run_event(&AppendRunEventInput {
-                flow_run_id: flow_run.id,
-                node_run_id: None,
-                event_type: "flow_run_failed".to_string(),
-                payload: error_payload,
-            })
-            .await?;
-        let variable_cache = public_node_variable_cache(&compiled_plan, &variable_pool);
-        persist_debug_variable_cache_entries(
-            &service.repository,
-            application.workspace_id,
-            &updated_flow_run,
-            &variable_cache,
-        )
-        .await?;
-
-        return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
-    }
-
-    ensure_flow_run_transition(
-        domain::FlowRunStatus::Running,
-        domain::FlowRunStatus::Succeeded,
-        "continue_flow_debug_run",
-    )?;
-    let updated = service
-        .repository
-        .update_flow_run_if_status(
-            &UpdateFlowRunInput {
-                flow_run_id: flow_run.id,
-                status: domain::FlowRunStatus::Succeeded,
-                output_payload: last_output_payload.clone(),
-                error_payload: None,
-                finished_at: Some(OffsetDateTime::now_utc()),
-            },
-            domain::FlowRunStatus::Running,
-        )
-        .await?;
-    if updated.is_none() {
-        return load_run_detail(&service.repository, command.application_id, flow_run.id).await;
-    }
-    append_runtime_event(
+    finish_continued_flow_run(ContinuedFlowCompletion {
         service,
-        flow_run.id,
-        debug_stream_events::flow_finished(flow_run.id, last_output_payload.clone()),
-    )
-    .await;
-    close_runtime_event_stream(service, flow_run.id, RuntimeEventCloseReason::Finished).await;
-    service
-        .repository
-        .append_run_event(&AppendRunEventInput {
-            flow_run_id: flow_run.id,
-            node_run_id: None,
-            event_type: "flow_run_completed".to_string(),
-            payload: last_output_payload,
-        })
-        .await?;
-    let updated_flow_run = updated.expect("updated flow run exists after is_none check");
-    let variable_cache = public_node_variable_cache(&compiled_plan, &variable_pool);
-    persist_debug_variable_cache_entries(
-        &service.repository,
-        application.workspace_id,
-        &updated_flow_run,
-        &variable_cache,
-    )
-    .await?;
-
-    load_run_detail(&service.repository, command.application_id, flow_run.id).await
+        command,
+        flow_run: &flow_run,
+        workspace_id: application.workspace_id,
+        compiled_plan: &compiled_plan,
+        variable_pool: &variable_pool,
+        last_output_payload,
+        pending_failure,
+    })
+    .await
 }

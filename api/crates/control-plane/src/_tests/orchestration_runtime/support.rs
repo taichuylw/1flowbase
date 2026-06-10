@@ -34,7 +34,7 @@ use crate::{
     },
 };
 
-#[path = "support/fixtures.rs"]
+#[path = "support/fixtures/mod.rs"]
 mod fixtures;
 #[path = "support/repository/mod.rs"]
 mod repository;

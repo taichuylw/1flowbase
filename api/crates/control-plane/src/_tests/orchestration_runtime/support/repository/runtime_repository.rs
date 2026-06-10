@@ -1,26 +1,10 @@
 use super::runtime_repository_helpers::{
     flow_run_record_from_create_input, flow_run_shell_record_from_input,
-    node_run_record_from_create_input,
+    force_status_before_next_flow_update, node_run_record_from_create_input,
 };
 use super::*;
 
 use async_trait::async_trait;
-
-fn force_status_before_next_flow_update(
-    inner: &mut InMemoryOrchestrationRuntimeState,
-    flow_run_id: Uuid,
-) {
-    let Some((race_flow_run_id, status)) = inner.status_before_next_flow_update.take() else {
-        return;
-    };
-    if race_flow_run_id == flow_run_id {
-        if let Some(stored) = inner.flow_runs_by_id.get_mut(&flow_run_id) {
-            stored.status = status;
-        }
-    } else {
-        inner.status_before_next_flow_update = Some((race_flow_run_id, status));
-    }
-}
 
 #[async_trait]
 impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {

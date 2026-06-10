@@ -1,5 +1,21 @@
 use super::*;
 
+pub(super) fn force_status_before_next_flow_update(
+    inner: &mut InMemoryOrchestrationRuntimeState,
+    flow_run_id: Uuid,
+) {
+    let Some((race_flow_run_id, status)) = inner.status_before_next_flow_update.take() else {
+        return;
+    };
+    if race_flow_run_id == flow_run_id {
+        if let Some(stored) = inner.flow_runs_by_id.get_mut(&flow_run_id) {
+            stored.status = status;
+        }
+    } else {
+        inner.status_before_next_flow_update = Some((race_flow_run_id, status));
+    }
+}
+
 pub(super) fn flow_run_record_from_create_input(
     input: &CreateFlowRunInput,
 ) -> domain::FlowRunRecord {

@@ -27,8 +27,10 @@ use super::super::{
     persistence::CheckpointLocatorPayload,
 };
 
+mod completion;
 mod engine;
 mod helpers;
+mod waiting_nodes;
 
 use super::{
     append_runtime_event, close_runtime_event_stream, emit_flow_failed_and_close, fail_flow_run,
