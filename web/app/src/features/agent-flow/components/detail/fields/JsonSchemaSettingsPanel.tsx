@@ -42,6 +42,7 @@ interface SchemaFieldRow {
   description: string;
   required: boolean;
   children?: SchemaFieldRow[];
+  enumValues?: string[];
   baseSchema?: Record<string, unknown>;
 }
 
@@ -83,6 +84,16 @@ function schemaFieldType(value: unknown): SchemaFieldType {
   return schemaFieldTypeOptions.some((option) => option.value === value)
     ? (value as SchemaFieldType)
     : 'string';
+}
+
+function stringEnumValues(schema: Record<string, unknown> | undefined) {
+  if (!Array.isArray(schema?.enum)) {
+    return undefined;
+  }
+
+  return schema.enum.every((value) => typeof value === 'string')
+    ? (schema.enum as string[])
+    : undefined;
 }
 
 function propertySchemaForType(type: SchemaFieldType): Record<string, unknown> {
@@ -134,6 +145,7 @@ function schemaRowFromProperty(
       description,
       required,
       baseSchema,
+      enumValues: stringEnumValues(baseSchema),
       children: schemaRowsFromObjectSchema(property)
     };
   }
@@ -148,6 +160,7 @@ function schemaRowFromProperty(
       description,
       required,
       baseSchema,
+      enumValues: stringEnumValues(baseSchema),
       children: schemaRowsFromObjectSchema(items)
     };
   }
@@ -158,6 +171,7 @@ function schemaRowFromProperty(
     type,
     description,
     required,
+    enumValues: stringEnumValues(baseSchema),
     baseSchema
   };
 }
@@ -193,6 +207,25 @@ function compatibleBaseSchema(row: SchemaFieldRow) {
   return row.baseSchema?.type === row.type ? row.baseSchema : undefined;
 }
 
+function withStringEnum(
+  schema: Record<string, unknown>,
+  enumValues: string[] | undefined
+) {
+  const nextSchema = { ...schema };
+
+  if (enumValues === undefined) {
+    return nextSchema;
+  }
+
+  if (enumValues.length > 0) {
+    nextSchema.enum = enumValues;
+  } else {
+    delete nextSchema.enum;
+  }
+
+  return nextSchema;
+}
+
 function propertySchemaFromRow(row: SchemaFieldRow): Record<string, unknown> {
   const baseSchema = compatibleBaseSchema(row);
 
@@ -219,10 +252,13 @@ function propertySchemaFromRow(row: SchemaFieldRow): Record<string, unknown> {
   }
 
   return withDescription(
-    {
-      ...(baseSchema ?? {}),
-      ...propertySchemaForType(row.type)
-    },
+    withStringEnum(
+      {
+        ...(baseSchema ?? {}),
+        ...propertySchemaForType(row.type)
+      },
+      row.type === 'string' ? row.enumValues : undefined
+    ),
     row.description
   );
 }
@@ -522,12 +558,60 @@ export const JsonSchemaEditorContent = forwardRef<
         baseSchema: typeChanged
           ? undefined
           : (patch.baseSchema ?? row.baseSchema),
+        enumValues: typeChanged
+          ? undefined
+          : (patch.enumValues ?? row.enumValues),
         children:
           nextType === 'object' || nextType === 'array'
             ? (patch.children ?? row.children ?? [])
             : undefined
       };
     });
+
+    setSchemaRows(nextRows);
+    notifyValidSchema(schemaFromRows(schemaRoot, nextRows, schemaBase));
+  }
+
+  function addSchemaRowEnumValue(path: number[]) {
+    const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) => {
+      const enumValues = row.enumValues ?? [];
+
+      return {
+        ...row,
+        enumValues: [...enumValues, `value_${enumValues.length + 1}`]
+      };
+    });
+
+    setSchemaRows(nextRows);
+    notifyValidSchema(schemaFromRows(schemaRoot, nextRows, schemaBase));
+  }
+
+  function updateSchemaRowEnumValue(
+    path: number[],
+    enumIndex: number,
+    value: string
+  ) {
+    const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) => {
+      const enumValues = [...(row.enumValues ?? [])];
+      enumValues[enumIndex] = value;
+
+      return {
+        ...row,
+        enumValues
+      };
+    });
+
+    setSchemaRows(nextRows);
+    notifyValidSchema(schemaFromRows(schemaRoot, nextRows, schemaBase));
+  }
+
+  function removeSchemaRowEnumValue(path: number[], enumIndex: number) {
+    const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) => ({
+      ...row,
+      enumValues: (row.enumValues ?? []).filter(
+        (_, index) => index !== enumIndex
+      )
+    }));
 
     setSchemaRows(nextRows);
     notifyValidSchema(schemaFromRows(schemaRoot, nextRows, schemaBase));
@@ -788,6 +872,76 @@ export const JsonSchemaEditorContent = forwardRef<
     );
   }
 
+  function renderSchemaEnumRows(
+    row: SchemaFieldRow,
+    path: number[],
+    pathLabel: string,
+    parentPath: number[]
+  ) {
+    if (row.type !== 'string') {
+      return null;
+    }
+
+    return (
+      <div
+        className="agent-flow-json-schema-settings__field-children"
+        style={{ paddingLeft: (parentPath.length + 1) * 18 }}
+      >
+        {(row.enumValues ?? []).map((enumValue, enumIndex) => {
+          const enumLabel = `${pathLabel}.${enumIndex + 1}`;
+
+          return (
+            <div
+              className="agent-flow-json-schema-settings__field-row"
+              key={`${row.id}-enum-${enumIndex}`}
+            >
+              <Input
+                aria-label={i18nText('agentFlow', 'auto.schema_enum_name', {
+                  value1: enumLabel
+                })}
+                disabled
+                value={`enum[${enumIndex + 1}]`}
+              />
+              <Input
+                aria-label={i18nText('agentFlow', 'auto.schema_enum_value', {
+                  value1: enumLabel
+                })}
+                value={enumValue}
+                onChange={(event) =>
+                  updateSchemaRowEnumValue(path, enumIndex, event.target.value)
+                }
+              />
+              <Input disabled value="String" />
+              <Checkbox disabled checked={false} />
+              <Button
+                aria-label={i18nText(
+                  'agentFlow',
+                  'auto.delete_schema_enum_value',
+                  { value1: enumLabel }
+                )}
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+                type="text"
+                onClick={() => removeSchemaRowEnumValue(path, enumIndex)}
+              />
+            </div>
+          );
+        })}
+        <Button
+          aria-label={i18nText('agentFlow', 'auto.add_schema_enum_value', {
+            value1: row.key || pathLabel
+          })}
+          className="agent-flow-json-schema-settings__add-child-field"
+          icon={<PlusOutlined />}
+          size="small"
+          type="dashed"
+          onClick={() => addSchemaRowEnumValue(path)}
+        />
+      </div>
+    );
+  }
+
   function renderSchemaRows(rows: SchemaFieldRow[], parentPath: number[] = []) {
     return rows.map((row, index) => {
       const path = [...parentPath, index];
@@ -859,6 +1013,7 @@ export const JsonSchemaEditorContent = forwardRef<
               onClick={() => removeSchemaRow(path)}
             />
           </div>
+          {renderSchemaEnumRows(row, path, pathLabel, parentPath)}
           {hasChildren ? (
             <div
               className="agent-flow-json-schema-settings__field-children"

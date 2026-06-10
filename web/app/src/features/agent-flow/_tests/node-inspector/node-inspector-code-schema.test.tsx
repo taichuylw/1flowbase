@@ -445,13 +445,50 @@ describe('NodeInspector code schema', () => {
       expect(screen.getByLabelText('Schema 字段名 2.1')).toHaveValue('kind');
       expect(screen.getByLabelText('Schema 字段名 2.2')).toHaveValue('source');
       expect(screen.getByLabelText('Schema 字段名 2.3')).toHaveValue('path');
+      expect(screen.getByLabelText('Schema 枚举项 2.1.1')).toHaveValue(
+        'enum[1]'
+      );
+      expect(screen.getByLabelText('Schema 枚举值 2.1.1')).toHaveValue(
+        'image'
+      );
+      expect(screen.getByLabelText('Schema 枚举项 2.2.1')).toHaveValue(
+        'enum[1]'
+      );
+      expect(screen.getByLabelText('Schema 枚举值 2.2.1')).toHaveValue(
+        'workspace_path'
+      );
+    });
+    fireEvent.change(screen.getByLabelText('Schema 枚举值 2.2.1'), {
+      target: { value: 'uploaded_file' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '添加 source 枚举值' }));
+    fireEvent.change(screen.getByLabelText('Schema 枚举值 2.2.2'), {
+      target: { value: 'workspace_path' }
     });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
     await waitFor(() => {
       expect(getCodeNode(latestDocument).outputs[0]).toMatchObject({
         valueType: 'object',
-        jsonSchema: mediaToolSchema
+        jsonSchema: {
+          ...mediaToolSchema,
+          properties: {
+            ...mediaToolSchema.properties,
+            media: {
+              ...mediaToolSchema.properties.media,
+              items: {
+                ...mediaToolSchema.properties.media.items,
+                properties: {
+                  ...mediaToolSchema.properties.media.items.properties,
+                  source: {
+                    ...mediaToolSchema.properties.media.items.properties.source,
+                    enum: ['uploaded_file', 'workspace_path']
+                  }
+                }
+              }
+            }
+          }
+        }
       });
     });
   });
