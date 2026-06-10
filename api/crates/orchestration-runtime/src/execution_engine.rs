@@ -15,8 +15,8 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::{
     binding_runtime::{
-        lookup_selector_value, render_template, render_templated_bindings,
-        resolve_answer_node_inputs, resolve_node_inputs, BindingResolutionIssue,
+        render_templated_bindings, resolve_answer_node_inputs, resolve_node_inputs,
+        BindingResolutionIssue,
     },
     compiled_plan::{
         CompiledEdge, CompiledLlmRuntime, CompiledNode, CompiledPlan, CompiledPluginRuntime,
@@ -25,9 +25,6 @@ use crate::{
     execution_state::{
         CheckpointSnapshot, ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionFailure,
         NodeExecutionTrace, PendingCallbackTask, PendingHumanInput,
-    },
-    node_error_policy::{
-        error_default_output, node_error_policy, NodeErrorPolicy, ERROR_BRANCH_SOURCE_HANDLE,
     },
     node_errors::build_node_type_not_implemented_error_payload,
     output_schema::value_is_llm_context_messages,
@@ -50,8 +47,10 @@ mod llm_invocation;
 mod llm_metrics;
 mod llm_node_outputs;
 mod llm_parameters;
+mod node_failure_policy;
 #[cfg(test)]
 mod tests;
+mod variable_assignment;
 mod visible_internal_llm_tools;
 
 use branching::*;
@@ -68,6 +67,8 @@ use llm_invocation::*;
 use llm_metrics::*;
 use llm_node_outputs::*;
 use llm_parameters::*;
+use node_failure_policy::{apply_node_error_policy, NodeErrorPolicyApplication};
+pub(crate) use variable_assignment::execute_variable_assignment_node;
 use visible_internal_llm_tools::*;
 
 const LLM_TOOL_CALLBACK_KIND: &str = "llm_tool_calls";
@@ -283,200 +284,6 @@ where
         invoker,
     )
     .await
-}
-
-fn configured_default_output_payload(node: &CompiledNode) -> Value {
-    match error_default_output(node) {
-        Some(value @ Value::Object(_)) => value,
-        Some(value) => json!({ first_output_key(node): value }),
-        None => json!({}),
-    }
-}
-
-pub(crate) fn execute_variable_assignment_node(
-    _node: &CompiledNode,
-    resolved_inputs: &Map<String, Value>,
-    variable_pool: &mut Map<String, Value>,
-) -> Result<Value> {
-    let operations = resolved_inputs
-        .get("operations")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("variable assigner requires operations"))?;
-    if operations.is_empty() {
-        return Err(anyhow!("variable assigner requires at least one operation"));
-    }
-
-    let updates = operations
-        .iter()
-        .map(|operation| {
-            let path = operation
-                .get("path")
-                .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("variable assigner path is required"))?;
-            let operator = operation
-                .get("operator")
-                .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("variable assigner operator is required"))?;
-            let target_namespace = path.first().and_then(Value::as_str);
-            let target_name = path
-                .get(1)
-                .and_then(Value::as_str)
-                .ok_or_else(|| anyhow!("variable assigner target name is required"))?;
-
-            if operator != "set"
-                || target_namespace != Some("conversation")
-                || target_name.trim().is_empty()
-            {
-                return Err(anyhow!(
-                    "variable assigner only supports setting conversation variables"
-                ));
-            }
-
-            let value = resolve_variable_assignment_value(operation, variable_pool)?;
-
-            Ok((target_name.to_string(), value))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let mut updated = Map::new();
-    let conversation_value = variable_pool
-        .entry("conversation".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-
-    if !conversation_value.is_object() {
-        *conversation_value = Value::Object(Map::new());
-    }
-
-    let conversation = conversation_value
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("conversation variable pool must be an object"))?;
-
-    for (target_name, value) in updates {
-        conversation.insert(target_name.clone(), value.clone());
-        updated.insert(target_name, value);
-    }
-
-    Ok(Value::Object(updated))
-}
-
-fn resolve_variable_assignment_value(
-    operation: &Value,
-    variable_pool: &Map<String, Value>,
-) -> Result<Value> {
-    let value = operation
-        .get("value")
-        .and_then(Value::as_object)
-        .ok_or_else(|| anyhow!("variable assigner value is required"))?;
-
-    match value.get("kind").and_then(Value::as_str) {
-        Some("constant") => Ok(value.get("value").cloned().unwrap_or(Value::Null)),
-        Some("selector") => {
-            let selector = value
-                .get("selector")
-                .and_then(Value::as_array)
-                .ok_or_else(|| anyhow!("variable assigner selector value is required"))?
-                .iter()
-                .map(|segment| {
-                    segment
-                        .as_str()
-                        .map(str::to_string)
-                        .ok_or_else(|| anyhow!("variable assigner selector must be strings"))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            lookup_selector_value(variable_pool, &selector)
-        }
-        Some("templated_text") => {
-            let template = value.get("value").and_then(Value::as_str).ok_or_else(|| {
-                anyhow!("variable assigner templated_text value must be a string")
-            })?;
-            render_template(template, variable_pool).map(Value::String)
-        }
-        Some(kind) => Err(anyhow!(
-            "variable assigner value kind is unsupported: {kind}"
-        )),
-        None => Err(anyhow!("variable assigner value kind is required")),
-    }
-}
-
-struct NodeErrorPolicyApplication<'a> {
-    plan: &'a CompiledPlan,
-    failed_node_index: usize,
-    active_node_ids: &'a mut BTreeSet<String>,
-    variable_pool: &'a mut Map<String, Value>,
-    pending_failure: &'a mut Option<NodeExecutionFailure>,
-    node: &'a CompiledNode,
-    output_payload: &'a Value,
-    error_payload: Value,
-    allow_terminal_template_fallback: bool,
-}
-
-fn apply_node_error_policy(
-    application: NodeErrorPolicyApplication<'_>,
-) -> Result<Option<NodeExecutionFailure>> {
-    let NodeErrorPolicyApplication {
-        plan,
-        failed_node_index,
-        active_node_ids,
-        variable_pool,
-        pending_failure,
-        node,
-        output_payload,
-        error_payload,
-        allow_terminal_template_fallback,
-    } = application;
-    let failure = NodeExecutionFailure {
-        node_id: node.node_id.clone(),
-        node_alias: node.alias.clone(),
-        error_payload: error_payload.clone(),
-    };
-
-    match node_error_policy(node) {
-        NodeErrorPolicy::DefaultValue => {
-            let default_output_payload = configured_default_output_payload(node);
-            variable_pool.insert(
-                node.node_id.clone(),
-                project_node_variable_payload(node, &default_output_payload)?,
-            );
-            activate_downstream_nodes(plan, active_node_ids, node, None);
-            Ok(None)
-        }
-        NodeErrorPolicy::ErrorBranch => {
-            variable_pool.insert(
-                node.node_id.clone(),
-                project_node_variable_payload(node, output_payload)?,
-            );
-            if activate_downstream_nodes(
-                plan,
-                active_node_ids,
-                node,
-                Some(ERROR_BRANCH_SOURCE_HANDLE),
-            ) {
-                return Ok(None);
-            }
-
-            Ok(Some(failure))
-        }
-        NodeErrorPolicy::None => {
-            if allow_terminal_template_fallback {
-                variable_pool.insert(
-                    node.node_id.clone(),
-                    project_node_variable_payload(node, output_payload)?,
-                );
-                let mut next_active_node_ids = active_node_ids.clone();
-                activate_downstream_nodes(plan, &mut next_active_node_ids, node, None);
-                if can_continue_to_terminal_template_nodes(
-                    plan,
-                    failed_node_index,
-                    &next_active_node_ids,
-                ) {
-                    *active_node_ids = next_active_node_ids;
-                    *pending_failure = Some(failure);
-                    return Ok(None);
-                }
-            }
-
-            Ok(Some(failure))
-        }
-    }
 }
 
 async fn execute_from<I>(

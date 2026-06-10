@@ -1,4 +1,5 @@
 use super::*;
+use crate::binding_runtime::lookup_selector_value;
 use crate::node_error_policy::ERROR_BRANCH_SOURCE_HANDLE;
 
 pub fn initial_active_node_ids(plan: &CompiledPlan) -> BTreeSet<String> {
