@@ -25,7 +25,7 @@ struct VisibleInternalLlmToolOutput {
 enum VisibleInternalLlmToolBranchExecution {
     Completed(VisibleInternalLlmToolOutput),
     Waiting {
-        wait: LlmToolCallbackWait,
+        wait: Box<LlmToolCallbackWait>,
         branch_text: String,
         route_events: Vec<Value>,
     },
@@ -37,7 +37,7 @@ enum VisibleInternalLlmToolBranchExecution {
 
 enum VisibleInternalLlmToolNodeExecution {
     Completed(Value),
-    Waiting(LlmToolCallbackWait),
+    Waiting(Box<LlmToolCallbackWait>),
     Failed(Value),
 }
 
@@ -54,7 +54,7 @@ enum VisibleInternalLlmToolRemainingExecution {
         provider_events: Vec<ProviderStreamEvent>,
         route_events: Vec<Value>,
     },
-    Waiting(LlmToolCallbackWait),
+    Waiting(Box<LlmToolCallbackWait>),
     Failed {
         error_payload: Value,
         provider_events: Vec<ProviderStreamEvent>,
@@ -76,12 +76,29 @@ struct VisibleInternalLlmToolCallbackStateInput<'a> {
 
 pub(super) enum VisibleInternalLlmToolResume {
     Ready(Map<String, Value>),
-    Waiting(LlmToolCallbackWait),
+    Waiting(Box<LlmToolCallbackWait>),
     Failed {
         node_id: String,
         node_alias: String,
-        execution: LlmNodeExecution,
+        execution: Box<LlmNodeExecution>,
     },
+}
+
+struct VisibleInternalLlmToolBranchContext<'a, I: ?Sized> {
+    plan: &'a CompiledPlan,
+    runtime_context: &'a ExecutionRuntimeContext,
+    invoker: &'a I,
+    main_node_id: &'a str,
+    tool_call: &'a Value,
+    tool: &'a VisibleInternalLlmTool,
+}
+
+struct VisibleInternalLlmToolRemainingContext<'a, I: ?Sized> {
+    plan: &'a CompiledPlan,
+    variable_pool: &'a Map<String, Value>,
+    runtime_context: &'a ExecutionRuntimeContext,
+    invoker: &'a I,
+    main_node_id: &'a str,
 }
 
 pub(super) fn has_visible_internal_llm_tool_callback_state(
@@ -303,7 +320,7 @@ where
                         provider_events,
                         route_events,
                     );
-                    pending_execution.pending_callback = Some(wait);
+                    pending_execution.pending_callback = Some(*wait);
                     return Ok(pending_execution);
                 }
                 VisibleInternalLlmToolBranchExecution::Failed {
@@ -461,14 +478,16 @@ where
     let active_node_ids = BTreeSet::from([tool.target_node_id.clone()]);
 
     continue_visible_internal_llm_tool_branch(
-        plan,
+        VisibleInternalLlmToolBranchContext {
+            plan,
+            runtime_context,
+            invoker,
+            main_node_id,
+            tool_call,
+            tool,
+        },
         variable_pool,
         active_node_ids,
-        runtime_context,
-        invoker,
-        main_node_id,
-        tool_call,
-        tool,
         String::new(),
         Vec::new(),
         route_events,
@@ -477,14 +496,9 @@ where
 }
 
 async fn continue_visible_internal_llm_tool_branch<I>(
-    plan: &CompiledPlan,
+    context: VisibleInternalLlmToolBranchContext<'_, I>,
     mut variable_pool: Map<String, Value>,
     mut active_node_ids: BTreeSet<String>,
-    runtime_context: &ExecutionRuntimeContext,
-    invoker: &I,
-    main_node_id: &str,
-    tool_call: &Value,
-    tool: &VisibleInternalLlmTool,
     mut branch_text: String,
     mut provider_events: Vec<ProviderStreamEvent>,
     mut route_events: Vec<Value>,
@@ -492,6 +506,13 @@ async fn continue_visible_internal_llm_tool_branch<I>(
 where
     I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
+    let plan = context.plan;
+    let runtime_context = context.runtime_context;
+    let invoker = context.invoker;
+    let main_node_id = context.main_node_id;
+    let tool_call = context.tool_call;
+    let tool = context.tool;
+
     for node_id in &plan.topological_order {
         if !active_node_ids.contains(node_id) {
             continue;
@@ -678,7 +699,7 @@ where
                     debug_payload: execution.debug_payload.clone(),
                     provider_events: execution.provider_events,
                 });
-                return Ok(VisibleInternalLlmToolNodeExecution::Waiting(wait));
+                return Ok(VisibleInternalLlmToolNodeExecution::Waiting(Box::new(wait)));
             }
 
             Ok(VisibleInternalLlmToolNodeExecution::Completed(
@@ -745,11 +766,7 @@ where
 }
 
 async fn execute_remaining_visible_internal_llm_tool_calls<I>(
-    plan: &CompiledPlan,
-    variable_pool: &Map<String, Value>,
-    runtime_context: &ExecutionRuntimeContext,
-    invoker: &I,
-    main_node_id: &str,
+    context: VisibleInternalLlmToolRemainingContext<'_, I>,
     mut completed_tool_results: Vec<Value>,
     mut visible_transcript: String,
     pending_calls: Vec<VisibleInternalLlmToolPendingCall>,
@@ -757,6 +774,12 @@ async fn execute_remaining_visible_internal_llm_tool_calls<I>(
 where
     I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
 {
+    let plan = context.plan;
+    let variable_pool = context.variable_pool;
+    let runtime_context = context.runtime_context;
+    let invoker = context.invoker;
+    let main_node_id = context.main_node_id;
+
     let mut provider_events = Vec::new();
     let mut route_events = Vec::new();
     for (index, pending_call) in pending_calls.iter().enumerate() {
@@ -949,14 +972,16 @@ where
                 })
             } else {
                 continue_visible_internal_llm_tool_branch(
-                    plan,
+                    VisibleInternalLlmToolBranchContext {
+                        plan,
+                        runtime_context,
+                        invoker,
+                        main_node_id: &state.main_node_id,
+                        tool_call: &state.tool_call,
+                        tool: &tool,
+                    },
                     variable_pool.clone(),
                     active_node_ids,
-                    runtime_context,
-                    invoker,
-                    &state.main_node_id,
-                    &state.tool_call,
-                    &tool,
                     branch_text,
                     provider_events,
                     route_events,
@@ -1001,11 +1026,13 @@ where
                         let visible_transcript =
                             format!("{}{}", state.main_visible_transcript, state.branch_text);
                         match execute_remaining_visible_internal_llm_tool_calls(
-                            plan,
-                            &variable_pool,
-                            runtime_context,
-                            invoker,
-                            &state.main_node_id,
+                            VisibleInternalLlmToolRemainingContext {
+                                plan,
+                                variable_pool: &variable_pool,
+                                runtime_context,
+                                invoker,
+                                main_node_id: &state.main_node_id,
+                            },
                             completed_tool_results,
                             visible_transcript,
                             state.remaining_tool_calls.clone(),
@@ -1061,7 +1088,7 @@ where
                                 return Ok(VisibleInternalLlmToolResume::Failed {
                                     node_id: main_node.node_id.clone(),
                                     node_alias: main_node.alias.clone(),
-                                    execution,
+                                    execution: Box::new(execution),
                                 });
                             }
                         }
@@ -1080,7 +1107,7 @@ where
                     return Ok(VisibleInternalLlmToolResume::Failed {
                         node_id: main_node.node_id.clone(),
                         node_alias: main_node.alias.clone(),
-                        execution,
+                        execution: Box::new(execution),
                     });
                 }
             };
@@ -1097,11 +1124,13 @@ where
             let visible_transcript =
                 format!("{}{}", state.main_visible_transcript, branch_output.text);
             match execute_remaining_visible_internal_llm_tool_calls(
-                plan,
-                &variable_pool,
-                runtime_context,
-                invoker,
-                &state.main_node_id,
+                VisibleInternalLlmToolRemainingContext {
+                    plan,
+                    variable_pool: &variable_pool,
+                    runtime_context,
+                    invoker,
+                    main_node_id: &state.main_node_id,
+                },
                 completed_tool_results,
                 visible_transcript,
                 state.remaining_tool_calls.clone(),
@@ -1157,7 +1186,7 @@ where
                     Ok(VisibleInternalLlmToolResume::Failed {
                         node_id: main_node.node_id.clone(),
                         node_alias: main_node.alias.clone(),
-                        execution,
+                        execution: Box::new(execution),
                     })
                 }
             }
@@ -1201,11 +1230,13 @@ where
                 let visible_transcript =
                     format!("{}{}", state.main_visible_transcript, state.branch_text);
                 match execute_remaining_visible_internal_llm_tool_calls(
-                    plan,
-                    &variable_pool,
-                    runtime_context,
-                    invoker,
-                    &state.main_node_id,
+                    VisibleInternalLlmToolRemainingContext {
+                        plan,
+                        variable_pool: &variable_pool,
+                        runtime_context,
+                        invoker,
+                        main_node_id: &state.main_node_id,
+                    },
                     completed_tool_results,
                     visible_transcript,
                     state.remaining_tool_calls.clone(),
@@ -1257,7 +1288,7 @@ where
                         return Ok(VisibleInternalLlmToolResume::Failed {
                             node_id: main_node.node_id.clone(),
                             node_alias: main_node.alias.clone(),
-                            execution,
+                            execution: Box::new(execution),
                         });
                     }
                 }
@@ -1271,7 +1302,7 @@ where
             Ok(VisibleInternalLlmToolResume::Failed {
                 node_id: main_node.node_id.clone(),
                 node_alias: main_node.alias.clone(),
-                execution,
+                execution: Box::new(execution),
             })
         }
     }
@@ -1639,16 +1670,17 @@ fn visible_internal_llm_tool_llm_resolved_inputs(
             inputs.insert("files".to_string(), Value::Array(files.clone()));
         }
     }
-    if !inputs.contains_key("tools") {
-        if !visible_internal_llm_tool_has_media_argument(variable_pool) {
-            if let Some(tools) = context
-                .get("tools")
-                .and_then(Value::as_array)
-                .filter(|tools| !tools.is_empty())
-            {
-                inputs.insert("tools".to_string(), Value::Array(tools.clone()));
-            }
-        }
+    let inherited_tools = (!inputs.contains_key("tools")
+        && !visible_internal_llm_tool_has_media_argument(variable_pool))
+    .then(|| {
+        context
+            .get("tools")
+            .and_then(Value::as_array)
+            .filter(|tools| !tools.is_empty())
+    })
+    .flatten();
+    if let Some(tools) = inherited_tools {
+        inputs.insert("tools".to_string(), Value::Array(tools.clone()));
     }
 
     inputs

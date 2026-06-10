@@ -47,13 +47,14 @@ pub fn activate_downstream_nodes(
         }
 
         if node.node_type != "if_else" {
+            let edge_source_handle = edge.source_handle.as_deref();
             if let Some(selected_source_handle) = selected_source_handle {
-                if edge.source_handle.as_deref() != Some(selected_source_handle) {
+                if edge_source_handle != Some(selected_source_handle) {
                     continue;
                 }
-            } else if edge.source_handle.as_deref() == Some(ERROR_BRANCH_SOURCE_HANDLE) {
-                continue;
-            } else if is_visible_internal_llm_tool_source_handle(edge.source_handle.as_deref()) {
+            } else if edge_source_handle == Some(ERROR_BRANCH_SOURCE_HANDLE)
+                || is_visible_internal_llm_tool_source_handle(edge_source_handle)
+            {
                 continue;
             }
         }

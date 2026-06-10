@@ -40,7 +40,7 @@ fn llm_tool_call_is_internal(call: &Value) -> bool {
         || call.get("visibility").and_then(Value::as_str) == Some("internal")
         || call
             .get("metadata")
-            .is_some_and(|metadata| metadata_marks_internal_llm_tool_call(metadata))
+            .is_some_and(metadata_marks_internal_llm_tool_call)
 }
 
 fn metadata_marks_internal_llm_tool_call(metadata: &Value) -> bool {

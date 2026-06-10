@@ -204,6 +204,7 @@ where
                     .await;
                 }
                 VisibleInternalLlmToolResume::Waiting(wait) => {
+                    let wait = *wait;
                     let checkpoint_variable_pool = wait.checkpoint_variable_pool.clone();
                     return Ok(FlowDebugExecutionOutcome {
                         stop_reason: ExecutionStopReason::WaitingCallback(PendingCallbackTask {
@@ -226,6 +227,7 @@ where
                     node_alias,
                     execution,
                 } => {
+                    let execution = *execution;
                     return Ok(FlowDebugExecutionOutcome {
                         stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
                             node_id,

@@ -309,22 +309,24 @@ export function getLlmVisibleInternalTools(
       return [];
     }
 
-    return [
-      {
-        type: 'visible_internal_llm_tool',
-        tool_name: toolName,
-        connector_id: asString(tool.connector_id).trim() || toolName,
-        target_node_id: targetNodeId,
-        description: asString(tool.description).trim() || undefined,
-        input_schema: isRecord(tool.input_schema)
-          ? (tool.input_schema as Record<string, unknown>)
-          : undefined,
-        internal_llm_node_policy:
-          tool.internal_llm_node_policy === 'allowed'
-            ? 'allowed'
-            : DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY
-      }
-    ];
+    const registration: LlmVisibleInternalTool = {
+      type: 'visible_internal_llm_tool',
+      tool_name: toolName,
+      connector_id: asString(tool.connector_id).trim() || toolName,
+      target_node_id: targetNodeId
+    };
+    const description = asString(tool.description).trim();
+    if (description) {
+      registration.description = description;
+    }
+    if (isRecord(tool.input_schema)) {
+      registration.input_schema = tool.input_schema as Record<string, unknown>;
+    }
+    if (tool.internal_llm_node_policy === 'allowed') {
+      registration.internal_llm_node_policy = 'allowed';
+    }
+
+    return [registration];
   });
 }
 

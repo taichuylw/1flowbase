@@ -61,6 +61,8 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
     collect_system_reminder_parts(&mut system_parts, &latest_user_text);
     let query = sanitize_anthropic_compat_text("user", &latest_user_text).unwrap_or_default();
     let latest_user_media_blocks = query_media_content_blocks(latest_user_content);
+    let latest_user_is_tool_result_only =
+        anthropic_content_is_tool_result_only(latest_user_content);
 
     let mut history = Vec::new();
     let mut hidden_control_kind = None;
@@ -80,7 +82,9 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
             collect_system_reminder_parts(&mut system_parts, &raw_content);
         }
         let content = sanitize_anthropic_compat_text(role, &raw_content).unwrap_or_default();
-        let content_blocks = history_content_blocks(role, content_value);
+        let keep_tool_use_blocks =
+            latest_user_is_tool_result_only && role == "assistant" && index + 1 == last_user_index;
+        let content_blocks = history_content_blocks(role, content_value, keep_tool_use_blocks);
         if content.trim().is_empty() && content_blocks.is_none() {
             continue;
         }
@@ -496,7 +500,40 @@ fn anthropic_blocks_have_visible_user_text(blocks: &[Value]) -> bool {
     })
 }
 
-fn history_content_blocks(role: &str, content: &Value) -> Option<Value> {
+fn anthropic_content_is_tool_result_only(content: &Value) -> bool {
+    let Some(blocks) = content.as_array() else {
+        return false;
+    };
+    let mut has_tool_result = false;
+    for block in blocks {
+        match block
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+        {
+            "tool_result" => has_tool_result = true,
+            "thinking" | "redacted_thinking" => {}
+            "text" => {
+                if block
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .and_then(|text| sanitize_anthropic_compat_text("user", text))
+                    .is_some()
+                {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    has_tool_result
+}
+
+fn history_content_blocks(
+    role: &str,
+    content: &Value,
+    keep_tool_use_blocks: bool,
+) -> Option<Value> {
     let blocks = content.as_array()?;
     let has_direct_media_blocks = blocks.iter().any(|block| {
         matches!(
@@ -522,6 +559,7 @@ fn history_content_blocks(role: &str, content: &Value) -> Option<Value> {
             }
             Some("text") => None,
             Some("image" | "document") => Some(block.clone()),
+            Some("tool_use" | "server_tool_use") if keep_tool_use_blocks => Some(block.clone()),
             _ => None,
         })
         .collect::<Vec<_>>();

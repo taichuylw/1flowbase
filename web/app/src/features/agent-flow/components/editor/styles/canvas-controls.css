@@ -309,10 +309,7 @@
   padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-padding-bottom: var(
-    --agent-flow-node-picker-list-bottom-padding,
-    40px
-  );
+  scroll-padding-bottom: var(--agent-flow-node-picker-list-bottom-padding, 40px);
 }
 
 .agent-flow-node-picker__section {
