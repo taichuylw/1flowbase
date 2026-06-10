@@ -19,7 +19,7 @@ test('exec-with-real-node shell launcher forwards child exit codes', () => {
     'utf8'
   );
 
-  const launcherPath = path.join(process.cwd(), 'scripts/node/exec-with-real-node.sh');
+  const launcherPath = path.join(process.cwd(), 'scripts/node/cli/exec-with-real-node.sh');
   const result = spawnSync(
     'bash',
     [launcherPath, childScript, '7'],
@@ -64,7 +64,7 @@ test('exec-with-real-node shell launcher follows corepack pnpm.js back to real N
   const childScript = path.join(tempDir, 'exit-code.js');
   fs.writeFileSync(childScript, 'process.exit(Number(process.argv[2] ?? 0));\n', 'utf8');
 
-  const launcherPath = path.join(process.cwd(), 'scripts/node/exec-with-real-node.sh');
+  const launcherPath = path.join(process.cwd(), 'scripts/node/cli/exec-with-real-node.sh');
   const result = spawnSync(
     'bash',
     [launcherPath, childScript, '9'],

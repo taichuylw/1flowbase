@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { main } = require('./merge-current-to-main-latest/core.js');
+const { main } = require('../merge-current-to-main-latest/core.js');
 
 if (require.main === module) {
   try {

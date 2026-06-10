@@ -3,7 +3,6 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { getRepoRoot } = require('../testing/warning-capture.js');
-const { backendThresholds } = require('../testing/coverage-thresholds.js');
 const {
   closeIssueWithGitHubApi,
   closeStaleOpenQualityGateIssues,
@@ -13,10 +12,12 @@ const {
   upsertIssueCommentWithMarker,
 } = require('./github-api.js');
 const {
-  BACKEND_CI_TEST_SHARDS,
-  BACKEND_CONSISTENCY_TARGETS,
-  BACKEND_SHARDS,
-} = require('../verify/index.js');
+  buildGateCommand,
+  COVERAGE_BACKEND_COMPONENT_SCOPES,
+  DEFAULT_AGGREGATE_SCOPES,
+  REPO_BACKEND_COMPONENT_SCOPES,
+} = require('./commands.js');
+const { BACKEND_CONSISTENCY_TARGETS } = require('../verify/index.js');
 const {
   buildContainerImageSecurityMarkdownLines,
   formatContainerImageSecurityComponentLine,
@@ -28,175 +29,11 @@ const {
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const BACKEND_CONSISTENCY_TARGET_REPORT_FILE = 'backend-consistency-targets.json';
 const SECURITY_RISK_REPORT_FILE = 'security-risk.json';
-const REPO_BACKEND_SHARD_TARGETS = ['clippy', 'test', 'check'];
-const REPO_BACKEND_SHARDS_BY_TARGET = {
-  clippy: BACKEND_SHARDS,
-  test: BACKEND_CI_TEST_SHARDS,
-  check: BACKEND_SHARDS,
-};
-const REPO_BACKEND_COMPONENT_SCOPES = [
-  'repo-backend-static',
-  'repo-backend-fmt',
-  ...REPO_BACKEND_SHARD_TARGETS.flatMap((target) =>
-    REPO_BACKEND_SHARDS_BY_TARGET[target].map((shard) => `repo-backend-${target}-${shard.key}`)
-  ),
-];
-const COVERAGE_BACKEND_COMPONENT_SCOPES = backendThresholds.map((entry) => `coverage-backend-${entry.key}`);
-const DEFAULT_AGGREGATE_SCOPES = [
-  'repo-tooling',
-  'repo-frontend',
-  ...REPO_BACKEND_COMPONENT_SCOPES,
-  'backend-consistency',
-  'coverage-frontend',
-  ...COVERAGE_BACKEND_COMPONENT_SCOPES,
-];
-const VALID_SCOPES = new Set([
-  'ci',
-  'repo',
-  'repo-tooling',
-  'repo-frontend',
-  'repo-frontend-pr',
-  'repo-backend',
-  'backend',
-  'backend-consistency',
-  'coverage',
-  'coverage-frontend',
-  'coverage-backend',
-  'container-images',
-  ...REPO_BACKEND_COMPONENT_SCOPES,
-  ...COVERAGE_BACKEND_COMPONENT_SCOPES,
-]);
 const VALID_REPORT_TYPES = new Set(['ci', 'cd']);
 const PR_REPORT_MARKER = '<!-- 1flowbase-quality-gate-pr-report -->';
 const MAX_GATE_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FAILURE_EXCERPT_MAX_LINES = 80;
 const ANSI_CONTROL_SEQUENCE_PATTERN = /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/gu;
-const PACKED_CLI_ENTRIES = new Set(['container-image-security', 'verify-backend-consistency']);
-
-function resolveCliEntry(repoRoot, entryName) {
-  const cliDir = PACKED_CLI_ENTRIES.has(entryName)
-    ? path.join('scripts', 'node', 'cli')
-    : path.join('scripts', 'node');
-  return path.join(repoRoot, cliDir, `${entryName}.js`);
-}
-
-function buildGateCommand({ repoRoot, scope }) {
-  if (!VALID_SCOPES.has(scope)) {
-    throw new Error(`Unknown quality gate scope: ${scope}`);
-  }
-
-  const command = process.execPath;
-
-  if (scope === 'coverage') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-coverage'), 'all'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'coverage-frontend') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-coverage'), 'frontend'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'coverage-backend') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-coverage'), 'backend'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope.startsWith('coverage-backend-')) {
-    return {
-      command,
-      args: [
-        resolveCliEntry(repoRoot, 'verify-coverage'),
-        'backend',
-        scope.replace(/^coverage-backend-/u, ''),
-      ],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'repo-tooling') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'tooling'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'repo-frontend') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'frontend'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'repo-frontend-pr') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'frontend-pr'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'repo-backend') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-repo'), 'backend'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'repo-backend-static') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-backend'), 'static'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'repo-backend-fmt') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'verify-backend'), 'fmt'],
-      cwd: repoRoot,
-    };
-  }
-
-  if (scope === 'container-images') {
-    return {
-      command,
-      args: [resolveCliEntry(repoRoot, 'container-image-security')],
-      cwd: repoRoot,
-    };
-  }
-
-  for (const target of REPO_BACKEND_SHARD_TARGETS) {
-    for (const shard of REPO_BACKEND_SHARDS_BY_TARGET[target]) {
-      if (scope === `repo-backend-${target}-${shard.key}`) {
-        return {
-          command,
-          args: [resolveCliEntry(repoRoot, 'verify-backend'), target, shard.key],
-          cwd: repoRoot,
-        };
-      }
-    }
-  }
-
-  return {
-    command,
-    args: [resolveCliEntry(repoRoot, `verify-${scope}`)],
-    cwd: repoRoot,
-  };
-}
 
 function parseBooleanInput(value) {
   if (value === undefined || value === null || value === '') {

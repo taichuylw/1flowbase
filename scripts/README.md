@@ -10,13 +10,13 @@
 
 ## Git Helpers
 
-### `node scripts/node/merge-current-to-main-latest.js [选项]`
+### `node scripts/node/cli/merge-current-to-main-latest.js [选项]`
 
 将当前分支合并到 `main`，推送 `main`；成功后切到 `latest`，将 `main` 合并进 `latest` 并推送。
 任意 git 步骤失败都会立即停止，并停留在失败发生时的分支/状态。
 
 ```bash
-node scripts/node/merge-current-to-main-latest.js
+node scripts/node/cli/merge-current-to-main-latest.js
 ```
 
 默认使用 `origin`、`main`、`latest`，可用 `--remote`、`--main`、`--latest` 覆盖。
@@ -324,7 +324,7 @@ profile：
 
 ## Runtime Helpers
 
-- `scripts/node/exec-with-real-node.sh`: 从前端包脚本调用仓库 Node 脚本时，确保使用真实 Node runtime。
+- `scripts/node/cli/exec-with-real-node.sh`: 从前端包脚本调用仓库 Node 脚本时，确保使用真实 Node runtime。
 - `scripts/node/testing/*`: 脚本共享的运行时配置、warning capture、coverage threshold 和 Node runtime 解析工具。
 ## docker
 
