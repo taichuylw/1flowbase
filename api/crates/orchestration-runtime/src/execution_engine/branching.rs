@@ -2,13 +2,21 @@ use super::*;
 use crate::node_error_policy::ERROR_BRANCH_SOURCE_HANDLE;
 
 pub fn initial_active_node_ids(plan: &CompiledPlan) -> BTreeSet<String> {
+    let mounted_llm_target_node_ids = visible_internal_llm_tool_target_node_ids(plan);
+
     if plan.edges.is_empty() {
-        return plan.topological_order.iter().cloned().collect();
+        return plan
+            .topological_order
+            .iter()
+            .filter(|node_id| !mounted_llm_target_node_ids.contains(*node_id))
+            .cloned()
+            .collect();
     }
 
     plan.nodes
         .values()
         .filter(|node| node.dependency_node_ids.is_empty())
+        .filter(|node| !mounted_llm_target_node_ids.contains(&node.node_id))
         .map(|node| node.node_id.clone())
         .collect()
 }
@@ -44,6 +52,8 @@ pub fn activate_downstream_nodes(
                     continue;
                 }
             } else if edge.source_handle.as_deref() == Some(ERROR_BRANCH_SOURCE_HANDLE) {
+                continue;
+            } else if is_visible_internal_llm_tool_source_handle(edge.source_handle.as_deref()) {
                 continue;
             }
         }

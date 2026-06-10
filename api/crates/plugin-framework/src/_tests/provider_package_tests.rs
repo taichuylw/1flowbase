@@ -133,6 +133,7 @@ family: llm
 capabilities:
   - stream
   - tool_call
+supports_multimodal: true
 context_window: 128000
 max_output_tokens: 4096
 provider_metadata:
@@ -210,6 +211,7 @@ fn provider_package_loads_manifest_v1_runtime_entry_and_static_models() {
     assert_eq!(model.source, ProviderModelSource::Static);
     assert!(model.supports_streaming);
     assert!(model.supports_tool_call);
+    assert!(model.supports_multimodal);
     assert_eq!(model.context_window, Some(128000));
     assert_eq!(model.max_output_tokens, Some(4096));
     assert!(

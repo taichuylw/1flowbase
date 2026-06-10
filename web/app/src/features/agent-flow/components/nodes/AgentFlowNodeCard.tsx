@@ -1,17 +1,17 @@
 import {
   DeleteOutlined,
+  MergeOutlined,
   MoreOutlined,
   PlayCircleOutlined,
   SwapOutlined
 } from '@ant-design/icons';
 import { Button, Dropdown, Tooltip, type MenuProps } from 'antd';
-import { Position, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
-  useEffect,
-  useRef,
-  useState,
-  type SyntheticEvent
-} from 'react';
+  Position,
+  useUpdateNodeInternals,
+  type NodeProps
+} from '@xyflow/react';
+import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
 
 import { SchemaRenderer } from '../../../../shared/schema-ui/runtime/SchemaRenderer';
 import { CanvasHandle } from '../canvas/CanvasHandle';
@@ -19,6 +19,7 @@ import { ConnectorAddIcon } from '../canvas/ConnectorAddIcon';
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from '../canvas/node-types';
 import { agentFlowRendererRegistry } from '../../schema/agent-flow-renderer-registry';
+import { MAIN_SOURCE_HANDLE_ID } from '../../lib/canvas-handle-ids';
 import { getNodeDefinitionMeta } from '../../lib/node-definitions';
 import { getCommonErrorBranchSourceHandle } from '../../lib/node-error-policy';
 import {
@@ -88,7 +89,7 @@ export function AgentFlowNodeCard({
     {
       key: 'run',
       icon: <PlayCircleOutlined />,
-      label: i18nText("agentFlow", "auto.execute_this_node"),
+      label: i18nText('agentFlow', 'auto.execute_this_node'),
       onClick: ({ domEvent }) => {
         domEvent.stopPropagation();
         data.onSelectNode(data.nodeId);
@@ -98,13 +99,13 @@ export function AgentFlowNodeCard({
     {
       key: 'replace',
       icon: <SwapOutlined />,
-      label: i18nText("agentFlow", "auto.replace_node"),
+      label: i18nText('agentFlow', 'auto.replace_node'),
       children: replaceItems
     },
     {
       key: 'delete',
       icon: <DeleteOutlined />,
-      label: i18nText("agentFlow", "auto.delete_node"),
+      label: i18nText('agentFlow', 'auto.delete_node'),
       danger: true,
       onClick: ({ domEvent }) => {
         domEvent.stopPropagation();
@@ -164,6 +165,10 @@ export function AgentFlowNodeCard({
   ]
     .map((handle) => handle.id)
     .join('|');
+  const toolSourceHandles = data.toolSourceHandles ?? [];
+  const toolHandleSignature = toolSourceHandles
+    .map((handle) => handle.id)
+    .join('|');
   const primarySourceHandles =
     branchSourceHandles.length > 0
       ? branchSourceHandles
@@ -180,21 +185,26 @@ export function AgentFlowNodeCard({
 
   useEffect(() => {
     updateNodeInternals(data.nodeId);
-  }, [branchHandleSignature, data.nodeId, updateNodeInternals]);
+  }, [
+    branchHandleSignature,
+    data.nodeId,
+    toolHandleSignature,
+    updateNodeInternals
+  ]);
 
   function renderSourceHandle(
     handle: { id: string | null; title: string | null },
     index: number
   ) {
+    const sourceHandleId = handle.id ?? MAIN_SOURCE_HANDLE_ID;
     const pickerSourceHandleId = data.pickerSourceHandleId ?? null;
-    const pickerOpen =
-      data.pickerOpen && pickerSourceHandleId === handle.id;
+    const pickerOpen = data.pickerOpen && pickerSourceHandleId === handle.id;
     const ariaLabel = handle.title
-      ? i18nText("agentFlow", "auto.add_node_after_branch", {
+      ? i18nText('agentFlow', 'auto.add_node_after_branch', {
           value1: data.alias,
           value2: handle.title
         })
-      : i18nText("agentFlow", "auto.add_node_after", { value1: data.alias });
+      : i18nText('agentFlow', 'auto.add_node_after', { value1: data.alias });
     const top =
       sourceHandles.length > 1
         ? `${((index + 1) / (sourceHandles.length + 1)) * 100}%`
@@ -203,12 +213,12 @@ export function AgentFlowNodeCard({
     const tooltipTitle = handle.title ? (
       <div style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}>
         <div>{handle.title}</div>
-        <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
+        <div>{i18nText('agentFlow', 'auto.click_add_node')}</div>
       </div>
     ) : (
       <div style={{ textAlign: 'center', fontSize: 12, padding: '2px 0' }}>
-        <div>{i18nText("agentFlow", "auto.click_add_node")}</div>
-        <div>{i18nText("agentFlow", "auto.drag_drop_connect_nodes")}</div>
+        <div>{i18nText('agentFlow', 'auto.click_add_node')}</div>
+        <div>{i18nText('agentFlow', 'auto.drag_drop_connect_nodes')}</div>
       </div>
     );
 
@@ -250,7 +260,7 @@ export function AgentFlowNodeCard({
             open={!pickerOpen ? undefined : false}
           >
             <CanvasHandle
-              id={handle.id ?? undefined}
+              id={sourceHandleId}
               type="source"
               position={Position.Right}
               aria-expanded={pickerOpen}
@@ -291,6 +301,54 @@ export function AgentFlowNodeCard({
     );
   }
 
+  function getToolConnectorLeft(index: number) {
+    return toolSourceHandles.length > 1
+      ? `${((index + 1) / (toolSourceHandles.length + 1)) * 100}%`
+      : '50%';
+  }
+
+  function renderToolHandle(
+    handle: { id: string; title: string },
+    index: number
+  ) {
+    return (
+      <div
+        className="agent-flow-node-card__tool-handle"
+        data-testid={`agent-flow-node-tool-handle-${index}`}
+        key={handle.id}
+        style={{ left: getToolConnectorLeft(index) }}
+      >
+        <Tooltip
+          title={handle.title}
+          placement="bottom"
+          color="#ffffff"
+          styles={{
+            body: {
+              color: '#333',
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }
+          }}
+        >
+          <CanvasHandle
+            id={handle.id}
+            type="source"
+            position={Position.Bottom}
+            isConnectable
+            aria-label={`${handle.title} ${i18nText('agentFlow', 'auto.tool_connector')}`}
+            className="agent-flow-node-handle agent-flow-node-handle--tool"
+          >
+            <MergeOutlined
+              aria-hidden="true"
+              className="agent-flow-node-handle__tool-icon"
+              data-testid="agent-flow-node-tool-connector-icon"
+            />
+          </CanvasHandle>
+        </Tooltip>
+      </div>
+    );
+  }
+
   return (
     <>
       {data.showTargetHandle ? (
@@ -321,11 +379,13 @@ export function AgentFlowNodeCard({
           }
         }}
       >
-        <SchemaRenderer
-          adapter={cardAdapter}
-          blocks={data.nodeSchema.card.blocks}
-          registry={agentFlowRendererRegistry}
-        />
+        <div className="agent-flow-node-card__content">
+          <SchemaRenderer
+            adapter={cardAdapter}
+            blocks={data.nodeSchema.card.blocks}
+            registry={agentFlowRendererRegistry}
+          />
+        </div>
         <div
           className={`agent-flow-node-card__quick-actions${quickActionsVisible ? ' agent-flow-node-card__quick-actions--visible' : ''}`}
           data-testid={`agent-flow-node-quick-actions-${data.nodeId}`}
@@ -333,9 +393,11 @@ export function AgentFlowNodeCard({
           onMouseLeave={scheduleHideQuickActions}
           onPointerDown={stopActionEvent}
         >
-          <Tooltip title={i18nText("agentFlow", "auto.execute_this_node")}>
+          <Tooltip title={i18nText('agentFlow', 'auto.execute_this_node')}>
             <Button
-              aria-label={i18nText("agentFlow", "auto.execute", { value1: data.alias })}
+              aria-label={i18nText('agentFlow', 'auto.execute', {
+                value1: data.alias
+              })}
               className="agent-flow-node-card__quick-action"
               icon={<PlayCircleOutlined />}
               shape="circle"
@@ -350,7 +412,9 @@ export function AgentFlowNodeCard({
           </Tooltip>
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
             <Button
-              aria-label={i18nText("agentFlow", "auto.more_actions", { value1: data.alias })}
+              aria-label={i18nText('agentFlow', 'auto.more_actions', {
+                value1: data.alias
+              })}
               className="agent-flow-node-card__quick-action"
               icon={<MoreOutlined />}
               shape="circle"
@@ -360,9 +424,14 @@ export function AgentFlowNodeCard({
             />
           </Dropdown>
         </div>
+        {toolSourceHandles.map((handle, index) =>
+          renderToolHandle(handle, index)
+        )}
       </div>
       {data.showSourceHandle
-        ? sourceHandles.map((handle, index) => renderSourceHandle(handle, index))
+        ? sourceHandles.map((handle, index) =>
+            renderSourceHandle(handle, index)
+          )
         : null}
     </>
   );

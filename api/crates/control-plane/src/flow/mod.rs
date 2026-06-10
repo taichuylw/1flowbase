@@ -1,10 +1,11 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
 use anyhow::Result;
 use async_trait::async_trait;
+use serde_json::Value;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -33,6 +34,9 @@ pub struct UpdateFlowVersionMetadataCommand {
     pub summary_is_custom: Option<bool>,
     pub is_protected: Option<bool>,
 }
+
+const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
+const FLOW_TOOL_IDENTIFIER_MAX_LENGTH: usize = 64;
 
 pub struct FlowService<R> {
     repository: R,
@@ -75,6 +79,7 @@ where
             .repository
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
+        validate_flow_draft_document(&command.document)?;
 
         self.repository
             .save_draft(
@@ -136,6 +141,106 @@ where
             )
             .await
     }
+}
+
+fn validate_flow_draft_document(document: &Value) -> Result<()> {
+    let Some(nodes) = document
+        .get("graph")
+        .and_then(|graph| graph.get("nodes"))
+        .and_then(Value::as_array)
+    else {
+        return Ok(());
+    };
+
+    for node in nodes {
+        if node.get("type").and_then(Value::as_str) != Some("llm") {
+            continue;
+        }
+
+        let Some(config) = node.get("config").and_then(Value::as_object) else {
+            continue;
+        };
+        let tools_enabled = config
+            .get("visible_internal_llm_tools_enabled")
+            .or_else(|| config.get("visibleInternalLlmToolsEnabled"))
+            .and_then(Value::as_bool)
+            == Some(true);
+
+        if !tools_enabled {
+            continue;
+        }
+
+        let Some(tools) = config
+            .get("visible_internal_llm_tools")
+            .or_else(|| config.get("visibleInternalLlmTools"))
+            .and_then(Value::as_array)
+        else {
+            continue;
+        };
+        let mut tool_names = HashSet::new();
+        let mut connector_ids = HashSet::new();
+
+        for tool in tools {
+            if tool.get("type").and_then(Value::as_str) != Some(VISIBLE_INTERNAL_LLM_TOOL_TYPE) {
+                continue;
+            }
+
+            let Some(tool_name) = trimmed_string_field(tool, "tool_name", "name") else {
+                return Err(ControlPlaneError::InvalidInput(
+                    "visible_internal_llm_tools.tool_name",
+                )
+                .into());
+            };
+
+            if !is_flow_tool_identifier(tool_name) || !tool_names.insert(tool_name.to_string()) {
+                return Err(ControlPlaneError::InvalidInput(
+                    "visible_internal_llm_tools.tool_name",
+                )
+                .into());
+            }
+
+            let effective_connector_id = match string_field(tool, "connector_id", "connectorId") {
+                Some(value) => value
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or(ControlPlaneError::InvalidInput(
+                        "visible_internal_llm_tools.connector_id",
+                    ))?,
+                None => tool_name,
+            };
+
+            if !is_flow_tool_identifier(effective_connector_id)
+                || !connector_ids.insert(effective_connector_id.to_string())
+            {
+                return Err(ControlPlaneError::InvalidInput(
+                    "visible_internal_llm_tools.connector_id",
+                )
+                .into());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn trimmed_string_field<'a>(value: &'a Value, snake_key: &str, camel_key: &str) -> Option<&'a str> {
+    string_field(value, snake_key, camel_key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn string_field<'a>(value: &'a Value, snake_key: &str, camel_key: &str) -> Option<&'a Value> {
+    value.get(snake_key).or_else(|| value.get(camel_key))
+}
+
+fn is_flow_tool_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= FLOW_TOOL_IDENTIFIER_MAX_LENGTH
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 #[derive(Default)]

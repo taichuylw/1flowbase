@@ -5,6 +5,7 @@ import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { buildFlowDebugRunInput } from '../api/runtime';
 import { createNodeDocument } from '../lib/document/node-factory';
 import {
+  isSelectorVisible,
   listLlmContextSelectorOptions,
   listVisibleSelectorOptions,
   toCascaderSelectorOptions
@@ -319,6 +320,147 @@ describe('start node variables', () => {
         (option) => option.value
       )
     ).not.toContainEqual(['sys', 'app_id']);
+  });
+
+  test('exposes mounted LLM tool schema arguments to tool branch selectors', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+    const mountedLlmNode = createNodeDocument('llm', 'node-mounted-llm');
+    const mountedAnswerNode = createNodeDocument(
+      'answer',
+      'node-mounted-answer'
+    );
+
+    if (!llmNode) {
+      throw new Error('expected llm node');
+    }
+
+    llmNode.config.visible_internal_llm_tools_enabled = true;
+    llmNode.config.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'image_llm',
+        connector_id: 'image_llm',
+        target_node_id: 'node-mounted-llm',
+        input_schema: {
+          type: 'object',
+          required: ['task'],
+          properties: {
+            task: {
+              type: 'string',
+              description: '给多模态模型任务指示提示词'
+            },
+            retry_count: { type: 'number' }
+          }
+        }
+      }
+    ];
+    document.graph.nodes.push(mountedLlmNode, mountedAnswerNode);
+    document.graph.edges.push(
+      {
+        id: 'edge-llm-mounted-tool',
+        source: 'node-llm',
+        target: 'node-mounted-llm',
+        sourceHandle: 'visible_internal_llm_tool:image_llm',
+        targetHandle: null,
+        containerId: null,
+        points: []
+      },
+      {
+        id: 'edge-mounted-llm-answer',
+        source: 'node-mounted-llm',
+        target: 'node-mounted-answer',
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      }
+    );
+
+    expect(
+      listVisibleSelectorOptions(document, 'node-mounted-answer')
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'visible_internal_llm_tool',
+          nodeLabel: 'tool',
+          outputKey: 'task',
+          outputLabel: 'task',
+          valueType: 'string',
+          jsonSchema: expect.objectContaining({
+            type: 'string',
+            description: '给多模态模型任务指示提示词'
+          }),
+          value: ['visible_internal_llm_tool', 'arguments', 'task'],
+          displayLabel: 'tool.task'
+        }),
+        expect.objectContaining({
+          outputKey: 'retry_count',
+          valueType: 'number',
+          value: ['visible_internal_llm_tool', 'arguments', 'retry_count']
+        })
+      ])
+    );
+    expect(
+      isSelectorVisible(document, 'node-mounted-answer', [
+        'visible_internal_llm_tool',
+        'arguments',
+        'task'
+      ])
+    ).toBe(true);
+  });
+
+  test('does not expose mounted LLM tool arguments outside the tool branch', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+    const mountedLlmNode = createNodeDocument('llm', 'node-mounted-llm');
+
+    if (!llmNode) {
+      throw new Error('expected llm node');
+    }
+
+    llmNode.config.visible_internal_llm_tools_enabled = true;
+    llmNode.config.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'image_llm',
+        connector_id: 'image_llm',
+        target_node_id: 'node-mounted-llm',
+        input_schema: {
+          type: 'object',
+          properties: {
+            task: { type: 'string' }
+          }
+        }
+      }
+    ];
+    document.graph.nodes.push(mountedLlmNode);
+    document.graph.edges.push({
+      id: 'edge-llm-mounted-tool',
+      source: 'node-llm',
+      target: 'node-mounted-llm',
+      sourceHandle: 'visible_internal_llm_tool:image_llm',
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(
+      listVisibleSelectorOptions(document, 'node-answer').map(
+        (option) => option.value
+      )
+    ).not.toContainEqual([
+      'visible_internal_llm_tool',
+      'arguments',
+      'task'
+    ]);
+    expect(
+      isSelectorVisible(document, 'node-answer', [
+        'visible_internal_llm_tool',
+        'arguments',
+        'task'
+      ])
+    ).toBe(false);
   });
 
   test('exposes application environment variables to any node', () => {

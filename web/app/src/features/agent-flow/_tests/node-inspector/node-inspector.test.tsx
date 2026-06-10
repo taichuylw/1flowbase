@@ -1,12 +1,18 @@
+import { readFileSync } from 'node:fs';
+
+import { useState } from 'react';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { modelProviderOptionsContract } from '../../../../test/model-provider-contract-fixtures';
+import { NamedBindingsField } from '../../components/bindings/NamedBindingsField';
 import { TemplatedNamedBindingsField } from '../../components/bindings/TemplatedNamedBindingsField';
 import { NodeDetailPanel } from '../../components/detail/NodeDetailPanel';
 import { NodeConfigTab } from '../../components/detail/tabs/NodeConfigTab';
 import { NodeInspector } from '../../components/inspector/NodeInspector';
+import { createEdgeDocument } from '../../lib/document/edge-factory';
+import { createNodeDocument } from '../../lib/document/node-factory';
 import * as nodeSchemaAdapterApi from '../../schema/node-schema-adapter';
 import * as nodeSchemaRegistry from '../../schema/node-schema-registry';
 import { validateDocument } from '../../lib/validate-document';
@@ -29,6 +35,21 @@ import {
 } from './support';
 
 beforeEach(setupNodeInspectorTest);
+
+function NamedBindingsFocusHarness() {
+  const [value, setValue] = useState<
+    Array<{ name: string; selector: string[] }>
+  >([{ name: 'arg1', selector: [] }]);
+
+  return (
+    <NamedBindingsField
+      ariaLabel="bindings"
+      value={value}
+      options={[]}
+      onChange={setValue}
+    />
+  );
+}
 
 describe('NodeInspector core', () => {
   test('reads config sections through the node schema registry and adapter bridge', async () => {
@@ -168,13 +189,167 @@ describe('NodeInspector core', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    const modelTrigger = await screen.findByRole('button', { name: /模型|model/ });
+    const modelTrigger = await screen.findByRole('button', {
+      name: /模型|model/
+    });
 
     await waitFor(() => {
       expect(
         within(modelTrigger).getByLabelText('上下文 128K')
       ).toBeInTheDocument();
     });
+  });
+
+  test('edits LLM mounted tools through compact rows and a modal form', async () => {
+    const state = createInitialState();
+    let latestDocument = state.draft.document;
+    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm', 720, 240);
+    const llmNodeConfig = getLlmNodeConfig(state.draft.document);
+
+    mountedLlm.alias = '视觉 LLM';
+    state.draft.document.graph.nodes.push(mountedLlm);
+    llmNodeConfig.visible_internal_llm_tools_enabled = true;
+    llmNodeConfig.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_visible_context',
+        connector_id: 'inspect_visible_context',
+        target_node_id: 'node-mounted-llm',
+        description: 'Inspect visible context',
+        input_schema: { type: 'object' }
+      }
+    ];
+    state.draft.document.graph.edges.push(
+      createEdgeDocument({
+        id: 'edge-llm-mounted-tool',
+        source: 'node-llm',
+        target: 'node-mounted-llm',
+        sourceHandle: 'visible_internal_llm_tool:inspect_visible_context'
+      })
+    );
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    expect(
+      await screen.findByText('inspect_visible_context')
+    ).toBeInTheDocument();
+    const mountToolsField = screen.getByTestId(
+      'inspector-field-config.visible_internal_llm_tools_enabled'
+    );
+    const mountToolsToolbar = within(mountToolsField).getByTestId(
+      'agent-flow-llm-tool-registrations-toolbar'
+    );
+    const addToolButton = within(mountToolsToolbar).getByRole('button', {
+      name: '添加工具'
+    });
+    const mountToolsSwitch = within(mountToolsToolbar).getByRole('switch', {
+      name: '挂载工具'
+    });
+
+    expect(within(mountToolsToolbar).getByText('挂载工具')).toBeInTheDocument();
+    expect(
+      within(addToolButton).getByTestId(
+        'agent-flow-llm-tool-registration-add-icon'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(mountToolsToolbar).queryByText('添加工具')
+    ).not.toBeInTheDocument();
+    expect(mountToolsSwitch).toHaveClass(
+      'agent-flow-llm-tool-registrations__switch'
+    );
+    expect(
+      readFileSync(
+        'src/features/agent-flow/components/editor/styles/inspector.css',
+        'utf8'
+      )
+    ).toMatch(
+      /\.agent-flow-llm-tool-registrations__switch\.ant-switch\s*\{[^}]*margin-left:\s*auto;/s
+    );
+    expect(within(mountToolsField).getAllByText('挂载工具')).toHaveLength(1);
+    expect(
+      screen.queryByRole('columnheader', { name: '目标 LLM' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '编辑 inspect_visible_context' })
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
+
+    expect(within(dialog).queryByLabelText('目标 LLM')).not.toBeInTheDocument();
+    const internalLlmSwitch = within(dialog).getByRole('switch', {
+      name: '智能路由'
+    });
+    expect(internalLlmSwitch).not.toBeChecked();
+    const saveToolButton = within(dialog).getByRole('button', {
+      name: '保存工具'
+    });
+
+    fireEvent.change(within(dialog).getByLabelText('工具标识'), {
+      target: { value: 'inspect-image' }
+    });
+    expect(saveToolButton).toBeDisabled();
+    expect(
+      within(dialog).getByText('仅支持 1-64 位数字、大小写字母、下划线。')
+    ).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('工具标识'), {
+      target: { value: 'inspect_image' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('工具名称'), {
+      target: { value: 'inspect_image' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('描述'), {
+      target: { value: 'Inspect uploaded image' }
+    });
+    fireEvent.click(internalLlmSwitch);
+    fireEvent.click(saveToolButton);
+
+    await waitFor(() => {
+      expect(getLlmNodeConfig(latestDocument)).toEqual(
+        expect.objectContaining({
+          visible_internal_llm_tools: [
+            expect.objectContaining({
+              tool_name: 'inspect_image',
+              connector_id: 'inspect_image',
+              target_node_id: 'node-mounted-llm',
+              description: 'Inspect uploaded image',
+              internal_llm_node_policy: 'allowed'
+            })
+          ]
+        })
+      );
+    });
+    expect(latestDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'edge-llm-mounted-tool',
+          sourceHandle: 'visible_internal_llm_tool:inspect_image'
+        })
+      ])
+    );
+    expect(await screen.findByText('inspect_image')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '删除 inspect_image' }));
+
+    await waitFor(() => {
+      expect(getLlmNodeConfig(latestDocument)).toEqual(
+        expect.objectContaining({
+          visible_internal_llm_tools: []
+        })
+      );
+    });
+    expect(screen.getByText('暂无工具注册')).toBeInTheDocument();
   });
 
   test('collapses generated outputs by default and keeps output contract editing hidden', async () => {
@@ -462,5 +637,17 @@ describe('NodeInspector core', () => {
         value: { kind: 'constant', value: '' }
       }
     ]);
+  });
+
+  test('keeps named binding input focused when editing its name', () => {
+    renderWithProviders(<NamedBindingsFocusHarness />);
+
+    const nameInput = screen.getByLabelText('bindings-0-name');
+    nameInput.focus();
+    fireEvent.change(nameInput, {
+      target: { value: 'arg2' }
+    });
+
+    expect(screen.getByLabelText('bindings-0-name')).toHaveFocus();
   });
 });

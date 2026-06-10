@@ -52,6 +52,7 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   if_else: createElement(SwapOutlined),
   http_request: createElement(ApiOutlined),
   tool: createElement(ToolOutlined),
+  tool_result: createElement(MessageOutlined),
   data_model_list: createElement(DatabaseOutlined),
   data_model_get: createElement(DatabaseOutlined),
   data_model_create: createElement(DatabaseOutlined),

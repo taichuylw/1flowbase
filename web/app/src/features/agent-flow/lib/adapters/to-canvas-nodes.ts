@@ -7,6 +7,11 @@ import type {
 import type { NodePickerOption } from '../plugin-node-definitions';
 import { resolveAgentFlowNodeSchema } from '../../schema/node-schema-registry';
 import { getIfElseBranchesFromBindings } from '../if-else-branches';
+import {
+  createLlmToolSourceHandleId,
+  getLlmVisibleInternalTools,
+  getLlmVisibleInternalToolsEnabled
+} from '../llm-node-config';
 
 const CANVAS_NODE_WIDTH = 196;
 const CANVAS_NODE_HEIGHT = 96;
@@ -24,6 +29,17 @@ function nodeTypeLabel(nodeType: AgentFlowCanvasNodeData['nodeType']) {
     .split('_')
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(' ');
+}
+
+function llmToolSourceHandles(config: Record<string, unknown>) {
+  if (!getLlmVisibleInternalToolsEnabled(config)) {
+    return [];
+  }
+
+  return getLlmVisibleInternalTools(config).map((tool) => ({
+    id: createLlmToolSourceHandleId(tool.connector_id || tool.tool_name),
+    title: tool.connector_id || tool.tool_name
+  }));
 }
 
 export function toCanvasNodes(
@@ -52,11 +68,15 @@ export function toCanvasNodes(
     .map((node) => {
       const branchSourceHandles =
         node.type === 'if_else'
-          ? (getIfElseBranchesFromBindings(node.bindings) ?? []).map((branch) => ({
-              id: branch.sourceHandle,
-              title: branch.title
-            }))
+          ? (getIfElseBranchesFromBindings(node.bindings) ?? []).map(
+              (branch) => ({
+                id: branch.sourceHandle,
+                title: branch.title
+              })
+            )
           : [];
+      const toolSourceHandles =
+        node.type === 'llm' ? llmToolSourceHandles(node.config) : [];
 
       return {
         id: node.id,
@@ -84,6 +104,7 @@ export function toCanvasNodes(
           showTargetHandle: node.type !== 'start',
           showSourceHandle: true,
           branchSourceHandles,
+          toolSourceHandles,
           isContainer: node.type === 'iteration' || node.type === 'loop',
           ...actions
         }

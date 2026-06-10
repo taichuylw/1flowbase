@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use plugin_framework::{
-    provider_contract::{ProviderInvocationInput, ProviderStreamEvent},
+    provider_contract::{ProviderInvocationInput, ProviderModelDescriptor, ProviderStreamEvent},
     provider_package::ProviderPackage,
     ProviderConfigField,
 };

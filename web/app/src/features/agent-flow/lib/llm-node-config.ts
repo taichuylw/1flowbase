@@ -36,6 +36,18 @@ export interface LlmNodeExternalReasoningPolicy {
   follow_external_reasoning: boolean;
 }
 
+export type LlmInternalLlmNodePolicy = 'forbidden' | 'allowed';
+
+export interface LlmVisibleInternalTool {
+  type: 'visible_internal_llm_tool';
+  tool_name: string;
+  connector_id?: string;
+  target_node_id: string;
+  description?: string;
+  input_schema?: Record<string, unknown>;
+  internal_llm_node_policy?: LlmInternalLlmNodePolicy;
+}
+
 export const DEFAULT_LLM_CONTEXT_POLICY: LlmNodeContextPolicy = {
   integration_context: 'enabled',
   context_selector: ['node-start', 'history']
@@ -55,12 +67,45 @@ export const DEFAULT_LLM_RESPONSE_FORMAT: LlmNodeResponseFormat = {
   mode: 'text'
 };
 
+export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS_ENABLED = false;
+export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS: LlmVisibleInternalTool[] = [];
+export const DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY: LlmInternalLlmNodePolicy =
+  'forbidden';
+export const LLM_TOOL_IDENTIFIER_MAX_LENGTH = 64;
+const LLM_TOOL_SOURCE_HANDLE_PREFIX = 'visible_internal_llm_tool:';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+export function createLlmToolSourceHandleId(connectorId: string) {
+  return `${LLM_TOOL_SOURCE_HANDLE_PREFIX}${connectorId}`;
+}
+
+export function parseLlmToolSourceHandleId(
+  handleId: string | null | undefined
+) {
+  if (!handleId?.startsWith(LLM_TOOL_SOURCE_HANDLE_PREFIX)) {
+    return null;
+  }
+
+  return handleId.slice(LLM_TOOL_SOURCE_HANDLE_PREFIX.length);
+}
+
+export function isLlmToolSourceHandle(handleId: string | null | undefined) {
+  return parseLlmToolSourceHandleId(handleId) !== null;
+}
+
+export function isLlmToolIdentifier(value: string) {
+  return (
+    value.length > 0 &&
+    value.length <= LLM_TOOL_IDENTIFIER_MAX_LENGTH &&
+    /^[A-Za-z0-9_]+$/.test(value)
+  );
 }
 
 export function getLlmParameterDefaultValue(
@@ -227,6 +272,60 @@ export function getLlmExternalReasoningPolicy(
     follow_external_reasoning:
       externalReasoningPolicy.follow_external_reasoning === true
   };
+}
+
+export function getLlmVisibleInternalToolsEnabled(
+  config: Record<string, unknown>
+): boolean {
+  return config.visible_internal_llm_tools_enabled === true;
+}
+
+export function getLlmToolInternalLlmNodePolicy(
+  tool: Pick<LlmVisibleInternalTool, 'internal_llm_node_policy'>
+): LlmInternalLlmNodePolicy {
+  return tool.internal_llm_node_policy === 'allowed'
+    ? 'allowed'
+    : DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY;
+}
+
+export function getLlmVisibleInternalTools(
+  config: Record<string, unknown>
+): LlmVisibleInternalTool[] {
+  const tools = config.visible_internal_llm_tools;
+
+  if (!Array.isArray(tools)) {
+    return DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS;
+  }
+
+  return tools.flatMap((tool): LlmVisibleInternalTool[] => {
+    if (!isRecord(tool) || tool.type !== 'visible_internal_llm_tool') {
+      return [];
+    }
+
+    const toolName = asString(tool.tool_name).trim();
+    const targetNodeId = asString(tool.target_node_id).trim();
+
+    if (!toolName) {
+      return [];
+    }
+
+    return [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: toolName,
+        connector_id: asString(tool.connector_id).trim() || toolName,
+        target_node_id: targetNodeId,
+        description: asString(tool.description).trim() || undefined,
+        input_schema: isRecord(tool.input_schema)
+          ? (tool.input_schema as Record<string, unknown>)
+          : undefined,
+        internal_llm_node_policy:
+          tool.internal_llm_node_policy === 'allowed'
+            ? 'allowed'
+            : DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY
+      }
+    ];
+  });
 }
 
 export function getLlmResponseFormat(

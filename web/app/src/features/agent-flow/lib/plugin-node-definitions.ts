@@ -41,7 +41,8 @@ const HIDDEN_BUILTIN_NODE_PICKER_TYPES = new Set<BuiltinFlowNodeType>([
   'human_input',
   'iteration',
   'loop',
-  'parameter_extractor'
+  'parameter_extractor',
+  'tool'
 ]);
 
 export const BUILTIN_NODE_PICKER_OPTIONS: BuiltinNodePickerOption[] =

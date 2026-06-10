@@ -227,6 +227,8 @@ struct RawModelDescriptor {
     family: Option<String>,
     #[serde(default)]
     capabilities: Vec<String>,
+    #[serde(default)]
+    supports_multimodal: bool,
     context_window: Option<u64>,
     max_output_tokens: Option<u64>,
     #[serde(default)]
@@ -321,7 +323,8 @@ fn load_predefined_models(models_dir: &Path) -> FrameworkResult<Vec<ProviderMode
             source: ProviderModelSource::Static,
             supports_streaming: capabilities.iter().any(|value| value == "stream"),
             supports_tool_call: capabilities.iter().any(|value| value == "tool_call"),
-            supports_multimodal: capabilities.iter().any(|value| value == "multimodal"),
+            supports_multimodal: raw_model.supports_multimodal
+                || capabilities.iter().any(|value| value == "multimodal"),
             context_window: raw_model.context_window,
             max_output_tokens: raw_model.max_output_tokens,
             provider_metadata: raw_model.provider_metadata,

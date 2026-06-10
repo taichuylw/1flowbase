@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 
 import {
   createNextNodeId,
-  createNodeDocument
+  createNodeDocumentWithCountedAlias
 } from '../../lib/document/node-factory';
+import { isLlmToolSourceHandle } from '../../lib/llm-node-config';
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
 import {
   connectNodeFromSource,
@@ -11,7 +12,9 @@ import {
   insertNodeOnEdge,
   removeEdge,
   reconnectEdge,
-  validateConnection
+  type EdgeConnection,
+  validateConnection,
+  validateVisibleInternalLlmToolConnection
 } from '../../lib/document/transforms/edge';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { selectWorkingDocument } from '../../store/editor/selectors';
@@ -30,11 +33,39 @@ export function useEdgeInteractions() {
   const setInteractionState = useAgentFlowEditorStore(
     (state) => state.setInteractionState
   );
-  const nodePickerState = useAgentFlowEditorStore((state) => state.nodePickerState);
+  const nodePickerState = useAgentFlowEditorStore(
+    (state) => state.nodePickerState
+  );
 
   useEffect(() => {
     connectingPayloadRef.current = connectingPayload;
   }, [connectingPayload]);
+
+  function closeNodePicker() {
+    setPanelState({
+      nodePickerState: {
+        open: false,
+        anchorNodeId: null,
+        anchorEdgeId: null,
+        anchorCanvasPosition: null
+      }
+    });
+  }
+
+  function clearConnectingPayload() {
+    setInteractionState({
+      connectingPayload: {
+        sourceNodeId: null,
+        sourceHandleId: null,
+        sourceNodeType: null
+      }
+    });
+    connectingPayloadRef.current = {
+      sourceNodeId: null,
+      sourceHandleId: null,
+      sourceNodeType: null
+    };
+  }
 
   return {
     connect(connection: Parameters<typeof connectNodes>[1]['connection']) {
@@ -42,26 +73,8 @@ export function useEdgeInteractions() {
         connection
       });
 
-      setPanelState({
-        nodePickerState: {
-          open: false,
-          anchorNodeId: null,
-          anchorEdgeId: null,
-          anchorCanvasPosition: null
-        }
-      });
-      setInteractionState({
-        connectingPayload: {
-          sourceNodeId: null,
-          sourceHandleId: null,
-          sourceNodeType: null
-        }
-      });
-      connectingPayloadRef.current = {
-        sourceNodeId: null,
-        sourceHandleId: null,
-        sourceNodeType: null
-      };
+      closeNodePicker();
+      clearConnectingPayload();
 
       if (nextDocument === document) {
         return;
@@ -69,7 +82,10 @@ export function useEdgeInteractions() {
 
       setWorkingDocument(nextDocument);
     },
-    reconnect(edgeId: string, connection: Parameters<typeof reconnectEdge>[1]['connection']) {
+    reconnect(
+      edgeId: string,
+      connection: Parameters<typeof reconnectEdge>[1]['connection']
+    ) {
       const nextDocument = reconnectEdge(document, {
         edgeId,
         connection
@@ -87,7 +103,8 @@ export function useEdgeInteractions() {
       });
     },
     insertOnEdge(edgeId: string, option: NodePickerOption) {
-      const nextNode = createNodeDocument(
+      const nextNode = createNodeDocumentWithCountedAlias(
+        document,
         option,
         createNextNodeId(document, option)
       );
@@ -114,10 +131,15 @@ export function useEdgeInteractions() {
       }
 
       const flowPosition = {
-        x: Math.round((anchorCanvasPosition.x - document.editor.viewport.x) / zoom),
-        y: Math.round((anchorCanvasPosition.y - document.editor.viewport.y) / zoom)
+        x: Math.round(
+          (anchorCanvasPosition.x - document.editor.viewport.x) / zoom
+        ),
+        y: Math.round(
+          (anchorCanvasPosition.y - document.editor.viewport.y) / zoom
+        )
       };
-      const nextNode = createNodeDocument(
+      const nextNode = createNodeDocumentWithCountedAlias(
+        document,
         option,
         createNextNodeId(document, option),
         flowPosition.x,
@@ -139,26 +161,8 @@ export function useEdgeInteractions() {
         selectedNodeIds: [nextNode.id],
         selectedEdgeId: null
       });
-      setPanelState({
-        nodePickerState: {
-          open: false,
-          anchorNodeId: null,
-          anchorEdgeId: null,
-          anchorCanvasPosition: null
-        }
-      });
-      setInteractionState({
-        connectingPayload: {
-          sourceNodeId: null,
-          sourceHandleId: null,
-          sourceNodeType: null
-        }
-      });
-      connectingPayloadRef.current = {
-        sourceNodeId: null,
-        sourceHandleId: null,
-        sourceNodeType: null
-      };
+      closeNodePicker();
+      clearConnectingPayload();
     },
     startConnection(payload: {
       nodeId: string | null;
@@ -169,7 +173,9 @@ export function useEdgeInteractions() {
         return;
       }
 
-      const sourceNode = document.graph.nodes.find((node) => node.id === payload.nodeId);
+      const sourceNode = document.graph.nodes.find(
+        (node) => node.id === payload.nodeId
+      );
 
       setPanelState({
         nodePickerState: {
@@ -209,22 +215,13 @@ export function useEdgeInteractions() {
       });
     },
     cancelConnection() {
-      setInteractionState({
-        connectingPayload: {
-          sourceNodeId: null,
-          sourceHandleId: null,
-          sourceNodeType: null
-        }
-      });
-      connectingPayloadRef.current = {
-        sourceNodeId: null,
-        sourceHandleId: null,
-        sourceNodeType: null
-      };
+      clearConnectingPayload();
     },
-    isValidConnection(
-      connection: Parameters<typeof validateConnection>[1]
-    ) {
+    isValidConnection(connection: EdgeConnection) {
+      if (isLlmToolSourceHandle(connection.sourceHandle)) {
+        return validateVisibleInternalLlmToolConnection(document, connection);
+      }
+
       return validateConnection(document, connection);
     },
     remove(edgeId: string) {

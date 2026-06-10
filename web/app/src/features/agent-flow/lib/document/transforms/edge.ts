@@ -4,6 +4,11 @@ import type {
 } from '@1flowbase/flow-schema';
 
 import { getDefaultIfElseSourceHandle } from '../../if-else-branches';
+import {
+  getLlmVisibleInternalTools,
+  getLlmVisibleInternalToolsEnabled,
+  parseLlmToolSourceHandleId
+} from '../../llm-node-config';
 import { createEdgeDocument } from '../edge-factory';
 import { getEdgeById, getNodeById } from '../selectors';
 import { shiftDownstreamNodesBFS } from './layout';
@@ -28,9 +33,30 @@ export function validateConnection(
 
   return Boolean(
     sourceNode &&
-      targetNode &&
-      sourceNode.id !== targetNode.id &&
-      sourceNode.containerId === targetNode.containerId
+    targetNode &&
+    sourceNode.id !== targetNode.id &&
+    sourceNode.containerId === targetNode.containerId
+  );
+}
+
+export function validateVisibleInternalLlmToolConnection(
+  document: FlowAuthoringDocument,
+  connection: EdgeConnection
+) {
+  const connectorId = parseLlmToolSourceHandleId(connection.sourceHandle);
+
+  if (!connectorId || !validateConnection(document, connection)) {
+    return false;
+  }
+
+  const sourceNode = getNodeById(document, connection.source ?? null);
+
+  return Boolean(
+    sourceNode?.type === 'llm' &&
+    getLlmVisibleInternalToolsEnabled(sourceNode.config) &&
+    getLlmVisibleInternalTools(sourceNode.config).some(
+      (tool) => (tool.connector_id || tool.tool_name) === connectorId
+    )
   );
 }
 
@@ -96,7 +122,17 @@ export function connectNodes(
     connection: EdgeConnection;
   }
 ): FlowAuthoringDocument {
-  if (!validateConnection(document, payload.connection)) {
+  const toolConnectorId = parseLlmToolSourceHandleId(
+    payload.connection.sourceHandle
+  );
+
+  if (toolConnectorId) {
+    if (
+      !validateVisibleInternalLlmToolConnection(document, payload.connection)
+    ) {
+      return document;
+    }
+  } else if (!validateConnection(document, payload.connection)) {
     return document;
   }
 

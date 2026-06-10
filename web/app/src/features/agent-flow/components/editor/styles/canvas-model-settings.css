@@ -478,6 +478,23 @@
   height: 100%;
 }
 
+.agent-flow-json-schema-settings--inline {
+  min-height: auto;
+  flex: none;
+}
+
+.agent-flow-json-schema-settings--inline .ant-tabs {
+  min-height: auto;
+  flex: none;
+}
+
+.agent-flow-json-schema-settings--inline .ant-tabs-content-holder,
+.agent-flow-json-schema-settings--inline .ant-tabs-content,
+.agent-flow-json-schema-settings--inline .ant-tabs-tabpane {
+  min-height: auto;
+  height: auto;
+}
+
 .agent-flow-json-schema-settings__fields {
   display: flex;
   min-height: 0;
@@ -488,7 +505,9 @@
 .agent-flow-json-schema-settings__field-head,
 .agent-flow-json-schema-settings__field-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 116px 64px 44px;
+  grid-template-columns:
+    minmax(120px, 0.9fr) minmax(160px, 1.1fr)
+    116px 64px 64px;
   align-items: center;
   gap: 8px;
 }
@@ -497,6 +516,21 @@
   color: #738196;
   font-size: 12px;
   font-weight: 600;
+}
+
+.agent-flow-json-schema-settings__field-row--readonly .ant-input-disabled {
+  color: #536577;
+  background: #f7faf8;
+  cursor: default;
+}
+
+.agent-flow-json-schema-settings__field-row--readonly .ant-checkbox-disabled {
+  cursor: default;
+}
+
+.agent-flow-json-schema-settings__field-row--readonly .ant-typography {
+  color: #8a98a8;
+  font-size: 12px;
 }
 
 .agent-flow-json-schema-settings__field-rows {
@@ -517,6 +551,12 @@
   width: 100%;
 }
 
+.agent-flow-json-schema-settings__field-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .agent-flow-json-schema-settings__field-children {
   display: flex;
   flex-direction: column;
@@ -528,16 +568,17 @@
   width: fit-content;
 }
 
-.agent-flow-json-schema-settings__add-child-field {
-  width: fit-content;
-}
-
 .agent-flow-json-schema-settings__editor {
   min-height: 0;
   height: 340px;
   overflow: hidden;
   border: 1px solid #d9e1ea;
   border-radius: 10px;
+}
+
+.agent-flow-json-schema-settings--inline
+  .agent-flow-json-schema-settings__editor {
+  height: 260px;
 }
 
 .agent-flow-json-schema-settings__editor-loading {

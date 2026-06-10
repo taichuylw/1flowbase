@@ -844,6 +844,132 @@ describe('validateDocument', () => {
     );
   });
 
+  test('flags mounted LLM tool branches without a Tool Result node', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default llm node');
+    }
+
+    llmNode.config.visible_internal_llm_tools_enabled = true;
+    llmNode.config.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_context',
+        connector_id: 'inspect_context',
+        target_node_id: 'node-tool-transform'
+      }
+    ];
+    document.graph.nodes.push(
+      createNodeDocument(
+        'template_transform',
+        'node-tool-transform',
+        llmNode.position.x + 240,
+        llmNode.position.y + 160
+      )
+    );
+    document.graph.edges.push({
+      id: 'edge-llm-mounted-tool',
+      source: llmNode.id,
+      target: 'node-tool-transform',
+      sourceHandle: 'visible_internal_llm_tool:inspect_context',
+      targetHandle: null,
+      containerId: null,
+      points: []
+    });
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.visible_internal_llm_tools_enabled',
+          title: '工具分支缺少 Tool Result'
+        })
+      ])
+    );
+  });
+
+  test('requires an allowed tool policy before mounted tool branches can contain LLM nodes', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = document.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default llm node');
+    }
+
+    const mountedLlm = {
+      ...createNodeDocument(
+        'llm',
+        'node-mounted-llm',
+        llmNode.position.x + 240,
+        llmNode.position.y + 160
+      ),
+      config: llmNode.config,
+      bindings: llmNode.bindings,
+      outputs: llmNode.outputs
+    };
+    const toolResult = createNodeDocument(
+      'tool_result',
+      'node-tool-result',
+      llmNode.position.x + 520,
+      llmNode.position.y + 160
+    );
+
+    llmNode.config.visible_internal_llm_tools_enabled = true;
+    llmNode.config.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_context',
+        connector_id: 'inspect_context',
+        target_node_id: mountedLlm.id
+      }
+    ];
+    document.graph.nodes.push(mountedLlm, toolResult);
+    document.graph.edges.push(
+      {
+        id: 'edge-llm-mounted-tool',
+        source: llmNode.id,
+        target: mountedLlm.id,
+        sourceHandle: 'visible_internal_llm_tool:inspect_context',
+        targetHandle: null,
+        containerId: null,
+        points: []
+      },
+      {
+        id: 'edge-mounted-llm-tool-result',
+        source: mountedLlm.id,
+        target: toolResult.id,
+        sourceHandle: null,
+        targetHandle: null,
+        containerId: null,
+        points: []
+      }
+    );
+
+    expect(validateDocument(document)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.visible_internal_llm_tools.0.internal_llm_node_policy'
+        })
+      ])
+    );
+
+    const visibleInternalTools = llmNode.config
+      .visible_internal_llm_tools as Array<Record<string, unknown>>;
+    visibleInternalTools[0].internal_llm_node_policy = 'allowed';
+
+    expect(validateDocument(document)).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'node-llm',
+          fieldKey: 'config.visible_internal_llm_tools.0.internal_llm_node_policy'
+        })
+      ])
+    );
+  });
+
   test('flags duplicate code output keys in the editable output contract', () => {
     const document = createCodeDocumentWithOutputs([
       { key: 'result', title: '结果', valueType: 'string' },

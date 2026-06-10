@@ -38,6 +38,41 @@ fn last_user_text_maps_to_native_query() {
 }
 
 #[test]
+fn last_user_image_url_maps_to_native_content_blocks() {
+    let native = map_chat_completion_request(json!({
+        "model": "gpt-compatible",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe image"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "https://example.com/cat.png"}
+                    }
+                ]
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(native.query, "Describe image");
+    assert_eq!(native.history.len(), 1);
+    assert_eq!(native.history[0]["role"], json!("user"));
+    assert_eq!(native.history[0]["content"], json!("Describe image"));
+    assert_eq!(
+        native.history[0]["content_blocks"],
+        json!([
+            {"type": "text", "text": "Describe image"},
+            {
+                "type": "image_url",
+                "image_url": {"url": "https://example.com/cat.png"}
+            }
+        ])
+    );
+}
+
+#[test]
 fn prior_system_message_maps_to_native_system_context() {
     let native = map_chat_completion_request(json!({
         "model": "gpt-compatible",
@@ -117,6 +152,43 @@ fn responses_instructions_map_to_native_system_context() {
     assert_eq!(native.query, "Final question");
     assert_eq!(native.system.as_deref(), Some("Use the support playbook."));
     assert!(native.history.is_empty());
+}
+
+#[test]
+fn responses_input_image_maps_to_native_content_blocks() {
+    let native = map_response_request(
+        json!({
+            "model": "gpt-compatible",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "Describe image"},
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,aW1hZ2U="
+                        }
+                    ]
+                }
+            ]
+        }),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(native.query, "Describe image");
+    assert_eq!(native.history.len(), 1);
+    assert_eq!(
+        native.history[0]["content_blocks"][0]["type"],
+        json!("text")
+    );
+    assert_eq!(
+        native.history[0]["content_blocks"][1],
+        json!({
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,aW1hZ2U="}
+        })
+    );
 }
 
 #[test]

@@ -21,6 +21,7 @@ import {
   updateNodeField
 } from '../../lib/document/transforms/node';
 import { setViewport } from '../../lib/document/transforms/viewport';
+import { createLlmToolSourceHandleId } from '../../lib/llm-node-config';
 import { BUILTIN_NODE_PICKER_OPTIONS } from '../../lib/plugin-node-definitions';
 
 function createNestedContainerDocument() {
@@ -510,7 +511,9 @@ describe('agent flow document transforms', () => {
 
     const next = replaceNodeWithOption(document, {
       nodeId: 'node-llm',
-      option: BUILTIN_NODE_PICKER_OPTIONS.find((option) => option.type === 'tool')!
+      option: BUILTIN_NODE_PICKER_OPTIONS.find(
+        (option) => option.type === 'tool_result'
+      )!
     });
     const replacedNode = next.graph.nodes.find(
       (node) => node.id === 'node-llm'
@@ -519,8 +522,8 @@ describe('agent flow document transforms', () => {
     expect(replacedNode).toEqual(
       expect.objectContaining({
         id: 'node-llm',
-        type: 'tool',
-        alias: 'Tool',
+        type: 'tool_result',
+        alias: 'Tool Result',
         position: originalNode?.position,
         containerId: originalNode?.containerId
       })
@@ -556,12 +559,7 @@ describe('agent flow document transforms', () => {
       })
     );
 
-    const next = insertNodeAfter(
-      document,
-      'node-if-else',
-      insertedNode,
-      'if'
-    );
+    const next = insertNodeAfter(document, 'node-if-else', insertedNode, 'if');
 
     expect(next.graph.edges).toEqual(
       expect.arrayContaining([
@@ -612,6 +610,60 @@ describe('agent flow document transforms', () => {
         })
       ])
     );
+  });
+
+  test('places inserted LLM tool-mounted nodes below the source node mount lane', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const firstToolHandle = createLlmToolSourceHandleId('search_tool');
+    const secondToolHandle = createLlmToolSourceHandleId('quote_tool');
+    const existingMountedNode = createNodeDocument(
+      'llm',
+      'node-mounted-llm-existing',
+      0,
+      0
+    );
+    const insertedNode = createNodeDocument(
+      'tool_result',
+      'node-tool-result-mounted',
+      0,
+      0
+    );
+
+    document.graph.nodes = document.graph.nodes.map((node) =>
+      node.id === 'node-llm' ? { ...node, position: { x: 400, y: 160 } } : node
+    );
+    const withExistingMount = insertNodeAfter(
+      document,
+      'node-llm',
+      existingMountedNode,
+      firstToolHandle
+    );
+    const next = insertNodeAfter(
+      withExistingMount,
+      'node-llm',
+      insertedNode,
+      secondToolHandle
+    );
+    const llmNode = next.graph.nodes.find((node) => node.id === 'node-llm');
+    const firstMountedNode = next.graph.nodes.find(
+      (node) => node.id === 'node-mounted-llm-existing'
+    );
+    const secondMountedNode = next.graph.nodes.find(
+      (node) => node.id === 'node-tool-result-mounted'
+    );
+
+    if (!llmNode || !firstMountedNode || !secondMountedNode) {
+      throw new Error('expected mounted nodes to exist');
+    }
+
+    expect(firstMountedNode.position.x).toBe(llmNode.position.x + 280);
+    expect(firstMountedNode.position.y).toBeGreaterThan(
+      llmNode.position.y + 96
+    );
+    expect(secondMountedNode.position.x).toBe(llmNode.position.x + 280);
+    expect(
+      secondMountedNode.position.y - firstMountedNode.position.y
+    ).toBeGreaterThanOrEqual(136);
   });
 
   test('defaults If / Else drag-created connections to the if branch when no handle is provided', () => {

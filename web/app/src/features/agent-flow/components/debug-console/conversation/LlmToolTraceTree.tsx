@@ -2,11 +2,14 @@ import { DownOutlined, RightOutlined, ToolOutlined } from '@ant-design/icons';
 import { Tag, Tooltip, Typography } from 'antd';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { AgentFlowTraceItem } from '../../../api/runtime';
 import { RuntimeDebugPayloadBlock } from '../../detail/last-run/NodeRunIOCard';
+import { DebugWorkflowNodeRow } from './DebugWorkflowNodeRow';
 import {
   collectLlmToolCallbacksFromDebugPayloads,
   readLlmToolCallbackDetail,
-  type LlmToolCallback
+  type LlmToolCallback,
+  type LlmToolRouteTraceSummary
 } from './llm-tool-callbacks';
 import { i18nText } from '../../../../../shared/i18n/text';
 import { formatTokens, formatDurationScaled } from './metrics-formatter';
@@ -117,6 +120,101 @@ function LlmToolInlineMetrics({ callback }: { callback: LlmToolCallback }) {
   );
 }
 
+function routeNodeStatus(callback: LlmToolCallback) {
+  const traceStatus = callback.routeTrace?.status;
+
+  if (traceStatus) {
+    return traceStatus;
+  }
+
+  switch (callback.executionStatus) {
+    case 'succeeded':
+      return 'succeeded';
+    case 'failed':
+    case 'timed_out':
+      return 'failed';
+    case 'cancelled':
+      return 'cancelled';
+    default:
+      return callback.callbackStatus === 'returned'
+        ? 'succeeded'
+        : 'waiting_callback';
+  }
+}
+
+function routeNodeAlias(routeTrace: LlmToolRouteTraceSummary) {
+  return routeTrace.routeNodeAlias ?? 'LLM';
+}
+
+function routeNodeOutputPayload(callback: LlmToolCallback) {
+  if (callback.call_usage) {
+    return {
+      usage: callback.call_usage
+    };
+  }
+
+  return {};
+}
+
+function buildRouteTraceItem(callback: LlmToolCallback): AgentFlowTraceItem {
+  const routeTrace = callback.routeTrace;
+
+  return {
+    nodeId:
+      routeTrace?.routeNodeId ??
+      routeTrace?.targetNodeId ??
+      `${callback.id}:route`,
+    nodeRunId: routeTrace?.detailArtifactRef ?? `${callback.id}:route`,
+    nodeAlias: routeTrace ? routeNodeAlias(routeTrace) : 'LLM',
+    nodeType: 'llm',
+    status: routeNodeStatus(callback),
+    startedAt: '',
+    finishedAt: callback.callbackStatus === 'returned' ? '' : null,
+    durationMs: callback.duration_ms,
+    inputPayload: {},
+    outputPayload: routeNodeOutputPayload(callback),
+    errorPayload:
+      callback.executionStatus === 'failed'
+        ? (callback.parsedResult ?? {})
+        : null,
+    metricsPayload: {},
+    debugPayload: routeTrace?.rawPayload ?? {}
+  };
+}
+
+function LlmToolRouteNode({
+  callback,
+  onLoadArtifact
+}: {
+  callback: LlmToolCallback;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+}) {
+  if (!callback.routeTrace) {
+    return null;
+  }
+
+  const routeTraceItem = buildRouteTraceItem(callback);
+
+  return (
+    <div
+      className="agent-flow-editor__debug-llm-route-node"
+      data-testid="debug-llm-route-node"
+    >
+      <div className="agent-flow-editor__debug-llm-route-node-row">
+        <DebugWorkflowNodeRow item={routeTraceItem} />
+      </div>
+      <div className="agent-flow-editor__debug-llm-route-node-detail">
+        <RuntimeDebugPayloadBlock
+          height="11rem"
+          payload={callback.routeTrace.rawPayload}
+          title={i18nText('agentFlow', 'auto.route_trace')}
+          onLoadArtifact={onLoadArtifact}
+        />
+      </div>
+    </div>
+  );
+}
+
 function LlmToolCallbackItem({
   callback,
   expanded,
@@ -145,7 +243,13 @@ function LlmToolCallbackItem({
       >
         <span className="agent-flow-editor__debug-llm-tool-main">
           <Typography.Text strong>{callback.name}</Typography.Text>
-          <LlmToolInlineMetrics callback={callback} />
+          {callback.routeTrace ? (
+            <Tag className="agent-flow-editor__debug-llm-tool-route-tag">
+              {i18nText('agentFlow', 'auto.route_trace')}
+            </Tag>
+          ) : (
+            <LlmToolInlineMetrics callback={callback} />
+          )}
         </span>
         <Tag color={callbackStatusColor(callback.callbackStatus)}>
           {callbackStatusLabel(callback.callbackStatus)}
@@ -175,6 +279,10 @@ function LlmToolCallbackItem({
           ) : null}
           {!loading && !loadFailed ? (
             <>
+              <LlmToolRouteNode
+                callback={callback}
+                onLoadArtifact={onLoadArtifact}
+              />
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
@@ -255,7 +363,8 @@ export function LlmToolTraceTree({
             callback.result_context_usage,
           duration_ms: loadedCallback.duration_ms ?? callback.duration_ms,
           detailArtifactRef:
-            callback.detailArtifactRef ?? loadedCallback.detailArtifactRef
+            callback.detailArtifactRef ?? loadedCallback.detailArtifactRef,
+          routeTrace: loadedCallback.routeTrace ?? callback.routeTrace
         };
       }),
     [loadedToolCallbacks, toolCallbacks]

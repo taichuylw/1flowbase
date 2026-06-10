@@ -24,21 +24,29 @@ vi.mock('@xyflow/react', () => ({
     ['aria-label']?: string;
     onClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
     onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
+    isConnectable?: boolean;
   }) => {
     const domProps = { ...(props as Record<string, unknown>) };
 
     delete domProps.type;
     delete domProps.position;
+    const isConnectable = domProps.isConnectable;
+    delete domProps.isConnectable;
 
     return (
-      <div className={`react-flow__handle ${className ?? ''}`} {...domProps}>
+      <div
+        className={`react-flow__handle ${className ?? ''}`}
+        data-is-connectable={String(isConnectable)}
+        {...domProps}
+      >
         {children}
       </div>
     );
   },
   Position: {
     Left: 'left',
-    Right: 'right'
+    Right: 'right',
+    Bottom: 'bottom'
   },
   useUpdateNodeInternals: () => updateNodeInternalsMock
 }));
@@ -88,7 +96,9 @@ describe('AgentFlowNodeCard', () => {
       </AppProviders>
     );
 
-    const card = screen.getByRole('button', { name: /database Data Model List/ });
+    const card = screen.getByRole('button', {
+      name: /database Data Model List/
+    });
 
     expect(card).toHaveClass('agent-flow-node-card--theme-unified');
     expect(card).toHaveClass('agent-flow-node-card--type-data_model_list');
@@ -141,6 +151,86 @@ describe('AgentFlowNodeCard', () => {
       within(card).getByRole('img', { name: 'message' })
     ).toBeInTheDocument();
     expect(screen.queryByText('3')).not.toBeInTheDocument();
+  });
+
+  test('clips rendered node content in an inner layer while floating controls stay on the shell', () => {
+    const canvasStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/canvas.css',
+      'utf8'
+    );
+
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-llm',
+              nodeType: 'llm',
+              nodeSchema: resolveAgentFlowNodeSchema('llm'),
+              typeLabel: 'LLM',
+              alias: 'LLM',
+              description: '选择并调用大语言模型',
+              config: {
+                model_provider: {
+                  provider_code: 'openai_compatible',
+                  model_id: 'gpt-4',
+                  provider_label: 'OpenAI Prod',
+                  model_label: 'GPT-4'
+                }
+              },
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              toolSourceHandles: [
+                { id: 'search_context', title: 'search_context' }
+              ],
+              isContainer: false,
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn(),
+              onRunNode: vi.fn(),
+              onReplaceNode: vi.fn(),
+              onDeleteNode: vi.fn()
+            },
+            id: 'node-llm',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    const card = screen.getByRole('button', {
+      name: /LLM OpenAI Prod GPT-4/
+    });
+    const content = card.querySelector('.agent-flow-node-card__content');
+    const quickActions = screen.getByTestId(
+      'agent-flow-node-quick-actions-node-llm'
+    );
+    const toolHandleSlot = screen.getByTestId(
+      'agent-flow-node-tool-handle-0'
+    );
+
+    expect(content).toBeInTheDocument();
+    expect(content).toContainElement(
+      card.querySelector('.agent-flow-node-card__header') as HTMLElement
+    );
+    expect(content).toContainElement(
+      card.querySelector('.agent-flow-node-card__model') as HTMLElement
+    );
+    expect(card).toContainElement(quickActions);
+    expect(content).not.toContainElement(quickActions);
+    expect(card).toContainElement(toolHandleSlot);
+    expect(content).not.toContainElement(toolHandleSlot);
+    expect(canvasStyles).toMatch(
+      /\.agent-flow-node-card\s*\{[^}]*overflow:\s*visible;/s
+    );
+    expect(canvasStyles).toMatch(
+      /\.agent-flow-node-card__content\s*\{[^}]*overflow:\s*hidden;[^}]*border-radius:\s*calc\(var\(--agent-flow-node-card-radius\)\s*-\s*1px\);/s
+    );
   });
 
   test('renders Code nodes with a code SVG icon', () => {
@@ -239,6 +329,137 @@ describe('AgentFlowNodeCard', () => {
     expect(onOpenPicker).toHaveBeenCalledWith('node-llm');
   });
 
+  test('renders LLM tool registrations as bottom edge handles with hover labels', async () => {
+    const canvasStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/canvas.css',
+      'utf8'
+    );
+    const canvasControlStyles = readFileSync(
+      'src/features/agent-flow/components/editor/styles/canvas-controls.css',
+      'utf8'
+    );
+
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-llm',
+              nodeType: 'llm',
+              nodeSchema: resolveAgentFlowNodeSchema('llm'),
+              typeLabel: 'LLM',
+              alias: 'LLM',
+              description: '选择并调用大语言模型',
+              config: {
+                model_provider: {
+                  provider_code: 'openai_compatible',
+                  model_id: 'gpt-4',
+                  provider_label: 'OpenAI Prod',
+                  model_label: 'GPT-4'
+                },
+                visible_internal_llm_tools_enabled: true,
+                visible_internal_llm_tools: [
+                  {
+                    type: 'visible_internal_llm_tool',
+                    tool_name: 'search_context',
+                    connector_id: 'search_context',
+                    target_node_id: 'node-search-llm'
+                  },
+                  {
+                    type: 'visible_internal_llm_tool',
+                    tool_name: 'inspect_image',
+                    connector_id: 'inspect_image',
+                    target_node_id: 'node-vision-llm'
+                  }
+                ]
+              },
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              toolSourceHandles: [
+                { id: 'search_context', title: 'search_context' },
+                { id: 'inspect_image', title: 'inspect_image' }
+              ],
+              isContainer: false,
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn()
+            },
+            id: 'node-llm',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    expect(screen.queryByText('search_context')).not.toBeInTheDocument();
+    expect(screen.queryByText('inspect_image')).not.toBeInTheDocument();
+    expect(screen.queryByText('挂载工具')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('agent-flow-node-tool-label-0')
+    ).not.toBeInTheDocument();
+
+    const toolConnectors = screen.getAllByLabelText(/工具连接器$/);
+    const firstToolHandleSlot = screen.getByTestId(
+      'agent-flow-node-tool-handle-0'
+    );
+    const mainSourceConnector = screen.getByRole('button', {
+      name: '在 LLM 后新增节点'
+    });
+    const card = screen.getByRole('button', {
+      name: /LLM OpenAI Prod GPT-4/
+    });
+
+    expect(toolConnectors).toHaveLength(2);
+    expect(mainSourceConnector).toHaveAttribute('id', 'source-right');
+    expect(mainSourceConnector).toHaveClass('agent-flow-node-handle--source');
+    expect(mainSourceConnector).not.toHaveClass('agent-flow-node-handle--tool');
+    expect(toolConnectors[0]).toHaveClass('agent-flow-node-handle--tool');
+    expect(toolConnectors[0]).toHaveAttribute('data-is-connectable', 'true');
+    expect(
+      within(toolConnectors[0]).getByTestId(
+        'agent-flow-node-tool-connector-icon'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(toolConnectors[1]).getByTestId(
+        'agent-flow-node-tool-connector-icon'
+      )
+    ).toBeInTheDocument();
+    expect(canvasStyles).toMatch(
+      /\.agent-flow-node-card__tool-handle\s*\{[^}]*pointer-events:\s*none;/s
+    );
+    expect(canvasControlStyles).toMatch(
+      /\.agent-flow-node-handle--tool\.react-flow__handle\s*\{[^}]*pointer-events:\s*auto;/s
+    );
+    expect(canvasControlStyles).toContain(
+      '.react-flow__node:hover .agent-flow-node-handle--tool.react-flow__handle'
+    );
+    expect(canvasControlStyles).toMatch(
+      /\.react-flow__node:hover\s+\.agent-flow-node-handle--tool\.react-flow__handle,[^{]*\.agent-flow-node-handle--tool\.react-flow__handle:focus-visible\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;/s
+    );
+    expect(canvasControlStyles).toMatch(
+      /\.agent-flow-node-handle__tool-icon\s*\{[^}]*opacity:\s*0;/s
+    );
+    expect(canvasControlStyles).toMatch(
+      /\.react-flow__node:hover\s+\.agent-flow-node-handle--tool\s+\.agent-flow-node-handle__tool-icon,[^{]*\.agent-flow-node-handle--tool\.react-flow__handle:focus-visible\s+\.agent-flow-node-handle__tool-icon\s*\{[^}]*opacity:\s*1;/s
+    );
+    expect(canvasControlStyles).toContain('rgba(22, 119, 255, 0.18)');
+    expect(within(card).getByTestId('agent-flow-node-tool-handle-0')).toBe(
+      firstToolHandleSlot
+    );
+    expect(
+      within(firstToolHandleSlot).getByLabelText('search_context 工具连接器')
+    ).toBe(toolConnectors[0]);
+    fireEvent.mouseEnter(toolConnectors[0]);
+    expect(await screen.findByText('search_context')).toBeInTheDocument();
+    expect(mainSourceConnector).toBeInTheDocument();
+  });
+
   test('routes If / Else branch handles through picker open and insert callbacks', async () => {
     const onOpenPicker = vi.fn();
     const onInsertNode = vi.fn();
@@ -329,11 +550,7 @@ describe('AgentFlowNodeCard', () => {
 
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Code' }));
 
-    expect(onInsertNode).toHaveBeenCalledWith(
-      'node-if-else',
-      codeOption,
-      'if'
-    );
+    expect(onInsertNode).toHaveBeenCalledWith('node-if-else', codeOption, 'if');
   });
 
   test('adds the fixed exception handle from the common node shell', async () => {

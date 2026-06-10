@@ -1,4 +1,5 @@
 use super::*;
+use plugin_framework::provider_contract::ProviderMessageRole;
 
 #[async_trait]
 impl<R, H> orchestration_runtime::execution_engine::ProviderInvoker for RuntimeProviderInvoker<R, H>
@@ -55,6 +56,14 @@ where
             package_load_ms = package_load_started.elapsed().as_millis() as u64,
             "package load finished"
         );
+        adapt_or_ensure_model_supports_content_blocks(
+            &self.repository,
+            &instance,
+            &package,
+            &runtime.model,
+            &mut input,
+        )
+        .await?;
 
         let runtime_config_started = std::time::Instant::now();
         input.provider_config = build_provider_runtime_config(
@@ -675,6 +684,196 @@ fn is_secret_field(field_type: &str) -> bool {
 fn load_provider_package(path: &str) -> Result<ProviderPackage> {
     ProviderPackage::load_from_dir(path)
         .map_err(|_| ControlPlaneError::InvalidInput("provider_package").into())
+}
+
+async fn adapt_or_ensure_model_supports_content_blocks<R>(
+    repository: &R,
+    instance: &domain::ModelProviderInstanceRecord,
+    package: &ProviderPackage,
+    model_id: &str,
+    input: &mut ProviderInvocationInput,
+) -> Result<()>
+where
+    R: ModelProviderRepository,
+{
+    if !provider_input_has_media_content_blocks(input) {
+        return Ok(());
+    }
+
+    if selected_model_supports_multimodal(repository, instance, package, model_id).await? {
+        return Ok(());
+    }
+
+    textualize_media_content_blocks_for_text_model(input);
+    Ok(())
+}
+
+fn provider_input_has_media_content_blocks(input: &ProviderInvocationInput) -> bool {
+    input.messages.iter().any(|message| {
+        message
+            .content_blocks
+            .as_ref()
+            .is_some_and(content_blocks_have_media)
+    })
+}
+
+fn content_blocks_have_media(content_blocks: &Value) -> bool {
+    content_blocks.as_array().is_some_and(|blocks| {
+        blocks.iter().any(|block| {
+            block
+                .get("type")
+                .and_then(Value::as_str)
+                .is_some_and(is_media_block_type)
+        })
+    })
+}
+
+pub(super) fn textualize_media_content_blocks_for_text_model(input: &mut ProviderInvocationInput) {
+    for message in &mut input.messages {
+        let Some(content_blocks) = message.content_blocks.take() else {
+            continue;
+        };
+        let media_blocks = summarize_media_blocks(&content_blocks);
+        if media_blocks.as_array().is_none_or(Vec::is_empty) {
+            message.content_blocks = Some(content_blocks);
+            continue;
+        }
+        let (error_code, message_text) = if matches!(message.role, ProviderMessageRole::Tool) {
+            (
+                "tool_result_media_unsupported",
+                "Tool result contained media blocks that were not injected into the selected text model context.",
+            )
+        } else {
+            (
+                "message_media_unsupported",
+                "Message contained media blocks that were not injected into the selected text model context.",
+            )
+        };
+        let fallback = json!({
+            "error_code": error_code,
+            "message": message_text,
+            "recoverable": true,
+            "media_blocks": media_blocks,
+        })
+        .to_string();
+        if message.content.trim().is_empty() {
+            message.content = fallback;
+        } else {
+            message.content = format!("{}\n{}", message.content.trim_end(), fallback);
+        }
+        if let Some(remaining_content_blocks) =
+            retain_non_text_media_content_blocks(&content_blocks)
+        {
+            message.content_blocks = Some(remaining_content_blocks);
+        }
+    }
+}
+
+fn summarize_media_blocks(content_blocks: &Value) -> Value {
+    let Some(blocks) = content_blocks.as_array() else {
+        return Value::Array(Vec::new());
+    };
+    Value::Array(blocks.iter().filter_map(summarize_media_block).collect())
+}
+
+fn summarize_media_block(block: &Value) -> Option<Value> {
+    let block_type = block.get("type").and_then(Value::as_str)?;
+    if !is_media_block_type(block_type) {
+        return None;
+    }
+    let mut summary = serde_json::Map::new();
+    summary.insert("type".to_string(), Value::String(block_type.to_string()));
+    if let Some(source_type) = block
+        .get("source")
+        .and_then(|source| source.get("type"))
+        .and_then(Value::as_str)
+    {
+        summary.insert(
+            "source_type".to_string(),
+            Value::String(source_type.to_string()),
+        );
+    }
+    if let Some(media_type) = block
+        .get("source")
+        .and_then(|source| source.get("media_type"))
+        .or_else(|| block.get("media_type"))
+        .and_then(Value::as_str)
+    {
+        summary.insert(
+            "media_type".to_string(),
+            Value::String(media_type.to_string()),
+        );
+    }
+    if let Some(url) = block
+        .get("image_url")
+        .and_then(|image_url| image_url.get("url"))
+        .or_else(|| block.get("source").and_then(|source| source.get("url")))
+        .and_then(Value::as_str)
+    {
+        summary.insert("url".to_string(), Value::String(summarized_media_url(url)));
+    }
+    Some(Value::Object(summary))
+}
+
+fn summarized_media_url(url: &str) -> String {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("data:") {
+        return trimmed.to_string();
+    }
+    let prefix = trimmed
+        .split_once(',')
+        .map(|(prefix, _)| prefix)
+        .unwrap_or("data:[redacted]");
+    format!("{prefix},[redacted]")
+}
+
+fn retain_non_text_media_content_blocks(content_blocks: &Value) -> Option<Value> {
+    let blocks = content_blocks.as_array()?;
+    let retained = blocks
+        .iter()
+        .filter(|block| {
+            !block
+                .get("type")
+                .and_then(Value::as_str)
+                .is_some_and(|block_type| block_type == "text" || is_media_block_type(block_type))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    (!retained.is_empty()).then_some(Value::Array(retained))
+}
+
+fn is_media_block_type(block_type: &str) -> bool {
+    matches!(
+        block_type,
+        "image" | "document" | "image_url" | "input_image"
+    )
+}
+
+async fn selected_model_supports_multimodal<R>(
+    repository: &R,
+    instance: &domain::ModelProviderInstanceRecord,
+    package: &ProviderPackage,
+    model_id: &str,
+) -> Result<bool>
+where
+    R: ModelProviderRepository,
+{
+    if let Some(cache) = repository.get_catalog_cache(instance.id).await? {
+        let models: Vec<ProviderModelDescriptor> = serde_json::from_value(cache.models_json)?;
+        if let Some(model) = models.iter().find(|model| model.model_id == model_id) {
+            return Ok(model.supports_multimodal);
+        }
+    }
+
+    if let Some(model) = package
+        .predefined_models
+        .iter()
+        .find(|model| model.model_id == model_id)
+    {
+        return Ok(model.supports_multimodal);
+    }
+
+    Ok(false)
 }
 
 pub(super) async fn freeze_failover_queue_routes<R>(

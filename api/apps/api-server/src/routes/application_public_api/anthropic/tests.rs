@@ -40,6 +40,54 @@ fn anthropic_response_projects_native_tool_calls() {
 }
 
 #[test]
+fn anthropic_response_filters_internal_visible_llm_tool_calls() {
+    let callback_task_id = Uuid::from_u128(0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd);
+    let run = NativeRunResult {
+        id: Uuid::nil(),
+        application_id: Uuid::nil(),
+        api_key_id: Uuid::nil(),
+        publication_version_id: Uuid::nil(),
+        status: NativeRunStatus::Waiting,
+        node_input_payload: json!({}),
+        metadata: json!({}),
+        answer: Some("visible internal LLM output".to_string()),
+        required_action: Some(NativeRequiredAction {
+            action_type: "submit_tool_outputs".to_string(),
+            payload: json!({
+                "callback_task_id": callback_task_id,
+                "callback_kind": "llm_tool_calls"
+            }),
+        }),
+        tool_calls: Some(json!([
+            {
+                "id": "toolu_internal",
+                "type": "visible_internal_llm_tool",
+                "name": "inspect_visible_context",
+                "arguments": {"query": "visible"}
+            }
+        ])),
+        usage: None,
+        error: None,
+        created_at: OffsetDateTime::UNIX_EPOCH,
+    };
+
+    let payload = serde_json::to_value(to_anthropic_response(run, "provider/model".into()))
+        .expect("anthropic response serializes");
+
+    assert_eq!(payload["stop_reason"], json!("end_turn"));
+    assert_eq!(payload["content"][0]["type"], json!("text"));
+    assert_eq!(
+        payload["content"][0]["text"],
+        json!("visible internal LLM output")
+    );
+    assert!(payload["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|block| block["type"] != json!("tool_use")));
+}
+
+#[test]
 fn anthropic_response_projects_only_visible_assistant_text() {
     let run = NativeRunResult {
             id: Uuid::nil(),
@@ -324,6 +372,10 @@ fn anthropic_tool_resume_request_preserves_media_tool_result_content() {
     assert_eq!(resume.callback_task_id, callback_task_id);
     assert_eq!(resume.tool_results[0]["tool_call_id"], json!("toolu_image"));
     assert_eq!(resume.tool_results[0]["content"][0]["type"], json!("image"));
+    assert_eq!(
+        resume.tool_results[0]["content"][0]["source"]["media_type"],
+        json!("image/png")
+    );
 }
 
 #[test]

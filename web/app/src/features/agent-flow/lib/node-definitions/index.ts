@@ -16,6 +16,7 @@ import { questionClassifierNodeDefinition } from './nodes/question-classifier';
 import { startNodeDefinition } from './nodes/start';
 import { templateTransformNodeDefinition } from './nodes/template-transform';
 import { toolNodeDefinition } from './nodes/tool';
+import { toolResultNodeDefinition } from './nodes/tool-result';
 import { variableAssignerNodeDefinition } from './nodes/variable-assigner';
 import { pluginNodeDefinition } from '../plugin-node-definitions';
 import type { InspectorSectionKey, NodeDefinitionMap } from './types';
@@ -40,6 +41,7 @@ export const nodeDefinitions: NodeDefinitionMap = {
   template_transform: templateTransformNodeDefinition,
   http_request: httpRequestNodeDefinition,
   tool: toolNodeDefinition,
+  tool_result: toolResultNodeDefinition,
   ...dataModelNodeDefinitions,
   variable_assigner: variableAssignerNodeDefinition,
   parameter_extractor: parameterExtractorNodeDefinition,

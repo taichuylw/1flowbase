@@ -25,6 +25,7 @@ type RuntimeDebugArtifactOffloadFuture<'a> =
 mod payloads;
 #[cfg(test)]
 mod tests;
+mod visible_internal_llm_route_traces;
 
 pub(super) use payloads::{
     application_run_model, application_run_query, load_runtime_debug_artifact_json_value,
@@ -35,6 +36,7 @@ use payloads::{
     should_keep_runtime_payload_field_inline, with_application_run_input_summary,
     with_debug_artifact_field_path,
 };
+use visible_internal_llm_route_traces::collect_visible_internal_llm_tool_route_traces;
 
 struct RuntimeDebugArtifactScope {
     workspace_id: Uuid,
@@ -730,6 +732,61 @@ impl RuntimeDebugArtifactWriter {
         Ok(payload)
     }
 
+    async fn with_visible_internal_llm_tool_trace_index(
+        &self,
+        scope: &RuntimeDebugArtifactScope,
+        mut payload: Value,
+    ) -> Result<Value, ApiError> {
+        let Some(object) = payload.as_object() else {
+            return Ok(payload);
+        };
+        if object.contains_key("visible_internal_llm_tool_trace") {
+            return Ok(payload);
+        }
+
+        let traces = collect_visible_internal_llm_tool_route_traces(&payload);
+        if traces.is_empty() {
+            return Ok(payload);
+        }
+
+        let mut summaries = Vec::with_capacity(traces.len());
+        for trace in traces {
+            let artifact_id = self
+                .persist_value_artifact(
+                    scope,
+                    "node_debug_visible_internal_llm_tool_trace",
+                    &trace.detail_payload(),
+                )
+                .await?;
+            summaries.push(trace.summary_payload(artifact_id));
+        }
+
+        if let Some(object) = payload.as_object_mut() {
+            object.insert(
+                "visible_internal_llm_tool_trace".to_string(),
+                Value::Array(summaries),
+            );
+        }
+        Ok(payload)
+    }
+
+    async fn offload_node_debug_payload(
+        &self,
+        scope: &RuntimeDebugArtifactScope,
+        payload: Value,
+    ) -> Result<(Value, bool), ApiError> {
+        let original_payload = payload.clone();
+        let payload = self
+            .with_visible_internal_llm_tool_trace_index(scope, payload)
+            .await?;
+        let trace_changed = payload != original_payload;
+        let (payload, fields_changed) = self
+            .offload_payload_fields(scope, "node_debug_payload", payload, Vec::new())
+            .await?;
+
+        Ok((payload, trace_changed || fields_changed))
+    }
+
     async fn enrich_existing_llm_rounds_preview(
         &self,
         scope: &RuntimeDebugArtifactScope,
@@ -946,12 +1003,7 @@ pub async fn offload_application_run_detail_artifacts(
             )
             .await?;
         let (debug_payload, debug_changed) = writer
-            .offload_payload_fields(
-                &node_scope,
-                "node_debug_payload",
-                node_run.debug_payload.clone(),
-                Vec::new(),
-            )
+            .offload_node_debug_payload(&node_scope, node_run.debug_payload.clone())
             .await?;
 
         if input_changed || output_changed || error_changed || metrics_changed || debug_changed {

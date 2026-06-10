@@ -295,6 +295,87 @@
   gap: 4px;
 }
 
+.agent-flow-llm-tool-registrations {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+}
+
+.agent-flow-llm-tool-registrations__toolbar {
+  display: flex;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-flow-llm-tool-registrations__label.ant-typography {
+  min-width: 0;
+  color: #1f3326;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.agent-flow-llm-tool-registrations__add.ant-btn {
+  flex: none;
+}
+
+.agent-flow-llm-tool-registrations__switch.ant-switch {
+  flex: none;
+  margin-left: auto;
+}
+
+.agent-flow-llm-tool-registration-panel .agent-flow-model-settings__panel-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-flow-llm-tool-registration-form {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+
+.agent-flow-llm-tool-registration-panel__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid #edf1f5;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.agent-flow-llm-tool-registration-schema {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.agent-flow-llm-tool-registration-schema
+  .agent-flow-json-schema-settings--inline {
+  overflow: hidden;
+  padding: 10px 12px 12px;
+  border: 1px solid #d9e3dc;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.agent-flow-llm-tool-registration-schema
+  .agent-flow-json-schema-settings__field-rows {
+  max-height: 184px;
+}
+
+.agent-flow-llm-tool-registration-schema
+  .agent-flow-json-schema-settings__field-head,
+.agent-flow-llm-tool-registration-schema
+  .agent-flow-json-schema-settings__field-row {
+  grid-template-columns:
+    minmax(116px, 0.95fr) minmax(148px, 1.1fr)
+    112px 54px 56px;
+  gap: 7px;
+}
+
 .agent-flow-templated-text-field__frame {
   width: 100%;
   overflow: hidden;
@@ -767,10 +848,9 @@
 
 .agent-flow-templated-binding-row {
   display: grid;
-  grid-template-columns: minmax(88px, 0.7fr) minmax(96px, 0.65fr) minmax(
-      168px,
-      1.5fr
-    ) 28px;
+  grid-template-columns:
+    minmax(88px, 0.7fr) minmax(96px, 0.65fr) minmax(168px, 1.5fr)
+    28px;
   align-items: start;
   min-width: 0;
   gap: 8px;

@@ -5,6 +5,11 @@ use crate::node_error_policy::{node_uses_error_branch, ERROR_BRANCH_SOURCE_HANDL
 use super::node_compilation::compile_node;
 use super::*;
 
+const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
+const VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX: &str = "visible_internal_llm_tool:";
+const TOOL_RESULT_NODE_TYPE: &str = "tool_result";
+const INTERNAL_LLM_NODE_POLICY_ALLOWED: &str = "allowed";
+
 type NodeTopologyBuild = (
     BTreeMap<String, CompiledNode>,
     Vec<CompiledEdge>,
@@ -155,6 +160,15 @@ pub(super) fn build_nodes_and_topology(
             .expect("validated target indegree must exist") += 1;
     }
 
+    compile_issues.extend(materialize_visible_internal_llm_tool_targets(
+        &mut nodes,
+        &compiled_edges,
+    ));
+    compile_issues.extend(validate_visible_internal_llm_tool_branches(
+        &nodes,
+        &compiled_edges,
+    ));
+
     for node in nodes.values_mut() {
         node.dependency_node_ids
             .sort_by_key(|node_id| node_order_index(&node_order, node_id));
@@ -233,6 +247,31 @@ fn validate_edge_source_handle(
         );
     }
 
+    if let Some(connector_id) =
+        visible_internal_llm_tool_connector_id_from_source_handle(source_handle)
+    {
+        if source_node.node_type != "llm" {
+            bail!(
+                "edge {edge_id} uses visible internal LLM tool sourceHandle on non-LLM node {}",
+                source_node.node_id
+            );
+        }
+        if !visible_internal_llm_tools_enabled(source_node) {
+            bail!(
+                "edge {edge_id} uses visible internal LLM tool sourceHandle on node {} without mount tools enabled",
+                source_node.node_id
+            );
+        }
+        if !visible_internal_llm_tool_connector_ids(source_node).contains(connector_id) {
+            bail!(
+                "edge {edge_id} references unknown visible internal LLM tool connector {connector_id} for node {}",
+                source_node.node_id
+            );
+        }
+
+        return Ok(());
+    }
+
     if source_node.node_type != "if_else" {
         return Ok(());
     }
@@ -260,6 +299,16 @@ fn validate_edge_source_handle(
     }
 
     Ok(())
+}
+
+fn visible_internal_llm_tool_connector_id_from_source_handle(
+    source_handle: Option<&str>,
+) -> Option<&str> {
+    source_handle?.strip_prefix(VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX)
+}
+
+fn visible_internal_llm_tool_source_handle(connector_id: &str) -> String {
+    format!("{VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX}{connector_id}")
 }
 
 fn collect_if_else_branch_source_handles(
@@ -417,6 +466,296 @@ fn validate_llm_context_policies(nodes: &BTreeMap<String, CompiledNode>) -> Vec<
             })
         })
         .collect()
+}
+
+fn materialize_visible_internal_llm_tool_targets(
+    nodes: &mut BTreeMap<String, CompiledNode>,
+    edges: &[CompiledEdge],
+) -> Vec<CompileIssue> {
+    let mut issues = Vec::new();
+
+    for node in nodes.values_mut().filter(|node| node.node_type == "llm") {
+        if !visible_internal_llm_tools_enabled(node) {
+            continue;
+        }
+
+        let node_id = node.node_id.clone();
+        let Some(tools) = visible_internal_llm_tools_array_mut(&mut node.config) else {
+            continue;
+        };
+
+        for tool in tools {
+            if tool.get("type").and_then(Value::as_str) != Some(VISIBLE_INTERNAL_LLM_TOOL_TYPE) {
+                continue;
+            }
+            let connector_id = tool
+                .get("connector_id")
+                .or_else(|| tool.get("connectorId"))
+                .or_else(|| tool.get("tool_name"))
+                .or_else(|| tool.get("name"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let Some(connector_id) = connector_id else {
+                issues.push(CompileIssue {
+                    node_id: node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tools entry is missing connector_id",
+                        node_id
+                    ),
+                });
+                continue;
+            };
+            let source_handle = visible_internal_llm_tool_source_handle(connector_id);
+            let matching_edges = edges
+                .iter()
+                .filter(|edge| {
+                    edge.source == node_id && edge.source_handle.as_deref() == Some(&source_handle)
+                })
+                .collect::<Vec<_>>();
+
+            if matching_edges.is_empty() {
+                issues.push(CompileIssue {
+                    node_id: node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tool connector {connector_id} is missing a graph edge",
+                        node_id
+                    ),
+                });
+                continue;
+            };
+            if matching_edges.len() > 1 {
+                issues.push(CompileIssue {
+                    node_id: node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tool connector {connector_id} has multiple graph edges",
+                        node_id
+                    ),
+                });
+                continue;
+            }
+
+            if let Some(tool_object) = tool.as_object_mut() {
+                tool_object.insert(
+                    "target_node_id".to_string(),
+                    Value::String(matching_edges[0].target.clone()),
+                );
+            }
+        }
+    }
+
+    issues
+}
+
+fn validate_visible_internal_llm_tool_branches(
+    nodes: &BTreeMap<String, CompiledNode>,
+    edges: &[CompiledEdge],
+) -> Vec<CompileIssue> {
+    let mut issues = Vec::new();
+
+    for node in nodes.values().filter(|node| node.node_type == "llm") {
+        if !visible_internal_llm_tools_enabled(node) {
+            continue;
+        }
+
+        for tool in visible_internal_llm_tool_entries(node) {
+            let allow_internal_llm = visible_internal_llm_tool_allows_internal_llm_node(tool);
+            let connector_id = visible_internal_llm_tool_connector_id(tool)
+                .unwrap_or_else(|| "unknown".to_string());
+            let Some(target_node_id) = tool
+                .get("target_node_id")
+                .or_else(|| tool.get("targetNodeId"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            else {
+                continue;
+            };
+
+            let reachable_node_ids =
+                visible_internal_llm_tool_branch_node_ids(target_node_id, nodes, edges);
+            let tool_result_node_ids = reachable_node_ids
+                .iter()
+                .filter(|node_id| {
+                    nodes
+                        .get(*node_id)
+                        .map(|reachable| reachable.node_type == TOOL_RESULT_NODE_TYPE)
+                        .unwrap_or(false)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+
+            if tool_result_node_ids.is_empty() {
+                issues.push(CompileIssue {
+                    node_id: node.node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tool connector {connector_id} is missing a reachable tool_result node",
+                        node.node_id
+                    ),
+                });
+            } else if tool_result_node_ids.len() > 1 {
+                issues.push(CompileIssue {
+                    node_id: node.node_id.clone(),
+                    code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                    message: format!(
+                        "node {} visible_internal_llm_tool connector {connector_id} has multiple reachable tool_result nodes",
+                        node.node_id
+                    ),
+                });
+            }
+
+            if !allow_internal_llm {
+                for reachable_node_id in &reachable_node_ids {
+                    if reachable_node_id == &node.node_id {
+                        continue;
+                    }
+
+                    let Some(reachable_node) = nodes.get(reachable_node_id) else {
+                        continue;
+                    };
+
+                    if reachable_node.node_type == "llm" {
+                        issues.push(CompileIssue {
+                            node_id: node.node_id.clone(),
+                            code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                            message: format!(
+                                "node {} visible_internal_llm_tool connector {connector_id} reaches LLM node {} without internal_llm_node_policy allowed",
+                                node.node_id, reachable_node.node_id
+                            ),
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    issues
+}
+
+fn visible_internal_llm_tool_entries(node: &CompiledNode) -> Vec<&Value> {
+    node.config
+        .get("visible_internal_llm_tools")
+        .or_else(|| node.config.get("visibleInternalLlmTools"))
+        .and_then(Value::as_array)
+        .map(|tools| {
+            tools
+                .iter()
+                .filter(|tool| {
+                    tool.get("type").and_then(Value::as_str) == Some(VISIBLE_INTERNAL_LLM_TOOL_TYPE)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn visible_internal_llm_tool_connector_id(tool: &Value) -> Option<String> {
+    tool.get("connector_id")
+        .or_else(|| tool.get("connectorId"))
+        .or_else(|| tool.get("tool_name"))
+        .or_else(|| tool.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn visible_internal_llm_tool_branch_node_ids(
+    target_node_id: &str,
+    nodes: &BTreeMap<String, CompiledNode>,
+    edges: &[CompiledEdge],
+) -> BTreeSet<String> {
+    let mut visited = BTreeSet::new();
+    let mut queue = VecDeque::from([target_node_id.to_string()]);
+
+    while let Some(node_id) = queue.pop_front() {
+        if !visited.insert(node_id.clone()) {
+            continue;
+        }
+
+        let Some(node) = nodes.get(&node_id) else {
+            continue;
+        };
+
+        if node.node_type == TOOL_RESULT_NODE_TYPE {
+            continue;
+        }
+
+        for edge in edges.iter().filter(|edge| edge.source == node_id) {
+            if edge.source_handle.as_deref() == Some(ERROR_BRANCH_SOURCE_HANDLE)
+                || visible_internal_llm_tool_connector_id_from_source_handle(
+                    edge.source_handle.as_deref(),
+                )
+                .is_some()
+            {
+                continue;
+            }
+
+            queue.push_back(edge.target.clone());
+        }
+    }
+
+    visited
+}
+
+fn visible_internal_llm_tool_allows_internal_llm_node(tool: &Value) -> bool {
+    tool.get("internal_llm_node_policy")
+        .or_else(|| tool.get("internalLlmNodePolicy"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        == Some(INTERNAL_LLM_NODE_POLICY_ALLOWED)
+}
+
+fn visible_internal_llm_tools_array_mut(config: &mut Value) -> Option<&mut Vec<Value>> {
+    let object = config.as_object_mut()?;
+    let key = if object.contains_key("visible_internal_llm_tools") {
+        "visible_internal_llm_tools"
+    } else {
+        "visibleInternalLlmTools"
+    };
+
+    object.get_mut(key).and_then(Value::as_array_mut)
+}
+
+fn visible_internal_llm_tool_connector_ids(node: &CompiledNode) -> BTreeSet<String> {
+    node.config
+        .get("visible_internal_llm_tools")
+        .or_else(|| node.config.get("visibleInternalLlmTools"))
+        .and_then(Value::as_array)
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(|tool| {
+                    if tool.get("type").and_then(Value::as_str)
+                        != Some(VISIBLE_INTERNAL_LLM_TOOL_TYPE)
+                    {
+                        return None;
+                    }
+
+                    tool.get("connector_id")
+                        .or_else(|| tool.get("connectorId"))
+                        .or_else(|| tool.get("tool_name"))
+                        .or_else(|| tool.get("name"))
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn visible_internal_llm_tools_enabled(node: &CompiledNode) -> bool {
+    node.config
+        .get("visible_internal_llm_tools_enabled")
+        .or_else(|| node.config.get("visibleInternalLlmToolsEnabled"))
+        .and_then(Value::as_bool)
+        == Some(true)
 }
 
 fn context_policy_selector(node: &CompiledNode) -> Option<Vec<String>> {

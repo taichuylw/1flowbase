@@ -15,9 +15,18 @@ import {
   formatConversationVariableTitle,
   listConversationVariables
 } from './variables/conversation-variables';
+import {
+  getLlmVisibleInternalTools,
+  getLlmVisibleInternalToolsEnabled,
+  parseLlmToolSourceHandleId
+} from './llm-node-config';
 import { outputHasLlmContextSchema } from './output-contract/schema';
 import { formatNodeVariableLabel } from './variables/variable-labels';
 import { i18nText } from '../../../shared/i18n/text';
+
+const visibleInternalLlmToolNodeId = 'visible_internal_llm_tool';
+const visibleInternalLlmToolArgumentsKey = 'arguments';
+const visibleInternalLlmToolDisplayNodeLabel = 'tool';
 
 export interface FlowSelectorOption {
   nodeId: string;
@@ -73,6 +82,109 @@ function collectUpstreamNodeIds(
   }
 
   return visited;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function jsonSchemaPropertyValueType(property: unknown) {
+  if (!isRecord(property)) {
+    return 'json';
+  }
+
+  const type = property.type;
+
+  if (type === 'string' || type === 'number' || type === 'boolean') {
+    return type;
+  }
+
+  if (type === 'integer') {
+    return 'number';
+  }
+
+  if (type === 'array') {
+    return 'array';
+  }
+
+  return 'json';
+}
+
+function visibleInternalLlmToolArgumentOptions(
+  document: FlowAuthoringDocument,
+  nodeId: string
+): FlowSelectorOption[] {
+  const visitedNodeIds = new Set<string>();
+  const queue = [nodeId];
+  const optionsByField = new Map<string, FlowSelectorOption>();
+
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+
+    if (!currentNodeId || visitedNodeIds.has(currentNodeId)) {
+      continue;
+    }
+
+    visitedNodeIds.add(currentNodeId);
+
+    for (const edge of document.graph.edges) {
+      if (edge.target !== currentNodeId) {
+        continue;
+      }
+
+      queue.push(edge.source);
+
+      const connectorId = parseLlmToolSourceHandleId(edge.sourceHandle);
+
+      if (!connectorId) {
+        continue;
+      }
+
+      const sourceNode = document.graph.nodes.find(
+        (node) => node.id === edge.source
+      );
+
+      if (
+        sourceNode?.type !== 'llm' ||
+        !getLlmVisibleInternalToolsEnabled(sourceNode.config)
+      ) {
+        continue;
+      }
+
+      const tool = getLlmVisibleInternalTools(sourceNode.config).find(
+        (candidate) =>
+          (candidate.connector_id || candidate.tool_name) === connectorId
+      );
+      const properties = isRecord(tool?.input_schema?.properties)
+        ? tool.input_schema.properties
+        : {};
+
+      for (const [fieldKey, property] of Object.entries(properties)) {
+        const trimmedFieldKey = fieldKey.trim();
+
+        if (!trimmedFieldKey || optionsByField.has(trimmedFieldKey)) {
+          continue;
+        }
+
+        optionsByField.set(trimmedFieldKey, {
+          nodeId: visibleInternalLlmToolNodeId,
+          nodeLabel: visibleInternalLlmToolDisplayNodeLabel,
+          outputKey: trimmedFieldKey,
+          outputLabel: trimmedFieldKey,
+          valueType: jsonSchemaPropertyValueType(property),
+          jsonSchema: isRecord(property) ? property : undefined,
+          value: [
+            visibleInternalLlmToolNodeId,
+            visibleInternalLlmToolArgumentsKey,
+            trimmedFieldKey
+          ],
+          displayLabel: `${visibleInternalLlmToolDisplayNodeLabel}.${trimmedFieldKey}`
+        });
+      }
+    }
+  }
+
+  return [...optionsByField.values()];
 }
 
 export function listVisibleSelectorOptions(
@@ -132,10 +244,16 @@ export function listVisibleSelectorOptions(
       })
     );
 
+  const toolArgumentOptions = visibleInternalLlmToolArgumentOptions(
+    document,
+    nodeId
+  );
+
   return [
     ...systemOptions,
     ...environmentOptions,
     ...conversationOptions,
+    ...toolArgumentOptions,
     ...nodeOptions
   ];
 }

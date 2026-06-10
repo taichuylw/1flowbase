@@ -113,6 +113,14 @@ where
             &trace.provider_events,
         )
         .await?;
+        persist_visible_internal_llm_tool_route_events(
+            repository,
+            flow_run_id,
+            node_run.id,
+            &trace.node_id,
+            &trace.debug_payload,
+        )
+        .await?;
 
         if finished_at.is_none() && status != domain::NodeRunStatus::Failed {
             waiting_node_run = Some(node_run);
@@ -120,4 +128,38 @@ where
     }
 
     Ok(waiting_node_run)
+}
+
+async fn persist_visible_internal_llm_tool_route_events<R>(
+    repository: &R,
+    flow_run_id: Uuid,
+    node_run_id: Uuid,
+    node_id: &str,
+    debug_payload: &Value,
+) -> Result<()>
+where
+    R: OrchestrationRuntimeRepository,
+{
+    let Some(route_events) = debug_payload
+        .get("visible_internal_llm_tool_events")
+        .and_then(Value::as_array)
+    else {
+        return Ok(());
+    };
+
+    for route_event in route_events {
+        runtime_event_persister::persist_runtime_event_payload(
+            repository,
+            flow_run_id,
+            &debug_stream_events::visible_internal_llm_tool_route(
+                flow_run_id,
+                node_run_id,
+                node_id,
+                route_event,
+            ),
+        )
+        .await?;
+    }
+
+    Ok(())
 }

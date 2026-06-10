@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
 import { arrangeCanvasLeftToRight, shiftDownstreamNodesBFS } from '../layout';
+import { createLlmToolSourceHandleId } from '../../../llm-node-config';
+import { createEdgeDocument } from '../../edge-factory';
+import { createNodeDocument } from '../../node-factory';
 
 describe('Topological BFS Downstream Shifting', () => {
   test('shifts downstream nodes when parent moves forward', () => {
@@ -264,6 +267,81 @@ describe('Canvas left-to-right arrangement', () => {
     expect(
       Math.abs(llmNode.position.y - siblingNode.position.y)
     ).toBeGreaterThanOrEqual(136);
+    expect(
+      arrangedAgain.graph.nodes.map((node) => [node.id, node.position])
+    ).toEqual(arranged.graph.nodes.map((node) => [node.id, node.position]));
+  });
+
+  test('keeps LLM tool-mounted nodes in a vertical mount lane without flattening the main flow', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const toolHandleA = createLlmToolSourceHandleId('search_tool');
+    const toolHandleB = createLlmToolSourceHandleId('quote_tool');
+
+    document.graph.nodes.push(
+      createNodeDocument('llm', 'node-mounted-llm-a', 40, 600),
+      createNodeDocument('llm', 'node-mounted-llm-b', 40, 620),
+      createNodeDocument('tool_result', 'node-tool-result', 40, 640)
+    );
+    document.graph.edges.push(
+      createEdgeDocument({
+        id: 'edge-llm-mounted-a',
+        source: 'node-llm',
+        target: 'node-mounted-llm-a',
+        sourceHandle: toolHandleA
+      }),
+      createEdgeDocument({
+        id: 'edge-llm-mounted-b',
+        source: 'node-llm',
+        target: 'node-mounted-llm-b',
+        sourceHandle: toolHandleB
+      }),
+      createEdgeDocument({
+        id: 'edge-mounted-a-tool-result',
+        source: 'node-mounted-llm-a',
+        target: 'node-tool-result'
+      })
+    );
+
+    const arranged = arrangeCanvasLeftToRight(document, null);
+    const arrangedAgain = arrangeCanvasLeftToRight(arranged, null);
+    const llmNode = arranged.graph.nodes.find((node) => node.id === 'node-llm');
+    const answerNode = arranged.graph.nodes.find(
+      (node) => node.id === 'node-answer'
+    );
+    const mountedNodeA = arranged.graph.nodes.find(
+      (node) => node.id === 'node-mounted-llm-a'
+    );
+    const mountedNodeB = arranged.graph.nodes.find(
+      (node) => node.id === 'node-mounted-llm-b'
+    );
+    const toolResultNode = arranged.graph.nodes.find(
+      (node) => node.id === 'node-tool-result'
+    );
+
+    if (
+      !llmNode ||
+      !answerNode ||
+      !mountedNodeA ||
+      !mountedNodeB ||
+      !toolResultNode
+    ) {
+      throw new Error('expected arranged nodes to exist');
+    }
+
+    expect(answerNode.position).toEqual({
+      x: llmNode.position.x + 280,
+      y: llmNode.position.y
+    });
+    expect(mountedNodeA.position.x).toBe(llmNode.position.x + 280);
+    expect(mountedNodeB.position.x).toBe(llmNode.position.x + 280);
+    expect(mountedNodeA.position.y).toBeGreaterThan(llmNode.position.y + 96);
+    expect(
+      mountedNodeB.position.y - mountedNodeA.position.y
+    ).toBeGreaterThanOrEqual(136);
+    expect(toolResultNode.position).toEqual({
+      x: mountedNodeA.position.x + 280,
+      y: mountedNodeA.position.y
+    });
     expect(
       arrangedAgain.graph.nodes.map((node) => [node.id, node.position])
     ).toEqual(arranged.graph.nodes.map((node) => [node.id, node.position]));

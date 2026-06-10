@@ -21,6 +21,11 @@ export const llmNodeDefinition: NodeDefinition = {
           required: true
         },
         {
+          key: 'config.visible_internal_llm_tools_enabled',
+          label: i18nText('agentFlow', 'auto.mount_tools'),
+          editor: 'llm_tool_registrations'
+        },
+        {
           key: 'config.context_policy',
           label: '上下文',
           editor: 'llm_context_policy'

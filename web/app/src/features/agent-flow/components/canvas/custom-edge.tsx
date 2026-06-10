@@ -1,4 +1,9 @@
-import { EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from '@xyflow/react';
+import {
+  EdgeLabelRenderer,
+  getBezierPath,
+  type Edge,
+  type EdgeProps
+} from '@xyflow/react';
 import { useState } from 'react';
 
 import type { NodePickerOption } from '../../lib/plugin-node-definitions';
@@ -39,7 +44,9 @@ export function AgentFlowCustomEdge(props: EdgeProps<AgentFlowCanvasEdge>) {
     targetPosition
   });
 
-  const shouldShowButton = isHovered || pickerOpen || selected;
+  const canInsertNode = Boolean(data?.onInsertNode);
+  const shouldShowButton =
+    canInsertNode && (isHovered || pickerOpen || selected);
 
   return (
     <g
@@ -58,43 +65,45 @@ export function AgentFlowCustomEdge(props: EdgeProps<AgentFlowCanvasEdge>) {
         id={id}
         style={{
           ...style,
-          stroke: selected ? '#1677ff' : (style?.stroke || '#cbd5e1'),
-          strokeWidth: selected ? 3 : (style?.strokeWidth || 2)
+          stroke: selected ? '#1677ff' : style?.stroke || '#cbd5e1',
+          strokeWidth: selected ? 3 : style?.strokeWidth || 2
         }}
         className="react-flow__edge-path agent-flow-custom-edge-path"
         d={edgePath}
         markerEnd={markerEnd}
       />
-      <EdgeLabelRenderer>
-        <div
-          className="agent-flow-edge-label-container"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          style={{
-            position: 'absolute',
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: 'all',
-            zIndex: 20,
-            opacity: shouldShowButton ? 1 : 0,
-            transition: 'opacity 0.2s ease-in-out',
-            boxShadow: selected
-              ? '0 0 0 2px rgba(22, 119, 255, 0.18), 0 2px 8px rgba(22, 119, 255, 0.16)'
-              : undefined
-          }}
-        >
-          <div className="agent-flow-edge-add-button-wrapper">
-            <EdgeInsertButton
-              open={pickerOpen}
-              onOpenChange={setPickerOpen}
-              options={data?.nodePickerOptions ?? []}
-              onPickNode={(option) => {
-                data?.onInsertNode?.(id, option);
-                setPickerOpen(false);
-              }}
-            />
+      {canInsertNode ? (
+        <EdgeLabelRenderer>
+          <div
+            className="agent-flow-edge-label-container"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+              zIndex: 20,
+              opacity: shouldShowButton ? 1 : 0,
+              transition: 'opacity 0.2s ease-in-out',
+              boxShadow: selected
+                ? '0 0 0 2px rgba(22, 119, 255, 0.18), 0 2px 8px rgba(22, 119, 255, 0.16)'
+                : undefined
+            }}
+          >
+            <div className="agent-flow-edge-add-button-wrapper">
+              <EdgeInsertButton
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
+                options={data?.nodePickerOptions ?? []}
+                onPickNode={(option) => {
+                  data?.onInsertNode?.(id, option);
+                  setPickerOpen(false);
+                }}
+              />
+            </div>
           </div>
-        </div>
-      </EdgeLabelRenderer>
+        </EdgeLabelRenderer>
+      ) : null}
     </g>
   );
 }

@@ -52,6 +52,7 @@ mod llm_node_outputs;
 mod llm_parameters;
 #[cfg(test)]
 mod tests;
+mod visible_internal_llm_tools;
 
 use branching::*;
 pub use http_request::{
@@ -67,6 +68,7 @@ use llm_invocation::*;
 use llm_metrics::*;
 use llm_node_outputs::*;
 use llm_parameters::*;
+use visible_internal_llm_tools::*;
 
 const LLM_TOOL_CALLBACK_KIND: &str = "llm_tool_calls";
 const LLM_TOOL_CALLBACK_STATE_KEY: &str = "__llm_tool_callback";
@@ -124,6 +126,7 @@ pub struct LlmNodeExecution {
     pub metrics_payload: Value,
     pub debug_payload: Value,
     pub provider_events: Vec<ProviderStreamEvent>,
+    pub pending_callback: Option<LlmToolCallbackWait>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -136,8 +139,11 @@ pub struct CapabilityNodeExecution {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LlmToolCallbackWait {
+    pub node_id: String,
+    pub node_alias: String,
     pub request_payload: Value,
     pub checkpoint_variable_pool: Map<String, Value>,
+    pub node_trace: Option<NodeExecutionTrace>,
 }
 
 pub async fn start_flow_debug_run<I>(
@@ -176,6 +182,68 @@ where
 
     if pending_llm_tool_callback_state(&variable_pool, waiting_node_id).is_some() {
         append_llm_tool_result_messages(&mut variable_pool, waiting_node_id, resume_payload)?;
+        if has_visible_internal_llm_tool_callback_state(&variable_pool) {
+            match resume_visible_internal_llm_tool_callback(
+                plan,
+                waiting_node_id,
+                variable_pool,
+                &runtime_context,
+                invoker,
+            )
+            .await?
+            {
+                VisibleInternalLlmToolResume::Ready(variable_pool) => {
+                    return execute_from(
+                        plan,
+                        checkpoint.next_node_index,
+                        variable_pool,
+                        Some(checkpoint.active_node_ids.iter().cloned().collect()),
+                        &runtime_context,
+                        invoker,
+                    )
+                    .await;
+                }
+                VisibleInternalLlmToolResume::Waiting(wait) => {
+                    let checkpoint_variable_pool = wait.checkpoint_variable_pool.clone();
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::WaitingCallback(PendingCallbackTask {
+                            node_id: wait.node_id.clone(),
+                            node_alias: wait.node_alias.clone(),
+                            callback_kind: LLM_TOOL_CALLBACK_KIND.to_string(),
+                            request_payload: wait.request_payload,
+                        }),
+                        variable_pool: checkpoint_variable_pool.clone(),
+                        checkpoint_snapshot: Some(CheckpointSnapshot {
+                            next_node_index: checkpoint.next_node_index,
+                            variable_pool: checkpoint_variable_pool,
+                            active_node_ids: checkpoint.active_node_ids.clone(),
+                        }),
+                        node_traces: wait.node_trace.into_iter().collect(),
+                    });
+                }
+                VisibleInternalLlmToolResume::Failed {
+                    node_id,
+                    node_alias,
+                    execution,
+                } => {
+                    return Ok(FlowDebugExecutionOutcome {
+                        stop_reason: ExecutionStopReason::Failed(NodeExecutionFailure {
+                            node_id,
+                            node_alias,
+                            error_payload: execution.error_payload.clone().unwrap_or_else(|| {
+                                json!({
+                                    "error_code": "visible_internal_llm_tool_failed",
+                                    "message": "visible internal LLM tool branch node failed"
+                                })
+                            }),
+                        }),
+                        variable_pool: Map::new(),
+                        checkpoint_snapshot: None,
+                        node_traces: Vec::new(),
+                    });
+                }
+            }
+        }
         return execute_from(
             plan,
             checkpoint.next_node_index,
@@ -423,6 +491,7 @@ where
     let mut node_traces = Vec::new();
     let mut pending_failure: Option<NodeExecutionFailure> = None;
     let mut active_node_ids = active_node_ids.unwrap_or_else(|| initial_active_node_ids(plan));
+    let mounted_llm_target_node_ids = visible_internal_llm_tool_target_node_ids(plan);
 
     for (index, node_id) in plan
         .topological_order
@@ -436,6 +505,9 @@ where
             .ok_or_else(|| anyhow!("compiled node missing: {node_id}"))?;
 
         if !active_node_ids.contains(node_id) {
+            continue;
+        }
+        if mounted_llm_target_node_ids.contains(node_id) {
             continue;
         }
 
@@ -513,6 +585,7 @@ where
             }
             "llm" => {
                 let execution = execute_llm_node(
+                    plan,
                     node,
                     &resolved_inputs,
                     &rendered_templates,
@@ -556,16 +629,22 @@ where
                     continue;
                 }
 
-                if let Some(wait) = build_llm_tool_callback_wait(
-                    node,
-                    &resolved_inputs,
-                    &variable_pool,
-                    &execution.output_payload,
-                ) {
+                let pending_callback = execution.pending_callback.or_else(|| {
+                    build_llm_tool_callback_wait(
+                        node,
+                        &resolved_inputs,
+                        &variable_pool,
+                        &execution.output_payload,
+                    )
+                });
+                if let Some(wait) = pending_callback {
+                    if let Some(trace) = wait.node_trace.clone() {
+                        node_traces.push(trace);
+                    }
                     return Ok(FlowDebugExecutionOutcome {
                         stop_reason: ExecutionStopReason::WaitingCallback(PendingCallbackTask {
-                            node_id: node.node_id.clone(),
-                            node_alias: node.alias.clone(),
+                            node_id: wait.node_id.clone(),
+                            node_alias: wait.node_alias.clone(),
                             callback_kind: LLM_TOOL_CALLBACK_KIND.to_string(),
                             request_payload: wait.request_payload,
                         }),
@@ -651,7 +730,7 @@ where
                     provider_events: Vec::new(),
                 });
             }
-            "template_transform" | "answer" => {
+            "template_transform" | "answer" | "tool_result" => {
                 let output_key = first_output_key(node);
                 let output_value =
                     rendered_templates
@@ -892,6 +971,30 @@ where
 }
 
 pub async fn execute_llm_node<I>(
+    plan: &CompiledPlan,
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    rendered_templates: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+    runtime_context: &ExecutionRuntimeContext,
+    invoker: &I,
+) -> Result<LlmNodeExecution>
+where
+    I: ProviderInvoker + CapabilityInvoker + CodeInvoker + ?Sized,
+{
+    execute_llm_node_with_visible_internal_tools(
+        plan,
+        node,
+        resolved_inputs,
+        rendered_templates,
+        variable_pool,
+        runtime_context,
+        invoker,
+    )
+    .await
+}
+
+pub(super) async fn execute_llm_node_provider_round<I>(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
     rendered_templates: &Map<String, Value>,
@@ -917,7 +1020,7 @@ where
     let mut failed_attempts = Vec::new();
 
     for (attempt_index, attempt_runtime) in attempt_runtimes.iter().enumerate() {
-        let invocation = match build_provider_invocation(
+        let mut invocation = match build_provider_invocation(
             node,
             attempt_runtime,
             resolved_inputs,
@@ -949,6 +1052,8 @@ where
                 );
             }
         };
+        inject_visible_internal_llm_tool_media_content_blocks(&mut invocation.input, variable_pool)
+            .await;
         let invocation_messages = build_llm_debug_invocation_messages(
             node,
             resolved_inputs,

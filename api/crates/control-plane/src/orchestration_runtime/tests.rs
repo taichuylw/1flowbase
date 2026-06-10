@@ -1,5 +1,112 @@
 use super::*;
 use crate::{errors::ControlPlaneError, ports::ModelProviderRepository};
+use orchestration_runtime::execution_state::{
+    ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionTrace,
+};
+use plugin_framework::provider_contract::{ProviderMessage, ProviderMessageRole};
+use serde_json::Map;
+
+#[tokio::test]
+async fn orchestration_runtime_persists_visible_internal_llm_tool_route_events() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let now = OffsetDateTime::now_utc();
+    let flow_run = OrchestrationRuntimeRepository::create_flow_run(
+        &repository,
+        &crate::ports::CreateFlowRunInput {
+            actor_user_id: Uuid::nil(),
+            application_id: Uuid::nil(),
+            flow_id: Uuid::now_v7(),
+            flow_draft_id: Uuid::now_v7(),
+            compiled_plan_id: Uuid::now_v7(),
+            debug_session_id: "debug-session".to_string(),
+            flow_schema_version: "1".to_string(),
+            document_hash: "hash".to_string(),
+            run_mode: domain::FlowRunMode::DebugFlowRun,
+            target_node_id: None,
+            title: "debug flow".to_string(),
+            status: domain::FlowRunStatus::Running,
+            input_payload: json!({}),
+            started_at: now,
+            api_key_id: None,
+            publication_version_id: None,
+            external_user: None,
+            external_conversation_id: None,
+            external_trace_id: None,
+            compatibility_mode: None,
+            idempotency_key: None,
+        },
+    )
+    .await
+    .expect("flow run should be created");
+    let outcome = FlowDebugExecutionOutcome {
+        stop_reason: ExecutionStopReason::Completed,
+        variable_pool: Map::new(),
+        checkpoint_snapshot: None,
+        node_traces: vec![NodeExecutionTrace {
+            node_id: "node-llm".to_string(),
+            node_type: "llm".to_string(),
+            node_alias: "Main LLM".to_string(),
+            input_payload: json!({}),
+            output_payload: json!({ "text": "done" }),
+            error_payload: None,
+            metrics_payload: json!({}),
+            debug_payload: json!({
+                "visible_internal_llm_tool_events": [
+                    {
+                        "event_type": "visible_internal_llm_tool_started",
+                        "main_node_id": "node-llm",
+                        "target_node_id": "node-mounted-llm",
+                        "tool_name": "image_llm",
+                        "tool_call_id": "call_visible",
+                        "arguments": { "task": "describe image" }
+                    },
+                    {
+                        "event_type": "visible_internal_llm_tool_completed",
+                        "main_node_id": "node-llm",
+                        "target_node_id": "node-mounted-llm",
+                        "tool_name": "image_llm",
+                        "tool_call_id": "call_visible",
+                        "provider_route": { "model": "gpt-5.4-mini" }
+                    }
+                ]
+            }),
+            provider_events: Vec::new(),
+        }],
+    };
+
+    persist_flow_debug_outcome(
+        &repository,
+        PersistFlowDebugOutcomeInput {
+            application_id: flow_run.application_id,
+            flow_run: &flow_run,
+            compiled_plan: None,
+            outcome: &outcome,
+            trigger_event_type: "flow_run_started",
+            trigger_event_payload: json!({}),
+            base_started_at: now,
+            waiting_node_resume: None,
+        },
+    )
+    .await
+    .expect("debug outcome should persist");
+
+    let runtime_events =
+        OrchestrationRuntimeRepository::list_runtime_events(&repository, flow_run.id, 0)
+            .await
+            .expect("runtime events should be listed");
+    assert!(runtime_events.iter().any(|event| {
+        event.event_type == "visible_internal_llm_tool_started"
+            && event.node_run_id.is_some()
+            && event.payload["node_id"] == json!("node-llm")
+            && event.payload["tool_name"] == json!("image_llm")
+            && event.payload["arguments"]["task"] == json!("describe image")
+    }));
+    assert!(runtime_events.iter().any(|event| {
+        event.event_type == "visible_internal_llm_tool_completed"
+            && event.payload["target_node_id"] == json!("node-mounted-llm")
+            && event.payload["provider_route"]["model"] == json!("gpt-5.4-mini")
+    }));
+}
 
 #[tokio::test]
 async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_missing(
@@ -159,4 +266,118 @@ async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_i
         error.downcast_ref::<ControlPlaneError>(),
         Some(ControlPlaneError::InvalidInput("model"))
     ));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let (provider_instance_id, _) = repository.seed_included_provider_instances();
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: test_support::InMemoryProviderRuntime::default(),
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        answer_presentation: None,
+    };
+    let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {
+        provider_instance_id: provider_instance_id.to_string(),
+        provider_code: "fixture_provider".to_string(),
+        protocol: "openai_compatible".to_string(),
+        model: "gpt-5.4-mini".to_string(),
+        routing: None,
+    };
+    let input = ProviderInvocationInput {
+        provider_instance_id: provider_instance_id.to_string(),
+        provider_code: "fixture_provider".to_string(),
+        protocol: "openai_compatible".to_string(),
+        model: "gpt-5.4-mini".to_string(),
+        messages: vec![ProviderMessage {
+            role: ProviderMessageRole::User,
+            content: "Describe image".to_string(),
+            name: None,
+            tool_call_id: None,
+            tool_calls: None,
+            content_blocks: Some(json!([
+                {"type": "text", "text": "Describe image"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://example.com/cat.png"}
+                }
+            ])),
+        }],
+        ..ProviderInvocationInput::default()
+    };
+
+    let output = orchestration_runtime::execution_engine::ProviderInvoker::invoke_llm(
+        &invoker, &runtime, input,
+    )
+    .await
+    .expect("non-multimodal model should receive textualized media context");
+
+    let content = output.result.final_content.unwrap_or_default();
+    assert!(content.contains("\"error_code\":\"message_media_unsupported\""));
+    assert!(content.contains("\"url\":\"https://example.com/cat.png\""));
+    assert!(!content.contains("content_blocks"));
+}
+
+#[test]
+fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
+    let mut input = ProviderInvocationInput {
+        messages: vec![
+            ProviderMessage {
+                role: ProviderMessageRole::User,
+                content: "Describe image".to_string(),
+                name: None,
+                tool_call_id: None,
+                tool_calls: None,
+                content_blocks: None,
+            },
+            ProviderMessage {
+                role: ProviderMessageRole::Tool,
+                content: String::new(),
+                name: Some("Read".to_string()),
+                tool_call_id: Some("call_read".to_string()),
+                tool_calls: None,
+                content_blocks: Some(json!([
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "aW1hZ2U="
+                        }
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/png;base64,SHOULD_NOT_BE_VISIBLE"
+                        }
+                    }
+                ])),
+            },
+        ],
+        ..ProviderInvocationInput::default()
+    };
+
+    provider_invoker::textualize_media_content_blocks_for_text_model(&mut input);
+
+    let tool_message = &input.messages[1];
+    assert!(tool_message.content_blocks.is_none());
+    assert!(tool_message
+        .content
+        .contains("\"error_code\":\"tool_result_media_unsupported\""));
+    assert!(tool_message
+        .content
+        .contains("\"media_type\":\"image/png\""));
+    assert!(!tool_message.content.contains("aW1hZ2U="));
+    assert!(tool_message
+        .content
+        .contains("\"url\":\"data:image/png;base64,[redacted]\""));
+    assert!(!tool_message.content.contains("SHOULD_NOT_BE_VISIBLE"));
 }

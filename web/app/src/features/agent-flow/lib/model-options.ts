@@ -37,6 +37,8 @@ export interface LlmModelOption {
   contextWindow: number | null;
   effectiveContextWindow: number | null;
   maxOutputTokens: number | null;
+  supportsToolCall: boolean;
+  supportsMultimodal: boolean;
   tag?: string;
 }
 
@@ -73,6 +75,8 @@ function mapLlmModelOption(
     contextWindow: model.context_window,
     effectiveContextWindow: model.context_window,
     maxOutputTokens: model.max_output_tokens,
+    supportsToolCall: model.supports_tool_call,
+    supportsMultimodal: model.supports_multimodal,
     tag: toTag(model.source)
   };
 }
@@ -203,10 +207,14 @@ export function buildLlmModelMetadataSummary(model: LlmModelOption) {
     model.value,
     model.tag,
     model.effectiveContextWindow !== null
-      ? i18nText("agentFlow", "auto.context", { value1: formatLlmTokenCount(model.effectiveContextWindow) })
+      ? i18nText('agentFlow', 'auto.context', {
+          value1: formatLlmTokenCount(model.effectiveContextWindow)
+        })
       : null,
     model.maxOutputTokens !== null
-      ? i18nText("agentFlow", "auto.output", { value1: formatLlmTokenCount(model.maxOutputTokens) })
+      ? i18nText('agentFlow', 'auto.output', {
+          value1: formatLlmTokenCount(model.maxOutputTokens)
+        })
       : null
   ]
     .filter(Boolean)

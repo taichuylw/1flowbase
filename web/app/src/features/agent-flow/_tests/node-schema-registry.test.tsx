@@ -97,6 +97,9 @@ describe('agent-flow node schema registry', () => {
     expect(agentFlowRendererRegistry.fields.llm_response_format).toBeTypeOf(
       'function'
     );
+    expect(agentFlowRendererRegistry.fields.llm_tool_registrations).toBeTypeOf(
+      'function'
+    );
     expect(agentFlowRendererRegistry.fields.code_source).toBeTypeOf('function');
     expect(
       agentFlowRendererRegistry.fields.output_contract_definition
@@ -262,6 +265,19 @@ describe('agent-flow node schema registry', () => {
           kind: 'builtin',
           type: 'answer',
           label: 'Answer'
+        }),
+        expect.objectContaining({
+          kind: 'builtin',
+          type: 'tool_result',
+          label: 'Tool Result'
+        })
+      ])
+    );
+    expect(BUILTIN_NODE_PICKER_OPTIONS).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          kind: 'builtin',
+          type: 'tool'
         })
       ])
     );
@@ -279,6 +295,37 @@ describe('agent-flow node schema registry', () => {
           key: 'llm-generated-outputs'
         })
       ])
+    );
+  });
+
+  test('exposes LLM tool registration authoring fields without execution role UI', () => {
+    const schema = resolveAgentFlowNodeSchema('llm');
+    const contract = getBuiltinNodeRuntimeContract('llm');
+    const executionRoleField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.execution_role'
+    );
+    const internalLlmField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.internal_llm_node_policy'
+    );
+    const mountToolsField = findFieldBlock(
+      schema.detail.tabs.config.blocks,
+      'config.visible_internal_llm_tools_enabled'
+    );
+
+    expect(contract?.defaults.config).toEqual(
+      expect.objectContaining({
+        visible_internal_llm_tools_enabled: false,
+        visible_internal_llm_tools: []
+      })
+    );
+    expect(executionRoleField).toBeNull();
+    expect(internalLlmField).toBeNull();
+    expect(mountToolsField).toEqual(
+      expect.objectContaining({
+        renderer: 'llm_tool_registrations'
+      })
     );
   });
 
@@ -617,6 +664,7 @@ describe('agent-flow node schema registry', () => {
       'code',
       'http_request',
       'tool',
+      'tool_result',
       'plugin_node',
       'human_input',
       'data_model_list',
@@ -1010,6 +1058,54 @@ describe('agent-flow node schema registry', () => {
     expect(nextNode.outputs).toEqual(nextOutputs);
     expect(nextNode.config).not.toHaveProperty('output_contract');
     expect(nextNode.alias).toBe('LLM');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  test('writes LLM tool registrations into node config without graph edges', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm');
+    const documentWithMountedLlm = {
+      ...document,
+      graph: {
+        ...document.graph,
+        nodes: [...document.graph.nodes, mountedLlm]
+      }
+    };
+    const setWorkingDocument = vi.fn();
+    const dispatch = vi.fn();
+    const adapter = createAgentFlowNodeSchemaAdapter({
+      document: documentWithMountedLlm,
+      nodeId: 'node-llm',
+      setWorkingDocument,
+      dispatch
+    });
+    const nextTools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'inspect_visible_context',
+        connector_id: 'inspect_visible_context',
+        target_node_id: 'node-mounted-llm',
+        description: 'Inspect visible context',
+        input_schema: { type: 'object' }
+      }
+    ];
+
+    adapter.setValue('config.visible_internal_llm_tools_enabled', true);
+    adapter.setValue('config.visible_internal_llm_tools', nextTools);
+
+    const nextDocument = setWorkingDocument.mock.calls.reduce(
+      (currentDocument, [update]) =>
+        typeof update === 'function' ? update(currentDocument) : update,
+      documentWithMountedLlm
+    );
+
+    expect(getNode(nextDocument, 'node-llm').config).toEqual(
+      expect.objectContaining({
+        visible_internal_llm_tools_enabled: true,
+        visible_internal_llm_tools: nextTools
+      })
+    );
+    expect(nextDocument.graph.edges).toEqual(document.graph.edges);
     expect(dispatch).not.toHaveBeenCalled();
   });
 

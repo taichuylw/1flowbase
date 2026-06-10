@@ -37,8 +37,12 @@ describe('useEditorShortcuts', () => {
         useEditorShortcuts();
 
         return {
-          edges: useAgentFlowEditorStore((state) => state.workingDocument.graph.edges),
-          selectedEdgeId: useAgentFlowEditorStore((state) => state.selectedEdgeId),
+          edges: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.edges
+          ),
+          selectedEdgeId: useAgentFlowEditorStore(
+            (state) => state.selectedEdgeId
+          ),
           setSelection: useAgentFlowEditorStore((state) => state.setSelection)
         };
       },
@@ -79,9 +83,15 @@ describe('useEditorShortcuts', () => {
         useEditorShortcuts();
 
         return {
-          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
-          edges: useAgentFlowEditorStore((state) => state.workingDocument.graph.edges),
-          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          nodes: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.nodes
+          ),
+          edges: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.edges
+          ),
+          selectedNodeId: useAgentFlowEditorStore(
+            (state) => state.selectedNodeId
+          ),
           setSelection: useAgentFlowEditorStore((state) => state.setSelection)
         };
       },
@@ -132,9 +142,15 @@ describe('useEditorShortcuts', () => {
         useEditorShortcuts();
 
         return {
-          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
-          edges: useAgentFlowEditorStore((state) => state.workingDocument.graph.edges),
-          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          nodes: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.nodes
+          ),
+          edges: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.edges
+          ),
+          selectedNodeId: useAgentFlowEditorStore(
+            (state) => state.selectedNodeId
+          ),
           setSelection: useAgentFlowEditorStore((state) => state.setSelection)
         };
       },
@@ -190,8 +206,12 @@ describe('useEditorShortcuts', () => {
         useEditorShortcuts();
 
         return {
-          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
-          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          nodes: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.nodes
+          ),
+          selectedNodeId: useAgentFlowEditorStore(
+            (state) => state.selectedNodeId
+          ),
           setSelection: useAgentFlowEditorStore((state) => state.setSelection)
         };
       },
@@ -243,7 +263,9 @@ describe('useEditorShortcuts', () => {
         useEditorShortcuts();
 
         return {
-          nodes: useAgentFlowEditorStore((state) => state.workingDocument.graph.nodes),
+          nodes: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.nodes
+          ),
           setSelection: useAgentFlowEditorStore((state) => state.setSelection)
         };
       },
@@ -276,6 +298,56 @@ describe('useEditorShortcuts', () => {
     input.remove();
   });
 
+  test('does not paste nodes when paste comes from Monaco editor content', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentFlowEditorStoreProvider initialState={createInitialState()}>
+        {children}
+      </AgentFlowEditorStoreProvider>
+    );
+
+    const { result } = renderHook(
+      () => {
+        useEditorShortcuts();
+
+        return {
+          nodes: useAgentFlowEditorStore(
+            (state) => state.workingDocument.graph.nodes
+          ),
+          setSelection: useAgentFlowEditorStore((state) => state.setSelection)
+        };
+      },
+      { wrapper }
+    );
+    const monacoEditor = document.createElement('div');
+    const monacoLine = document.createElement('div');
+    monacoEditor.className = 'monaco-editor';
+    monacoLine.className = 'view-line';
+    monacoEditor.appendChild(monacoLine);
+    document.body.appendChild(monacoEditor);
+
+    act(() => {
+      result.current.setSelection({
+        selectedNodeId: 'node-llm',
+        selectedNodeIds: ['node-llm'],
+        selectedEdgeId: null
+      });
+    });
+
+    act(() => {
+      monacoLine.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true })
+      );
+      monacoLine.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true })
+      );
+    });
+
+    expect(result.current.nodes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'node-llm-copy' })])
+    );
+    monacoEditor.remove();
+  });
+
   test('does not close node detail when Escape comes from editable content', () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
       <AgentFlowEditorStoreProvider initialState={createInitialState()}>
@@ -288,7 +360,9 @@ describe('useEditorShortcuts', () => {
         useEditorShortcuts();
 
         return {
-          selectedNodeId: useAgentFlowEditorStore((state) => state.selectedNodeId),
+          selectedNodeId: useAgentFlowEditorStore(
+            (state) => state.selectedNodeId
+          ),
           setSelection: useAgentFlowEditorStore((state) => state.setSelection)
         };
       },

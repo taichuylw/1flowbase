@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowbase/flow-schema';
@@ -67,12 +67,21 @@ describe('NodeInspector code schema', () => {
     expect(sourceField.compareDocumentPosition(outputField)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
-    expect(screen.getByLabelText(/输入变量-0-name|input variables-0-name/)).toHaveValue('arg1');
-    expect(screen.getAllByLabelText(/输入变量-0-type|input variables-0-type/).length).toBeGreaterThan(0);
     expect(
-      screen.queryByLabelText(/输入变量-0-value-mode|input variables-0-value-mode/)
+      screen.getByLabelText(/输入变量-0-name|input variables-0-name/)
+    ).toHaveValue('arg1');
+    expect(
+      screen.getAllByLabelText(/输入变量-0-type|input variables-0-type/).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByLabelText(
+        /输入变量-0-value-mode|input variables-0-value-mode/
+      )
     ).not.toBeInTheDocument();
-    expect(screen.getAllByLabelText(/输入变量-0-value|input variables-0-value/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByLabelText(/输入变量-0-value|input variables-0-value/)
+        .length
+    ).toBeGreaterThan(0);
     expect(
       screen.queryByLabelText(/输入变量-0-selector|input variables-0-selector/)
     ).not.toBeInTheDocument();
@@ -85,21 +94,33 @@ describe('NodeInspector code schema', () => {
     expect(
       screen.getByRole('button', { name: '删除变量 arg1' })
     ).toBeInTheDocument();
-    const codeEditor = await screen.findByLabelText(/JavaScript 代码|JavaScript code/);
+    const codeEditor = await screen.findByLabelText(
+      /JavaScript 代码|JavaScript code/
+    );
 
     expect(codeEditor).toHaveValue('return { riskScore: 0.82 };');
     expect(screen.getByLabelText('输出变量名 1')).toHaveValue('riskScore');
     expect(screen.queryByLabelText('输出显示名 1')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/输入变量-0-name|input variables-0-name/), {
+    const inputVariableName = screen.getByLabelText(
+      /输入变量-0-name|input variables-0-name/
+    );
+    inputVariableName.focus();
+    fireEvent.change(inputVariableName, {
       target: { value: 'score_1' }
     });
+    expect(
+      screen.getByLabelText(/输入变量-0-name|input variables-0-name/)
+    ).toHaveFocus();
     fireEvent.change(codeEditor, {
       target: { value: 'return { risk_score: inputs.score };' }
     });
-    fireEvent.change(screen.getByLabelText('输出变量名 1'), {
+    const outputVariableName = screen.getByLabelText('输出变量名 1');
+    outputVariableName.focus();
+    fireEvent.change(outputVariableName, {
       target: { value: 'risk_score' }
     });
+    expect(screen.getByLabelText('输出变量名 1')).toHaveFocus();
 
     await waitFor(() => {
       expect(getCodeNode(latestDocument).config).toMatchObject({
@@ -131,8 +152,8 @@ describe('NodeInspector code schema', () => {
   });
 
   test('renders JSON schema controls for structured code outputs', async () => {
-    let latestDocument = createInitialStateWithStructuredCodeNode().draft
-      .document;
+    let latestDocument =
+      createInitialStateWithStructuredCodeNode().draft.document;
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider
@@ -165,18 +186,25 @@ describe('NodeInspector code schema', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'JSON Schema' });
     expect(dialog).toHaveClass('agent-flow-model-settings__panel');
-    expect(screen.getByRole('tab', { name: 'Schema 字段' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('tab', { name: 'Schema 字段' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'JSON 解析' })).toBeInTheDocument();
     expect(screen.getByLabelText('Schema 字段名 1')).toHaveValue('role');
     expect(screen.getByLabelText('Schema 字段名 2')).toHaveValue('content');
 
     fireEvent.click(screen.getByRole('button', { name: '添加 Schema 字段' }));
-    fireEvent.change(screen.getByLabelText('Schema 字段名 3'), {
+    const schemaFieldNameInput = screen.getByLabelText('Schema 字段名 3');
+    schemaFieldNameInput.focus();
+    fireEvent.change(schemaFieldNameInput, {
       target: { value: 'metadata' }
     });
+    expect(screen.getByLabelText('Schema 字段名 3')).toHaveFocus();
     await openSelect('Schema 字段类型 3');
     await selectOption('Object');
-    fireEvent.click(screen.getByRole('button', { name: '添加 metadata 子字段' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: '添加 metadata 子字段' })
+    );
     fireEvent.change(screen.getByLabelText('Schema 字段名 3.1'), {
       target: { value: 'source' }
     });
@@ -210,8 +238,8 @@ describe('NodeInspector code schema', () => {
   });
 
   test('parses JSON Schema from highlighted code mode', async () => {
-    let latestDocument = createInitialStateWithStructuredCodeNode().draft
-      .document;
+    let latestDocument =
+      createInitialStateWithStructuredCodeNode().draft.document;
 
     renderWithProviders(
       <AgentFlowEditorStoreProvider
@@ -345,6 +373,241 @@ describe('NodeInspector code schema', () => {
               content: { type: 'string' }
             },
             required: ['role', 'content']
+          }
+        }
+      });
+    });
+  });
+
+  test('preserves array item metadata from parsed JSON Schema when returning to field mode', async () => {
+    const initialState = createInitialStateWithStructuredCodeNode();
+    const codeNode = getCodeNode(initialState.draft.document);
+    codeNode.outputs = [
+      {
+        key: 'tool_arguments',
+        title: 'Tool Arguments',
+        valueType: 'object',
+        jsonSchema: {
+          type: 'object',
+          required: [],
+          properties: {}
+        }
+      }
+    ];
+    let latestDocument = initialState.draft.document;
+    const mediaToolSchema = {
+      type: 'object',
+      properties: {
+        task: {
+          type: 'string',
+          description: '给多模态模型的任务指示提示词'
+        },
+        media: {
+          type: 'array',
+          description: '需要交给多模态模型处理的媒体引用',
+          items: {
+            type: 'object',
+            properties: {
+              kind: {
+                type: 'string',
+                enum: ['image'],
+                description: '媒体类型'
+              },
+              source: {
+                type: 'string',
+                enum: ['workspace_path'],
+                description: '媒体来源'
+              },
+              path: {
+                type: 'string',
+                description:
+                  '工作区内图片路径，例如 uploads/image_aionui_1781014667000.png'
+              }
+            },
+            required: ['kind', 'source', 'path']
+          }
+        }
+      },
+      required: ['task']
+    };
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-code" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '编辑 JSON Schema' })
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'JSON 解析' }));
+    fireEvent.change(await screen.findByLabelText('JSON Schema 内容'), {
+      target: {
+        value: JSON.stringify(mediaToolSchema, null, 2)
+      }
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'Schema 字段' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schema 字段名 1')).toHaveValue('task');
+      expect(screen.getByLabelText('Schema 字段名 2')).toHaveValue('media');
+      expect(screen.getByLabelText('Schema 字段名 2.1')).toHaveValue('kind');
+      expect(screen.getByLabelText('Schema 字段名 2.2')).toHaveValue('source');
+      expect(screen.getByLabelText('Schema 字段名 2.3')).toHaveValue('path');
+      expect(screen.getByLabelText('Schema 枚举字段名 2.1')).toHaveValue(
+        'enum'
+      );
+      expect(screen.getByLabelText('Schema 枚举字段值 2.1')).toHaveValue(
+        '["image"]'
+      );
+      expect(
+        screen.getByRole('combobox', { name: 'Schema 枚举字段类型 2.1' })
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText('Schema 枚举项 2.1.1')).toHaveValue(
+        'enum[1]'
+      );
+      expect(screen.getByLabelText('Schema 枚举值 2.1.1')).toHaveValue('image');
+      expect(screen.getByLabelText('Schema 枚举项 2.2.1')).toHaveValue(
+        'enum[1]'
+      );
+      expect(screen.getByLabelText('Schema 枚举值 2.2.1')).toHaveValue(
+        'workspace_path'
+      );
+    });
+    const mediaActions = screen.getByRole('group', {
+      name: 'Schema 字段 media 操作'
+    });
+    const sourceActions = screen.getByRole('group', {
+      name: 'Schema 字段 source 操作'
+    });
+
+    expect(
+      within(mediaActions).getByRole('button', { name: '添加 media 子字段' })
+    ).toBeInTheDocument();
+    expect(
+      within(sourceActions).getByRole('button', { name: '添加 source 枚举值' })
+    ).toBeInTheDocument();
+    expect(
+      within(sourceActions).getByRole('button', {
+        name: '删除 Schema 字段 source'
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Schema 枚举值 2.2.1'), {
+      target: { value: 'uploaded_file' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '添加 source 枚举值' }));
+    fireEvent.change(screen.getByLabelText('Schema 枚举值 2.2.2'), {
+      target: { value: 'workspace_path' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(getCodeNode(latestDocument).outputs[0]).toMatchObject({
+        valueType: 'object',
+        jsonSchema: {
+          ...mediaToolSchema,
+          properties: {
+            ...mediaToolSchema.properties,
+            media: {
+              ...mediaToolSchema.properties.media,
+              items: {
+                ...mediaToolSchema.properties.media.items,
+                properties: {
+                  ...mediaToolSchema.properties.media.items.properties,
+                  source: {
+                    ...mediaToolSchema.properties.media.items.properties.source,
+                    enum: ['uploaded_file', 'workspace_path']
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+  });
+
+  test('edits scalar array item type and keeps enum values on array items', async () => {
+    const initialState = createInitialStateWithStructuredCodeNode();
+    const codeNode = getCodeNode(initialState.draft.document);
+    codeNode.outputs = [
+      {
+        key: 'tool_arguments',
+        title: 'Tool Arguments',
+        valueType: 'object',
+        jsonSchema: {
+          type: 'object',
+          required: ['tags'],
+          properties: {
+            tags: {
+              type: 'array',
+              description: '标签',
+              items: {
+                type: 'string',
+                enum: ['image']
+              }
+            }
+          }
+        }
+      }
+    ];
+    let latestDocument = initialState.draft.document;
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-code" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '编辑 JSON Schema' })
+    );
+
+    expect(await screen.findByLabelText('Schema 字段名 1')).toHaveValue('tags');
+    expect(screen.getByLabelText('Schema 枚举字段名 1')).toHaveValue('enum');
+    expect(screen.getByLabelText('Schema 枚举字段值 1')).toHaveValue(
+      '["image"]'
+    );
+    expect(screen.getByLabelText('Schema 枚举值 1.1')).toHaveValue('image');
+    expect(
+      screen.getByRole('combobox', { name: 'Schema 枚举类型 1.1' })
+    ).toBeInTheDocument();
+
+    await openSelect('Schema 字段类型 1');
+    await selectOption('Array<Number>');
+    fireEvent.change(screen.getByLabelText('Schema 枚举值 1.1'), {
+      target: { value: '7' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(getCodeNode(latestDocument).outputs[0]).toMatchObject({
+        valueType: 'object',
+        jsonSchema: {
+          type: 'object',
+          required: ['tags'],
+          properties: {
+            tags: {
+              type: 'array',
+              description: '标签',
+              items: {
+                type: 'number',
+                enum: [7]
+              }
+            }
           }
         }
       });

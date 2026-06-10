@@ -205,6 +205,23 @@ pub(crate) async fn start_anthropic_run_stream(
     .await
 }
 
+pub(crate) async fn start_anthropic_resume_stream(
+    state: Arc<ApiState>,
+    run: NativeRunResult,
+    model: String,
+    command: ResumePublishedCallbackCommand,
+) -> Result<Response, NativeApiError> {
+    let mut mapper = AnthropicStreamMapper::new(model);
+    start_compatible_resume_stream(
+        state,
+        run,
+        command,
+        ANTHROPIC_SSE_PROJECTION,
+        move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+    )
+    .await
+}
+
 pub(crate) fn completed_anthropic_stream(run: NativeRunResult, model: String) -> Response {
     completed_compatible_stream(anthropic_completed_run_to_sse(&run, &model))
 }

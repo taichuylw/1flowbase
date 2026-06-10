@@ -43,7 +43,8 @@ function hasEmbeddedLabel(renderer: string) {
     renderer === 'code_source' ||
     renderer === 'output_contract_definition' ||
     renderer === 'start_input_fields' ||
-    renderer === 'start_model_list'
+    renderer === 'start_model_list' ||
+    renderer === 'llm_tool_registrations'
   );
 }
 
@@ -92,7 +93,9 @@ function getFieldLabelAction(
         size="small"
         type="text"
         onClick={() => {
-          const entries = namedBindingEntriesFromValue(adapter.getValue(block.path));
+          const entries = namedBindingEntriesFromValue(
+            adapter.getValue(block.path)
+          );
           adapter.setValue(
             block.path,
             toNamedBinding([...entries, createHttpRequestKeyValueEntry()])

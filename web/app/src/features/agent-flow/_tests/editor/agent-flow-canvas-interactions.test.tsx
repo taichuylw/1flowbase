@@ -8,6 +8,7 @@ import {
   type FlowNodeType
 } from '@1flowbase/flow-schema';
 import { AgentFlowCanvas } from '../../components/editor/AgentFlowCanvas';
+import { createNodeDocument } from '../../lib/document/node-factory';
 import { AgentFlowEditorStoreProvider } from '../../store/editor/AgentFlowEditorStoreProvider';
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { selectWorkingDocument } from '../../store/editor/selectors';
@@ -47,6 +48,10 @@ type MockReactFlowProps = {
   edges?: Array<{
     id: string;
     selected?: boolean;
+    source?: string;
+    target?: string;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
     data?: {
       onInsertNode?: (edgeId: string, nodeType: FlowNodeType) => void;
     };
@@ -337,6 +342,43 @@ describe('AgentFlowCanvas interactions', () => {
     );
   });
 
+  test('projects default main edges to the right source handle when mounted tool handles exist', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const sourceLlm = document.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    if (!sourceLlm) {
+      throw new Error('expected default LLM node');
+    }
+
+    sourceLlm.config = {
+      ...sourceLlm.config,
+      visible_internal_llm_tools_enabled: true,
+      visible_internal_llm_tools: [
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'inspect_visible_context',
+          connector_id: 'inspect_visible_context',
+          target_node_id: '',
+          input_schema: { type: 'object' }
+        }
+      ]
+    };
+
+    expect(
+      document.graph.edges.find((edge) => edge.id === 'edge-llm-answer')
+        ?.sourceHandle
+    ).toBeNull();
+
+    renderCanvas(document);
+
+    expect(
+      latestReactFlowProps?.edges?.find((edge) => edge.id === 'edge-llm-answer')
+        ?.sourceHandle
+    ).toBe('source-right');
+  });
+
   test('opens with the document viewport and shows a plain percentage label', () => {
     renderCanvas();
 
@@ -411,7 +453,7 @@ describe('AgentFlowCanvas interactions', () => {
     );
   });
 
-  test('inserts a node through the edge action callback', () => {
+  test('inserts a node through the edge action callback with a counted alias', () => {
     const { getState } = renderCanvas();
 
     expect(latestReactFlowProps).not.toBeNull();
@@ -422,17 +464,18 @@ describe('AgentFlowCanvas interactions', () => {
     expect(insertOnEdge).toBeTypeOf('function');
 
     act(() => {
-      insertOnEdge?.('edge-llm-answer', 'template_transform');
+      insertOnEdge?.('edge-llm-answer', 'llm');
     });
 
     expect(getState().workingDocument.graph.nodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'template_transform'
+          type: 'llm',
+          alias: 'LLM1'
         })
       ])
     );
-    expect(getState().selectedNodeId).toMatch(/^node-template-transform-/);
+    expect(getState().selectedNodeId).toMatch(/^node-llm-/);
   });
 
   test('rewrites the document edge when an existing line is reconnected', () => {
@@ -498,6 +541,140 @@ describe('AgentFlowCanvas interactions', () => {
           target: 'node-llm',
           sourceHandle: 'source-right',
           targetHandle: 'target-left'
+        })
+      ])
+    );
+  });
+
+  test('creates a composable edge from an LLM tool connector', () => {
+    const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const transformNode = createNodeDocument(
+      'template_transform',
+      'node-tool-transform',
+      720,
+      240
+    );
+    const sourceLlm = document.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    if (!sourceLlm) {
+      throw new Error('expected default LLM node');
+    }
+
+    document.graph.nodes.push(transformNode);
+    sourceLlm.config = {
+      ...sourceLlm.config,
+      visible_internal_llm_tools_enabled: true,
+      visible_internal_llm_tools: [
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'inspect_visible_context',
+          connector_id: 'inspect_visible_context',
+          target_node_id: '',
+          input_schema: { type: 'object' }
+        }
+      ]
+    };
+
+    const { getState } = renderCanvas(document);
+
+    expect(latestReactFlowProps?.onConnect).toBeTypeOf('function');
+
+    act(() => {
+      latestReactFlowProps?.onConnect?.({
+        source: 'node-llm',
+        target: 'node-tool-transform',
+        sourceHandle: 'visible_internal_llm_tool:inspect_visible_context',
+        targetHandle: null
+      });
+    });
+
+    const nextSourceLlm = getState().workingDocument.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    expect(nextSourceLlm?.config.visible_internal_llm_tools).toEqual([
+      expect.objectContaining({
+        tool_name: 'inspect_visible_context',
+        target_node_id: ''
+      })
+    ]);
+    expect(getState().workingDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-llm',
+          target: 'node-tool-transform',
+          sourceHandle: 'visible_internal_llm_tool:inspect_visible_context',
+          targetHandle: null
+        })
+      ])
+    );
+  });
+
+  test('opens the node picker when an LLM tool connector stops on the pane', async () => {
+    const flowDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const sourceLlm = flowDocument.graph.nodes.find(
+      (node) => node.id === 'node-llm'
+    );
+
+    if (!sourceLlm) {
+      throw new Error('expected default LLM node');
+    }
+
+    sourceLlm.config = {
+      ...sourceLlm.config,
+      visible_internal_llm_tools_enabled: true,
+      visible_internal_llm_tools: [
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'inspect_visible_context',
+          connector_id: 'inspect_visible_context',
+          target_node_id: '',
+          input_schema: { type: 'object' }
+        }
+      ]
+    };
+
+    const { getState } = renderCanvas(flowDocument);
+
+    act(() => {
+      latestReactFlowProps?.onConnectStart?.(null, {
+        nodeId: 'node-llm',
+        handleType: 'source',
+        handleId: 'visible_internal_llm_tool:inspect_visible_context'
+      });
+      latestReactFlowProps?.onConnectEnd?.({
+        clientX: 420,
+        clientY: 260,
+        target: document.createElement('div')
+      });
+    });
+
+    expect(getState().nodePickerState).toEqual({
+      open: true,
+      anchorNodeId: 'node-llm',
+      anchorEdgeId: null,
+      anchorCanvasPosition: { x: 420, y: 260 }
+    });
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'LLM' }));
+
+    const insertedNode = getState().workingDocument.graph.nodes.find(
+      (node) => node.id !== 'node-llm' && node.type === 'llm'
+    );
+
+    expect(insertedNode).toMatchObject({
+      type: 'llm',
+      alias: 'LLM1',
+      position: { x: 609, y: 405 }
+    });
+    expect(getState().workingDocument.graph.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'node-llm',
+          target: insertedNode?.id,
+          sourceHandle: 'visible_internal_llm_tool:inspect_visible_context'
         })
       ])
     );

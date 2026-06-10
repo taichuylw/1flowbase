@@ -7,10 +7,12 @@ import type {
 
 import {
   replaceNodeOutputs,
+  updateLlmVisibleInternalTools,
   updateNodeField
 } from '../lib/document/transforms/node';
 import { getDirectDownstreamNodes } from '../lib/document/relations';
 import { listVisibleSelectorOptions } from '../lib/selector-options';
+import type { LlmVisibleInternalTool } from '../lib/llm-node-config';
 import { getNodeDefinitionMeta } from '../lib/node-definitions';
 import { getBuiltinNodeRuntimeContract } from '../lib/node-definitions/contracts';
 import { parseHttpRequestUrlParts } from '../lib/http-request/url';
@@ -282,6 +284,22 @@ export function createAgentFlowNodeSchemaAdapter({
       }
 
       if (
+        node.type === 'llm' &&
+        path === 'config.visible_internal_llm_tools' &&
+        Array.isArray(value)
+      ) {
+        setWorkingDocument((currentDocument) =>
+          updateLlmVisibleInternalTools(
+            currentDocument,
+            nodeId,
+            value as LlmVisibleInternalTool[]
+          )
+        );
+
+        return;
+      }
+
+      if (
         node.type === 'http_request' &&
         path === 'config.url' &&
         typeof value === 'string'
@@ -329,6 +347,10 @@ export function createAgentFlowNodeSchemaAdapter({
 
       if (key === 'node' || key === 'selectedNode') {
         return node;
+      }
+
+      if (key === 'document') {
+        return document;
       }
 
       if (key === 'definitionMeta') {

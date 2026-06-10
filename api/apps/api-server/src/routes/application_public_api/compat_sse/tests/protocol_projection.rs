@@ -133,6 +133,62 @@ async fn openai_chat_durable_waiting_callback_fallback_drains_text_delta_first()
 }
 
 #[tokio::test]
+async fn openai_chat_waiting_internal_llm_tool_callback_finishes_without_tool_calls() {
+    let mut run = native_run();
+    let callback_task_id = Uuid::from_u128(0x12121212121212121212121212121212);
+    run.status = NativeRunStatus::Waiting;
+    run.answer = Some("visible internal LLM output".to_string());
+    run.tool_calls = Some(json!([
+        {
+            "id": "call_internal",
+            "type": "visible_internal_llm_tool",
+            "name": "inspect_visible_context",
+            "arguments": { "query": "visible" }
+        }
+    ]));
+
+    let mut mapper =
+        OpenAiChatStreamMapper::new("1flowbase".to_string(), "chatcmpl-test".to_string(), true);
+    let mut events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+    );
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "tool_calls": run.tool_calls.clone().unwrap()
+                }),
+            },
+        ),
+    ));
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("\"finish_reason\":\"stop\""), "{body}");
+    assert!(!body.contains("\"tool_calls\""), "{body}");
+    assert!(!body.contains("required_action_not_supported"), "{body}");
+    assert!(body.contains("[DONE]"), "{body}");
+}
+
+#[tokio::test]
 async fn terminal_answer_recovery_prefers_durable_answer_presentation() {
     let run = native_run();
     let (base_state, _) = crate::_tests::support::test_api_state_with_database_url().await;
@@ -357,6 +413,166 @@ async fn openai_chat_resume_replay_terminal_drains_durable_text_before_tool_call
     );
     assert!(body.contains("\"finish_reason\":\"tool_calls\""), "{body}");
     assert!(body.contains("[DONE]"), "{body}");
+}
+
+#[tokio::test]
+async fn anthropic_resume_replay_terminal_drains_route_callback_as_tool_use() {
+    let mut run = native_run();
+    let route_node_run_id = Uuid::from_u128(0x77777777777777777777777777777777);
+    let previous_callback_task_id = Uuid::from_u128(0x88888888888888888888888888888888);
+    let route_callback_task_id = Uuid::from_u128(0x99999999999999999999999999999999);
+    run.status = NativeRunStatus::Waiting;
+    run.tool_calls = Some(json!([
+        {
+            "id": "call_route_read",
+            "name": "Read",
+            "arguments": {
+                "file_path": "uploads/agent-flow-node-detail-icon-aligned.png"
+            }
+        }
+    ]));
+    run.required_action = Some(NativeRequiredAction {
+        action_type: "submit_tool_outputs".to_string(),
+        payload: json!({
+            "callback_task_id": route_callback_task_id,
+            "callback_kind": "llm_tool_calls",
+            "node_run_id": route_node_run_id,
+            "tool_calls": run.tool_calls.clone().unwrap()
+        }),
+    });
+
+    let (base_state, _) = crate::_tests::support::test_api_state_with_database_url().await;
+    seed_flow_run_for_compat_sse_test(&base_state, &run).await;
+    append_compat_sse_runtime_event(
+        &base_state,
+        run.id,
+        "waiting_callback",
+        json!({
+            "type": "waiting_callback",
+            "run_id": run.id,
+            "status": "waiting_callback",
+            "callback_task_id": previous_callback_task_id,
+            "callback_kind": "llm_tool_calls",
+            "node_run_id": route_node_run_id,
+            "tool_calls": [
+                {
+                    "id": "call_previous",
+                    "name": "Read",
+                    "arguments": { "file_path": "uploads/old.png" }
+                }
+            ]
+        }),
+    )
+    .await;
+    append_compat_sse_runtime_event(
+        &base_state,
+        run.id,
+        "waiting_callback",
+        json!({
+            "type": "waiting_callback",
+            "run_id": run.id,
+            "status": "waiting_callback",
+            "callback_task_id": route_callback_task_id,
+            "callback_kind": "llm_tool_calls",
+            "node_id": "node-llm-1",
+            "node_run_id": route_node_run_id,
+            "tool_calls": run.tool_calls.clone().unwrap()
+        }),
+    )
+    .await;
+
+    let subscription_replay = vec![
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": route_callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "node_id": "node-llm-1",
+                    "node_run_id": route_node_run_id,
+                    "tool_calls": run.tool_calls.clone().unwrap()
+                }),
+            },
+        ),
+    ];
+    let runtime_event_stream = Arc::new(
+        ReplayBeforeFallbackRuntimeEventStream::with_subscription_replay(
+            subscription_replay,
+            Vec::new(),
+        ),
+    );
+    let state = Arc::new(ApiState {
+        store: base_state.store.clone(),
+        infrastructure: base_state.infrastructure.clone(),
+        file_storage_registry: base_state.file_storage_registry.clone(),
+        runtime_engine: base_state.runtime_engine.clone(),
+        provider_runtime: base_state.provider_runtime.clone(),
+        process_started_at: base_state.process_started_at,
+        runtime_activity: base_state.runtime_activity.clone(),
+        api_runtime_profile: base_state.api_runtime_profile.clone(),
+        plugin_runner_system: base_state.plugin_runner_system.clone(),
+        official_plugin_source: base_state.official_plugin_source.clone(),
+        provider_install_root: base_state.provider_install_root.clone(),
+        provider_secret_master_key: base_state.provider_secret_master_key.clone(),
+        host_extension_dropin_root: base_state.host_extension_dropin_root.clone(),
+        allow_unverified_filesystem_dropins: base_state.allow_unverified_filesystem_dropins,
+        allow_uploaded_host_extensions: base_state.allow_uploaded_host_extensions,
+        session_store: base_state.session_store.clone(),
+        runtime_event_stream,
+        api_docs: base_state.api_docs.clone(),
+        cookie_name: base_state.cookie_name.clone(),
+        cookie_secure: base_state.cookie_secure,
+        session_ttl_days: base_state.session_ttl_days,
+        bootstrap_workspace_name: base_state.bootstrap_workspace_name.clone(),
+    });
+    let (sender, mut receiver) = mpsc::channel(32);
+    let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        send_compatible_runtime_event_stream(
+            state,
+            run.clone(),
+            ANTHROPIC_SSE_PROJECTION,
+            Some(0),
+            Some(previous_callback_task_id),
+            sender,
+            move |run, envelope| mapper.runtime_event_to_sse(run, envelope),
+        ),
+    )
+    .await
+    .expect("Anthropic stream should stop at replayed route callback");
+
+    let mut events = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        events.push(event);
+    }
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("event: message_start"), "{body}");
+    assert!(body.contains("\"type\":\"tool_use\""), "{body}");
+    assert!(body.contains("\"name\":\"Read\""), "{body}");
+    assert!(
+        body.contains("agent-flow-node-detail-icon-aligned.png"),
+        "{body}"
+    );
+    assert!(body.contains("\"stop_reason\":\"tool_use\""), "{body}");
+    assert!(body.contains("event: message_stop"), "{body}");
+    assert!(!body.contains("uploads/old.png"), "{body}");
 }
 
 #[tokio::test]
@@ -652,6 +868,61 @@ async fn openai_responses_waiting_callback_streams_function_call_added_done_and_
     );
 }
 
+#[tokio::test]
+async fn openai_responses_waiting_internal_llm_tool_callback_completes_without_function_call() {
+    let mut run = native_run();
+    let callback_task_id = Uuid::from_u128(0x34343434343434343434343434343434);
+    run.status = NativeRunStatus::Waiting;
+    run.answer = Some("visible internal LLM output".to_string());
+    run.tool_calls = Some(json!([
+        {
+            "id": "call_internal",
+            "visibility": "internal",
+            "origin": "visible_internal_llm_tool",
+            "name": "inspect_visible_context",
+            "arguments": { "query": "visible" }
+        }
+    ]));
+
+    let mut mapper = OpenAiResponseStreamMapper::new("1flowbase".to_string(), None, true);
+    let mut events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+    );
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "tool_calls": run.tool_calls.clone().unwrap()
+                }),
+            },
+        ),
+    ));
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("event: response.completed"), "{body}");
+    assert!(!body.contains("\"type\":\"function_call\""), "{body}");
+    assert!(!body.contains("required_action_not_supported"), "{body}");
+}
+
 #[test]
 fn anthropic_waiting_callback_maps_to_tool_use_block() {
     let callback_task_id = Uuid::from_u128(0xcccccccccccccccccccccccccccccccc);
@@ -675,6 +946,65 @@ fn anthropic_waiting_callback_maps_to_tool_use_block() {
         .as_str()
         .expect("tool_use id should be encoded")
         .contains("toolu_weather"));
+}
+
+#[tokio::test]
+async fn anthropic_waiting_internal_llm_tool_callback_streams_text_without_tool_use() {
+    let mut run = native_run();
+    let callback_task_id = Uuid::from_u128(0x56565656565656565656565656565656);
+    run.status = NativeRunStatus::Waiting;
+    run.answer = Some("visible internal LLM output".to_string());
+    run.tool_calls = Some(json!([
+        {
+            "id": "toolu_internal",
+            "metadata": {
+                "visibility": "internal",
+                "origin": "visible_internal_llm_tool"
+            },
+            "name": "inspect_visible_context",
+            "arguments": { "query": "visible" }
+        }
+    ]));
+
+    let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
+    let mut events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(run.id, 1, debug_stream_events::flow_started(run.id)),
+    );
+    events.extend(mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            2,
+            RuntimeEventPayload {
+                event_type: "waiting_callback".to_string(),
+                source: RuntimeEventSource::Runtime,
+                durability: RuntimeEventDurability::DurableRequired,
+                persist_required: true,
+                trace_visible: true,
+                payload: json!({
+                    "type": "waiting_callback",
+                    "run_id": run.id,
+                    "status": "waiting_callback",
+                    "callback_task_id": callback_task_id,
+                    "callback_kind": "llm_tool_calls",
+                    "tool_calls": run.tool_calls.clone().unwrap()
+                }),
+            },
+        ),
+    ));
+
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("visible internal LLM output"), "{body}");
+    assert!(body.contains("\"type\":\"text_delta\""), "{body}");
+    assert!(body.contains("\"stop_reason\":\"end_turn\""), "{body}");
+    assert!(!body.contains("\"type\":\"tool_use\""), "{body}");
+    assert!(!body.contains("required_action_not_supported"), "{body}");
 }
 
 #[tokio::test]

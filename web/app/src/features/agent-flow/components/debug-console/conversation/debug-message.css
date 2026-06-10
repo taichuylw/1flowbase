@@ -384,7 +384,30 @@
   line-height: 1.4;
 }
 
+.agent-flow-editor__debug-llm-tool-route-tag {
+  margin-inline-end: 0;
+}
+
 .agent-flow-editor__debug-llm-tool-detail {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0 0.5rem 0.5rem;
+}
+
+.agent-flow-editor__debug-llm-route-node {
+  display: grid;
+  border: 1px solid #dbe7e4;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.agent-flow-editor__debug-llm-route-node-row {
+  padding: 0.4rem 0.5rem;
+  background: #f8fafc;
+}
+
+.agent-flow-editor__debug-llm-route-node-detail {
   display: grid;
   gap: 0.5rem;
   padding: 0 0.5rem 0.5rem;
