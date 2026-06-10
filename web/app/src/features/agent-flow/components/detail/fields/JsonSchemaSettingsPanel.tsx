@@ -42,6 +42,7 @@ interface SchemaFieldRow {
   description: string;
   required: boolean;
   children?: SchemaFieldRow[];
+  baseSchema?: Record<string, unknown>;
 }
 
 let schemaFieldRowIdSeed = 0;
@@ -118,10 +119,11 @@ function schemaRowFromProperty(
   property: unknown,
   required: boolean
 ): SchemaFieldRow {
-  const type = schemaFieldType(isRecord(property) ? property.type : undefined);
+  const baseSchema = isRecord(property) ? property : undefined;
+  const type = schemaFieldType(baseSchema?.type);
   const description =
-    isRecord(property) && typeof property.description === 'string'
-      ? property.description
+    baseSchema && typeof baseSchema.description === 'string'
+      ? baseSchema.description
       : '';
 
   if (type === 'object') {
@@ -131,12 +133,13 @@ function schemaRowFromProperty(
       type,
       description,
       required,
+      baseSchema,
       children: schemaRowsFromObjectSchema(property)
     };
   }
 
   if (type === 'array') {
-    const items = isRecord(property) ? property.items : undefined;
+    const items = baseSchema?.items;
 
     return {
       id: createSchemaFieldRowId(),
@@ -144,11 +147,19 @@ function schemaRowFromProperty(
       type,
       description,
       required,
+      baseSchema,
       children: schemaRowsFromObjectSchema(items)
     };
   }
 
-  return { id: createSchemaFieldRowId(), key, type, description, required };
+  return {
+    id: createSchemaFieldRowId(),
+    key,
+    type,
+    description,
+    required,
+    baseSchema
+  };
 }
 
 function schemaRowsFromSchema(schema: unknown): SchemaFieldRow[] {
@@ -167,29 +178,53 @@ function schemaRowsFromSchema(schema: unknown): SchemaFieldRow[] {
 
 function withDescription(schema: Record<string, unknown>, description: string) {
   const trimmed = description.trim();
+  const nextSchema = { ...schema };
 
-  return trimmed ? { ...schema, description: trimmed } : schema;
+  if (trimmed) {
+    nextSchema.description = trimmed;
+  } else {
+    delete nextSchema.description;
+  }
+
+  return nextSchema;
+}
+
+function compatibleBaseSchema(row: SchemaFieldRow) {
+  return row.baseSchema?.type === row.type ? row.baseSchema : undefined;
 }
 
 function propertySchemaFromRow(row: SchemaFieldRow): Record<string, unknown> {
+  const baseSchema = compatibleBaseSchema(row);
+
   if (row.type === 'object') {
     return withDescription(
-      objectSchemaFromRows(row.children ?? []),
+      objectSchemaFromRows(row.children ?? [], baseSchema),
       row.description
     );
   }
 
   if (row.type === 'array') {
+    const baseItemsSchema = isRecord(baseSchema?.items)
+      ? baseSchema.items
+      : undefined;
+
     return withDescription(
       {
+        ...(baseSchema ?? {}),
         type: 'array',
-        items: objectSchemaFromRows(row.children ?? [])
+        items: objectSchemaFromRows(row.children ?? [], baseItemsSchema)
       },
       row.description
     );
   }
 
-  return withDescription(propertySchemaForType(row.type), row.description);
+  return withDescription(
+    {
+      ...(baseSchema ?? {}),
+      ...propertySchemaForType(row.type)
+    },
+    row.description
+  );
 }
 
 function objectSchemaFromRows(
@@ -479,10 +514,14 @@ export const JsonSchemaEditorContent = forwardRef<
   function updateSchemaRow(path: number[], patch: Partial<SchemaFieldRow>) {
     const nextRows = updateSchemaRowsAtPath(schemaRows, path, (row) => {
       const nextType = patch.type ?? row.type;
+      const typeChanged = patch.type !== undefined && patch.type !== row.type;
 
       return {
         ...row,
         ...patch,
+        baseSchema: typeChanged
+          ? undefined
+          : (patch.baseSchema ?? row.baseSchema),
         children:
           nextType === 'object' || nextType === 'array'
             ? (patch.children ?? row.children ?? [])

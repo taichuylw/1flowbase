@@ -363,4 +363,96 @@ describe('NodeInspector code schema', () => {
       });
     });
   });
+
+  test('preserves array item metadata from parsed JSON Schema when returning to field mode', async () => {
+    const initialState = createInitialStateWithStructuredCodeNode();
+    const codeNode = getCodeNode(initialState.draft.document);
+    codeNode.outputs = [
+      {
+        key: 'tool_arguments',
+        title: 'Tool Arguments',
+        valueType: 'object',
+        jsonSchema: {
+          type: 'object',
+          required: [],
+          properties: {}
+        }
+      }
+    ];
+    let latestDocument = initialState.draft.document;
+    const mediaToolSchema = {
+      type: 'object',
+      properties: {
+        task: {
+          type: 'string',
+          description: '给多模态模型的任务指示提示词'
+        },
+        media: {
+          type: 'array',
+          description: '需要交给多模态模型处理的媒体引用',
+          items: {
+            type: 'object',
+            properties: {
+              kind: {
+                type: 'string',
+                enum: ['image'],
+                description: '媒体类型'
+              },
+              source: {
+                type: 'string',
+                enum: ['workspace_path'],
+                description: '媒体来源'
+              },
+              path: {
+                type: 'string',
+                description:
+                  '工作区内图片路径，例如 uploads/image_aionui_1781014667000.png'
+              }
+            },
+            required: ['kind', 'source', 'path']
+          }
+        }
+      },
+      required: ['task']
+    };
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={initialState}>
+        <SelectionSeed nodeId="node-code" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '编辑 JSON Schema' })
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'JSON 解析' }));
+    fireEvent.change(await screen.findByLabelText('JSON Schema 内容'), {
+      target: {
+        value: JSON.stringify(mediaToolSchema, null, 2)
+      }
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'Schema 字段' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schema 字段名 1')).toHaveValue('task');
+      expect(screen.getByLabelText('Schema 字段名 2')).toHaveValue('media');
+      expect(screen.getByLabelText('Schema 字段名 2.1')).toHaveValue('kind');
+      expect(screen.getByLabelText('Schema 字段名 2.2')).toHaveValue('source');
+      expect(screen.getByLabelText('Schema 字段名 2.3')).toHaveValue('path');
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(getCodeNode(latestDocument).outputs[0]).toMatchObject({
+        valueType: 'object',
+        jsonSchema: mediaToolSchema
+      });
+    });
+  });
 });
