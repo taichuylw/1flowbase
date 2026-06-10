@@ -14,6 +14,8 @@ import { i18nText } from '../../i18n/text';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
+const JSON_PREVIEW_MODAL_Z_INDEX = 1060;
+
 const EDITOR_OPTIONS = {
   readOnly: true,
   domReadOnly: true,
@@ -172,6 +174,7 @@ export function JsonPreviewBlock({
         open={expanded}
         title={`${title} JSON`}
         width="min(960px, calc(100vw - 48px))"
+        zIndex={JSON_PREVIEW_MODAL_Z_INDEX}
       >
         <div className="json-preview-block-modal__editor">
           <JsonEditor height="70vh" value={formattedValue} />
