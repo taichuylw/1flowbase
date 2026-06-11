@@ -5,10 +5,12 @@ import { useRef, useState } from 'react';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
+  DEFAULT_LLM_EXTERNAL_TOOL_POLICY,
   DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
   getLlmVisibleInternalTools,
   getLlmVisibleInternalToolsEnabled,
   isLlmToolIdentifier,
+  type LlmExternalToolPolicy,
   type LlmInternalLlmNodePolicy,
   type LlmVisibleInternalTool
 } from '../../../lib/llm-node-config';
@@ -76,6 +78,7 @@ function buildNextTool(
     connector_id: toolName,
     target_node_id: '',
     internal_llm_node_policy: DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
+    external_tool_policy: DEFAULT_LLM_EXTERNAL_TOOL_POLICY,
     input_schema: { type: 'object' }
   };
 }
@@ -86,6 +89,7 @@ interface LlmToolRegistrationDraft {
   input_schema: Record<string, unknown>;
   connector_id: string;
   internal_llm_node_policy: LlmInternalLlmNodePolicy;
+  external_tool_policy: LlmExternalToolPolicy;
 }
 
 function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
@@ -97,7 +101,9 @@ function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
       : createDefaultJsonSchema(),
     connector_id: tool.connector_id ?? tool.tool_name,
     internal_llm_node_policy:
-      tool.internal_llm_node_policy ?? DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY
+      tool.internal_llm_node_policy ?? DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
+    external_tool_policy:
+      tool.external_tool_policy ?? DEFAULT_LLM_EXTERNAL_TOOL_POLICY
   };
 }
 
@@ -116,6 +122,7 @@ function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
     target_node_id: targetNodeId,
     description: draft.description.trim() || undefined,
     internal_llm_node_policy: draft.internal_llm_node_policy,
+    external_tool_policy: draft.external_tool_policy,
     input_schema: draft.input_schema
   };
 }
@@ -409,6 +416,18 @@ export function LlmToolRegistrationsField({
                 onChange={(checked) =>
                   updateDraft({
                     internal_llm_node_policy: checked ? 'allowed' : 'forbidden'
+                  })
+                }
+              />
+            </div>
+            <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
+              <span>{i18nText('agentFlow', 'auto.external_tool_policy')}</span>
+              <Switch
+                aria-label={i18nText('agentFlow', 'auto.external_tool_policy')}
+                checked={draft.external_tool_policy === 'inherited'}
+                onChange={(checked) =>
+                  updateDraft({
+                    external_tool_policy: checked ? 'inherited' : 'forbidden'
                   })
                 }
               />

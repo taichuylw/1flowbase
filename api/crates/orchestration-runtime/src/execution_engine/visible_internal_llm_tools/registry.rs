@@ -110,7 +110,22 @@ fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternal
             .get("input_schema")
             .or_else(|| object.get("inputSchema"))
             .cloned(),
+        external_tool_policy: visible_internal_llm_tool_external_tool_policy_from_object(object),
     })
+}
+
+fn visible_internal_llm_tool_external_tool_policy_from_object(
+    object: &Map<String, Value>,
+) -> VisibleInternalLlmToolExternalToolPolicy {
+    match object
+        .get("external_tool_policy")
+        .or_else(|| object.get("externalToolPolicy"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+    {
+        Some(EXTERNAL_TOOL_POLICY_INHERITED) => VisibleInternalLlmToolExternalToolPolicy::Inherited,
+        _ => VisibleInternalLlmToolExternalToolPolicy::Forbidden,
+    }
 }
 
 fn visible_internal_llm_tool_has_configured_media_contract(tool: &VisibleInternalLlmTool) -> bool {

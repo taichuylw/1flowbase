@@ -32,7 +32,8 @@ pub(super) fn visible_internal_llm_tool_llm_resolved_inputs(
         }
     }
     let inherited_tools = (!inputs.contains_key("tools")
-        && !visible_internal_llm_tool_has_media_argument(variable_pool))
+        && visible_internal_llm_tool_external_tool_policy(variable_pool)
+            == VisibleInternalLlmToolExternalToolPolicy::Inherited)
     .then(|| {
         context
             .get("tools")
@@ -45,6 +46,30 @@ pub(super) fn visible_internal_llm_tool_llm_resolved_inputs(
     }
 
     inputs
+}
+
+pub(super) fn visible_internal_llm_tool_external_tool_policy(
+    variable_pool: &Map<String, Value>,
+) -> VisibleInternalLlmToolExternalToolPolicy {
+    let inherited = variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|value| value.get("external_tool_policy"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        == Some(EXTERNAL_TOOL_POLICY_INHERITED);
+    if inherited {
+        VisibleInternalLlmToolExternalToolPolicy::Inherited
+    } else {
+        VisibleInternalLlmToolExternalToolPolicy::Forbidden
+    }
+}
+
+pub(in crate::execution_engine) fn visible_internal_llm_tool_blocks_external_tools(
+    variable_pool: &Map<String, Value>,
+) -> bool {
+    variable_pool.contains_key(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        && visible_internal_llm_tool_external_tool_policy(variable_pool)
+            == VisibleInternalLlmToolExternalToolPolicy::Forbidden
 }
 
 pub(in crate::execution_engine) async fn inject_visible_internal_llm_tool_media_content_blocks(
@@ -89,12 +114,6 @@ pub(in crate::execution_engine) async fn inject_visible_internal_llm_tool_media_
         });
     content_blocks.extend(injected_blocks);
     message.content_blocks = Some(Value::Array(content_blocks));
-}
-
-pub(in crate::execution_engine) fn visible_internal_llm_tool_has_media_argument(
-    variable_pool: &Map<String, Value>,
-) -> bool {
-    !visible_internal_llm_tool_media_argument(variable_pool).is_empty()
 }
 
 fn visible_internal_llm_tool_media_argument(variable_pool: &Map<String, Value>) -> Vec<Value> {

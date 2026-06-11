@@ -1,11 +1,28 @@
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum VisibleInternalLlmToolExternalToolPolicy {
+    #[default]
+    Forbidden,
+    Inherited,
+}
+
+impl VisibleInternalLlmToolExternalToolPolicy {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Forbidden => EXTERNAL_TOOL_POLICY_FORBIDDEN,
+            Self::Inherited => EXTERNAL_TOOL_POLICY_INHERITED,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct VisibleInternalLlmTool {
     pub(super) name: String,
     pub(super) description: Option<String>,
     pub(super) target_node_id: String,
     pub(super) input_schema: Option<Value>,
+    pub(super) external_tool_policy: VisibleInternalLlmToolExternalToolPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq)]

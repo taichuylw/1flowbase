@@ -159,6 +159,10 @@ fn visible_internal_llm_tool_pending_call_value(
         "target_node_id".to_string(),
         Value::String(pending_call.tool.target_node_id.clone()),
     );
+    tool.insert(
+        "external_tool_policy".to_string(),
+        Value::String(pending_call.tool.external_tool_policy.as_str().to_string()),
+    );
     if let Some(description) = pending_call.tool.description.clone() {
         tool.insert("description".to_string(), Value::String(description));
     }
@@ -213,6 +217,16 @@ fn visible_internal_llm_tool_pending_call_from_value(
                 .map(str::to_string),
             target_node_id,
             input_schema: tool.get("input_schema").cloned(),
+            external_tool_policy: match tool
+                .get("external_tool_policy")
+                .and_then(Value::as_str)
+                .map(str::trim)
+            {
+                Some(EXTERNAL_TOOL_POLICY_INHERITED) => {
+                    VisibleInternalLlmToolExternalToolPolicy::Inherited
+                }
+                _ => VisibleInternalLlmToolExternalToolPolicy::Forbidden,
+            },
         },
     })
 }

@@ -580,6 +580,7 @@
     "tool_identifier_rule": "Use 1-64 numbers, letters, or underscores.",
     "tool_identifier_duplicate": "This identifier is already used.",
     "internal_llm_node_policy": "ai route",
+    "external_tool_policy": "open external tools",
     "define_tool_call_return_content": "Define the tool call return content.",
     "tool_result_content": "Tool return content",
     "tool_result_output": "Tool return",

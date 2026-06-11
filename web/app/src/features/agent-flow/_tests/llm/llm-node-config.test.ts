@@ -12,7 +12,9 @@ import {
   getLlmModelProvider,
   getLlmParameters,
   getLlmVisibleInternalToolsEnabled,
-  getLlmVisibleInternalTools
+  getLlmVisibleInternalTools,
+  getLlmToolExternalToolPolicy,
+  DEFAULT_LLM_EXTERNAL_TOOL_POLICY
 } from '../../lib/llm-node-config';
 
 describe('llm-node-config', () => {
@@ -159,6 +161,43 @@ describe('llm-node-config', () => {
         input_schema: { type: 'object' }
       }
     ]);
+  });
+
+  test('getLlmVisibleInternalTools normalizes external_tool_policy to explicit values', () => {
+    const [inheritedTool, defaultTool, invalidTool] =
+      getLlmVisibleInternalTools({
+        visible_internal_llm_tools: [
+          {
+            type: 'visible_internal_llm_tool',
+            tool_name: 'frontend_llm',
+            connector_id: 'frontend_llm',
+            target_node_id: 'node-mounted-llm',
+            external_tool_policy: 'inherited'
+          },
+          {
+            type: 'visible_internal_llm_tool',
+            tool_name: 'image_llm',
+            connector_id: 'image_llm',
+            target_node_id: 'node-mounted-llm'
+          },
+          {
+            type: 'visible_internal_llm_tool',
+            tool_name: 'broken_llm',
+            connector_id: 'broken_llm',
+            target_node_id: 'node-mounted-llm',
+            external_tool_policy: 'open'
+          }
+        ]
+      });
+
+    expect(inheritedTool.external_tool_policy).toBe('inherited');
+    expect(defaultTool.external_tool_policy).toBeUndefined();
+    expect(invalidTool.external_tool_policy).toBeUndefined();
+    expect(getLlmToolExternalToolPolicy(inheritedTool)).toBe('inherited');
+    expect(getLlmToolExternalToolPolicy(defaultTool)).toBe(
+      DEFAULT_LLM_EXTERNAL_TOOL_POLICY
+    );
+    expect(getLlmToolExternalToolPolicy(invalidTool)).toBe('forbidden');
   });
 
   test('getLlmParameterDefaultValue derives stable defaults when schema omits them', () => {

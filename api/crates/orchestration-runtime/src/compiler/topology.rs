@@ -9,6 +9,8 @@ const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
 const VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX: &str = "visible_internal_llm_tool:";
 const TOOL_RESULT_NODE_TYPE: &str = "tool_result";
 const INTERNAL_LLM_NODE_POLICY_ALLOWED: &str = "allowed";
+const EXTERNAL_TOOL_POLICY_FORBIDDEN: &str = "forbidden";
+const EXTERNAL_TOOL_POLICY_INHERITED: &str = "inherited";
 
 type NodeTopologyBuild = (
     BTreeMap<String, CompiledNode>,
@@ -565,6 +567,20 @@ fn validate_visible_internal_llm_tool_branches(
             let allow_internal_llm = visible_internal_llm_tool_allows_internal_llm_node(tool);
             let connector_id = visible_internal_llm_tool_connector_id(tool)
                 .unwrap_or_else(|| "unknown".to_string());
+            if let Some(policy) = visible_internal_llm_tool_external_tool_policy_value(tool) {
+                if policy != EXTERNAL_TOOL_POLICY_FORBIDDEN
+                    && policy != EXTERNAL_TOOL_POLICY_INHERITED
+                {
+                    issues.push(CompileIssue {
+                        node_id: node.node_id.clone(),
+                        code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                        message: format!(
+                            "node {} visible_internal_llm_tool connector {connector_id} has invalid external_tool_policy {policy}; expected forbidden or inherited",
+                            node.node_id
+                        ),
+                    });
+                }
+            }
             let Some(target_node_id) = tool
                 .get("target_node_id")
                 .or_else(|| tool.get("targetNodeId"))
@@ -708,6 +724,15 @@ fn visible_internal_llm_tool_allows_internal_llm_node(tool: &Value) -> bool {
         .and_then(Value::as_str)
         .map(str::trim)
         == Some(INTERNAL_LLM_NODE_POLICY_ALLOWED)
+}
+
+fn visible_internal_llm_tool_external_tool_policy_value(tool: &Value) -> Option<String> {
+    tool.get("external_tool_policy")
+        .or_else(|| tool.get("externalToolPolicy"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 fn visible_internal_llm_tools_array_mut(config: &mut Value) -> Option<&mut Vec<Value>> {

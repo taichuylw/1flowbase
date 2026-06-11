@@ -13,10 +13,11 @@ use self::callback_state::{
 };
 pub(super) use self::media_context::{
     inject_visible_internal_llm_tool_media_content_blocks,
-    visible_internal_llm_tool_has_media_argument,
+    visible_internal_llm_tool_blocks_external_tools,
 };
 use self::media_context::{
-    visible_internal_llm_tool_inherited_context, visible_internal_llm_tool_llm_resolved_inputs,
+    visible_internal_llm_tool_external_tool_policy, visible_internal_llm_tool_inherited_context,
+    visible_internal_llm_tool_llm_resolved_inputs,
 };
 use self::payloads::*;
 use self::registry::visible_internal_llm_tools;
@@ -32,6 +33,8 @@ const VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX: &str = "visible_internal_l
 const VISIBLE_INTERNAL_LLM_TOOL_CALLBACK_STATE_KEY: &str = "__visible_internal_llm_tool_callback";
 const MAX_VISIBLE_INTERNAL_LLM_TOOL_ROUNDS: usize = 8;
 const TOOL_RESULT_NODE_TYPE: &str = "tool_result";
+const EXTERNAL_TOOL_POLICY_FORBIDDEN: &str = "forbidden";
+const EXTERNAL_TOOL_POLICY_INHERITED: &str = "inherited";
 
 pub(super) enum VisibleInternalLlmToolResume {
     Ready(Map<String, Value>),
@@ -323,6 +326,7 @@ where
                 .get("arguments")
                 .cloned()
                 .unwrap_or_else(|| json!({})),
+            "external_tool_policy": tool.external_tool_policy.as_str(),
             "context": inherited_context,
         }),
     );
@@ -814,6 +818,9 @@ where
                     description: None,
                     target_node_id: state.target_node_id.clone(),
                     input_schema: None,
+                    external_tool_policy: visible_internal_llm_tool_external_tool_policy(
+                        &variable_pool,
+                    ),
                 },
                 json!({
                     "waiting_node_id": wait.node_id,
@@ -848,6 +855,9 @@ where
                 description: None,
                 target_node_id: state.target_node_id.clone(),
                 input_schema: None,
+                external_tool_policy: visible_internal_llm_tool_external_tool_policy(
+                    &variable_pool,
+                ),
             };
             variable_pool.insert(
                 node.node_id.clone(),
@@ -1106,6 +1116,9 @@ where
                 description: None,
                 target_node_id: state.target_node_id.clone(),
                 input_schema: None,
+                external_tool_policy: visible_internal_llm_tool_external_tool_policy(
+                    &variable_pool,
+                ),
             };
             let error_payload = visible_internal_llm_tool_node_error(
                 &state.tool_call,

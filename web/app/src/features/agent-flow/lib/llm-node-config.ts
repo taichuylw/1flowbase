@@ -38,6 +38,8 @@ export interface LlmNodeExternalReasoningPolicy {
 
 export type LlmInternalLlmNodePolicy = 'forbidden' | 'allowed';
 
+export type LlmExternalToolPolicy = 'forbidden' | 'inherited';
+
 export interface LlmVisibleInternalTool {
   type: 'visible_internal_llm_tool';
   tool_name: string;
@@ -46,6 +48,7 @@ export interface LlmVisibleInternalTool {
   description?: string;
   input_schema?: Record<string, unknown>;
   internal_llm_node_policy?: LlmInternalLlmNodePolicy;
+  external_tool_policy?: LlmExternalToolPolicy;
 }
 
 export const DEFAULT_LLM_CONTEXT_POLICY: LlmNodeContextPolicy = {
@@ -70,6 +73,8 @@ export const DEFAULT_LLM_RESPONSE_FORMAT: LlmNodeResponseFormat = {
 export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS_ENABLED = false;
 export const DEFAULT_LLM_VISIBLE_INTERNAL_TOOLS: LlmVisibleInternalTool[] = [];
 export const DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY: LlmInternalLlmNodePolicy =
+  'forbidden';
+export const DEFAULT_LLM_EXTERNAL_TOOL_POLICY: LlmExternalToolPolicy =
   'forbidden';
 export const LLM_TOOL_IDENTIFIER_MAX_LENGTH = 64;
 const LLM_TOOL_SOURCE_HANDLE_PREFIX = 'visible_internal_llm_tool:';
@@ -288,6 +293,14 @@ export function getLlmToolInternalLlmNodePolicy(
     : DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY;
 }
 
+export function getLlmToolExternalToolPolicy(
+  tool: Pick<LlmVisibleInternalTool, 'external_tool_policy'>
+): LlmExternalToolPolicy {
+  return tool.external_tool_policy === 'inherited'
+    ? 'inherited'
+    : DEFAULT_LLM_EXTERNAL_TOOL_POLICY;
+}
+
 export function getLlmVisibleInternalTools(
   config: Record<string, unknown>
 ): LlmVisibleInternalTool[] {
@@ -324,6 +337,9 @@ export function getLlmVisibleInternalTools(
     }
     if (tool.internal_llm_node_policy === 'allowed') {
       registration.internal_llm_node_policy = 'allowed';
+    }
+    if (tool.external_tool_policy === 'inherited') {
+      registration.external_tool_policy = 'inherited';
     }
 
     return [registration];

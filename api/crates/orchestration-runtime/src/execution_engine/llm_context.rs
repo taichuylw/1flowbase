@@ -562,7 +562,7 @@ fn external_provider_tools(
     variable_pool: &Map<String, Value>,
     runtime_context: &ExecutionRuntimeContext,
 ) -> Vec<Value> {
-    if visible_internal_llm_tool_has_media_argument(variable_pool) {
+    if visible_internal_llm_tool_blocks_external_tools(variable_pool) {
         return Vec::new();
     }
     if media_route_should_hold_external_tools(node, resolved_inputs, variable_pool) {

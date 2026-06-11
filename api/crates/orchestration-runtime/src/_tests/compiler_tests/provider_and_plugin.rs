@@ -680,3 +680,37 @@ fn compile_unresolved_node_reports_blocking_issue() {
     }));
     assert_eq!(plan.nodes["node-llm"].node_type, "unresolved_node");
 }
+
+#[test]
+fn compile_flags_visible_internal_llm_tool_with_invalid_external_tool_policy() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "inspect_visible_context",
+            "connector_id": "inspect_visible_context",
+            "external_tool_policy": "open",
+            "input_schema": { "type": "object" }
+        }
+    ]);
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.code == CompileIssueCode::InvalidVisibleInternalLlmTool
+            && issue.node_id == "node-llm"
+            && issue.message.contains("external_tool_policy")
+    }));
+
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"][0]
+        ["external_tool_policy"] = json!("inherited");
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(!plan.compile_issues.iter().any(|issue| {
+        issue.code == CompileIssueCode::InvalidVisibleInternalLlmTool
+            && issue.message.contains("external_tool_policy")
+    }));
+}
