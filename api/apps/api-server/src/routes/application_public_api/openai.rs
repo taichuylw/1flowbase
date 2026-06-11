@@ -566,6 +566,7 @@ async fn create_native_run(
     request: NativeRunRequest,
 ) -> Result<NativeRunResult, native::NativeApiError> {
     ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
         .create_native_run(CreateNativeRunCommand {
             bearer_token,
             request,
@@ -818,6 +819,7 @@ async fn load_previous_response_context(
     };
     let run_id = run_id_from_response_id(response_id)?;
     let run = ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
         .get_native_run(GetNativeRunCommand {
             bearer_token: bearer_token.to_string(),
             run_id,

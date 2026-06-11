@@ -149,8 +149,11 @@ pub fn map_chat_completion_request(request: Value) -> Result<NativeRunRequest, O
             .remove("response_mode");
     }
 
-    serde_json::from_value(native)
-        .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))
+    let mut request: NativeRunRequest = serde_json::from_value(native)
+        .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))?;
+    request.protocol_compatibility_mode =
+        Some(OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_MODE.to_string());
+    Ok(request)
 }
 
 pub fn map_response_request(
@@ -215,8 +218,10 @@ pub fn map_response_request(
             .remove("response_mode");
     }
 
-    serde_json::from_value(native)
-        .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))
+    let mut request: NativeRunRequest = serde_json::from_value(native)
+        .map_err(|_| OpenAiCompatError::invalid("body", "failed to build Native request"))?;
+    request.protocol_compatibility_mode = Some(OPENAI_RESPONSES_COMPATIBILITY_MODE.to_string());
+    Ok(request)
 }
 
 fn system_from_parts(parts: Vec<String>) -> Option<String> {

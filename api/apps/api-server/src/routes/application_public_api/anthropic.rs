@@ -18,7 +18,7 @@ use control_plane::application_public_api::{
     },
     native::{
         ApplicationNativeRunService, CreateNativeRunCommand, GetNativeRunCommand, NativeRunRequest,
-        NativeRunResult, NativeRunStatus, NativeRunValidationError,
+        NativeRunResult, NativeRunValidationError,
     },
     run_service::ApplicationPublishedRunControlRepository,
 };
@@ -176,22 +176,11 @@ pub async fn create_message(
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    if let Some(response) = anthropic_probe_response(&value, &model) {
-        authenticate_anthropic_token(state.as_ref(), &bearer_token).await?;
-        return Ok(Json(response).into_response());
-    }
     let response_mode = value
         .get("stream")
         .and_then(Value::as_bool)
         .filter(|stream| *stream)
         .map(|_| "streaming".to_string());
-    if let Some(run) = anthropic_structured_output_run(&value)? {
-        authenticate_anthropic_token(state.as_ref(), &bearer_token).await?;
-        if response_mode.as_deref() == Some("streaming") {
-            return Ok(compat_sse::completed_anthropic_stream(run, model));
-        }
-        return Ok(Json(to_anthropic_response(run, model)).into_response());
-    }
     if let Some(resume) = anthropic_tool_resume_request(&value)? {
         if response_mode.as_deref() == Some("streaming") {
             let resume_plan = prepare_anthropic_tool_resume(
@@ -332,6 +321,7 @@ async fn create_native_run(
     request: NativeRunRequest,
 ) -> Result<NativeRunResult, native::NativeApiError> {
     ApplicationNativeRunService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
         .create_native_run(CreateNativeRunCommand {
             bearer_token,
             request,
@@ -661,148 +651,6 @@ fn anthropic_usage(
 fn to_anthropic_count_tokens_response(request: &Value) -> AnthropicCountTokensResponse {
     AnthropicCountTokensResponse {
         input_tokens: anthropic_count_input_tokens(request),
-    }
-}
-
-fn anthropic_probe_response(request: &Value, model: &str) -> Option<AnthropicMessageResponse> {
-    if request.get("stream").and_then(Value::as_bool) == Some(true)
-        || request
-            .get("max_tokens")
-            .and_then(Value::as_u64)
-            .is_none_or(|max_tokens| max_tokens > 1)
-    {
-        return None;
-    }
-    let probe_text = anthropic_single_user_text(request)?;
-    if !matches!(probe_text.trim(), "test" | "foo" | "count") {
-        return None;
-    }
-
-    Some(AnthropicMessageResponse {
-        id: format!("msg_{}", Uuid::now_v7()),
-        response_type: "message",
-        role: "assistant",
-        model: model.to_string(),
-        content: vec![json!({"type": "text", "text": ""})],
-        stop_reason: "end_turn",
-        usage: AnthropicUsage {
-            input_tokens: anthropic_count_input_tokens(request),
-            cache_creation_input_tokens: 0,
-            cache_read_input_tokens: 0,
-            output_tokens: 0,
-        },
-    })
-}
-
-fn anthropic_structured_output_run(
-    request: &Value,
-) -> Result<Option<NativeRunResult>, AnthropicCompatError> {
-    if !anthropic_title_output_requested(request) {
-        return Ok(None);
-    }
-    let native = map_messages_request(request.clone())?;
-    let content_text = json!({ "title": anthropic_title_from_query(&native.query) }).to_string();
-
-    Ok(Some(NativeRunResult {
-        id: Uuid::now_v7(),
-        application_id: Uuid::nil(),
-        api_key_id: Uuid::nil(),
-        publication_version_id: Uuid::nil(),
-        status: NativeRunStatus::Succeeded,
-        node_input_payload: json!({}),
-        metadata: json!({}),
-        answer: Some(content_text),
-        required_action: None,
-        tool_calls: None,
-        usage: None,
-        error: None,
-        created_at: time::OffsetDateTime::now_utc(),
-    }))
-}
-
-fn anthropic_title_output_requested(request: &Value) -> bool {
-    anthropic_title_json_schema_requested(request)
-        || anthropic_title_system_prompt_requested(request)
-}
-
-fn anthropic_title_json_schema_requested(request: &Value) -> bool {
-    let Some(format) = request
-        .get("output_config")
-        .and_then(|output_config| output_config.get("format"))
-        .and_then(Value::as_object)
-    else {
-        return false;
-    };
-    format.get("type").and_then(Value::as_str) == Some("json_schema")
-        && format
-            .get("schema")
-            .and_then(|schema| schema.get("properties"))
-            .and_then(|properties| properties.get("title"))
-            .and_then(|title| title.get("type"))
-            .and_then(Value::as_str)
-            == Some("string")
-}
-
-fn anthropic_title_system_prompt_requested(request: &Value) -> bool {
-    let system_text = anthropic_system_text(request);
-    system_text.contains("Generate a concise, sentence-case title")
-        && system_text.contains("Return JSON with a single \"title\" field")
-}
-
-fn anthropic_system_text(request: &Value) -> String {
-    match request.get("system") {
-        Some(Value::String(text)) => text.to_string(),
-        Some(Value::Array(blocks)) => blocks
-            .iter()
-            .filter_map(|block| match block {
-                Value::String(text) => Some(text.as_str()),
-                Value::Object(object) => object.get("text").and_then(Value::as_str),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-        _ => String::new(),
-    }
-}
-
-fn anthropic_title_from_query(query: &str) -> String {
-    let collapsed = query
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .unwrap_or("新会话")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    let title = collapsed
-        .trim_matches(|value: char| matches!(value, '"' | '\'' | '`' | ':' | '-' | '#'))
-        .trim();
-    let title = if title.is_empty() { "新会话" } else { title };
-    let max_chars = 48;
-    let mut shortened = title.chars().take(max_chars).collect::<String>();
-    if title.chars().count() > max_chars {
-        shortened.push_str("...");
-    }
-    shortened
-}
-
-fn anthropic_single_user_text(request: &Value) -> Option<&str> {
-    let messages = request.get("messages").and_then(Value::as_array)?;
-    if messages.len() != 1 {
-        return None;
-    }
-    let message = messages.first()?;
-    if message.get("role").and_then(Value::as_str) != Some("user") {
-        return None;
-    }
-    match message.get("content")? {
-        Value::String(text) => Some(text.as_str()),
-        Value::Array(blocks) if blocks.len() == 1 => blocks
-            .first()
-            .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-            .and_then(|block| block.get("text"))
-            .and_then(Value::as_str),
-        _ => None,
     }
 }
 

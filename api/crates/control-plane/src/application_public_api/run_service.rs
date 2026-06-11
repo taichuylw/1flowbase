@@ -382,7 +382,9 @@ where
         actor: &ApplicationApiKeyActor,
         request: &NativeRunRequest,
     ) -> std::result::Result<(), NativeRunValidationError> {
-        if request.compatibility_mode.as_deref() != Some(ANTHROPIC_MESSAGES_COMPATIBILITY_MODE) {
+        if request.protocol_compatibility_mode.as_deref()
+            != Some(ANTHROPIC_MESSAGES_COMPATIBILITY_MODE)
+        {
             return Ok(());
         }
         let Some(external_user) = request.conversation.string("user") else {

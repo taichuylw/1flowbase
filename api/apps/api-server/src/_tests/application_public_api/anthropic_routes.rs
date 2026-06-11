@@ -202,6 +202,12 @@ async fn setup_published_app(app: &Router, name: &str) -> String {
     token
 }
 
+async fn setup_unpublished_app_key(app: &Router, name: &str) -> String {
+    let (cookie, csrf) = login_and_capture_cookie(app, "root", "change-me").await;
+    let application_id = create_application(app, &cookie, &csrf, name).await;
+    create_application_key(app, &cookie, &csrf, &application_id).await
+}
+
 async fn test_app_with_state() -> (Router, Arc<ApiState>) {
     let (state, _) = test_api_state_with_database_url().await;
     let config = test_config();
@@ -508,7 +514,7 @@ async fn anthropic_count_tokens_returns_usage_without_creating_run() {
 }
 
 #[tokio::test]
-async fn anthropic_probe_message_returns_usage_without_creating_run() {
+async fn anthropic_probe_message_uses_published_native_run() {
     let (app, state) = test_app_with_state().await;
     let token = setup_published_app(&app, "Anthropic Probe Compatible Route App").await;
     let before = flow_run_count(state.as_ref()).await;
@@ -533,12 +539,74 @@ async fn anthropic_probe_message_returns_usage_without_creating_run() {
     assert_eq!(response.status(), StatusCode::OK);
     let payload = response_json(response).await;
     assert_eq!(payload["type"], json!("message"));
-    assert!(
-        payload["usage"]["input_tokens"]
-            .as_u64()
-            .unwrap_or_default()
-            > 0,
-        "{payload}"
-    );
-    assert_eq!(flow_run_count(state.as_ref()).await, before);
+    assert_eq!(flow_run_count(state.as_ref()).await, before + 1);
+}
+
+#[tokio::test]
+async fn anthropic_probe_message_requires_active_publication() {
+    let (app, state) = test_app_with_state().await;
+    let token =
+        setup_unpublished_app_key(&app, "Anthropic Unpublished Probe Compatible Route App").await;
+
+    let response = post_json(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 1,
+            "messages": [
+                {"role": "user", "content": "test"}
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let payload = response_json(response).await;
+    assert_eq!(payload["error"]["type"], json!("application_not_published"));
+    assert_eq!(flow_run_count(state.as_ref()).await, 0);
+}
+
+#[tokio::test]
+async fn anthropic_structured_title_message_requires_active_publication() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_unpublished_app_key(
+        &app,
+        "Anthropic Unpublished Structured Compatible Route App",
+    )
+    .await;
+
+    let response = post_json(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "stream": true,
+            "messages": [
+                {"role": "user", "content": "帮我找找这个代码位置"}
+            ],
+            "output_config": {
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string" }
+                        },
+                        "required": ["title"],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let payload = response_json(response).await;
+    assert_eq!(payload["error"]["type"], json!("application_not_published"));
+    assert_eq!(flow_run_count(state.as_ref()).await, 0);
 }

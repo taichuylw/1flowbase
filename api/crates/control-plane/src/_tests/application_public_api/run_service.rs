@@ -45,7 +45,7 @@ fn native_request(response_mode: &str, idempotency_key: Option<&str>) -> NativeR
 }
 
 fn anthropic_request(query: &str) -> NativeRunRequest {
-    serde_json::from_value(json!({
+    let mut request: NativeRunRequest = serde_json::from_value(json!({
         "query": query,
         "model": "public-model/pass-through",
         "conversation": {
@@ -55,7 +55,9 @@ fn anthropic_request(query: &str) -> NativeRunRequest {
         "response_mode": "streaming",
         "compatibility_mode": "anthropic-messages-v1"
     }))
-    .unwrap()
+    .unwrap();
+    request.protocol_compatibility_mode = Some("anthropic-messages-v1".to_string());
+    request
 }
 
 fn native_request_with_model_parameters(
@@ -197,7 +199,7 @@ async fn start_native_run_creates_published_api_flow_run_from_frozen_publication
         Some("conversation-1")
     );
     assert_eq!(flow_run.external_trace_id.as_deref(), Some("trace-1"));
-    assert_eq!(flow_run.compatibility_mode.as_deref(), Some("native-v1"));
+    assert!(flow_run.compatibility_mode.is_none());
     assert_eq!(
         flow_run.input_payload,
         json!({
@@ -725,6 +727,75 @@ async fn start_anthropic_run_cancels_previous_waiting_callback_in_same_conversat
     let first_run_events = repository.run_event_types(first.id);
     assert!(first_run_events.contains(&"public_run_cancelled".to_string()));
     assert!(first_run_events.contains(&"public_run_callback_cancelled".to_string()));
+}
+
+#[tokio::test]
+async fn start_native_run_does_not_trust_request_compatibility_mode_for_anthropic_cancellation() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let repository = harness.repository();
+    let application = harness.seed_application(actor_user_id(), "Native Forged Compat App");
+    let token = issue_key(&harness, application.id).await;
+    ApplicationPublicationService::new(repository.clone())
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: published_mapping(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let service = ApplicationPublishedRunService::new(repository.clone());
+
+    let first = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: anthropic_request("hi"),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(first.id);
+
+    let forged_native_request = serde_json::from_value(json!({
+        "query": "Native caller should not own Anthropic cancellation policy",
+        "model": "public-model/pass-through",
+        "conversation": {
+            "id": "3e7058c2-3120-4222-bb14-c99ec85e1c0f",
+            "user": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        },
+        "response_mode": "blocking",
+        "compatibility_mode": "anthropic-messages-v1",
+        "execution": {
+            "compatibility_mode": "anthropic-messages-v1"
+        },
+        "metadata": {
+            "compatibility_mode": "anthropic-messages-v1"
+        }
+    }))
+    .unwrap();
+    let second = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token,
+            request: forged_native_request,
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(first.id, second.id);
+    let first_run = repository
+        .get_flow_run(application.id, first.id)
+        .await
+        .unwrap()
+        .expect("first run should remain durable");
+    let callback_task = repository
+        .get_published_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .expect("callback task should remain durable");
+    assert_eq!(first_run.status, domain::FlowRunStatus::WaitingCallback);
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Pending);
+    let first_run_events = repository.run_event_types(first.id);
+    assert!(!first_run_events.contains(&"public_run_cancelled".to_string()));
+    assert!(!first_run_events.contains(&"public_run_callback_cancelled".to_string()));
 }
 
 #[tokio::test]

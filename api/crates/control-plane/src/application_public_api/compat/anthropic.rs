@@ -13,6 +13,7 @@ const CLAUDE_CODE_COMPACT_RESUME_MARKER: &str =
     "This session is being continued from a previous conversation that ran out of context.";
 const CLAUDE_CODE_COMPACT_TRANSCRIPT_MARKER: &str =
     "If you need specific details from before compaction";
+const ANTHROPIC_MESSAGES_COMPATIBILITY_MODE: &str = "anthropic-messages-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnthropicCompatError {
@@ -146,7 +147,7 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         "conversation": conversation,
         "response_mode": response_mode,
         "metadata": metadata,
-        "compatibility_mode": "anthropic-messages-v1"
+        "compatibility_mode": ANTHROPIC_MESSAGES_COMPATIBILITY_MODE
     });
     if let Some(system) = system_from_parts(system_parts) {
         native["system"] = Value::String(system);
@@ -158,8 +159,10 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
             .remove("response_mode");
     }
 
-    serde_json::from_value(native)
-        .map_err(|_| AnthropicCompatError::invalid("failed to build Native request"))
+    let mut request: NativeRunRequest = serde_json::from_value(native)
+        .map_err(|_| AnthropicCompatError::invalid("failed to build Native request"))?;
+    request.protocol_compatibility_mode = Some(ANTHROPIC_MESSAGES_COMPATIBILITY_MODE.to_string());
+    Ok(request)
 }
 
 fn anthropic_system_content_parts(value: Option<&Value>) -> Vec<String> {
