@@ -1,6 +1,6 @@
 ---
 name: problem-framing
-description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；需要落地开发计划时默认走 L0 Umbrella 到 L1 ADR 到 L2 Epic 到 L3 Task 四层规划。涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 层级/分级标签、ADR drafting 或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、方案、风险、终止条件和用户拍板点，再进入实现。
+description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构、数学/算法/状态机/图/队列/约束/物理公式等计算表达假设，或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；需要落地开发计划时默认走 L0 Umbrella 到 L1 ADR 到 L2 Epic 到 L3 Task 四层规划。涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 层级/分级标签、ADR drafting 或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、方案、风险、终止条件和用户拍板点，再进入实现。
 ---
 
 # Problem Framing
@@ -61,19 +61,28 @@ Forbidden:
 
 方案进入 issue gate 或实现 handoff 前，若会新增抽象、公共接口、bool/flag 参数、通用 helper/manager/utils、重复校验、pass-through 层或非显然注释，先读取 `references/design-rules.md`。命中规则时停止，先给更小 redesign，不创建实现 issue、不进入实现。
 
+## Computational Framing
+
+输出方案前，先做计算表达假设：这个需求是否能被数学关系、算法、数据结构、状态机、图、队列、约束、概率、评分、调度或物理公式更清晰地表达？
+
+只有它能让规则更清楚、状态更一致、性能更稳定、交互更自然、资源成本更低或实现更简单时，才把它纳入方案生成维度。前端命中时关注空间关系、操作反馈、程序化视觉和低成本动效；后端命中时关注状态流转、一致性、调度、查找、去重、排序、权限集合和约束校验。
+
+输出时不要列技术清单；写成方案假设、收益、代价、失败模式和验收证据。若只是炫技、过度抽象、增加理解成本、性能风险高或无法验证，则明确不采用。
+
 ## Workflow
 
 1. 整理事实：分离已确认事实、假设、未知点、不变量、失败模式和需要用户决策的问题。
-2. 先做简短对齐：普通需求按“现状、方向、风险收益、建议”输出 2-3 个轻量做法，明确推荐其中一个，并等待用户确认。
-3. 检查阶段顺序：使用本文件 `Phase Order Gate` 判断当前只允许输出什么；到阶段边界就停。
-4. 检查设计规则：方案可能引入抽象、接口、flag、helper、重复校验或 pass-through 时，读取 `references/design-rules.md`；违反时先输出更小 redesign。
-5. 搭四层计划：需要落地开发时，使用 `references/issue-lifecycle.md` 默认建立 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task；每一层可以有多个 issue，下一层只关联直接 parent。
-6. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
-7. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
-8. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
-9. 管理 issue：需要落地开发时，按 L0/L1/L2/L3 分级、打标签、明确阶段、直接 parent 和关闭条件；用户未确认 issue 前停止。
-10. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
-11. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
+2. 做计算表达假设：使用本文件 `Computational Framing` 判断数学 / 算法 / 数据结构 / 物理公式是否应该成为方案生成维度；命中则写入方向和风险收益，不命中则不要展开。
+3. 先做简短对齐：普通需求按“现状、方向、风险收益、建议”输出 2-3 个轻量做法，明确推荐其中一个，并等待用户确认。
+4. 检查阶段顺序：使用本文件 `Phase Order Gate` 判断当前只允许输出什么；到阶段边界就停。
+5. 检查设计规则：方案可能引入抽象、接口、flag、helper、重复校验或 pass-through 时，读取 `references/design-rules.md`；违反时先输出更小 redesign。
+6. 搭四层计划：需要落地开发时，使用 `references/issue-lifecycle.md` 默认建立 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task；每一层可以有多个 issue，下一层只关联直接 parent。
+7. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
+8. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
+9. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
+10. 管理 issue：需要落地开发时，按 L0/L1/L2/L3 分级、打标签、明确阶段、直接 parent 和关闭条件；用户未确认 issue 前停止。
+11. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
+12. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
 
 ## User Decision Format
 
