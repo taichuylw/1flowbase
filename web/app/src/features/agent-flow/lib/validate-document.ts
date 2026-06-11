@@ -878,6 +878,19 @@ export function validateDocument(
       }
     }
 
+    if (node.type === 'unresolved_node') {
+      issues.push({
+        id: `${node.id}-unresolved-node`,
+        scope: 'node',
+        level: 'error',
+        nodeId: node.id,
+        sectionKey: 'basics',
+        fieldKey: null,
+        title: i18nText('agentFlow', 'auto.unresolved_node'),
+        message: i18nText('agentFlow', 'auto.unresolved_node_definition_summary')
+      });
+    }
+
     if (node.type === 'plugin_node' && !hasPluginContributionRef(node)) {
       issues.push({
         id: `${node.id}-plugin-ref-missing`,

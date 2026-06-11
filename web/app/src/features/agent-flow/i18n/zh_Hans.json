@@ -669,6 +669,13 @@
     "add_node_after_branch": "在 {{value1}} 的 {{value2}} 分支后新增节点",
     "branch_connection_invalid": "分支连线无效",
     "branch_connection_invalid_message": "该连线没有指向当前 If / Else 节点中存在的分支出口。",
-    "delete_node": "删除节点"
+    "delete_node": "删除节点",
+    "export_template": "导出模板",
+    "template_export_failed": "模板导出失败",
+    "template_exported": "模板已导出",
+    "unresolved_node": "未知节点",
+    "unresolved_node_definition_summary": "当前工作区尚不能识别该节点，依赖满足后会重新解析。",
+    "unresolved_node_reason": "原因：{{value1}}",
+    "original_node_type": "原节点类型：{{value1}}"
   }
 }

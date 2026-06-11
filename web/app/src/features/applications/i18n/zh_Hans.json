@@ -254,6 +254,22 @@
     "monitoring_group_outcome": "运行结果",
     "monitoring_group_performance": "性能耗时",
     "monitoring_group_tokens": "Tokens",
-    "monitoring_group_execution": "执行复杂度"
+    "monitoring_group_execution": "执行复杂度",
+    "export_template": "导出模板",
+    "import_agent_flow_template": "导入 AgentFlow 模板",
+    "import_template": "导入模板",
+    "import_template_file": "导入模板文件",
+    "missing_dependency_count": "缺失依赖 {{value1}}",
+    "missing_dependencies": "缺失依赖",
+    "template_dependency_summary": "依赖状态",
+    "template_export_failed": "模板导出失败",
+    "template_exported": "模板已导出",
+    "template_file_invalid": "模板文件格式无效",
+    "template_import_failed": "模板导入失败",
+    "template_imported": "模板已导入",
+    "template_preview_failed": "模板预览失败",
+    "template_ready_to_import": "模板依赖已就绪",
+    "unresolved_node_count": "未知节点 {{value1}}",
+    "unresolved_nodes": "未知节点"
   }
 }

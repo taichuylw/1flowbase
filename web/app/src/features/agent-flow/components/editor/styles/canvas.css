@@ -54,6 +54,46 @@
   background: inherit;
 }
 
+.agent-flow-node-card--type-unresolved_node {
+  --node-accent: #d48806;
+  --node-accent-bg: #fff7e6;
+  --node-accent-border: #ffd591;
+  --node-accent-text: #ad6800;
+}
+
+.agent-flow-node-card__unresolved {
+  display: flex;
+  min-height: 104px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: #fffaf0;
+}
+
+.agent-flow-node-card__unresolved-title {
+  color: #ad4e00;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-flow-node-card__unresolved-alias {
+  overflow: hidden;
+  color: #17261b;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-flow-node-card__unresolved-detail {
+  overflow: hidden;
+  color: #8c6a2f;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .agent-flow-node-card:hover {
   transform: translateY(-2px);
   box-shadow:

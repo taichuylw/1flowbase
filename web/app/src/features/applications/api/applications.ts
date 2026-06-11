@@ -2,14 +2,21 @@ import {
   createConsoleApplication,
   createConsoleApplicationTag,
   deleteConsoleApplication,
+  exportConsoleAgentFlowTemplate,
   getConsoleApplication,
   getConsoleApplicationCatalog,
   getDefaultApiBaseUrl,
+  importConsoleAgentFlowTemplate,
   listConsoleApplicationEnvironmentVariables,
   listConsoleApplications,
+  previewConsoleAgentFlowTemplate,
   replaceConsoleApplicationEnvironmentVariables,
   updateConsoleApplication,
   type ApiBaseUrlLocation,
+  type ConsoleAgentFlowTemplatePackage,
+  type ConsoleAgentFlowTemplatePreview,
+  type ImportConsoleAgentFlowTemplateInput,
+  type ImportConsoleAgentFlowTemplateResponse,
   type ConsoleApplicationCatalog,
   type ConsoleApplicationDetail,
   type ConsoleApplicationEnvironmentVariable,
@@ -31,6 +38,11 @@ export interface ApplicationEnvironmentVariableInput {
 }
 export type ApplicationTagCatalogEntry = ConsoleApplicationTagCatalogEntry;
 export type CreateApplicationInput = CreateConsoleApplicationInput;
+export type AgentFlowTemplatePackage = ConsoleAgentFlowTemplatePackage;
+export type AgentFlowTemplatePreview = ConsoleAgentFlowTemplatePreview;
+export type ImportAgentFlowTemplateInput = ImportConsoleAgentFlowTemplateInput;
+export type ImportAgentFlowTemplateResponse =
+  ImportConsoleAgentFlowTemplateResponse;
 export interface UpdateApplicationInput {
   name: string;
   description: string;
@@ -138,6 +150,31 @@ export function createApplicationTag(
   csrfToken: string
 ) {
   return createConsoleApplicationTag(
+    input,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function exportAgentFlowTemplate(applicationId: string) {
+  return exportConsoleAgentFlowTemplate(
+    applicationId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function previewAgentFlowTemplate(template: AgentFlowTemplatePackage) {
+  return previewConsoleAgentFlowTemplate(
+    { template },
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function importAgentFlowTemplate(
+  input: ImportAgentFlowTemplateInput,
+  csrfToken: string
+) {
+  return importConsoleAgentFlowTemplate(
     input,
     csrfToken,
     getApplicationsApiBaseUrl()

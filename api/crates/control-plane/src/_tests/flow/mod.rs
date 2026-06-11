@@ -1,4 +1,7 @@
-use control_plane::flow::{FlowService, SaveFlowDraftCommand};
+use control_plane::flow::{
+    AgentFlowTemplateResourceSnapshot, FlowService, ImportAgentFlowTemplateCommand,
+    PreviewAgentFlowTemplateCommand, SaveFlowDraftCommand,
+};
 use domain::FlowChangeKind;
 use serde_json::json;
 use uuid::Uuid;
@@ -161,5 +164,250 @@ async fn save_draft_rejects_invalid_visible_internal_llm_tool_identifiers() {
     assert_eq!(
         error.to_string(),
         "invalid input: visible_internal_llm_tools.connector_id"
+    );
+}
+
+#[tokio::test]
+async fn export_agent_flow_template_omits_secret_fields_and_collects_dependencies() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+    let initial = service
+        .get_or_create_editor_state(owner_id, application.id)
+        .await
+        .unwrap();
+    let mut document = initial.draft.document.clone();
+    document["graph"]["nodes"][1]["config"]["model_provider"] = json!({
+        "provider_code": "fixture_provider",
+        "source_instance_id": "runtime-instance",
+        "model_id": "gpt-4o-mini",
+        "api_key": "sk-should-not-leak"
+    });
+
+    service
+        .save_draft(SaveFlowDraftCommand {
+            actor_user_id: owner_id,
+            application_id: application.id,
+            document,
+            change_kind: FlowChangeKind::Logical,
+            summary: "bind model".into(),
+        })
+        .await
+        .unwrap();
+
+    let template = service
+        .export_agent_flow_template(owner_id, application.id)
+        .await
+        .unwrap();
+    let serialized = serde_json::to_string(&template).unwrap();
+
+    assert_eq!(template.schema_version, "1flowbase.application-template/v1");
+    assert_eq!(template.application.application_type, "agent_flow");
+    assert!(template.dependencies.iter().any(|dependency| {
+        dependency.kind == "model_provider"
+            && dependency.provider_code.as_deref() == Some("fixture_provider")
+            && dependency.model_id.as_deref() == Some("gpt-4o-mini")
+    }));
+    assert!(!serialized.contains("sk-should-not-leak"));
+}
+
+#[tokio::test]
+async fn preview_agent_flow_template_marks_missing_model_as_unresolved_node() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+    let initial = service
+        .get_or_create_editor_state(owner_id, application.id)
+        .await
+        .unwrap();
+    let mut document = initial.draft.document.clone();
+    document["graph"]["nodes"][1]["config"]["model_provider"] = json!({
+        "provider_code": "missing_provider",
+        "model_id": "lost-model"
+    });
+    service
+        .save_draft(SaveFlowDraftCommand {
+            actor_user_id: owner_id,
+            application_id: application.id,
+            document,
+            change_kind: FlowChangeKind::Logical,
+            summary: "bind missing model".into(),
+        })
+        .await
+        .unwrap();
+    let template = service
+        .export_agent_flow_template(owner_id, application.id)
+        .await
+        .unwrap();
+
+    let preview = service
+        .preview_agent_flow_template(PreviewAgentFlowTemplateCommand {
+            actor_user_id: owner_id,
+            template,
+            resources: AgentFlowTemplateResourceSnapshot::default(),
+        })
+        .await
+        .unwrap();
+    let llm_node = &preview.document["graph"]["nodes"][1];
+
+    assert_eq!(preview.unresolved_nodes.len(), 1);
+    assert_eq!(llm_node["type"], "unresolved_node");
+    assert_eq!(
+        llm_node["config"]["unresolved"]["dependency_status"],
+        "missing_dependency"
+    );
+    assert_eq!(
+        llm_node["config"]["unresolved"]["reason"],
+        "missing_model_provider"
+    );
+    assert_eq!(
+        llm_node["config"]["unresolved"]["original_node"]["type"],
+        "llm"
+    );
+    assert_eq!(
+        llm_node["config"]["unresolved"]["original_node"]["config"]["model_provider"]
+            ["provider_code"],
+        "missing_provider"
+    );
+}
+
+#[tokio::test]
+async fn preview_agent_flow_template_rejects_dangling_edge_target() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+    let mut template = service
+        .export_agent_flow_template(owner_id, application.id)
+        .await
+        .unwrap();
+    template.flow_document["graph"]["edges"][0]["target"] = json!("missing-node");
+
+    let error = service
+        .preview_agent_flow_template(PreviewAgentFlowTemplateCommand {
+            actor_user_id: owner_id,
+            template,
+            resources: AgentFlowTemplateResourceSnapshot::default(),
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "invalid input: flow_document.graph.edges.target"
+    );
+}
+
+#[tokio::test]
+async fn import_agent_flow_template_creates_application_and_rewrites_only_flow_id() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let source_application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+    let source_state = service
+        .get_or_create_editor_state(owner_id, source_application.id)
+        .await
+        .unwrap();
+    let template = service
+        .export_agent_flow_template(owner_id, source_application.id)
+        .await
+        .unwrap();
+
+    let imported = service
+        .import_agent_flow_template(ImportAgentFlowTemplateCommand {
+            actor_user_id: owner_id,
+            template,
+            name: Some("Imported Support Agent".to_string()),
+            description: None,
+            resources: AgentFlowTemplateResourceSnapshot::default(),
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(imported.application.id, source_application.id);
+    assert_ne!(imported.orchestration.flow.id, source_state.flow.id);
+    assert_eq!(imported.application.name, "Imported Support Agent");
+    assert_eq!(
+        imported.orchestration.draft.document["meta"]["flowId"],
+        imported.orchestration.flow.id.to_string()
+    );
+    assert_eq!(
+        imported.orchestration.draft.document["graph"]["nodes"][0]["id"],
+        source_state.draft.document["graph"]["nodes"][0]["id"]
+    );
+    assert_eq!(
+        imported.orchestration.draft.document["graph"]["edges"][0]["id"],
+        source_state.draft.document["graph"]["edges"][0]["id"]
+    );
+}
+
+#[tokio::test]
+async fn preview_agent_flow_template_recovers_unresolved_node_when_dependency_is_available() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+    let state = service
+        .get_or_create_editor_state(owner_id, application.id)
+        .await
+        .unwrap();
+    let mut template = service
+        .export_agent_flow_template(owner_id, application.id)
+        .await
+        .unwrap();
+    let mut original_node = state.draft.document["graph"]["nodes"][1].clone();
+    original_node["config"]["model_provider"] = json!({
+        "provider_code": "fixture_provider",
+        "model_id": "gpt-4o-mini"
+    });
+    template.flow_document["graph"]["nodes"][1] = json!({
+        "id": "node-llm",
+        "type": "unresolved_node",
+        "alias": "LLM",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 360, "y": 220 },
+        "configVersion": 1,
+        "config": {
+            "unresolved": {
+                "dependency_status": "missing_dependency",
+                "reason": "missing_model_provider",
+                "original_type": "llm",
+                "original_node": original_node
+            }
+        },
+        "bindings": {},
+        "outputs": []
+    });
+
+    let preview = service
+        .preview_agent_flow_template(PreviewAgentFlowTemplateCommand {
+            actor_user_id: owner_id,
+            template,
+            resources: AgentFlowTemplateResourceSnapshot::from_ready_model(
+                "fixture_provider",
+                "gpt-4o-mini",
+            ),
+        })
+        .await
+        .unwrap();
+
+    assert!(preview.unresolved_nodes.is_empty());
+    assert_eq!(preview.document["graph"]["nodes"][1]["type"], "llm");
+    assert_eq!(
+        preview.document["graph"]["nodes"][1]["config"]["model_provider"]["model_id"],
+        "gpt-4o-mini"
     );
 }

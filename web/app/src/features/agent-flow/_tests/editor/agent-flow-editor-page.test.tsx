@@ -99,6 +99,22 @@ function createInitialState(
   };
 }
 
+function createTemplatePackage() {
+  return {
+    schema_version: '1flowbase.application-template/v1' as const,
+    application: {
+      application_type: 'agent_flow' as const,
+      name: 'Support Agent',
+      description: '',
+      icon: null,
+      icon_type: null,
+      icon_background: null
+    },
+    flow_document: createDefaultAgentFlowDocument({ flowId: 'flow-template' }),
+    dependencies: []
+  };
+}
+
 const readyContribution: ConsoleNodeContributionEntry = {
   installation_id: 'installation-1',
   provider_code: 'prompt_pack',
@@ -211,6 +227,9 @@ beforeEach(() => {
     applicationsApi,
     'fetchApplicationEnvironmentVariables'
   ).mockResolvedValue([]);
+  vi.spyOn(applicationsApi, 'exportAgentFlowTemplate').mockResolvedValue(
+    createTemplatePackage()
+  );
   vi.spyOn(publicApi, 'fetchApplicationApiMapping').mockResolvedValue(
     apiMapping
   );
@@ -372,6 +391,7 @@ describe('AgentFlowEditorShell', () => {
     ).toEqual([
       '预览',
       'Issues',
+      '导出模板',
       '系统变量',
       '环境变量',
       '会话变量',
@@ -379,6 +399,39 @@ describe('AgentFlowEditorShell', () => {
       '发布',
       '历史版本'
     ]);
+  }, 20_000);
+
+  test('exports an AgentFlow template from the editor toolbar', async () => {
+    const createObjectUrl = vi.fn(() => 'blob:template');
+    const revokeObjectUrl = vi.fn();
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+
+    vi.stubGlobal('URL', {
+      ...window.URL,
+      createObjectURL: createObjectUrl,
+      revokeObjectURL: revokeObjectUrl
+    });
+
+    renderShell(
+      <AgentFlowEditorShell
+        applicationId="app-1"
+        applicationName="Support Agent"
+        initialState={createInitialState()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '导出模板' }));
+
+    await waitFor(() => {
+      expect(applicationsApi.exportAgentFlowTemplate).toHaveBeenCalledWith(
+        'app-1'
+      );
+    });
+    expect(createObjectUrl).toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:template');
   }, 20_000);
 
   test('publishes the current application API from the canvas overlay', async () => {

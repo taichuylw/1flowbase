@@ -45,6 +45,13 @@ pub(super) fn compile_node(
     if node_type == "start" && !outputs.is_empty() {
         bail!("start node {node_id} outputs must be empty");
     }
+    if node_type == "unresolved_node" {
+        compile_issues.push(CompileIssue {
+            node_id: node_id.clone(),
+            code: CompileIssueCode::UnresolvedNode,
+            message: unresolved_node_message(&node_id, &config),
+        });
+    }
     let llm_runtime = (node_type == "llm")
         .then(|| compile_llm_runtime(&node_id, &config, context, compile_issues))
         .flatten();
@@ -70,6 +77,20 @@ pub(super) fn compile_node(
         llm_runtime,
         code_runtime,
     })
+}
+
+fn unresolved_node_message(node_id: &str, config: &Value) -> String {
+    let unresolved = config.get("unresolved");
+    let reason = unresolved
+        .and_then(|value| value.get("reason"))
+        .and_then(Value::as_str)
+        .unwrap_or("missing_dependency");
+    let original_type = unresolved
+        .and_then(|value| value.get("original_type"))
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+
+    format!("node {node_id} is unresolved ({original_type}): {reason}")
 }
 
 fn compile_code_runtime(

@@ -16,6 +16,48 @@ describe('validateDocument graph references', () => {
     expect(issues.some((issue) => issue.scope === 'global')).toBe(true);
   });
 
+  test('returns a node error for unresolved placeholder nodes', () => {
+    const broken = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const llmNode = broken.graph.nodes.find((node) => node.id === 'node-llm');
+
+    if (!llmNode) {
+      throw new Error('expected default LLM node');
+    }
+
+    broken.graph.nodes = broken.graph.nodes.map((node) =>
+      node.id === 'node-llm'
+        ? {
+            ...node,
+            type: 'unresolved_node',
+            config: {
+              unresolved: {
+                dependency_status: 'missing_dependency',
+                reason: 'missing_model_provider',
+                original_type: 'llm',
+                original_node: llmNode
+              }
+            },
+            bindings: {},
+            outputs: []
+          }
+        : node
+    );
+
+    const issues = validateDocument(broken);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'node-llm-unresolved-node',
+          scope: 'node',
+          level: 'error',
+          nodeId: 'node-llm',
+          title: '未知节点'
+        })
+      ])
+    );
+  });
+
   test('returns a field issue when a templated binding points to an unreachable output', () => {
     const broken = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
     const llmNode = broken.graph.nodes.find((node) => node.id === 'node-llm');

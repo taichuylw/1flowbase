@@ -14,7 +14,8 @@ import {
   SwapOutlined,
   SyncOutlined,
   ThunderboltOutlined,
-  ToolOutlined
+  ToolOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 
 const CODE_NODE_ICON_STYLE: CSSProperties = {
@@ -61,7 +62,8 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   variable_assigner: createElement(EditOutlined),
   iteration: createElement(SyncOutlined),
   loop: createElement(ReloadOutlined),
-  plugin_node: createElement(BlockOutlined)
+  plugin_node: createElement(BlockOutlined),
+  unresolved_node: createElement(WarningOutlined)
 };
 
 export function getAgentFlowNodeTypeIcon(nodeType: string) {

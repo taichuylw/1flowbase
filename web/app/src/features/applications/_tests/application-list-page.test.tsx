@@ -9,6 +9,9 @@ const applicationsApi = vi.hoisted(() => ({
   createApplication: vi.fn(),
   createApplicationTag: vi.fn(),
   deleteApplication: vi.fn(),
+  exportAgentFlowTemplate: vi.fn(),
+  importAgentFlowTemplate: vi.fn(),
+  previewAgentFlowTemplate: vi.fn(),
   updateApplication: vi.fn()
 }));
 
@@ -110,6 +113,36 @@ describe('ApplicationListPage', () => {
       application_count: 0
     });
     applicationsApi.deleteApplication.mockResolvedValue(undefined);
+    applicationsApi.exportAgentFlowTemplate.mockReturnValue(new Promise(() => undefined));
+    applicationsApi.importAgentFlowTemplate.mockReturnValue(new Promise(() => undefined));
+    applicationsApi.previewAgentFlowTemplate.mockResolvedValue({
+      schema_version: '1flowbase.application-template/v1',
+      application: {
+        application_type: 'agent_flow',
+        name: '导入客服助手',
+        description: '导入描述',
+        icon: null,
+        icon_type: null,
+        icon_background: null
+      },
+      dependencies: [],
+      unresolved_nodes: [],
+      document: {
+        schemaVersion: '1flowbase.flow/v2',
+        meta: {
+          flowId: 'flow-template',
+          name: '导入客服助手',
+          description: '',
+          tags: []
+        },
+        graph: { nodes: [], edges: [] },
+        editor: {
+          viewport: { x: 0, y: 0, zoom: 1 },
+          annotations: [],
+          activeContainerPath: []
+        }
+      }
+    });
     applicationsApi.updateApplication.mockResolvedValue(undefined);
   });
 
@@ -241,6 +274,89 @@ describe('ApplicationListPage', () => {
             icon: null,
             icon_type: null,
             icon_background: null
+          },
+          'csrf-123'
+        );
+      },
+      { timeout: 10_000 }
+    );
+  }, 15_000);
+
+  test('exports an AgentFlow template from the card action', async () => {
+    renderPage();
+
+    expect(await screen.findByText('客服助手', {}, { timeout: 10_000 })).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('button', { name: '更多操作-客服助手' }));
+    fireEvent.click(screen.getByText('导出模板'));
+
+    await waitFor(
+      () => {
+        expect(applicationsApi.exportAgentFlowTemplate).toHaveBeenCalledWith('app-1');
+      },
+      { timeout: 10_000 }
+    );
+  }, 15_000);
+
+  test('previews and imports a selected AgentFlow template file', async () => {
+    const template = {
+      schema_version: '1flowbase.application-template/v1',
+      application: {
+        application_type: 'agent_flow',
+        name: '导入客服助手',
+        description: '导入描述',
+        icon: null,
+        icon_type: null,
+        icon_background: null
+      },
+      flow_document: {
+        schemaVersion: '1flowbase.flow/v2',
+        meta: {
+          flowId: 'flow-template',
+          name: '导入客服助手',
+          description: '',
+          tags: []
+        },
+        graph: { nodes: [], edges: [] },
+        editor: {
+          viewport: { x: 0, y: 0, zoom: 1 },
+          annotations: [],
+          activeContainerPath: []
+        }
+      },
+      dependencies: []
+    };
+    renderPage();
+
+    expect(await screen.findByText('客服助手', {}, { timeout: 10_000 })).toBeInTheDocument();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([JSON.stringify(template)], 'support-template.json', {
+      type: 'application/json'
+    });
+    Object.defineProperty(file, 'text', {
+      value: () => Promise.resolve(JSON.stringify(template))
+    });
+
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(
+      () => {
+        expect(applicationsApi.previewAgentFlowTemplate).toHaveBeenCalledWith(template);
+      },
+      { timeout: 10_000 }
+    );
+
+    const dialog = await screen.findByRole('dialog', undefined, { timeout: 10_000 });
+    expect(within(dialog).getByText('导入 AgentFlow 模板')).toBeInTheDocument();
+    expect(within(dialog).getByText('模板依赖已就绪')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: '导入模板' }));
+
+    await waitFor(
+      () => {
+        expect(applicationsApi.importAgentFlowTemplate).toHaveBeenCalledWith(
+          {
+            template,
+            name: '导入客服助手',
+            description: '导入描述'
           },
           'csrf-123'
         );

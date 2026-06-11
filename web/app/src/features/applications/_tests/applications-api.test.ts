@@ -8,6 +8,9 @@ vi.mock('@1flowbase/api-client', () => ({
     id: 'tag-1'
   }),
   deleteConsoleApplication: vi.fn().mockResolvedValue(undefined),
+  exportConsoleAgentFlowTemplate: vi.fn().mockResolvedValue({
+    schema_version: '1flowbase.application-template/v1'
+  }),
   getConsoleApplication: vi.fn().mockResolvedValue({
     id: 'app-1'
   }),
@@ -17,6 +20,12 @@ vi.mock('@1flowbase/api-client', () => ({
   }),
   listConsoleApplicationEnvironmentVariables: vi.fn().mockResolvedValue([]),
   listConsoleApplications: vi.fn().mockResolvedValue([]),
+  importConsoleAgentFlowTemplate: vi.fn().mockResolvedValue({
+    application: { id: 'app-imported' }
+  }),
+  previewConsoleAgentFlowTemplate: vi.fn().mockResolvedValue({
+    unresolved_nodes: []
+  }),
   replaceConsoleApplicationEnvironmentVariables: vi.fn().mockResolvedValue([
     {
       name: 'ApiBaseUrl',
@@ -36,11 +45,14 @@ import {
   createConsoleApplication,
   createConsoleApplicationTag,
   deleteConsoleApplication,
+  exportConsoleAgentFlowTemplate,
   getConsoleApplication,
   getConsoleApplicationCatalog,
   getDefaultApiBaseUrl,
+  importConsoleAgentFlowTemplate,
   listConsoleApplicationEnvironmentVariables,
   listConsoleApplications,
+  previewConsoleAgentFlowTemplate,
   replaceConsoleApplicationEnvironmentVariables,
   updateConsoleApplication
 } from '@1flowbase/api-client';
@@ -49,11 +61,14 @@ import {
   createApplication,
   createApplicationTag,
   deleteApplication,
+  exportAgentFlowTemplate,
   fetchApplicationCatalog,
   fetchApplicationDetail,
   fetchApplicationEnvironmentVariables,
   fetchApplications,
   getApplicationsApiBaseUrl,
+  importAgentFlowTemplate,
+  previewAgentFlowTemplate,
   replaceApplicationEnvironmentVariables,
   updateApplication
 } from '../api/applications';
@@ -118,6 +133,34 @@ describe('applications api', () => {
       'csrf-123'
     );
     await createApplicationTag({ name: '客服' }, 'csrf-123');
+    const template: Parameters<typeof previewAgentFlowTemplate>[0] = {
+      schema_version: '1flowbase.application-template/v1',
+      application: {
+        application_type: 'agent_flow',
+        name: 'Support Agent',
+        description: '',
+        icon: null,
+        icon_type: null,
+        icon_background: null
+      },
+      flow_document: {
+        schemaVersion: '1flowbase.flow/v2',
+        meta: { flowId: 'flow-1', name: 'Support Agent', description: '', tags: [] },
+        graph: { nodes: [], edges: [] },
+        editor: { viewport: { x: 0, y: 0, zoom: 1 }, annotations: [], activeContainerPath: [] }
+      },
+      dependencies: []
+    };
+    await exportAgentFlowTemplate('app-1');
+    await previewAgentFlowTemplate(template);
+    await importAgentFlowTemplate(
+      {
+        template,
+        name: 'Imported Agent',
+        description: ''
+      },
+      'csrf-123'
+    );
 
     expect(listConsoleApplications).toHaveBeenCalledWith(
       'http://127.0.0.1:7800'
@@ -170,6 +213,23 @@ describe('applications api', () => {
     );
     expect(createConsoleApplicationTag).toHaveBeenCalledWith(
       { name: '客服' },
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(exportConsoleAgentFlowTemplate).toHaveBeenCalledWith(
+      'app-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(previewConsoleAgentFlowTemplate).toHaveBeenCalledWith(
+      { template },
+      'http://127.0.0.1:7800'
+    );
+    expect(importConsoleAgentFlowTemplate).toHaveBeenCalledWith(
+      {
+        template,
+        name: 'Imported Agent',
+        description: ''
+      },
       'csrf-123',
       'http://127.0.0.1:7800'
     );

@@ -34,6 +34,25 @@ function stopActionEvent(event: SyntheticEvent<HTMLElement>) {
   event.stopPropagation();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function unresolvedNodeInfo(config: Record<string, unknown>) {
+  const unresolved = isRecord(config.unresolved) ? config.unresolved : {};
+  const reason =
+    typeof unresolved.reason === 'string' && unresolved.reason.trim().length > 0
+      ? unresolved.reason
+      : 'missing_dependency';
+  const originalType =
+    typeof unresolved.original_type === 'string' &&
+    unresolved.original_type.trim().length > 0
+      ? unresolved.original_type
+      : 'unknown';
+
+  return { reason, originalType };
+}
+
 export function AgentFlowNodeCard({
   data,
   selected
@@ -74,6 +93,8 @@ export function AgentFlowNodeCard({
     };
   }, []);
   const nodePickerOptions = data.nodePickerOptions ?? [];
+  const isUnresolvedNode = data.nodeType === 'unresolved_node';
+  const unresolvedInfo = unresolvedNodeInfo(data.config);
   const replaceItems: MenuProps['items'] = nodePickerOptions.map((option) => ({
     key: getNodePickerOptionKey(option),
     label: getNodePickerOptionDescription(option)
@@ -85,17 +106,22 @@ export function AgentFlowNodeCard({
       data.onReplaceNode(data.nodeId, option);
     }
   }));
+  const runMenuItems: NonNullable<MenuProps['items']> = !isUnresolvedNode
+    ? [
+        {
+          key: 'run',
+          icon: <PlayCircleOutlined />,
+          label: i18nText('agentFlow', 'auto.execute_this_node'),
+          onClick: ({ domEvent }) => {
+            domEvent.stopPropagation();
+            data.onSelectNode(data.nodeId);
+            data.onRunNode(data.nodeId);
+          }
+        }
+      ]
+    : [];
   const menuItems: MenuProps['items'] = [
-    {
-      key: 'run',
-      icon: <PlayCircleOutlined />,
-      label: i18nText('agentFlow', 'auto.execute_this_node'),
-      onClick: ({ domEvent }) => {
-        domEvent.stopPropagation();
-        data.onSelectNode(data.nodeId);
-        data.onRunNode(data.nodeId);
-      }
-    },
+    ...runMenuItems,
     {
       key: 'replace',
       icon: <SwapOutlined />,
@@ -383,11 +409,32 @@ export function AgentFlowNodeCard({
           className="agent-flow-node-card__content"
           data-testid={`agent-flow-node-content-${data.nodeId}`}
         >
-          <SchemaRenderer
-            adapter={cardAdapter}
-            blocks={data.nodeSchema.card.blocks}
-            registry={agentFlowRendererRegistry}
-          />
+          {isUnresolvedNode ? (
+            <div className="agent-flow-node-card__unresolved">
+              <div className="agent-flow-node-card__unresolved-title">
+                {i18nText('agentFlow', 'auto.unresolved_node')}
+              </div>
+              <div className="agent-flow-node-card__unresolved-alias">
+                {data.alias}
+              </div>
+              <div className="agent-flow-node-card__unresolved-detail">
+                {i18nText('agentFlow', 'auto.original_node_type', {
+                  value1: unresolvedInfo.originalType
+                })}
+              </div>
+              <div className="agent-flow-node-card__unresolved-detail">
+                {i18nText('agentFlow', 'auto.unresolved_node_reason', {
+                  value1: unresolvedInfo.reason
+                })}
+              </div>
+            </div>
+          ) : (
+            <SchemaRenderer
+              adapter={cardAdapter}
+              blocks={data.nodeSchema.card.blocks}
+              registry={agentFlowRendererRegistry}
+            />
+          )}
         </div>
         <div
           className={`agent-flow-node-card__quick-actions${quickActionsVisible ? ' agent-flow-node-card__quick-actions--visible' : ''}`}
@@ -396,23 +443,25 @@ export function AgentFlowNodeCard({
           onMouseLeave={scheduleHideQuickActions}
           onPointerDown={stopActionEvent}
         >
-          <Tooltip title={i18nText('agentFlow', 'auto.execute_this_node')}>
-            <Button
-              aria-label={i18nText('agentFlow', 'auto.execute', {
-                value1: data.alias
-              })}
-              className="agent-flow-node-card__quick-action"
-              icon={<PlayCircleOutlined />}
-              shape="circle"
-              size="small"
-              type="text"
-              onClick={(event) => {
-                stopActionEvent(event);
-                data.onSelectNode(data.nodeId);
-                data.onRunNode(data.nodeId);
-              }}
-            />
-          </Tooltip>
+          {!isUnresolvedNode ? (
+            <Tooltip title={i18nText('agentFlow', 'auto.execute_this_node')}>
+              <Button
+                aria-label={i18nText('agentFlow', 'auto.execute', {
+                  value1: data.alias
+                })}
+                className="agent-flow-node-card__quick-action"
+                icon={<PlayCircleOutlined />}
+                shape="circle"
+                size="small"
+                type="text"
+                onClick={(event) => {
+                  stopActionEvent(event);
+                  data.onSelectNode(data.nodeId);
+                  data.onRunNode(data.nodeId);
+                }}
+              />
+            </Tooltip>
+          ) : null}
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
             <Button
               aria-label={i18nText('agentFlow', 'auto.more_actions', {

@@ -669,6 +669,13 @@
     "add_node_after_branch": "Add node after {{value1}} {{value2}} branch",
     "branch_connection_invalid": "Invalid branch connection",
     "branch_connection_invalid_message": "This edge does not target an existing branch outlet on the current If / Else node.",
-    "delete_node": "Delete node"
+    "delete_node": "Delete node",
+    "export_template": "Export template",
+    "template_export_failed": "Template export failed",
+    "template_exported": "Template exported",
+    "unresolved_node": "Unresolved node",
+    "unresolved_node_definition_summary": "This workspace cannot identify the node yet. It can be resolved again after dependencies are available.",
+    "unresolved_node_reason": "Reason: {{value1}}",
+    "original_node_type": "Original type: {{value1}}"
   }
 }

@@ -25,7 +25,7 @@ export type BuiltinFlowNodeType =
   | 'loop'
   | 'human_input';
 
-export type FlowNodeType = BuiltinFlowNodeType | 'plugin_node';
+export type FlowNodeType = BuiltinFlowNodeType | 'plugin_node' | 'unresolved_node';
 
 export type FlowStartInputType =
   | 'text'

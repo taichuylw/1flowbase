@@ -14,8 +14,18 @@ use crate::{
     errors::ControlPlaneError,
     ports::{
         ApplicationRepository, ApplicationVisibility, CreateApplicationInput,
-        CreateApplicationTagInput, DeleteApplicationInput, FlowRepository, UpdateApplicationInput,
+        CreateApplicationTagInput, DeleteApplicationInput, FlowRepository, ModelProviderRepository,
+        NodeContributionRepository, UpdateApplicationInput,
     },
+};
+
+mod agentflow_template;
+
+pub use agentflow_template::{
+    load_agent_flow_template_resources, AgentFlowTemplateApplication, AgentFlowTemplateDependency,
+    AgentFlowTemplateDependencyStatus, AgentFlowTemplatePackage, AgentFlowTemplatePreview,
+    AgentFlowTemplateResourceSnapshot, AgentFlowTemplateUnresolvedNode,
+    AGENT_FLOW_TEMPLATE_SCHEMA_VERSION, UNRESOLVED_NODE_TYPE,
 };
 
 pub struct SaveFlowDraftCommand {
@@ -33,6 +43,26 @@ pub struct UpdateFlowVersionMetadataCommand {
     pub summary: Option<String>,
     pub summary_is_custom: Option<bool>,
     pub is_protected: Option<bool>,
+}
+
+pub struct PreviewAgentFlowTemplateCommand {
+    pub actor_user_id: Uuid,
+    pub template: AgentFlowTemplatePackage,
+    pub resources: AgentFlowTemplateResourceSnapshot,
+}
+
+pub struct ImportAgentFlowTemplateCommand {
+    pub actor_user_id: Uuid,
+    pub template: AgentFlowTemplatePackage,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub resources: AgentFlowTemplateResourceSnapshot,
+}
+
+pub struct ImportAgentFlowTemplateResult {
+    pub application: domain::ApplicationRecord,
+    pub orchestration: domain::FlowEditorState,
+    pub preview: AgentFlowTemplatePreview,
 }
 
 const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
@@ -140,6 +170,134 @@ where
                 command.is_protected,
             )
             .await
+    }
+
+    pub async fn export_agent_flow_template(
+        &self,
+        actor_user_id: Uuid,
+        application_id: Uuid,
+    ) -> Result<AgentFlowTemplatePackage> {
+        let application = ApplicationService::new(self.repository.clone())
+            .get_application(actor_user_id, application_id)
+            .await?;
+        if application.application_type != domain::ApplicationType::AgentFlow {
+            return Err(ControlPlaneError::InvalidInput("application_type").into());
+        }
+        let actor = self
+            .repository
+            .load_actor_context_for_user(actor_user_id)
+            .await?;
+        let flow_state = self
+            .repository
+            .get_or_create_editor_state(actor.current_workspace_id, application_id, actor_user_id)
+            .await?;
+
+        Ok(agentflow_template::build_agent_flow_template_package(
+            &application,
+            &flow_state.draft.document,
+        ))
+    }
+
+    pub async fn preview_agent_flow_template(
+        &self,
+        command: PreviewAgentFlowTemplateCommand,
+    ) -> Result<AgentFlowTemplatePreview> {
+        self.repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+
+        agentflow_template::preview_agent_flow_template_package(
+            command.template,
+            &command.resources,
+        )
+    }
+
+    pub async fn import_agent_flow_template(
+        &self,
+        command: ImportAgentFlowTemplateCommand,
+    ) -> Result<ImportAgentFlowTemplateResult> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        let preview = agentflow_template::preview_agent_flow_template_package(
+            command.template.clone(),
+            &command.resources,
+        )?;
+        let application_name = command
+            .name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| preview.application.name.clone());
+        let application_description = command
+            .description
+            .unwrap_or_else(|| preview.application.description.clone());
+        let application = ApplicationService::new(self.repository.clone())
+            .create_application(crate::application::CreateApplicationCommand {
+                actor_user_id: command.actor_user_id,
+                application_type: domain::ApplicationType::AgentFlow,
+                name: application_name,
+                description: application_description,
+                icon: preview.application.icon.clone(),
+                icon_type: preview.application.icon_type.clone(),
+                icon_background: preview.application.icon_background.clone(),
+            })
+            .await?;
+        let bootstrapped = self
+            .repository
+            .get_or_create_editor_state(
+                actor.current_workspace_id,
+                application.id,
+                command.actor_user_id,
+            )
+            .await?;
+        let (document, _) = agentflow_template::import_agent_flow_template_document(
+            &command.template,
+            bootstrapped.flow.id,
+            &command.resources,
+        )?;
+        validate_flow_draft_document(&document)?;
+        let orchestration = self
+            .repository
+            .save_draft(
+                actor.current_workspace_id,
+                application.id,
+                command.actor_user_id,
+                document,
+                domain::FlowChangeKind::Logical,
+                "导入 AgentFlow 模板",
+            )
+            .await?;
+
+        Ok(ImportAgentFlowTemplateResult {
+            application,
+            orchestration,
+            preview,
+        })
+    }
+}
+
+impl<R> FlowService<R>
+where
+    R: ApplicationRepository
+        + FlowRepository
+        + ModelProviderRepository
+        + NodeContributionRepository
+        + Clone,
+{
+    pub async fn load_agent_flow_template_resources(
+        &self,
+        actor_user_id: Uuid,
+    ) -> Result<AgentFlowTemplateResourceSnapshot> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(actor_user_id)
+            .await?;
+
+        agentflow_template::load_agent_flow_template_resources(
+            &self.repository,
+            actor.current_workspace_id,
+        )
+        .await
     }
 }
 

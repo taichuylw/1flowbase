@@ -56,6 +56,62 @@ describe('AgentFlowNodeCard', () => {
     updateNodeInternalsMock.mockClear();
   });
 
+  test('renders unresolved nodes as non-runnable placeholders', () => {
+    render(
+      <AppProviders>
+        <AgentFlowNodeCard
+          {...({
+            data: {
+              nodeId: 'node-missing',
+              nodeType: 'unresolved_node',
+              nodeSchema: resolveAgentFlowNodeSchema('unresolved_node'),
+              typeLabel: 'Unresolved Node',
+              alias: 'Missing LLM',
+              description: '',
+              config: {
+                unresolved: {
+                  dependency_status: 'missing_dependency',
+                  reason: 'missing_model_provider',
+                  original_type: 'llm',
+                  original_node: {
+                    id: 'node-missing',
+                    type: 'llm'
+                  }
+                }
+              },
+              issueCount: 0,
+              canEnterContainer: false,
+              pickerOpen: false,
+              showTargetHandle: true,
+              showSourceHandle: true,
+              isContainer: false,
+              onOpenPicker: vi.fn(),
+              onClosePicker: vi.fn(),
+              onOpenContainer: vi.fn(),
+              onSelectNode: vi.fn(),
+              onInsertNode: vi.fn(),
+              onReplaceNode: vi.fn(),
+              onDeleteNode: vi.fn(),
+              onRunNode: vi.fn()
+            },
+            id: 'node-missing',
+            selected: false
+          } as unknown as Parameters<typeof AgentFlowNodeCard>[0])}
+        />
+      </AppProviders>
+    );
+
+    expect(screen.getByText(/未知节点|Unresolved node/)).toBeInTheDocument();
+    expect(screen.getByText(/llm/)).toBeInTheDocument();
+    expect(screen.getByText(/missing_model_provider/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /执行|Execute/ })).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByTestId('agent-flow-node-content-node-missing')
+        .closest('.agent-flow-node-card')
+    ).toHaveClass('agent-flow-node-card--type-unresolved_node');
+  });
+
   test('keeps node color on the shell theme instead of per-type selectors', () => {
     const canvasStyles = readFileSync(
       'src/features/agent-flow/components/editor/styles/canvas.css',

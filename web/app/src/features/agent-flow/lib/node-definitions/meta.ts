@@ -73,5 +73,9 @@ export const nodeDefinitionMeta: NodeDefinitionMetaMap = {
   plugin_node: {
     summary: i18nText("agentFlow", "auto.plugin_node_definition_summary"),
     helpHref: null
+  },
+  unresolved_node: {
+    summary: i18nText('agentFlow', 'auto.unresolved_node_definition_summary'),
+    helpHref: null
   }
 };

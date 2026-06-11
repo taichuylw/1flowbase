@@ -39,6 +39,91 @@ export interface UpdateConsoleApplicationVersionInput {
   is_protected?: boolean;
 }
 
+export interface ConsoleAgentFlowTemplateApplication {
+  application_type: 'agent_flow';
+  name: string;
+  description: string;
+  icon: string | null;
+  icon_type: string | null;
+  icon_background: string | null;
+}
+
+export interface ConsoleAgentFlowTemplateDependency {
+  kind: string;
+  node_id: string | null;
+  node_type: string | null;
+  config_version: number | null;
+  provider_code: string | null;
+  model_id: string | null;
+  plugin_id: string | null;
+  plugin_version: string | null;
+  contribution_code: string | null;
+  node_shell: string | null;
+  schema_version: string | null;
+  plugin_unique_identifier: string | null;
+  package_id: string | null;
+  contribution_checksum: string | null;
+  compiled_contribution_hash: string | null;
+}
+
+export interface ConsoleAgentFlowTemplatePackage {
+  schema_version: '1flowbase.application-template/v1';
+  application: ConsoleAgentFlowTemplateApplication;
+  flow_document: FlowAuthoringDocument;
+  dependencies: ConsoleAgentFlowTemplateDependency[];
+}
+
+export interface ConsoleAgentFlowTemplateDependencyStatus {
+  dependency: ConsoleAgentFlowTemplateDependency;
+  status: string;
+  reason: string | null;
+}
+
+export interface ConsoleAgentFlowTemplateUnresolvedNode {
+  node_id: string;
+  alias: string;
+  original_type: string;
+  dependency_status: string;
+  reason: string;
+  original_node: Record<string, unknown>;
+}
+
+export interface ConsoleAgentFlowTemplatePreview {
+  schema_version: '1flowbase.application-template/v1';
+  application: ConsoleAgentFlowTemplateApplication;
+  dependencies: ConsoleAgentFlowTemplateDependencyStatus[];
+  unresolved_nodes: ConsoleAgentFlowTemplateUnresolvedNode[];
+  document: FlowAuthoringDocument;
+}
+
+export interface PreviewConsoleAgentFlowTemplateInput {
+  template: ConsoleAgentFlowTemplatePackage;
+}
+
+export interface ImportConsoleAgentFlowTemplateInput {
+  template: ConsoleAgentFlowTemplatePackage;
+  name?: string;
+  description?: string;
+}
+
+export interface ConsoleAgentFlowTemplateImportedApplication {
+  id: string;
+  application_type: 'agent_flow';
+  name: string;
+  description: string;
+  icon: string | null;
+  icon_type: string | null;
+  icon_background: string | null;
+  created_by: string;
+  updated_at: string;
+}
+
+export interface ImportConsoleAgentFlowTemplateResponse {
+  application: ConsoleAgentFlowTemplateImportedApplication;
+  orchestration: ConsoleApplicationOrchestrationState;
+  preview: ConsoleAgentFlowTemplatePreview;
+}
+
 export function getConsoleApplicationOrchestration(
   applicationId: string,
   baseUrl?: string
@@ -58,6 +143,42 @@ export function saveConsoleApplicationDraft(
   return apiFetch<ConsoleApplicationOrchestrationState>({
     path: `/api/console/applications/${applicationId}/orchestration/draft`,
     method: 'PUT',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function exportConsoleAgentFlowTemplate(
+  applicationId: string,
+  baseUrl?: string
+): Promise<ConsoleAgentFlowTemplatePackage> {
+  return apiFetch<ConsoleAgentFlowTemplatePackage>({
+    path: `/api/console/applications/${applicationId}/orchestration/template`,
+    baseUrl
+  });
+}
+
+export function previewConsoleAgentFlowTemplate(
+  input: PreviewConsoleAgentFlowTemplateInput,
+  baseUrl?: string
+): Promise<ConsoleAgentFlowTemplatePreview> {
+  return apiFetch<ConsoleAgentFlowTemplatePreview>({
+    path: '/api/console/applications/orchestration/template/preview',
+    method: 'POST',
+    body: input,
+    baseUrl
+  });
+}
+
+export function importConsoleAgentFlowTemplate(
+  input: ImportConsoleAgentFlowTemplateInput,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<ImportConsoleAgentFlowTemplateResponse> {
+  return apiFetch<ImportConsoleAgentFlowTemplateResponse>({
+    path: '/api/console/applications/orchestration/template/import',
+    method: 'POST',
     body: input,
     csrfToken,
     baseUrl

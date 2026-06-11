@@ -1,5 +1,6 @@
 import {
   CodeOutlined,
+  ExportOutlined,
   GlobalOutlined,
   HistoryOutlined,
   IssuesCloseOutlined,
@@ -18,6 +19,7 @@ interface AgentFlowOverlayProps {
   saveDisabled: boolean;
   saveLoading: boolean;
   onOpenDebugConsole: () => void;
+  onExportTemplate: () => void;
   onOpenIssues: () => void;
   onOpenHistory: () => void;
   onOpenConversationVariables: () => void;
@@ -25,6 +27,7 @@ interface AgentFlowOverlayProps {
   onOpenSystemVariables: () => void;
   onOpenPublish: () => void;
   issueErrorCount: number;
+  exportLoading: boolean;
   publishDisabled: boolean;
 }
 
@@ -36,6 +39,7 @@ export function AgentFlowOverlay({
   saveDisabled,
   saveLoading,
   onOpenDebugConsole,
+  onExportTemplate,
   onOpenIssues,
   onOpenHistory,
   onOpenConversationVariables,
@@ -43,6 +47,7 @@ export function AgentFlowOverlay({
   onOpenSystemVariables,
   onOpenPublish,
   issueErrorCount,
+  exportLoading,
   publishDisabled
 }: AgentFlowOverlayProps) {
   const statusTag = {
@@ -82,6 +87,14 @@ export function AgentFlowOverlay({
             title="Issues"
           />
         </Badge>
+        <Button
+          aria-label={i18nText('agentFlow', 'auto.export_template')}
+          autoInsertSpace={false}
+          icon={<ExportOutlined />}
+          loading={exportLoading}
+          onClick={onExportTemplate}
+          title={i18nText('agentFlow', 'auto.export_template')}
+        />
         <Button
           aria-label={i18nText('agentFlow', 'auto.system_variables')}
           autoInsertSpace={false}

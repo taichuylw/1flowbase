@@ -22,6 +22,7 @@ import {
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
+  ExportOutlined,
   FileTextOutlined,
   ImportOutlined,
   MoreOutlined,
@@ -30,8 +31,8 @@ import {
   TagOutlined
 } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
-import type { ReactNode } from 'react';
-import { useState } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '../../../state/auth-store';
@@ -43,15 +44,21 @@ import {
   createApplication,
   createApplicationTag,
   deleteApplication,
+  exportAgentFlowTemplate,
   fetchApplicationCatalog,
   fetchApplications,
+  importAgentFlowTemplate,
+  previewAgentFlowTemplate,
   type Application,
+  type AgentFlowTemplatePackage,
   type ApplicationTagCatalogEntry,
   updateApplication
 } from '../api/applications';
 import { ApplicationCreateModal } from '../components/ApplicationCreateModal';
 import { ApplicationEditModal } from '../components/ApplicationEditModal';
 import { ApplicationTagManagerModal } from '../components/ApplicationTagManagerModal';
+import { ApplicationTemplateImportModal } from '../components/ApplicationTemplateImportModal';
+import { downloadTemplateFile } from '../lib/template-download';
 
 type ApplicationTypeFilter = 'all' | Application['application_type'];
 
@@ -112,6 +119,7 @@ export function ApplicationListPage() {
   const queryClient = useQueryClient();
   const [messageApi, messageContextHolder] = message.useMessage();
   const [modalApi, modalContextHolder] = Modal.useModal();
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [keyword, setKeyword] = useState('');
   const [typeFilter, setTypeFilter] = useState<ApplicationTypeFilter>('all');
@@ -122,6 +130,11 @@ export function ApplicationListPage() {
   const [taggingApplicationId, setTaggingApplicationId] = useState<string | null>(null);
   const [openActionApplicationId, setOpenActionApplicationId] = useState<string | null>(null);
   const [optimisticTags, setOptimisticTags] = useState<ApplicationTagCatalogEntry[]>([]);
+  const [importTemplate, setImportTemplate] = useState<AgentFlowTemplatePackage | null>(null);
+  const [importName, setImportName] = useState('');
+  const [importPreview, setImportPreview] = useState<Awaited<
+    ReturnType<typeof previewAgentFlowTemplate>
+  > | null>(null);
 
   const applicationsQuery = useQuery({
     queryKey: applicationsQueryKey,
@@ -151,6 +164,59 @@ export function ApplicationListPage() {
     },
     onError: () => {
       messageApi.error(t('auto.copy_application_failed'));
+    }
+  });
+
+  const exportTemplateMutation = useMutation({
+    mutationFn: (applicationId: string) => exportAgentFlowTemplate(applicationId),
+    onSuccess: (template) => {
+      downloadTemplateFile(template);
+      messageApi.success(t('auto.template_exported'));
+    },
+    onError: () => {
+      messageApi.error(t('auto.template_export_failed'));
+    }
+  });
+
+  const previewTemplateMutation = useMutation({
+    mutationFn: (template: AgentFlowTemplatePackage) => previewAgentFlowTemplate(template),
+    onSuccess: (preview) => {
+      setImportPreview(preview);
+      setImportName(preview.application.name);
+    },
+    onError: () => {
+      setImportTemplate(null);
+      setImportPreview(null);
+      messageApi.error(t('auto.template_preview_failed'));
+    }
+  });
+
+  const importTemplateMutation = useMutation({
+    mutationFn: () => {
+      if (!importTemplate) {
+        throw new Error('missing template');
+      }
+
+      return importAgentFlowTemplate(
+        {
+          template: importTemplate,
+          name: importName.trim(),
+          description:
+            importPreview?.application.description ??
+            importTemplate.application.description
+        },
+        csrfToken ?? ''
+      );
+    },
+    onSuccess: async (imported) => {
+      await queryClient.invalidateQueries({ queryKey: applicationsQueryKey });
+      messageApi.success(t('auto.template_imported'));
+      window.location.assign(
+        `/applications/${imported.application.id}/orchestration`
+      );
+    },
+    onError: () => {
+      messageApi.error(t('auto.template_import_failed'));
     }
   });
 
@@ -256,6 +322,27 @@ export function ApplicationListPage() {
     });
   };
 
+  const handleImportTemplateFile = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const template = JSON.parse(await file.text()) as AgentFlowTemplatePackage;
+      setImportTemplate(template);
+      previewTemplateMutation.mutate(template);
+    } catch {
+      setImportTemplate(null);
+      setImportPreview(null);
+      messageApi.error(t('auto.template_file_invalid'));
+    }
+  };
+
   const handleUpdateApplication = async (
     application: Application,
     input: { name: string; description: string; tag_ids: string[] }
@@ -270,6 +357,14 @@ export function ApplicationListPage() {
     <div style={{ padding: '24px 0', width: '100%', maxWidth: 1240, margin: '0 auto' }}>
       {messageContextHolder}
       {modalContextHolder}
+      <input
+        ref={importFileInputRef}
+        type="file"
+        accept="application/json,.json"
+        aria-label={t('auto.import_template_file')}
+        style={{ display: 'none' }}
+        onChange={(event) => void handleImportTemplateFile(event)}
+      />
       <Flex justify="space-between" align="center" wrap="wrap" gap={16} style={{ marginBottom: 24 }}>
         <Space size="small" wrap>
           {typeTabs.map((tab) => (
@@ -351,9 +446,10 @@ export function ApplicationListPage() {
               type="text"
               icon={<ImportOutlined />}
               style={{ justifyContent: 'flex-start' }}
-              disabled
+              loading={previewTemplateMutation.isPending}
+              onClick={() => importFileInputRef.current?.click()}
             >
-              {t('auto.import_dsl_file')}</Button>
+              {t('auto.import_template_file')}</Button>
           </div>
         )}
 
@@ -363,6 +459,14 @@ export function ApplicationListPage() {
           const typeLabel = typeLabels.get(application.application_type) ?? application.application_type;
           const applicationHref = `/applications/${application.id}/orchestration`;
           const actionItems: MenuProps['items'] = [
+            {
+              key: 'export_template',
+              icon: <ExportOutlined />,
+              label: t('auto.export_template'),
+              disabled:
+                application.application_type !== 'agent_flow' ||
+                exportTemplateMutation.isPending
+            },
             {
               key: 'copy',
               icon: <CopyOutlined />,
@@ -523,6 +627,9 @@ export function ApplicationListPage() {
                         selectable={false}
                         items={actionItems}
                         onClick={({ key }) => {
+                          if (key === 'export_template') {
+                            exportTemplateMutation.mutate(application.id);
+                          }
                           if (key === 'copy' && canCreate) {
                             duplicateApplicationMutation.mutate(application);
                           }
@@ -599,6 +706,19 @@ export function ApplicationListPage() {
         onCreated={(applicationId) => {
           window.location.assign(`/applications/${applicationId}/orchestration`);
         }}
+      />
+
+      <ApplicationTemplateImportModal
+        open={Boolean(importPreview)}
+        preview={importPreview}
+        name={importName}
+        importing={importTemplateMutation.isPending}
+        onNameChange={setImportName}
+        onCancel={() => {
+          setImportTemplate(null);
+          setImportPreview(null);
+        }}
+        onImport={() => importTemplateMutation.mutate()}
       />
     </div>
   );

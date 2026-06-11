@@ -264,6 +264,9 @@ fn compile_issue_field(issue: &orchestration_runtime::compiled_plan::CompileIssu
         orchestration_runtime::compiled_plan::CompileIssueCode::InvalidVisibleInternalLlmTool => {
             "visible_internal_llm_tools"
         }
+        orchestration_runtime::compiled_plan::CompileIssueCode::UnresolvedNode => {
+            "unresolved_node"
+        }
     }
 }
 

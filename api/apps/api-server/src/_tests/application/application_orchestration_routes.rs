@@ -167,3 +167,170 @@ async fn application_orchestration_routes_bootstrap_save_and_restore() {
 
     assert_eq!(restore.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn application_orchestration_template_routes_export_preview_and_import() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/applications")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "application_type": "agent_flow",
+                        "name": "Template Source",
+                        "description": "source app",
+                        "icon": "RobotOutlined",
+                        "icon_type": "iconfont",
+                        "icon_background": "#E6F7F2"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create.status(), StatusCode::CREATED);
+    let created_body: Value =
+        serde_json::from_slice(&to_bytes(create.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let application_id = created_body["data"]["id"].as_str().unwrap();
+
+    let state = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(state.status(), StatusCode::OK);
+    let state_body: Value =
+        serde_json::from_slice(&to_bytes(state.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let source_flow_id = state_body["data"]["flow_id"].as_str().unwrap().to_string();
+    let source_node_id = state_body["data"]["draft"]["document"]["graph"]["nodes"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let export = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/template"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(export.status(), StatusCode::OK);
+    let export_body: Value =
+        serde_json::from_slice(&to_bytes(export.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let template = export_body["data"].clone();
+    assert_eq!(
+        template["schema_version"],
+        json!("1flowbase.application-template/v1")
+    );
+    assert_eq!(
+        template["application"]["application_type"],
+        json!("agent_flow")
+    );
+
+    let preview = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/applications/orchestration/template/preview")
+                .header("cookie", &cookie)
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "template": template }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+    let preview_body: Value =
+        serde_json::from_slice(&to_bytes(preview.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(preview_body["data"]["unresolved_nodes"], json!([]));
+
+    let import = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/applications/orchestration/template/import")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "template": preview_body["data"],
+                        "name": "Template Imported"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(import.status(), StatusCode::BAD_REQUEST);
+
+    let import = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/applications/orchestration/template/import")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "template": export_body["data"],
+                        "name": "Template Imported"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(import.status(), StatusCode::CREATED);
+    let import_body: Value =
+        serde_json::from_slice(&to_bytes(import.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_ne!(
+        import_body["data"]["application"]["id"],
+        json!(application_id)
+    );
+    assert_eq!(
+        import_body["data"]["application"]["name"],
+        json!("Template Imported")
+    );
+    assert_ne!(
+        import_body["data"]["orchestration"]["flow_id"],
+        json!(source_flow_id)
+    );
+    assert_eq!(
+        import_body["data"]["orchestration"]["draft"]["document"]["meta"]["flowId"],
+        import_body["data"]["orchestration"]["flow_id"]
+    );
+    assert_eq!(
+        import_body["data"]["orchestration"]["draft"]["document"]["graph"]["nodes"][0]["id"],
+        json!(source_node_id)
+    );
+}

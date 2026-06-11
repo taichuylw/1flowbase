@@ -23,6 +23,7 @@ import { orchestrationQueryKey, updateVersion } from '../../api/orchestration';
 import {
   applicationDetailQueryKey,
   applicationEnvironmentVariablesQueryKey,
+  exportAgentFlowTemplate,
   replaceApplicationEnvironmentVariables
 } from '../../../applications/api/applications';
 import {
@@ -78,6 +79,7 @@ import { ApplicationEnvironmentVariablesPanel } from './ApplicationEnvironmentVa
 import { ConversationVariablesPanel } from './ConversationVariablesPanel';
 import { SystemVariablesPanel } from './SystemVariablesPanel';
 import { i18nText } from '../../../../shared/i18n/text';
+import { downloadTemplateFile } from '../../../applications/lib/template-download';
 import {
   CONVERSATION_LOG_MIN_WIDTH,
   CONVERSATION_LOG_DEFAULT_WIDTH,
@@ -247,6 +249,16 @@ export function AgentFlowCanvasFrame({
       message.error(
         i18nText('agentFlow', 'auto.failed_save_environment_variables')
       );
+    }
+  });
+  const exportTemplateMutation = useMutation({
+    mutationFn: () => exportAgentFlowTemplate(applicationId),
+    onSuccess(template) {
+      downloadTemplateFile(template);
+      message.success(i18nText('agentFlow', 'auto.template_exported'));
+    },
+    onError() {
+      message.error(i18nText('agentFlow', 'auto.template_export_failed'));
     }
   });
   const publishMutation = useMutation({
@@ -901,6 +913,7 @@ export function AgentFlowCanvasFrame({
         saveDisabled={autosaveStatus === 'saving'}
         saveLoading={autosaveStatus === 'saving'}
         onOpenDebugConsole={openDebugConsole}
+        onExportTemplate={() => exportTemplateMutation.mutate()}
         onOpenIssues={() => setPanelState({ issuesOpen: true })}
         onOpenHistory={openHistory}
         onOpenConversationVariables={openConversationVariables}
@@ -908,6 +921,7 @@ export function AgentFlowCanvasFrame({
         onOpenSystemVariables={openSystemVariables}
         onOpenPublish={() => publishMutation.mutate()}
         issueErrorCount={issueErrorCount}
+        exportLoading={exportTemplateMutation.isPending}
         publishDisabled={publishMutation.isPending || issueErrorCount > 0}
       />
       {activeContainerId ? (

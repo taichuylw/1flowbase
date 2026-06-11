@@ -29,7 +29,7 @@ import {
 } from '../http-request/contract';
 import { i18nText } from '../../../../shared/i18n/text';
 
-type BuiltinNodeRuntimeContractType = FlowNodeType;
+type BuiltinNodeRuntimeContractType = Exclude<FlowNodeType, 'unresolved_node'>;
 type ContractCategory = 'io' | 'generation' | 'control' | 'data' | 'external';
 
 const DEFAULT_RUNTIME_POLICY = {

@@ -647,3 +647,36 @@ fn compile_plugin_node_reports_issue_when_output_schema_snapshot_drifts() {
             && issue.code == CompileIssueCode::PluginContributionOutputSchemaMismatch
     }));
 }
+
+#[test]
+fn compile_unresolved_node_reports_blocking_issue() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    let original_node = document["graph"]["nodes"][1].clone();
+    document["graph"]["nodes"][1] = json!({
+        "id": "node-llm",
+        "type": "unresolved_node",
+        "alias": "LLM",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 240, "y": 0 },
+        "configVersion": 1,
+        "config": {
+            "unresolved": {
+                "dependency_status": "missing_dependency",
+                "reason": "missing_model_provider",
+                "original_type": "llm",
+                "original_node": original_node
+            }
+        },
+        "bindings": {},
+        "outputs": []
+    });
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.node_id == "node-llm" && issue.code == CompileIssueCode::UnresolvedNode
+    }));
+    assert_eq!(plan.nodes["node-llm"].node_type, "unresolved_node");
+}
