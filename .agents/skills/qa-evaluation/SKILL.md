@@ -1,6 +1,6 @@
 ---
 name: qa-evaluation
-description: Evidence-driven QA evaluation for 1flowbase task acceptance, regression, delivery, full-project audits, quality gate routing, i18n/multilingual key-value hygiene, frontend/backend contract, status, boundary and runtime checks, hotspot/churn prevention reviews, and maintainability/dead-abstraction warnings. Use when Codex must report verifiable findings and risks instead of directly implementing or fixing.
+description: Evidence-driven QA evaluation for 1flowbase dev acceptance, PR merge gates, project health gates, regression, delivery, full-project audits, quality gate routing, i18n/multilingual key-value hygiene, frontend/backend contract, status, boundary and runtime checks, hotspot/churn prevention reviews, and maintainability/dead-abstraction warnings. Use when Codex must report verifiable findings and risks instead of directly implementing or fixing.
 ---
 
 # QA Evaluation
@@ -8,6 +8,8 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 ## Overview
 
 `qa-evaluation` 不是另一个开发 Skill，而是 1flowbase 的质量评估器。开发阶段默认不自动注入完整测试门禁；进入自检、验收、回归或交付阶段后，再由这个 Skill 负责选择脚本、收集证据并输出 QA 结论。它默认只产出问题报告与修正方向，不直接改代码。
+
+质量门禁先分 lane 再选证据：开发后验收优先快，PR 门禁优先合并信心，项目体检优先完整健康快照和维护者感知。不要把三种资源预算混成一套重门禁。
 
 ## When to Use
 
@@ -35,15 +37,19 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 ## Quick Reference
 
 - 开发阶段默认不加载完整质量门禁；功能完成后再主动进入 `qa-evaluation`
-- 默认 `task mode`；只有用户明确要求全量审计时才进入 `project evaluation mode`
+- 先按 `references/gate-lanes.md` 选择门禁 lane：`Dev Acceptance Gate`、`PR Merge Gate`、`Project Health Gate`
+- 默认 `Dev Acceptance Gate / task mode`；用户明确要求 PR 校验、全量门禁、项目体检或完整 QA 审计时，才升级到对应 lane
+- `Dev Acceptance Gate` 追求快速反馈：复用 TDD 红绿结果，按风险向量选择最小证据链，证据足够或预算耗尽就停，不用仓库级门禁惩罚局部开发
+- `PR Merge Gate` 追求合并信心：优先 GitHub Actions / artifact，报告 blocker、warning、advisory、资源耗时和合并风险
+- `Project Health Gate` 追求维护者感知：优先远端完整门禁与 artifact，输出全局快照、风险热力图、趋势、轮转深挖和维护建议
 - 评估前先读 `.memory/AGENTS.md`、`.memory/user-memory.md`、项目记忆、反馈记忆和相关 spec
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`
 - 多语言 key / value hygiene、warning 解释和修复边界看 `references/i18n-hygiene-gate.md`
 - 需要处理周期性质量门禁值守、GitHub Issue / Actions 报告闭环或无权限贡献者本地门禁取证时，看 `references/quality-gate-watch.md`
 - 评估范围命中容器镜像、Trivy、GHCR、Dockerfile、基础镜像或镜像漏洞报告时，再加载 `references/container-image-security.md`
 - 如果评估范围命中后端，必须先读 `api/AGENTS.md`，再对齐 `.memory/project-memory` 中最近的后端规范、计划和插件边界记忆，不能沿用旧口径
-- `task mode` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归
-- `project evaluation mode` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口
+- `task mode / Dev Acceptance Gate` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归
+- `project evaluation mode / Project Health Gate` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口、风险热力图和维护建议
 - 前后端字段契约必查：接口字段名必须沿用后端 DTO / 领域语义；展示文案可本地化，但不得为展示另起业务字段别名
 - 用户可见文案硬边界：不得改 locale value、按钮/菜单/标题/导航/placeholder/empty/error/help text、schema label、节点展示名或默认 alias 等任何用户能看到的字符串；发现错字、不一致或表达问题时只写 finding / warning，并要求产品或开发者确认新文案
 - i18n hygiene 修复边界：不得为了消除重复 value、未引用 key 或 common 抽取 warning 改文案值；只能复用既有 key、调整 key 引用、合并重复 key、删除确认失效 key，或保留相同文案值并说明原因
@@ -62,14 +68,16 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 - 后端范围命中 Rust 代码时，必须额外检查类型不变量、错误边界、状态方法、事务、幂等、async 阻塞、锁跨 await、数据库约束和 Rust 质量门禁
 - Rust 后端验收必须核对 completion self-check；缺少证据时对应项只能写 `未验证`，不能下通过结论
 - 同一工作区内执行后端 `cargo` 验证命令时默认串行，不要为了加速 QA 并发启动多条 `cargo test / check / clippy` 导致锁等待和结论失真
-- 验证预算：先跑最能覆盖当前风险的最小证据链；证据足够回答核心验收问题后停止，除非用户要求全量、CI、coverage 或发现高 blast radius
+- 验证预算由 gate lane 决定：开发后验收用最小证据链和早停；PR 门禁用 CI / gate DAG / artifact；项目体检用全量维度覆盖、风险热力图和轮转深挖
 - 前端层级、入口、L0 / L1 / L2 / L3 问题：联动 `frontend-logic-design`
 - 后端契约、状态入口、边界污染问题：联动 `backend-development`
+- 项目体检发现非硬性维护问题时，联动 `problem-framing` 输出现状、方向、风险收益和建议；硬性门禁失败才进入质量回归修复
 - 无法验证时必须明确写：`未验证，不下确定结论`
 
 ## Implementation
 
 - Mode selection and session bias: `references/modes.md`
+- Gate lane model and resource budgets: `references/gate-lanes.md`
 - Repository quality gate routing: `references/repo-quality-gates.md`
 - I18n hygiene gate: `references/i18n-hygiene-gate.md`
 - Quality gate watch scenarios: `references/quality-gate-watch.md`
@@ -88,6 +96,7 @@ description: Evidence-driven QA evaluation for 1flowbase task acceptance, regres
 ## Common Mistakes
 
 - 把 QA 当成修复流程
+- 把开发后验收、PR 门禁和项目体检混成同一套重门禁
 - 没有证据就下结论
 - 把代码审查写成 QA 报告
 - 小任务也直接上全量审计
