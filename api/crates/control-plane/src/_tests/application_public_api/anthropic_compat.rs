@@ -378,6 +378,30 @@ fn claude_code_compact_summary_request_marks_control_metadata() {
 }
 
 #[test]
+fn claude_code_session_title_request_marks_control_metadata() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "system": "x-anthropic-billing-header: cc_version=2.1.141.831; cc_entrypoint=cli; cch=a143a;\n\nYou are Claude Code, Anthropic's official CLI for Claude.\n\nGenerate a concise, sentence-case title (3-7 words) that captures the main topic or goal of this coding session. Return JSON with a single \"title\" field.",
+        "metadata": {
+            "user_id": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        },
+        "messages": [
+            {"role": "user", "content": "uploads/image-1.png 帮我看看这导航栏代码是在哪来的？"}
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        native.metadata.as_value()["compatibility"]["claude_code_control"],
+        json!("session_title")
+    );
+    assert_eq!(
+        native.inputs.as_value()["compatibility"]["claude_code_control"],
+        json!("session_title")
+    );
+}
+
+#[test]
 fn claude_code_compact_resume_history_is_marked_hidden_from_conversation() {
     let native = map_messages_request(json!({
         "model": "claude-compatible-custom",

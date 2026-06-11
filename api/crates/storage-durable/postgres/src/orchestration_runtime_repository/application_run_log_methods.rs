@@ -4,14 +4,9 @@ impl PgControlPlaneStore {
         flow_run: &domain::FlowRunRecord,
     ) -> Result<()> {
         let is_terminal = is_terminal_application_run_log_status(flow_run.status);
-        let display_title = control_plane::flow_run_title::display_flow_run_title(
-            &flow_run.title,
-            &flow_run.input_payload,
-        );
         let mut tx = self.pool().begin().await?;
 
-        Self::upsert_application_run_log_summary_projection(&mut tx, flow_run, &display_title)
-            .await?;
+        Self::upsert_visible_application_run_log_summary_projection(&mut tx, flow_run).await?;
         tx.commit().await?;
 
         if is_terminal {
@@ -19,6 +14,38 @@ impl PgControlPlaneStore {
                 .await?;
         }
 
+        Ok(())
+    }
+
+    async fn upsert_visible_application_run_log_summary_projection(
+        tx: &mut sqlx::Transaction<'_, Postgres>,
+        flow_run: &domain::FlowRunRecord,
+    ) -> Result<()> {
+        if is_anthropic_claude_code_control_run(flow_run) {
+            Self::delete_application_run_log_summary_projection(tx, flow_run.id).await?;
+            return Ok(());
+        }
+
+        let display_title = control_plane::flow_run_title::display_flow_run_title(
+            &flow_run.title,
+            &flow_run.input_payload,
+        );
+        Self::upsert_application_run_log_summary_projection(tx, flow_run, &display_title).await
+    }
+
+    async fn delete_application_run_log_summary_projection(
+        tx: &mut sqlx::Transaction<'_, Postgres>,
+        flow_run_id: Uuid,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            delete from application_run_log_summaries
+            where flow_run_id = $1
+            "#,
+        )
+        .bind(flow_run_id)
+        .execute(&mut **tx)
+        .await?;
         Ok(())
     }
 

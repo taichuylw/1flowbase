@@ -541,6 +541,45 @@ impl PgControlPlaneStore {
                 from flow_runs
                 where application_id = $1
                   and external_conversation_id = $2
+                  and not (
+                      compatibility_mode = 'anthropic-messages-v1'
+                      and (
+                          input_payload #>> '{node-start,compatibility,claude_code_control}' is not null
+                          or input_payload #>> '{start,compatibility,claude_code_control}' is not null
+                          or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
+                              input_payload #>> '{node-start,query}',
+                              input_payload #>> '{start,query}',
+                              input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
+                              input_payload #>> '{node-start,query}',
+                              input_payload #>> '{start,query}',
+                              input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
+                              input_payload #>> '{node-start,query}',
+                              input_payload #>> '{start,query}',
+                              input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or (
+                              position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
+                                  input_payload #>> '{node-start,query}',
+                                  input_payload #>> '{start,query}',
+                                  input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                              and position('If you need specific details from before compaction' in coalesce(
+                                  input_payload #>> '{node-start,query}',
+                                  input_payload #>> '{start,query}',
+                                  input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                          )
+                      )
+                  )
             )
             select *
             from ordered
@@ -587,6 +626,45 @@ impl PgControlPlaneStore {
                 from flow_runs
                 where application_id = $1
                   and external_conversation_id = $2
+                  and not (
+                      compatibility_mode = 'anthropic-messages-v1'
+                      and (
+                          input_payload #>> '{node-start,compatibility,claude_code_control}' is not null
+                          or input_payload #>> '{start,compatibility,claude_code_control}' is not null
+                          or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
+                              input_payload #>> '{node-start,query}',
+                              input_payload #>> '{start,query}',
+                              input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
+                              input_payload #>> '{node-start,query}',
+                              input_payload #>> '{start,query}',
+                              input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
+                              input_payload #>> '{node-start,query}',
+                              input_payload #>> '{start,query}',
+                              input_payload #>> '{query}',
+                              ''
+                          )) > 0
+                          or (
+                              position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
+                                  input_payload #>> '{node-start,query}',
+                                  input_payload #>> '{start,query}',
+                                  input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                              and position('If you need specific details from before compaction' in coalesce(
+                                  input_payload #>> '{node-start,query}',
+                                  input_payload #>> '{start,query}',
+                                  input_payload #>> '{query}',
+                                  ''
+                              )) > 0
+                          )
+                      )
+                  )
             )
             select rn, total
             from ordered

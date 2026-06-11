@@ -335,6 +335,38 @@ async fn terminal_claude_code_control_run_does_not_project_conversation_messages
     .await
     .unwrap();
     assert_eq!(projected_count, 0);
+
+    let logs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationRunsPageInput {
+                page: 1,
+                page_size: 20,
+                created_after: None,
+                sort_by: Some("created_at".to_string()),
+                sort_order: Some("desc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(logs.total, 0);
+
+    let conversation_runs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_conversation_runs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationConversationRunsPageInput {
+                external_conversation_id: "claude-code-session".to_string(),
+                around_run_id: Some(run.id),
+                before_run_id: None,
+                after_run_id: None,
+                limit: 20,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(conversation_runs.items.is_empty());
 }
 
 #[tokio::test]

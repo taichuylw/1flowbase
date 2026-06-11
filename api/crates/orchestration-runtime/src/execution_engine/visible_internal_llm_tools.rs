@@ -130,6 +130,29 @@ where
             return Ok(execution);
         }
         if internal_tool_calls.len() != tool_calls.len() {
+            if visible_internal_media_tool_calls_are_repeated_after_route(
+                &internal_tool_calls,
+                &route_events,
+            ) {
+                for (tool_call, tool) in &internal_tool_calls {
+                    route_events.push(visible_internal_llm_tool_route_event(
+                        "visible_internal_llm_tool_ignored_repeated_media_call",
+                        &node.node_id,
+                        tool_call,
+                        tool,
+                        json!({}),
+                    ));
+                }
+                remove_visible_internal_tool_calls(
+                    &mut execution.output_payload,
+                    &internal_tool_calls,
+                );
+                if !provider_events.is_empty() {
+                    execution.provider_events = provider_events;
+                }
+                attach_visible_internal_llm_tool_events(&mut execution, &route_events);
+                return Ok(execution);
+            }
             return visible_internal_llm_tool_failure(
                 node,
                 provider_events,

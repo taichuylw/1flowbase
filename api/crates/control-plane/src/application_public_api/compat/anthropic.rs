@@ -13,6 +13,8 @@ const CLAUDE_CODE_COMPACT_RESUME_MARKER: &str =
     "This session is being continued from a previous conversation that ran out of context.";
 const CLAUDE_CODE_COMPACT_TRANSCRIPT_MARKER: &str =
     "If you need specific details from before compaction";
+const CLAUDE_CODE_SESSION_TITLE_SYSTEM_MARKER: &str = "Generate a concise, sentence-case title";
+const CLAUDE_CODE_SESSION_TITLE_JSON_MARKER: &str = "Return JSON with a single \"title\" field";
 const ANTHROPIC_MESSAGES_COMPATIBILITY_MODE: &str = "anthropic-messages-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +129,8 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .filter(|stream| *stream)
         .map(|_| "streaming".to_string());
     let conversation = metadata_conversation(object.get("metadata"));
-    let current_control_kind = claude_code_control_kind(&latest_user_text);
+    let current_control_kind = claude_code_control_kind(&latest_user_text)
+        .or_else(|| claude_code_system_control_kind(&system_parts));
     let metadata = object
         .get("metadata")
         .filter(|value| value.is_object())
@@ -292,6 +295,16 @@ pub fn claude_code_control_kind(content: &str) -> Option<&'static str> {
         return Some("compact_resume");
     }
     None
+}
+
+fn claude_code_system_control_kind(system_parts: &[String]) -> Option<&'static str> {
+    system_parts
+        .iter()
+        .any(|part| {
+            part.contains(CLAUDE_CODE_SESSION_TITLE_SYSTEM_MARKER)
+                && part.contains(CLAUDE_CODE_SESSION_TITLE_JSON_MARKER)
+        })
+        .then_some("session_title")
 }
 
 fn metadata_conversation(metadata: Option<&Value>) -> Value {

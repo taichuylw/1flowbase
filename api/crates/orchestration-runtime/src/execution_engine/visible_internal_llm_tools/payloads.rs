@@ -58,6 +58,53 @@ pub(super) fn visible_internal_tool_calls<'a>(
         .collect()
 }
 
+pub(super) fn visible_internal_media_tool_calls_are_repeated_after_route(
+    internal_tool_calls: &[(Value, &VisibleInternalLlmTool)],
+    route_events: &[Value],
+) -> bool {
+    !route_events.is_empty()
+        && !internal_tool_calls.is_empty()
+        && internal_tool_calls
+            .iter()
+            .all(|(tool_call, tool)| visible_internal_tool_call_has_media(tool_call, tool))
+}
+
+pub(super) fn remove_visible_internal_tool_calls(
+    output_payload: &mut Value,
+    internal_tool_calls: &[(Value, &VisibleInternalLlmTool)],
+) {
+    let internal_call_ids = internal_tool_calls
+        .iter()
+        .map(|(tool_call, _)| tool_call_id(tool_call))
+        .collect::<BTreeSet<_>>();
+    let Some(tool_calls) = output_payload
+        .get_mut("tool_calls")
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+
+    tool_calls.retain(|tool_call| !internal_call_ids.contains(&tool_call_id(tool_call)));
+    if tool_calls.is_empty() {
+        if let Some(payload) = output_payload.as_object_mut() {
+            payload.remove("tool_calls");
+        }
+    }
+}
+
+fn visible_internal_tool_call_has_media(tool_call: &Value, tool: &VisibleInternalLlmTool) -> bool {
+    tool.input_schema
+        .as_ref()
+        .and_then(|schema| schema.get("properties"))
+        .and_then(|properties| properties.get("media"))
+        .is_some()
+        && tool_call
+            .get("arguments")
+            .and_then(|arguments| arguments.get("media"))
+            .and_then(Value::as_array)
+            .is_some_and(|media| !media.is_empty())
+}
+
 pub(super) fn append_output_text(target: &mut String, output_payload: &Value) {
     if let Some(text) = output_payload.get("text").and_then(Value::as_str) {
         target.push_str(text);

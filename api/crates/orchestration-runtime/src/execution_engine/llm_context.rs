@@ -549,7 +549,9 @@ pub(super) fn provider_tools(
         variable_pool,
         runtime_context,
     );
-    tools.extend(visible_internal_llm_provider_tools(node));
+    if !media_route_has_returned_to_main(node, resolved_inputs, variable_pool) {
+        tools.extend(visible_internal_llm_provider_tools(node));
+    }
     tools
 }
 
@@ -563,9 +565,7 @@ fn external_provider_tools(
     if visible_internal_llm_tool_has_media_argument(variable_pool) {
         return Vec::new();
     }
-    if visible_internal_llm_node_has_media_tool(node)
-        && media_route_context_mentions_image_path(resolved_inputs, variable_pool)
-    {
+    if media_route_should_hold_external_tools(node, resolved_inputs, variable_pool) {
         return Vec::new();
     }
 
@@ -609,6 +609,26 @@ fn external_provider_tools(
                 })
         })
         .unwrap_or_else(|| runtime_context.tools.clone())
+}
+
+fn media_route_should_hold_external_tools(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> bool {
+    visible_internal_llm_node_has_media_tool(node)
+        && media_route_context_mentions_image_path(resolved_inputs, variable_pool)
+        && !media_route_has_returned_to_main(node, resolved_inputs, variable_pool)
+}
+
+fn media_route_has_returned_to_main(
+    node: &CompiledNode,
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> bool {
+    visible_internal_llm_node_has_media_tool(node)
+        && media_route_context_mentions_image_path(resolved_inputs, variable_pool)
+        && !pending_llm_tool_callback_visible_internal_events(node, variable_pool).is_empty()
 }
 
 fn media_route_context_mentions_image_path(
