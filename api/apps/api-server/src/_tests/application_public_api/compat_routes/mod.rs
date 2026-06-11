@@ -202,6 +202,17 @@ async fn create_application_key(
     csrf: &str,
     application_id: &str,
 ) -> String {
+    create_application_key_with_id(app, cookie, csrf, application_id)
+        .await
+        .0
+}
+
+async fn create_application_key_with_id(
+    app: &Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+) -> (String, uuid::Uuid) {
     let response = app
         .clone()
         .oneshot(
@@ -226,10 +237,10 @@ async fn create_application_key(
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::CREATED);
-    response_json(response).await["data"]["token"]
-        .as_str()
-        .unwrap()
-        .to_string()
+    let payload = response_json(response).await;
+    let token = payload["data"]["token"].as_str().unwrap().to_string();
+    let api_key_id = uuid::Uuid::parse_str(payload["data"]["id"].as_str().unwrap()).unwrap();
+    (token, api_key_id)
 }
 
 async fn publish_application(app: &Router, cookie: &str, csrf: &str, application_id: &str) {
@@ -347,6 +358,15 @@ async fn setup_published_app(app: &Router, name: &str) -> String {
     let token = create_application_key(app, &cookie, &csrf, &application_id).await;
     publish_application(app, &cookie, &csrf, &application_id).await;
     token
+}
+
+async fn setup_published_app_with_key_id(app: &Router, name: &str) -> (String, uuid::Uuid) {
+    let (cookie, csrf) = login_and_capture_cookie(app, "root", "change-me").await;
+    let application_id = create_application(app, &cookie, &csrf, name).await;
+    let (token, api_key_id) =
+        create_application_key_with_id(app, &cookie, &csrf, &application_id).await;
+    publish_application(app, &cookie, &csrf, &application_id).await;
+    (token, api_key_id)
 }
 
 async fn setup_unpublished_app_key(app: &Router, name: &str) -> String {
@@ -496,6 +516,19 @@ async fn seed_llm_callback_checkpoint_for_response_run(
         })
         .await
         .unwrap();
+}
+
+async fn application_api_key_last_used_at(
+    state: &ApiState,
+    api_key_id: uuid::Uuid,
+) -> Option<OffsetDateTime> {
+    sqlx::query_scalar::<_, Option<OffsetDateTime>>(
+        "select last_used_at from api_keys where id = $1",
+    )
+    .bind(api_key_id)
+    .fetch_one(state.store.pool())
+    .await
+    .unwrap()
 }
 
 async fn post_json(

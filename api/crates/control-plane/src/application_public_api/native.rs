@@ -56,6 +56,9 @@ pub struct NativeRunRequest {
     pub title: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string_reject_null")]
     pub compatibility_mode: Option<String>,
+    // Protocol mappers set this after deserialization; public Native JSON cannot own compat policy.
+    #[serde(skip)]
+    pub protocol_compatibility_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -536,11 +539,7 @@ where
 }
 
 fn build_run_metadata(request: &NativeRunRequest) -> Value {
-    let compatibility_mode = request
-        .compatibility_mode
-        .clone()
-        .or_else(|| string_field(&request.execution, "compatibility_mode"))
-        .or_else(|| string_field(&request.metadata, "compatibility_mode"));
+    let compatibility_mode = request.protocol_compatibility_mode.clone();
     let idempotency_key = string_field(&request.execution, "idempotency_key");
     let external_user = request
         .expand_id
@@ -734,7 +733,7 @@ mod tests {
 
         assert!(mapped.node_input_payload["start"].get("model").is_none());
         assert_eq!(mapped.metadata["model"], json!("unlisted-model"));
-        assert_eq!(mapped.metadata["compatibility_mode"], json!("native-v1"));
+        assert_eq!(mapped.metadata["compatibility_mode"], json!(null));
         assert_eq!(mapped.metadata["idempotency_key"], json!("idem-1"));
         assert_eq!(mapped.metadata["external_trace_id"], json!("trace-1"));
     }
