@@ -9,7 +9,8 @@ function getRepoRoot() {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(`Usage: node scripts/node/cli/merge-current-to-main-latest.js [options]
+  writeStdout(`Usage: node scripts/node/merge-current-to-main-latest.js [options]
+       node scripts/node/cli/merge-current-to-main-latest.js [options]
 
 Merges the current branch into main, pushes main, then merges main into latest and pushes latest.
 Any git failure stops the script immediately and leaves the repository at the failing step.

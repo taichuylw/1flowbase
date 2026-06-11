@@ -1,10 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const {
   parseCliArgs,
   runMergeCurrentToMainLatest,
 } = require('../core.js');
+
+const rootCliEntry = path.resolve(__dirname, '..', '..', 'merge-current-to-main-latest.js');
 
 function createSpawnSyncMock(responses = []) {
   const calls = [];
@@ -39,6 +43,16 @@ test('parseCliArgs uses origin, main, and latest by default', () => {
     mainBranch: 'main',
     remote: 'origin',
   });
+});
+
+test('root script entry keeps the documented command available', () => {
+  const result = spawnSync(process.execPath, [rootCliEntry, '--help'], {
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /scripts\/node\/merge-current-to-main-latest\.js/u);
+  assert.match(result.stdout, /scripts\/node\/cli\/merge-current-to-main-latest\.js/u);
 });
 
 test('runMergeCurrentToMainLatest merges the current branch into main, then main into latest', () => {
