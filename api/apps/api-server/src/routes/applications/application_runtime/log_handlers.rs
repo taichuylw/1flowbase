@@ -253,6 +253,7 @@ pub async fn get_application_run_detail(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+    let detail = enrich_application_run_detail_visible_internal_llm_route_traces(detail);
     let response = to_application_run_detail_response(&application, detail);
 
     Ok(Json(ApiSuccess::new(response)))
@@ -288,6 +289,7 @@ pub async fn get_application_run_node_last_run(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+    let detail = enrich_application_run_detail_visible_internal_llm_route_traces(detail);
 
     let Some(node_run) = detail
         .node_runs

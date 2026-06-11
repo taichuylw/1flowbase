@@ -788,6 +788,200 @@ async fn application_runtime_routes_logs_report_run_statistics() {
 }
 
 #[tokio::test]
+async fn application_runtime_routes_log_detail_exposes_visible_internal_llm_route_trace() {
+    let (state, database_url) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+
+    let preview = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/nodes/node-llm/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "input_payload": {
+                            "node-start": { "query": "uploads/image-1.png 帮我看看导航栏代码" }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let preview_status = preview.status();
+    let preview_body = to_bytes(preview.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        preview_status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&preview_body)
+    );
+    let preview_payload: Value = serde_json::from_slice(&preview_body).unwrap();
+    let flow_run_id = preview_payload["data"]["flow_run"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let node_run_id =
+        Uuid::parse_str(preview_payload["data"]["node_run"]["id"].as_str().unwrap()).unwrap();
+    let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+    let debug_payload = json!({
+        "visible_internal_llm_tool_events": [
+            {
+                "event_type": "visible_internal_llm_tool_started",
+                "tool_call_id": "call-image",
+                "tool_name": "image_llm",
+                "main_node_id": "node-llm",
+                "target_node_id": "node-llm-1",
+                "arguments": {
+                    "task": "描述图片里的导航栏",
+                    "media": [
+                        {
+                            "kind": "image",
+                            "path": "uploads/image-1.png",
+                            "source": "workspace_path"
+                        }
+                    ]
+                }
+            },
+            {
+                "event_type": "visible_internal_llm_tool_completed",
+                "tool_call_id": "call-image",
+                "tool_name": "image_llm",
+                "main_node_id": "node-llm",
+                "target_node_id": "node-llm-1",
+                "node_id": "node-llm-1",
+                "provider_route": {
+                    "model": "mimo-v2.5",
+                    "protocol": "anthropic_messages",
+                    "provider_code": "anthropic",
+                    "provider_instance_id": "provider-mimo"
+                }
+            }
+        ],
+        "llm_rounds": [
+            {
+                "round_index": 0,
+                "assistant": {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call-image",
+                            "name": "image_llm",
+                            "arguments": {
+                                "task": "描述图片里的导航栏"
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "round_index": 1,
+                "tool_results": [
+                    {
+                        "tool_call_id": "call-image",
+                        "name": "image_llm",
+                        "content": "图片里有 1flowbase 品牌和 工作台、前台、子系统、工具 导航。"
+                    }
+                ]
+            },
+            {
+                "round_index": 2,
+                "assistant": {
+                    "content": "根据图片内容继续搜索导航栏代码。"
+                }
+            }
+        ]
+    });
+    sqlx::query("update node_runs set debug_payload = $2 where id = $1")
+        .bind(node_run_id)
+        .bind(&debug_payload)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let before_artifact_count = sqlx::query_scalar::<_, i64>(
+        "select count(*) from runtime_debug_artifacts where flow_run_id = $1",
+    )
+    .bind(Uuid::parse_str(&flow_run_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let detail = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(detail.status(), StatusCode::OK);
+    let detail_body = to_bytes(detail.into_body(), usize::MAX).await.unwrap();
+    let detail_payload: Value = serde_json::from_slice(&detail_body).unwrap();
+    let llm_debug_payload = detail_payload["data"]["node_runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_id"] == json!("node-llm"))
+        .unwrap()["debug_payload"]
+        .clone();
+    let trace = &llm_debug_payload["visible_internal_llm_tool_trace"][0];
+    assert_eq!(trace["kind"], json!("visible_internal_llm_tool_trace"));
+    assert_eq!(trace["tool_name"], json!("image_llm"));
+    assert_eq!(trace["status"], json!("succeeded"));
+    assert_eq!(trace["route_model"], json!("mimo-v2.5"));
+    assert_eq!(trace["returned_to_main"], json!(true));
+    assert_eq!(trace["main_resume"], json!(true));
+    assert!(trace.get("artifact_ref").is_none());
+
+    let scoped_node = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/nodes/node-llm"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(scoped_node.status(), StatusCode::OK);
+    let scoped_node_body = to_bytes(scoped_node.into_body(), usize::MAX).await.unwrap();
+    let scoped_node_payload: Value = serde_json::from_slice(&scoped_node_body).unwrap();
+    assert_eq!(
+        scoped_node_payload["data"]["node_run"]["debug_payload"]["visible_internal_llm_tool_trace"]
+            [0]["route_model"],
+        json!("mimo-v2.5")
+    );
+
+    let after_artifact_count = sqlx::query_scalar::<_, i64>(
+        "select count(*) from runtime_debug_artifacts where flow_run_id = $1",
+    )
+    .bind(Uuid::parse_str(&flow_run_id).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(after_artifact_count, before_artifact_count);
+}
+
+#[tokio::test]
 async fn application_runtime_routes_logs_are_paginated_and_newest_first() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

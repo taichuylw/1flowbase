@@ -17,6 +17,10 @@ impl VisibleInternalLlmToolRouteTrace {
         self.detail_payload.clone()
     }
 
+    pub(super) fn inline_summary_payload(&self) -> Value {
+        self.summary_payload.clone()
+    }
+
     pub(super) fn summary_payload(&self, artifact_id: Uuid) -> Value {
         let mut summary = self.summary_payload.clone();
         let original_size_bytes = serde_json::to_vec(&self.detail_payload)

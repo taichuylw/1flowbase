@@ -1165,3 +1165,41 @@ pub async fn offload_application_run_detail_artifacts(
 
     Ok(detail)
 }
+
+pub fn enrich_application_run_detail_visible_internal_llm_route_traces(
+    mut detail: domain::ApplicationRunDetail,
+) -> domain::ApplicationRunDetail {
+    for node_run in &mut detail.node_runs {
+        node_run.debug_payload =
+            with_inline_visible_internal_llm_tool_trace_index(node_run.debug_payload.clone());
+    }
+
+    detail
+}
+
+fn with_inline_visible_internal_llm_tool_trace_index(mut payload: Value) -> Value {
+    let Some(object) = payload.as_object() else {
+        return payload;
+    };
+    if object.contains_key("visible_internal_llm_tool_trace") {
+        return payload;
+    }
+
+    let traces = collect_visible_internal_llm_tool_route_traces(&payload);
+    if traces.is_empty() {
+        return payload;
+    }
+
+    let summaries = traces
+        .into_iter()
+        .map(|trace| trace.inline_summary_payload())
+        .collect::<Vec<_>>();
+    if let Some(object) = payload.as_object_mut() {
+        object.insert(
+            "visible_internal_llm_tool_trace".to_string(),
+            Value::Array(summaries),
+        );
+    }
+
+    payload
+}
