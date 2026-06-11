@@ -1067,6 +1067,7 @@ fn normalize_configured_models(
                 model_id,
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             })
             .collect();
     }
@@ -1082,6 +1083,7 @@ fn normalize_configured_models(
             model_id: trimmed.to_string(),
             enabled: configured_model.enabled,
             context_window_override_tokens: configured_model.context_window_override_tokens,
+            supports_multimodal: configured_model.supports_multimodal,
         });
     }
     normalized

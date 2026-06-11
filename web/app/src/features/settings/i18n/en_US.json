@@ -232,6 +232,8 @@
     "cancel": "Cancel",
     "example_operations_specialist": "For example: operations specialist",
     "model_configuration": "Model configuration",
+    "multimodal": "Multimodal",
+    "enable_multimodal_model": "Enable multimodal model {{value1}}",
     "cache_json_copied": "Cache JSON copied",
     "displayed_value_used_interface_display": "The displayed value is used for interface display.",
     "example_one_two_eight_k": "For example 128K",

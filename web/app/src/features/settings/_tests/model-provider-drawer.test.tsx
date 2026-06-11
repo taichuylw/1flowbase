@@ -150,7 +150,7 @@ describe('ModelProviderInstanceDrawer', () => {
             source: 'dynamic',
             supports_streaming: true,
             supports_tool_call: true,
-            supports_multimodal: false,
+            supports_multimodal: true,
             context_window: null,
             max_output_tokens: null,
             parameter_form: null,
@@ -280,12 +280,14 @@ describe('ModelProviderInstanceDrawer', () => {
             {
               model_id: 'gpt-4o-mini',
               enabled: true,
-              context_window_override_tokens: null
+              context_window_override_tokens: null,
+              supports_multimodal: false
             },
             {
               model_id: 'manual-model-id',
               enabled: false,
-              context_window_override_tokens: null
+              context_window_override_tokens: null,
+              supports_multimodal: false
             }
           ],
           included_in_main: true,
@@ -383,6 +385,7 @@ describe('ModelProviderInstanceDrawer', () => {
       fireEvent.change(screen.getByLabelText('模型 ID 1'), {
         target: { value: 'gpt-4o-mini' }
       });
+      fireEvent.click(screen.getByRole('switch', { name: '启用多模态模型 1' }));
       fireEvent.change(screen.getByLabelText('上下文 1'), {
         target: { value: 'abc' }
       });
@@ -412,7 +415,8 @@ describe('ModelProviderInstanceDrawer', () => {
             {
               model_id: 'gpt-4o-mini',
               enabled: true,
-              context_window_override_tokens: 200000
+              context_window_override_tokens: 200000,
+              supports_multimodal: true
             }
           ],
           included_in_main: true,
@@ -433,7 +437,8 @@ describe('ModelProviderInstanceDrawer', () => {
           {
             model_id: 'gpt-4o-mini',
             enabled: true,
-            context_window_override_tokens: 16000
+            context_window_override_tokens: 16000,
+            supports_multimodal: true
           }
         ]
       };
@@ -472,7 +477,8 @@ describe('ModelProviderInstanceDrawer', () => {
               {
                 model_id: 'gpt-4o-mini',
                 enabled: true,
-                context_window_override_tokens: null
+                context_window_override_tokens: null,
+                supports_multimodal: true
               }
             ]
           })

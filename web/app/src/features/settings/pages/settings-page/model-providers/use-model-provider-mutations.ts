@@ -93,6 +93,7 @@ export function useModelProviderMutations({
         model_id: string;
         enabled: boolean;
         context_window_override_tokens: number | null;
+        supports_multimodal: boolean;
       }>;
       preview_token?: string;
       config: Record<string, unknown>;
@@ -128,6 +129,7 @@ export function useModelProviderMutations({
         model_id: string;
         enabled: boolean;
         context_window_override_tokens: number | null;
+        supports_multimodal: boolean;
       }>;
       preview_token?: string;
       config: Record<string, unknown>;

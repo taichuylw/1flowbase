@@ -858,6 +858,15 @@ async fn selected_model_supports_multimodal<R>(
 where
     R: ModelProviderRepository,
 {
+    if let Some(supports_multimodal) = instance
+        .configured_models
+        .iter()
+        .find(|model| model.enabled && model.model_id == model_id)
+        .and_then(|model| model.supports_multimodal)
+    {
+        return Ok(supports_multimodal);
+    }
+
     if let Some(cache) = repository.get_catalog_cache(instance.id).await? {
         let models: Vec<ProviderModelDescriptor> = serde_json::from_value(cache.models_json)?;
         if let Some(model) = models.iter().find(|model| model.model_id == model_id) {

@@ -232,6 +232,8 @@
     "cancel": "取消",
     "example_operations_specialist": "例如：运营专员",
     "model_configuration": "模型配置",
+    "multimodal": "多模态",
+    "enable_multimodal_model": "启用多模态模型 {{value1}}",
     "cache_json_copied": "已复制缓存 JSON",
     "displayed_value_used_interface_display": "显示值用于界面展示。",
     "example_one_two_eight_k": "例如 128K",

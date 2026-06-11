@@ -38,6 +38,7 @@ async fn model_provider_service_options_group_models_by_source_instance_and_keep
                 model_id: "fixture_chat".to_string(),
                 enabled: true,
                 context_window_override_tokens: Some(256_000),
+                supports_multimodal: None,
             }],
             enabled_model_ids: vec!["fixture_chat".to_string(), "custom-enabled".to_string()],
             included_in_main: Some(true),
@@ -242,16 +243,19 @@ async fn model_provider_service_persists_configured_models_and_derives_enabled_m
                     model_id: " fixture_chat ".to_string(),
                     enabled: true,
                     context_window_override_tokens: Some(128_000),
+                    supports_multimodal: Some(true),
                 },
                 ModelProviderConfiguredModelInput {
                     model_id: " custom-disabled ".to_string(),
                     enabled: false,
                     context_window_override_tokens: None,
+                    supports_multimodal: Some(false),
                 },
                 ModelProviderConfiguredModelInput {
                     model_id: "".to_string(),
                     enabled: true,
                     context_window_override_tokens: Some(64_000),
+                    supports_multimodal: None,
                 },
             ],
             enabled_model_ids: vec!["legacy-should-be-ignored".to_string()],
@@ -269,11 +273,13 @@ async fn model_provider_service_persists_configured_models_and_derives_enabled_m
                 model_id: "fixture_chat".to_string(),
                 enabled: true,
                 context_window_override_tokens: Some(128_000),
+                supports_multimodal: Some(true),
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "custom-disabled".to_string(),
                 enabled: false,
                 context_window_override_tokens: None,
+                supports_multimodal: Some(false),
             },
         ]
     );
@@ -293,16 +299,19 @@ async fn model_provider_service_persists_configured_models_and_derives_enabled_m
                     model_id: "fixture_chat".to_string(),
                     enabled: false,
                     context_window_override_tokens: Some(64_000),
+                    supports_multimodal: None,
                 },
                 ModelProviderConfiguredModelInput {
                     model_id: " custom-enabled ".to_string(),
                     enabled: true,
                     context_window_override_tokens: Some(256_000),
+                    supports_multimodal: Some(true),
                 },
                 ModelProviderConfiguredModelInput {
                     model_id: "custom-enabled".to_string(),
                     enabled: true,
                     context_window_override_tokens: None,
+                    supports_multimodal: None,
                 },
             ],
             enabled_model_ids: vec!["legacy-should-be-ignored".to_string()],
@@ -320,11 +329,13 @@ async fn model_provider_service_persists_configured_models_and_derives_enabled_m
                 model_id: "fixture_chat".to_string(),
                 enabled: false,
                 context_window_override_tokens: Some(64_000),
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "custom-enabled".to_string(),
                 enabled: true,
                 context_window_override_tokens: Some(256_000),
+                supports_multimodal: Some(true),
             },
         ]
     );

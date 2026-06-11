@@ -12,6 +12,7 @@ pub(crate) struct InMemoryProviderRuntime {
     provider_results: Option<Arc<Mutex<VecDeque<ProviderInvocationResult>>>>,
     live_events_then_error: Option<Vec<ProviderStreamEvent>>,
     fail_before_token_models: Vec<String>,
+    captured_inputs: Option<Arc<Mutex<Vec<ProviderInvocationInput>>>>,
 }
 
 impl InMemoryProviderRuntime {
@@ -23,6 +24,7 @@ impl InMemoryProviderRuntime {
             provider_results: None,
             live_events_then_error: None,
             fail_before_token_models: Vec::new(),
+            captured_inputs: None,
         }
     }
 
@@ -34,6 +36,7 @@ impl InMemoryProviderRuntime {
             provider_results: None,
             live_events_then_error: None,
             fail_before_token_models: Vec::new(),
+            captured_inputs: None,
         }
     }
 
@@ -45,6 +48,7 @@ impl InMemoryProviderRuntime {
             provider_results: None,
             live_events_then_error: None,
             fail_before_token_models: Vec::new(),
+            captured_inputs: None,
         }
     }
 
@@ -56,6 +60,7 @@ impl InMemoryProviderRuntime {
             provider_results: Some(Arc::new(Mutex::new(provider_results.into()))),
             live_events_then_error: None,
             fail_before_token_models: Vec::new(),
+            captured_inputs: None,
         }
     }
 
@@ -67,6 +72,7 @@ impl InMemoryProviderRuntime {
             provider_results: None,
             live_events_then_error: Some(live_events),
             fail_before_token_models: Vec::new(),
+            captured_inputs: None,
         }
     }
 
@@ -78,7 +84,19 @@ impl InMemoryProviderRuntime {
             provider_results: None,
             live_events_then_error: None,
             fail_before_token_models: models.into_iter().map(str::to_string).collect(),
+            captured_inputs: None,
         }
+    }
+
+    pub(crate) fn with_invocation_capture() -> (Self, Arc<Mutex<Vec<ProviderInvocationInput>>>) {
+        let captured_inputs = Arc::new(Mutex::new(Vec::new()));
+        (
+            Self {
+                captured_inputs: Some(captured_inputs.clone()),
+                ..Self::default()
+            },
+            captured_inputs,
+        )
     }
 }
 
@@ -109,6 +127,12 @@ impl ProviderRuntimePort for InMemoryProviderRuntime {
         _installation: &domain::PluginInstallationRecord,
         input: ProviderInvocationInput,
     ) -> Result<crate::ports::ProviderRuntimeInvocationOutput> {
+        if let Some(captured_inputs) = &self.captured_inputs {
+            captured_inputs
+                .lock()
+                .expect("provider input capture mutex should not be poisoned")
+                .push(input.clone());
+        }
         if self
             .fail_before_token_models
             .iter()

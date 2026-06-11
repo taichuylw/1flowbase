@@ -138,10 +138,45 @@ async fn resolve_workspace_media_path(raw_path: &str) -> Option<std::path::PathB
     }
 
     let current_dir = std::env::current_dir().ok()?;
-    let mut roots = vec![current_dir.clone()];
+    let roots = workspace_media_roots_from(&current_dir);
+    resolve_workspace_media_path_from_roots(requested_path, roots).await
+}
+
+fn workspace_media_roots_from(current_dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+    push_workspace_media_root(&mut roots, current_dir.to_path_buf());
     if let Some(parent) = current_dir.parent() {
-        roots.push(parent.to_path_buf());
+        push_workspace_media_root(&mut roots, parent.to_path_buf());
     }
+    for ancestor in current_dir.ancestors() {
+        if workspace_media_root_marker(ancestor) {
+            push_workspace_media_root(&mut roots, ancestor.to_path_buf());
+        }
+    }
+    for ancestor in std::path::Path::new(env!("CARGO_MANIFEST_DIR")).ancestors() {
+        if workspace_media_root_marker(ancestor) {
+            push_workspace_media_root(&mut roots, ancestor.to_path_buf());
+        }
+    }
+    roots
+}
+
+fn push_workspace_media_root(roots: &mut Vec<std::path::PathBuf>, root: std::path::PathBuf) {
+    if !roots.iter().any(|existing| existing == &root) {
+        roots.push(root);
+    }
+}
+
+fn workspace_media_root_marker(path: &std::path::Path) -> bool {
+    path.join("uploads").is_dir()
+        || (path.join("AGENTS.md").is_file() && path.join("api").is_dir())
+        || path.join("api/AGENTS.md").is_file()
+}
+
+async fn resolve_workspace_media_path_from_roots(
+    requested_path: &std::path::Path,
+    roots: Vec<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
     let canonical_roots = roots
         .into_iter()
         .filter_map(|root| std::fs::canonicalize(root).ok())
@@ -279,4 +314,46 @@ fn find_run_context_array(variable_pool: &Map<String, Value>, key: &str) -> Vec<
     find_run_context_value(variable_pool, key)
         .and_then(|value| value.as_array().cloned())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn resolves_workspace_media_from_repo_root_when_started_in_api_server_dir() {
+        let test_root =
+            std::env::temp_dir().join(format!("1flowbase-visible-media-{}", uuid::Uuid::now_v7()));
+        let repo_root = test_root.join("repo");
+        let api_server_dir = repo_root.join("api/apps/api-server");
+        let uploads_dir = repo_root.join("uploads");
+        tokio::fs::create_dir_all(&api_server_dir)
+            .await
+            .expect("api-server test directory should be created");
+        tokio::fs::create_dir_all(&uploads_dir)
+            .await
+            .expect("uploads test directory should be created");
+        tokio::fs::write(repo_root.join("AGENTS.md"), b"workspace")
+            .await
+            .expect("workspace marker should be written");
+        tokio::fs::write(uploads_dir.join("image-1.png"), b"image")
+            .await
+            .expect("test image should be written");
+
+        let roots = workspace_media_roots_from(&api_server_dir);
+        let resolved = resolve_workspace_media_path_from_roots(
+            std::path::Path::new("uploads/image-1.png"),
+            roots,
+        )
+        .await
+        .expect("repo-root uploads image should resolve from api-server cwd");
+
+        assert_eq!(
+            resolved,
+            std::fs::canonicalize(uploads_dir.join("image-1.png"))
+                .expect("test image should canonicalize")
+        );
+
+        let _ = tokio::fs::remove_dir_all(test_root).await;
+    }
 }

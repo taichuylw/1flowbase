@@ -47,10 +47,11 @@ type ConfiguredModelRow = {
   model_id: string;
   context_window_input: string;
   context_window_error: string | null;
+  supports_multimodal: boolean;
   enabled: boolean;
 };
 
-const CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS = 'minmax(0, 1fr) 132px 48px 40px';
+const CONFIGURED_MODEL_GRID_TEMPLATE_COLUMNS = 'minmax(0, 1fr) 112px 76px 48px 40px';
 const CONFIGURED_MODEL_GRID_GAP = 8;
 
 function isSelectConfigField(field: ModelProviderConfigField) {
@@ -226,6 +227,7 @@ type ModelProviderInstanceDrawerProps = {
       model_id: string;
       enabled: boolean;
       context_window_override_tokens: number | null;
+      supports_multimodal: boolean;
     }>;
     preview_token?: string;
   }) => Promise<void>;
@@ -284,7 +286,8 @@ function ModelProviderInstanceDrawerContent({
         : (instance?.enabled_model_ids ?? []).map((modelId) => ({
             model_id: modelId,
             enabled: true,
-            context_window_override_tokens: null
+            context_window_override_tokens: null,
+            supports_multimodal: null
           }));
 
     configuredModelKeyRef.current = 0;
@@ -295,6 +298,7 @@ function ModelProviderInstanceDrawerContent({
         model.context_window_override_tokens
       ),
       context_window_error: null,
+      supports_multimodal: model.supports_multimodal ?? false,
       enabled: model.enabled
     }));
   }, [instance, nextConfiguredModelKey]);
@@ -356,6 +360,7 @@ function ModelProviderInstanceDrawerContent({
       model_id: string;
       enabled: boolean;
       context_window_override_tokens: number | null;
+      supports_multimodal: boolean;
     }> = [];
     const seen = new Set<string>();
     let hasValidationError = false;
@@ -390,7 +395,8 @@ function ModelProviderInstanceDrawerContent({
       normalizedRows.push({
         model_id: normalizedModelId,
         enabled: row.enabled,
-        context_window_override_tokens: parsedContextWindow.value
+        context_window_override_tokens: parsedContextWindow.value,
+        supports_multimodal: row.supports_multimodal
       });
     }
 
@@ -408,6 +414,7 @@ function ModelProviderInstanceDrawerContent({
         model_id: initial?.model_id ?? '',
         context_window_input: initial?.context_window_input ?? '',
         context_window_error: initial?.context_window_error ?? null,
+        supports_multimodal: initial?.supports_multimodal ?? false,
         enabled: initial?.enabled ?? true
       }
     ]);
@@ -488,7 +495,11 @@ function ModelProviderInstanceDrawerContent({
     patch: Partial<
       Pick<
         ConfiguredModelRow,
-        'model_id' | 'context_window_input' | 'context_window_error' | 'enabled'
+        | 'model_id'
+        | 'context_window_input'
+        | 'context_window_error'
+        | 'supports_multimodal'
+        | 'enabled'
       >
     >
   ) {
@@ -803,6 +814,7 @@ function ModelProviderInstanceDrawerContent({
                                   model_id: id,
                                   context_window_input: '',
                                   context_window_error: null,
+                                  supports_multimodal: pm.supports_multimodal,
                                   enabled: true
                                 });
                                 existingIds.add(id);
@@ -827,6 +839,8 @@ function ModelProviderInstanceDrawerContent({
                     >
                       <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.model_id_alt")}</Typography.Text>
                       <Typography.Text strong style={{ color: 'inherit' }}>{i18nText("settings", "auto.context_alt")}</Typography.Text>
+                      <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
+                        {i18nText("settings", "auto.multimodal")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
                         {i18nText("settings", "auto.enabled")}</Typography.Text>
                       <Typography.Text strong style={{ textAlign: 'center', color: 'inherit' }}>
@@ -899,6 +913,18 @@ function ModelProviderInstanceDrawerContent({
                                 {row.context_window_error}
                               </Typography.Text>
                             ) : null}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 5 }}>
+                            <Switch
+                              size="small"
+                              aria-label={i18nText("settings", "auto.enable_multimodal_model", { value1: index + 1 })}
+                              checked={row.supports_multimodal}
+                              onChange={(checked) => {
+                                updateConfiguredModelRow(row.key, {
+                                  supports_multimodal: checked
+                                });
+                              }}
+                            />
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 5 }}>
                             <Switch

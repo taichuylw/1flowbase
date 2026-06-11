@@ -74,6 +74,7 @@ export interface ConsoleModelProviderConfiguredModel {
   model_id: string;
   enabled: boolean;
   context_window_override_tokens: number | null;
+  supports_multimodal?: boolean | null;
 }
 
 export interface ConsoleModelProviderCatalogEntry {

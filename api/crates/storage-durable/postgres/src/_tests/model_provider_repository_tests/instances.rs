@@ -62,11 +62,13 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
                     model_id: "qwen-max".into(),
                     enabled: true,
                     context_window_override_tokens: Some(128_000),
+                    supports_multimodal: None,
                 },
                 domain::ModelProviderConfiguredModel {
                     model_id: "qwen-plus".into(),
                     enabled: false,
                     context_window_override_tokens: None,
+                    supports_multimodal: None,
                 },
             ],
             enabled_model_ids: vec!["qwen-max".into(), "qwen-plus".into()],
@@ -87,11 +89,13 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
                 model_id: "qwen-max".to_string(),
                 enabled: true,
                 context_window_override_tokens: Some(128_000),
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "qwen-plus".to_string(),
                 enabled: false,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
         ]
     );
@@ -109,11 +113,13 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
                     model_id: "qwen-max".into(),
                     enabled: true,
                     context_window_override_tokens: Some(256_000),
+                    supports_multimodal: None,
                 },
                 domain::ModelProviderConfiguredModel {
                     model_id: "qwen-plus".into(),
                     enabled: false,
                     context_window_override_tokens: None,
+                    supports_multimodal: None,
                 },
             ],
             enabled_model_ids: vec!["qwen-max".into(), "qwen-plus".into()],
@@ -135,11 +141,13 @@ async fn model_provider_repository_persists_instances_catalog_cache_and_encrypte
                 model_id: "qwen-max".to_string(),
                 enabled: true,
                 context_window_override_tokens: Some(256_000),
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "qwen-plus".to_string(),
                 enabled: false,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
         ]
     );
@@ -479,11 +487,13 @@ async fn model_provider_repository_backfills_missing_context_window_override_tok
                 model_id: "gpt-4o-mini".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "gpt-4.1-mini".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
         ]
     );

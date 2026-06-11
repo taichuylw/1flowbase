@@ -344,6 +344,8 @@ pub struct ModelProviderConfiguredModel {
     pub model_id: String,
     pub enabled: bool,
     pub context_window_override_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_multimodal: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

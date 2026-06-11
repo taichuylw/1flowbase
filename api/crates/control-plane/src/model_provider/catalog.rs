@@ -347,6 +347,11 @@ fn apply_context_override(
     {
         model.context_window = Some(override_tokens);
     }
+    if let Some(supports_multimodal) =
+        configured_model.and_then(|configured_model| configured_model.supports_multimodal)
+    {
+        model.supports_multimodal = supports_multimodal;
+    }
 
     model
 }
@@ -362,7 +367,9 @@ fn fallback_enabled_model_descriptor(
             source: ProviderModelSource::Dynamic,
             supports_streaming: false,
             supports_tool_call: false,
-            supports_multimodal: false,
+            supports_multimodal: configured_model
+                .and_then(|configured_model| configured_model.supports_multimodal)
+                .unwrap_or(false),
             context_window: configured_model
                 .and_then(|configured_model| configured_model.context_window_override_tokens),
             max_output_tokens: None,

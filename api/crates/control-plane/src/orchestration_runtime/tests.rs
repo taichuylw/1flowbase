@@ -326,6 +326,80 @@ async fn orchestration_runtime_textualizes_user_media_when_selected_model_is_not
     assert!(!content.contains("content_blocks"));
 }
 
+#[tokio::test]
+async fn orchestration_runtime_keeps_user_media_when_configured_model_supports_multimodal() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let (provider_instance_id, _) = repository.seed_included_provider_instances();
+    repository.set_configured_model_supports_multimodal(provider_instance_id, "gpt-5.4-mini", true);
+    let (runtime_port, captured_inputs) =
+        test_support::InMemoryProviderRuntime::with_invocation_capture();
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: runtime_port,
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        answer_presentation: None,
+    };
+    let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {
+        provider_instance_id: provider_instance_id.to_string(),
+        provider_code: "fixture_provider".to_string(),
+        protocol: "openai_compatible".to_string(),
+        model: "gpt-5.4-mini".to_string(),
+        routing: None,
+    };
+    let input = ProviderInvocationInput {
+        provider_instance_id: provider_instance_id.to_string(),
+        provider_code: "fixture_provider".to_string(),
+        protocol: "openai_compatible".to_string(),
+        model: "gpt-5.4-mini".to_string(),
+        messages: vec![ProviderMessage {
+            role: ProviderMessageRole::User,
+            content: "Describe image".to_string(),
+            name: None,
+            tool_call_id: None,
+            tool_calls: None,
+            content_blocks: Some(json!([
+                {"type": "text", "text": "Describe image"},
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": "aW1hZ2U="
+                    }
+                }
+            ])),
+        }],
+        ..ProviderInvocationInput::default()
+    };
+
+    orchestration_runtime::execution_engine::ProviderInvoker::invoke_llm(&invoker, &runtime, input)
+        .await
+        .expect("configured multimodal model should receive media content blocks");
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured provider inputs should be readable");
+    let content_blocks = captured[0].messages[0]
+        .content_blocks
+        .as_ref()
+        .expect("media content blocks should be preserved for multimodal configured models");
+    assert_eq!(content_blocks[1]["type"], json!("image"));
+    assert_eq!(
+        content_blocks[1]["source"]["media_type"],
+        json!("image/png")
+    );
+    assert!(!captured[0].messages[0]
+        .content
+        .contains("message_media_unsupported"));
+}
+
 #[test]
 fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
     let mut input = ProviderInvocationInput {

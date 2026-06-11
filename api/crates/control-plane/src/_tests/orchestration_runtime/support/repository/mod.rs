@@ -213,6 +213,7 @@ impl InMemoryOrchestrationRuntimeRepository {
                 model_id: "gpt-5.4-mini".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             }],
             enabled_model_ids: vec!["gpt-5.4-mini".to_string()],
             included_in_main: true,
@@ -355,6 +356,7 @@ impl InMemoryOrchestrationRuntimeRepository {
                 model_id,
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             })
             .collect::<Vec<_>>();
         let models_json = model_ids
@@ -482,6 +484,7 @@ impl InMemoryOrchestrationRuntimeRepository {
                 model_id,
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             })
             .collect();
         instance.updated_at = OffsetDateTime::now_utc();
@@ -516,6 +519,26 @@ impl InMemoryOrchestrationRuntimeRepository {
                 updated_at,
             },
         );
+    }
+
+    pub(crate) fn set_configured_model_supports_multimodal(
+        &self,
+        instance_id: Uuid,
+        model_id: &str,
+        supports_multimodal: bool,
+    ) {
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        let instance = inner
+            .instances_by_id
+            .get_mut(&instance_id)
+            .expect("provider instance should exist");
+        let configured_model = instance
+            .configured_models
+            .iter_mut()
+            .find(|model| model.model_id == model_id)
+            .expect("configured model should exist");
+        configured_model.supports_multimodal = Some(supports_multimodal);
+        instance.updated_at = OffsetDateTime::now_utc();
     }
 
     pub(crate) fn set_instance_catalog_models(
@@ -609,6 +632,7 @@ impl InMemoryOrchestrationRuntimeRepository {
                 model_id: "gpt-5.4-mini".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             }],
             enabled_model_ids: vec!["gpt-5.4-mini".to_string()],
             included_in_main: true,
@@ -633,6 +657,7 @@ impl InMemoryOrchestrationRuntimeRepository {
             model_id: "gpt-5.4-mini".to_string(),
             enabled: true,
             context_window_override_tokens: None,
+            supports_multimodal: None,
         }];
         backup_instance.enabled_model_ids = vec!["gpt-5.4-mini".to_string()];
         backup_instance.created_by = Uuid::nil();

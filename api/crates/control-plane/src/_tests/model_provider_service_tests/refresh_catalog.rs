@@ -61,16 +61,19 @@ async fn model_provider_service_normalizes_multiple_enabled_model_ids_and_allows
                 model_id: "fixture_chat".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "custom-alpha".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "custom-beta".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
         ]
     );
@@ -111,16 +114,19 @@ async fn model_provider_service_normalizes_multiple_enabled_model_ids_and_allows
                 model_id: "custom-beta".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "fixture_chat".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
             domain::ModelProviderConfiguredModel {
                 model_id: "custom-gamma".to_string(),
                 enabled: true,
                 context_window_override_tokens: None,
+                supports_multimodal: None,
             },
         ]
     );

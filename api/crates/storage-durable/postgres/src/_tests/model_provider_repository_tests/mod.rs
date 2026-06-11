@@ -307,6 +307,7 @@ async fn create_ready_instance(
                     model_id: model_id.clone(),
                     enabled: true,
                     context_window_override_tokens: None,
+                    supports_multimodal: None,
                 })
                 .collect(),
             enabled_model_ids,

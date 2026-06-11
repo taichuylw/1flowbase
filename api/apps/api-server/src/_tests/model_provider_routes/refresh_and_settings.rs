@@ -187,6 +187,20 @@ async fn model_provider_routes_main_instance_settings_drive_inclusion_and_groupe
                     .iter()
                     .any(|item| item["type"].as_str() == Some("integer")))
     );
+    let multimodal_schema =
+        &schemas["ConfiguredModelResponse"]["properties"]["supports_multimodal"];
+    assert!(
+        multimodal_schema["type"].as_str() == Some("boolean")
+            || multimodal_schema["type"]
+                .as_array()
+                .is_some_and(|items| items.iter().any(|item| item.as_str() == Some("boolean")))
+            || multimodal_schema
+                .get("anyOf")
+                .and_then(Value::as_array)
+                .is_some_and(|items| items
+                    .iter()
+                    .any(|item| item["type"].as_str() == Some("boolean")))
+    );
     assert!(schemas["ModelProviderOptionResponse"]
         .get("properties")
         .and_then(|properties| properties.get("effective_instance_id"))

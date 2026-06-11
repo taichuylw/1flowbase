@@ -43,6 +43,7 @@ pub struct ConfiguredModelBody {
     pub model_id: String,
     pub enabled: bool,
     pub context_window_override_tokens: Option<u64>,
+    pub supports_multimodal: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -227,6 +228,8 @@ pub struct ConfiguredModelResponse {
     pub model_id: String,
     pub enabled: bool,
     pub context_window_override_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_multimodal: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -620,6 +623,7 @@ fn to_instance_response(view: ModelProviderInstanceView) -> ModelProviderInstanc
                 model_id: model.model_id,
                 enabled: model.enabled,
                 context_window_override_tokens: model.context_window_override_tokens,
+                supports_multimodal: model.supports_multimodal,
             })
             .collect(),
         enabled_model_ids: view.instance.enabled_model_ids,
@@ -839,6 +843,7 @@ pub async fn create_instance(
                     model_id: model.model_id,
                     enabled: model.enabled,
                     context_window_override_tokens: model.context_window_override_tokens,
+                    supports_multimodal: model.supports_multimodal,
                 })
                 .collect(),
             enabled_model_ids: body.enabled_model_ids,
@@ -884,6 +889,7 @@ pub async fn update_instance(
                     model_id: model.model_id,
                     enabled: model.enabled,
                     context_window_override_tokens: model.context_window_override_tokens,
+                    supports_multimodal: model.supports_multimodal,
                 })
                 .collect(),
             enabled_model_ids: body.enabled_model_ids,

@@ -411,8 +411,8 @@ async fn model_provider_routes_create_instance_accepts_configured_models_with_pr
                         "installation_id": installation_id,
                         "display_name": "Fixture Prod",
                         "configured_models": [
-                            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 128000 },
-                            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null }
+                            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 128000, "supports_multimodal": true },
+                            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null, "supports_multimodal": false }
                         ],
                         "preview_token": preview_token,
                         "config": {
@@ -433,8 +433,8 @@ async fn model_provider_routes_create_instance_accepts_configured_models_with_pr
     assert_eq!(
         create_payload["data"]["configured_models"],
         json!([
-            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 128000 },
-            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null }
+            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 128000, "supports_multimodal": true },
+            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null, "supports_multimodal": false }
         ])
     );
     assert_eq!(
@@ -495,9 +495,9 @@ async fn model_provider_routes_update_instance_accepts_configured_models() {
                         "display_name": "Fixture Ready",
                         "included_in_main": true,
                         "configured_models": [
-                            { "model_id": " fixture_chat ", "enabled": true, "context_window_override_tokens": 64000 },
-                            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null },
-                            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 128000 },
+                            { "model_id": " fixture_chat ", "enabled": true, "context_window_override_tokens": 64000, "supports_multimodal": true },
+                            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null, "supports_multimodal": false },
+                            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 128000, "supports_multimodal": false },
                             { "model_id": "", "enabled": true, "context_window_override_tokens": 32000 }
                         ],
                         "config": {}
@@ -515,8 +515,8 @@ async fn model_provider_routes_update_instance_accepts_configured_models() {
     assert_eq!(
         update_payload["data"]["configured_models"],
         json!([
-            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 64000 },
-            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null }
+            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 64000, "supports_multimodal": true },
+            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null, "supports_multimodal": false }
         ])
     );
     assert_eq!(
@@ -547,8 +547,8 @@ async fn model_provider_routes_update_instance_accepts_configured_models() {
     assert_eq!(
         list_payload["data"][0]["configured_models"],
         json!([
-            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 64000 },
-            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null }
+            { "model_id": "fixture_chat", "enabled": true, "context_window_override_tokens": 64000, "supports_multimodal": true },
+            { "model_id": "custom-preview", "enabled": false, "context_window_override_tokens": null, "supports_multimodal": false }
         ])
     );
     assert_eq!(

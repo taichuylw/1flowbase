@@ -101,7 +101,8 @@ function buildInstance(): SettingsModelProviderInstance {
       {
         model_id: 'gpt-4o-mini',
         enabled: true,
-        context_window_override_tokens: null
+        context_window_override_tokens: null,
+        supports_multimodal: true
       }
     ],
     enabled_model_ids: ['gpt-4o-mini'],
@@ -141,7 +142,8 @@ describe('useModelProviderMutations', () => {
           {
             model_id: 'gpt-4o-mini',
             enabled: true,
-            context_window_override_tokens: null
+            context_window_override_tokens: null,
+            supports_multimodal: true
           }
         ],
         config: {}
