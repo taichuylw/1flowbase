@@ -1168,13 +1168,143 @@ pub async fn offload_application_run_detail_artifacts(
 
 pub fn enrich_application_run_detail_visible_internal_llm_route_traces(
     mut detail: domain::ApplicationRunDetail,
+    runtime_events: &[domain::RuntimeEventRecord],
 ) -> domain::ApplicationRunDetail {
+    let runtime_events_by_node_run_id =
+        visible_internal_llm_tool_runtime_events_by_node_run_id(&detail.node_runs, runtime_events);
+
     for node_run in &mut detail.node_runs {
-        node_run.debug_payload =
-            with_inline_visible_internal_llm_tool_trace_index(node_run.debug_payload.clone());
+        let debug_payload = runtime_events_by_node_run_id
+            .get(&node_run.id)
+            .map(|runtime_events| {
+                with_runtime_visible_internal_llm_tool_events(
+                    node_run.debug_payload.clone(),
+                    runtime_events,
+                )
+            })
+            .unwrap_or_else(|| node_run.debug_payload.clone());
+        node_run.debug_payload = with_inline_visible_internal_llm_tool_trace_index(debug_payload);
     }
 
     detail
+}
+
+pub fn enrich_node_last_run_visible_internal_llm_route_traces(
+    mut last_run: domain::NodeLastRun,
+    runtime_events: &[domain::RuntimeEventRecord],
+) -> domain::NodeLastRun {
+    let runtime_events_by_node_run_id = visible_internal_llm_tool_runtime_events_by_node_run_id(
+        std::slice::from_ref(&last_run.node_run),
+        runtime_events,
+    );
+    let debug_payload = runtime_events_by_node_run_id
+        .get(&last_run.node_run.id)
+        .map(|runtime_events| {
+            with_runtime_visible_internal_llm_tool_events(
+                last_run.node_run.debug_payload.clone(),
+                runtime_events,
+            )
+        })
+        .unwrap_or_else(|| last_run.node_run.debug_payload.clone());
+    last_run.node_run.debug_payload =
+        with_inline_visible_internal_llm_tool_trace_index(debug_payload);
+
+    last_run
+}
+
+fn visible_internal_llm_tool_runtime_events_by_node_run_id(
+    node_runs: &[domain::NodeRunRecord],
+    runtime_events: &[domain::RuntimeEventRecord],
+) -> HashMap<Uuid, Vec<Value>> {
+    let mut latest_node_run_id_by_node_id = HashMap::<String, Uuid>::new();
+    let mut node_run_ids = std::collections::HashSet::<Uuid>::new();
+    for node_run in node_runs {
+        latest_node_run_id_by_node_id.insert(node_run.node_id.clone(), node_run.id);
+        node_run_ids.insert(node_run.id);
+    }
+
+    let mut events_by_node_run_id = HashMap::<Uuid, Vec<Value>>::new();
+    for event in runtime_events {
+        let Some(payload) = visible_internal_llm_tool_runtime_event_payload(event) else {
+            continue;
+        };
+        let owner_node_run_id = visible_internal_llm_tool_runtime_event_owner_node_id(&payload)
+            .and_then(|node_id| latest_node_run_id_by_node_id.get(node_id).copied())
+            .or_else(|| visible_internal_llm_tool_runtime_event_node_run_id(event, &payload))
+            .filter(|node_run_id| node_run_ids.contains(node_run_id));
+        let Some(owner_node_run_id) = owner_node_run_id else {
+            continue;
+        };
+
+        events_by_node_run_id
+            .entry(owner_node_run_id)
+            .or_default()
+            .push(payload);
+    }
+
+    events_by_node_run_id
+}
+
+fn visible_internal_llm_tool_runtime_event_payload(
+    event: &domain::RuntimeEventRecord,
+) -> Option<Value> {
+    if !event.event_type.starts_with("visible_internal_llm_tool_") {
+        return None;
+    }
+
+    let mut payload = event.payload.as_object()?.clone();
+    payload.insert("event_type".to_string(), json!(event.event_type));
+    if !payload.contains_key("node_run_id") {
+        if let Some(node_run_id) = event.node_run_id {
+            payload.insert("node_run_id".to_string(), json!(node_run_id.to_string()));
+        }
+    }
+
+    Some(Value::Object(payload))
+}
+
+fn visible_internal_llm_tool_runtime_event_owner_node_id(payload: &Value) -> Option<&str> {
+    payload
+        .get("main_node_id")
+        .or_else(|| payload.get("node_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn visible_internal_llm_tool_runtime_event_node_run_id(
+    event: &domain::RuntimeEventRecord,
+    payload: &Value,
+) -> Option<Uuid> {
+    payload
+        .get("node_run_id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
+        .or(event.node_run_id)
+}
+
+fn with_runtime_visible_internal_llm_tool_events(
+    mut payload: Value,
+    runtime_events: &[Value],
+) -> Value {
+    if runtime_events.is_empty() {
+        return payload;
+    }
+    let Some(object) = payload.as_object() else {
+        return payload;
+    };
+    if object.contains_key("visible_internal_llm_tool_events") {
+        return payload;
+    }
+
+    if let Some(object) = payload.as_object_mut() {
+        object.insert(
+            "visible_internal_llm_tool_events".to_string(),
+            Value::Array(runtime_events.to_vec()),
+        );
+    }
+
+    payload
 }
 
 fn with_inline_visible_internal_llm_tool_trace_index(mut payload: Value) -> Value {

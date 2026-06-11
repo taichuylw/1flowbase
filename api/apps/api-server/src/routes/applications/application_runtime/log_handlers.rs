@@ -253,7 +253,14 @@ pub async fn get_application_run_detail(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
-    let detail = enrich_application_run_detail_visible_internal_llm_route_traces(detail);
+    let runtime_events = <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
+        &state.store,
+        run_id,
+        0,
+    )
+    .await?;
+    let detail =
+        enrich_application_run_detail_visible_internal_llm_route_traces(detail, &runtime_events);
     let response = to_application_run_detail_response(&application, detail);
 
     Ok(Json(ApiSuccess::new(response)))
@@ -289,7 +296,14 @@ pub async fn get_application_run_node_last_run(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
-    let detail = enrich_application_run_detail_visible_internal_llm_route_traces(detail);
+    let runtime_events = <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
+        &state.store,
+        run_id,
+        0,
+    )
+    .await?;
+    let detail =
+        enrich_application_run_detail_visible_internal_llm_route_traces(detail, &runtime_events);
 
     let Some(node_run) = detail
         .node_runs
@@ -394,7 +408,21 @@ pub async fn get_node_last_run(
         &node_id,
     )
     .await?;
-    let last_run = last_run.map(to_node_last_run_response);
+    let last_run = match last_run {
+        Some(last_run) => {
+            let runtime_events =
+                <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
+                    &state.store,
+                    last_run.flow_run.id,
+                    0,
+                )
+                .await?;
+            Some(to_node_last_run_response(
+                enrich_node_last_run_visible_internal_llm_route_traces(last_run, &runtime_events),
+            ))
+        }
+        None => None,
+    };
 
     Ok(Json(ApiSuccess::new(last_run)))
 }

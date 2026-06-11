@@ -1,5 +1,7 @@
 use super::*;
-use control_plane::ports::{OrchestrationRuntimeRepository, UpdateFlowRunInput};
+use control_plane::ports::{
+    AppendRuntimeEventInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+};
 use storage_durable::MainDurableStore;
 
 #[tokio::test]
@@ -832,43 +834,11 @@ async fn application_runtime_routes_log_detail_exposes_visible_internal_llm_rout
         .as_str()
         .unwrap()
         .to_string();
+    let flow_run_uuid = Uuid::parse_str(&flow_run_id).unwrap();
     let node_run_id =
         Uuid::parse_str(preview_payload["data"]["node_run"]["id"].as_str().unwrap()).unwrap();
     let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
     let debug_payload = json!({
-        "visible_internal_llm_tool_events": [
-            {
-                "event_type": "visible_internal_llm_tool_started",
-                "tool_call_id": "call-image",
-                "tool_name": "image_llm",
-                "main_node_id": "node-llm",
-                "target_node_id": "node-llm-1",
-                "arguments": {
-                    "task": "描述图片里的导航栏",
-                    "media": [
-                        {
-                            "kind": "image",
-                            "path": "uploads/image-1.png",
-                            "source": "workspace_path"
-                        }
-                    ]
-                }
-            },
-            {
-                "event_type": "visible_internal_llm_tool_completed",
-                "tool_call_id": "call-image",
-                "tool_name": "image_llm",
-                "main_node_id": "node-llm",
-                "target_node_id": "node-llm-1",
-                "node_id": "node-llm-1",
-                "provider_route": {
-                    "model": "mimo-v2.5",
-                    "protocol": "anthropic_messages",
-                    "provider_code": "anthropic",
-                    "provider_instance_id": "provider-mimo"
-                }
-            }
-        ],
         "llm_rounds": [
             {
                 "round_index": 0,
@@ -909,10 +879,76 @@ async fn application_runtime_routes_log_detail_exposes_visible_internal_llm_rout
         .execute(&pool)
         .await
         .unwrap();
+    <MainDurableStore as OrchestrationRuntimeRepository>::append_runtime_events(
+        &state.store,
+        &[
+            AppendRuntimeEventInput {
+                flow_run_id: flow_run_uuid,
+                node_run_id: Some(node_run_id),
+                span_id: None,
+                parent_span_id: None,
+                event_type: "visible_internal_llm_tool_started".to_string(),
+                layer: domain::RuntimeEventLayer::AgentTransition,
+                source: domain::RuntimeEventSource::Host,
+                trust_level: domain::RuntimeTrustLevel::HostFact,
+                item_id: None,
+                ledger_ref: None,
+                payload: json!({
+                    "event_type": "visible_internal_llm_tool_started",
+                    "tool_call_id": "call-image",
+                    "tool_name": "image_llm",
+                    "main_node_id": "node-llm",
+                    "target_node_id": "node-llm-1",
+                    "arguments": {
+                        "task": "描述图片里的导航栏",
+                        "media": [
+                            {
+                                "kind": "image",
+                                "path": "uploads/image-1.png",
+                                "source": "workspace_path"
+                            }
+                        ]
+                    }
+                }),
+                visibility: domain::RuntimeEventVisibility::Workspace,
+                durability: domain::RuntimeEventDurability::Durable,
+            },
+            AppendRuntimeEventInput {
+                flow_run_id: flow_run_uuid,
+                node_run_id: Some(node_run_id),
+                span_id: None,
+                parent_span_id: None,
+                event_type: "visible_internal_llm_tool_completed".to_string(),
+                layer: domain::RuntimeEventLayer::AgentTransition,
+                source: domain::RuntimeEventSource::Host,
+                trust_level: domain::RuntimeTrustLevel::HostFact,
+                item_id: None,
+                ledger_ref: None,
+                payload: json!({
+                    "event_type": "visible_internal_llm_tool_completed",
+                    "tool_call_id": "call-image",
+                    "tool_name": "image_llm",
+                    "main_node_id": "node-llm",
+                    "target_node_id": "node-llm-1",
+                    "node_id": "node-llm-1",
+                    "provider_route": {
+                        "model": "mimo-v2.5",
+                        "protocol": "anthropic_messages",
+                        "provider_code": "anthropic",
+                        "provider_instance_id": "provider-mimo"
+                    }
+                }),
+                visibility: domain::RuntimeEventVisibility::Workspace,
+                durability: domain::RuntimeEventDurability::Durable,
+            },
+        ],
+    )
+    .await
+    .unwrap();
     let before_artifact_count = sqlx::query_scalar::<_, i64>(
         "select count(*) from runtime_debug_artifacts where flow_run_id = $1",
     )
-    .bind(Uuid::parse_str(&flow_run_id).unwrap())
+    .bind(flow_run_uuid)
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -974,7 +1010,7 @@ async fn application_runtime_routes_log_detail_exposes_visible_internal_llm_rout
     let after_artifact_count = sqlx::query_scalar::<_, i64>(
         "select count(*) from runtime_debug_artifacts where flow_run_id = $1",
     )
-    .bind(Uuid::parse_str(&flow_run_id).unwrap())
+    .bind(flow_run_uuid)
     .fetch_one(&pool)
     .await
     .unwrap();

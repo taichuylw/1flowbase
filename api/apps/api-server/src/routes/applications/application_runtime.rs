@@ -55,8 +55,8 @@ pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnap
 use runtime_debug_artifacts::{
     application_run_model, application_run_query,
     enrich_application_run_detail_visible_internal_llm_route_traces,
-    load_runtime_debug_artifact_json_value, load_runtime_debug_artifact_response,
-    offload_application_run_detail_artifacts,
+    enrich_node_last_run_visible_internal_llm_route_traces, load_runtime_debug_artifact_json_value,
+    load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
 };
 
 fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
