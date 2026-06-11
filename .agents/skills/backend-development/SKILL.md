@@ -1,65 +1,81 @@
 ---
 name: backend-development
-description: "Use for 1flowbase backend work in api/: implementing, fixing, refactoring, reviewing, or planning Rust/Axum APIs, routes, services, repositories, storage adapters, migrations, domain models, state transitions, write paths, module boundaries, permissions, HostExtension/RuntimeExtension boundaries, or core business logic. Also use when a request mentions 后端, 接口, API, Rust, Axum, service, repository, storage, 状态一致性, 数据一致性, 状态机, 写入口, or backend coupling and consistency."
+description: "Use for 1flowbase backend implementation in api/: building, fixing, refactoring, or code-reviewing Rust/Axum APIs, routes, services, repositories, storage adapters, migrations, domain models, state transitions, write paths, module boundaries, permissions, HostExtension/RuntimeExtension boundaries, or core business logic. Use after non-trivial requirements have been aligned by problem-framing, or when the user explicitly asks for direct implementation; do not use for standalone requirement alignment or QA reports."
 ---
 
 # Backend Development
 
 ## Overview
 
-后端最容易失控的原因，是把核心规则、外部协议、存储细节和状态改写入口混在一起。本 Skill 用来约束 API 设计、边界切分、状态入口和一致性，减少“一处改动牵一片”的后端腐化。
+本 Skill 是 1flowbase 后端实现期的边界守门员，不负责替代需求对齐或 QA 验收。进入这里时，默认已经有清晰目标、范围、成功标准和用户拍板点；本 Skill 只负责把已确认的 backend / API / Rust 任务按项目规则落到 `api/`。
+
+## Entry Contract
+
+- 需求仍有数据、contract、migration、权限、状态归属、架构方向或跨模块职责选择时，先回 `problem-framing`。
+- 涉及可测试行为变化时，先联动 `test-driven-development`；不能走 TDD 时，交付说明必须写明替代验证。
+- 用户要求自检、验收、回归、质量报告或证据结论时，切到 `qa-evaluation`。
+- 进入 `api/` 前先读 `api/AGENTS.md`；存在更近的 `AGENTS.md` 时按最近规则执行。
 
 ## When to Use
 
-- 设计或修改接口、动作入口、模块边界
-- 调整状态流转、关键模型或写路径
-- 评估是否拆 service、handler、repository、adapter
-- 发现多个模块都能直接改同一状态
-- 需要判断该直接实现、先收敛边界，还是先问人
+- 设计已确认后的接口、动作入口、模块边界、route / service / repository / adapter 实现。
+- 调整状态流转、关键领域对象、写路径、事务边界或一致性规则。
+- 实现 Rust / Axum API、storage adapter、migration、mapper、worker、runtime 后端逻辑。
+- 收口多个模块直接改同一关键状态的问题。
+- 处理 HostExtension / RuntimeExtension / CapabilityPlugin / Resource Action Kernel 的后端实现边界。
 
 **不要用于**
 
-- 纯视觉、交互、信息架构设计
-- 纯项目事实同步或技术栈介绍
+- 纯视觉、交互、信息架构设计。
+- 纯需求澄清、方案选择、issue shaping 或 ADR。
+- 纯 QA 报告、回归结论或质量门禁路由。
 
-## The Iron Law
+## Core Invariants
 
-稳定核心决定“该不该做”；边界适配层负责“怎么做到”；关键状态只能从清晰唯一入口改变。
+- 稳定核心决定“该不该做”；边界适配层负责“怎么做到”；关键状态只能从清晰唯一入口改变。
+- 核心业务规则不得直接依赖外部协议格式、存储细节、provider stdout / stderr 或临时 UI 形态。
+- 能力边界优先使用能力名，具体实现留在 adapter / repository / driver。
+- API 输入保持短、平、单动作；新接口、service、repository 方法必须命名具体。
+- 状态集合、流转规则、动作约束、幂等语义和错误边界必须显式。
+- Rust 实现要用类型表达核心不变量、显式传播错误、封装状态转换，并把阻塞 IO、锁、事务和外部副作用放在清晰边界内。
+- 新抽象、公共接口、bool/flag 参数、helper/manager/utils、pass-through service 或重复 defensive check，先读 `problem-framing/references/design-rules.md`；命中则回到 `problem-framing` 做更小 redesign。
 
-## Quick Reference
+## Implementation Routing
 
-- 非平凡后端需求如果还没有明确目标、范围、成功标准、关键假设、方案和用户拍板点，先使用 `problem-framing`；本 Skill 承接已收敛的后端设计和实现边界。
-- 实现前检查 `problem-framing/references/design-rules.md`；如果要新增抽象、公共接口、bool/flag 参数、helper/manager/utils、pass-through service 或重复 defensive check，命中规则就回到 `problem-framing` 给更小 redesign。
-- 核心状态机、对外协议、权限策略、插件边界、核心对象定义：先问人
-- 先分清稳定核心和边界适配层，再写代码
-- 能力边界优先使用能力名，具体实现留在 adapter / repository / driver
-- HostExtension 扩展核心业务时只走 `Resource Action Kernel`、声明式 hook、受控 route / worker / migration，不直接改 Core 真值表
-- Redis、队列、锁、event bus 等基础设施只作为 HostExtension provider 实现 host contract，不进业务代码直连
-- native HostExtension v1 是可信 in-process、restart-scoped；启停升级写 desired state，不设计 Rust 热卸载
-- API 输入保持短、平、单动作
-- 新接口、service、repository 方法必须命名具体，避免 `handler/manager/process/utils/helper/do_*/*_impl`
-- 状态必须写清：状态集合、流转规则、动作约束
-- 多个模块都能改同一关键状态：立即收口
-- Rust 后端实现要用类型表达核心不变量、显式传播错误、封装状态转换，并把阻塞 IO、锁、事务和外部副作用放在清晰边界内
-- Rust 后端开发完成前必须按 `references/rust-backend-practices.md` 的 completion self-check 自检；不能保证的项要标为风险或待办
-- 涉及可测试行为变化时，先联动 `test-driven-development`；不能走 TDD 时，在交付说明里写明替代验证
+- AI-friendly API rules: `references/api-design.md`。
+- State and consistency review: `references/state-and-consistency.md`。
+- Stable core vs adapter rules: `references/boundary-design.md`。
+- Local implementation rules: `references/implementation-rules.md`。
+- Rust backend practice rules: `references/rust-backend-practices.md`。
+- Anti-decay patterns: `references/anti-patterns.md`。
+- Pressure scenarios: `references/examples.md`。
+- Agent Flow runtime node payload contract: `references/agentflow-runtime-node-payload.md`，仅在调整运行日志、debug artifact、节点输入/数据处理/输出接口时读取。
 
-## Implementation
+## Host Extension Boundary
 
-- AI-friendly API rules: `references/api-design.md`
-- State and consistency review: `references/state-and-consistency.md`
-- Rust backend practice rules: `references/rust-backend-practices.md`
-- Stable core vs adapter rules: `references/boundary-design.md`
-- Local implementation rules: `references/implementation-rules.md`
-- Agent Flow runtime node payload contract: `references/agentflow-runtime-node-payload.md`，仅在调整运行日志、debug artifact、节点输入/数据处理/输出接口时读取
-- Anti-decay patterns: `references/anti-patterns.md`
-- Pressure scenarios: `references/examples.md`
+- HostExtension 扩展核心业务时只走 `Resource Action Kernel`、声明式 hook、受控 route / worker / migration，不直接改 Core 真值表。
+- Redis、队列、锁、event bus 等基础设施只作为 HostExtension provider 实现 host contract，不进业务代码直连。
+- native HostExtension v1 是可信 in-process、restart-scoped；启停升级写 desired state，不设计 Rust 热卸载。
+
+## Bounce Back Conditions
+
+- 核心状态机、对外协议、权限策略、插件边界、核心对象定义尚未被确认，停止实现并回 `problem-framing`。
+- 需要兼容旧字段、迁移历史数据、改变 source of truth、扩大 contract 或改 issue 范围，停止并回 `problem-framing`。
+- 需要输出验收通过 / 失败、质量报告、回归矩阵或证据结论，切到 `qa-evaluation`。
+- 前端缺少后端真值字段或聚合结果时，用职责单一的 DTO / API / repository 查询补后端，不让前端推断。
+
+## Exit Handoff
+
+- 交付时写清修改的 route / service / repository / domain / adapter 边界。
+- Rust 后端实现完成前按 `references/rust-backend-practices.md` 的 completion self-check 自检；不能保证的项标为风险或待办。
+- 验证命令按当前变更 blast radius 选择最小证据链；需要正式 QA 结论时移交 `qa-evaluation`。
 
 ## Common Mistakes
 
-- 业务规则直接依赖外部协议格式
-- 多个入口同时写同一核心状态
-- 一个接口塞进多个动作语义
-- 为了“一次查全”造出深层嵌套结构
-- 用隐式副作用完成状态变化
-- 用 bool 参数、重复空值校验或 pass-through service 处理特殊 case
+- 业务规则直接依赖外部协议格式。
+- 多个入口同时写同一核心状态。
+- 一个接口塞进多个动作语义。
+- 为了“一次查全”造出深层嵌套结构。
+- 用隐式副作用完成状态变化。
+- 用 bool 参数、重复空值校验或 pass-through service 处理特殊 case。
+- 用 `handler/manager/process/utils/helper/do_*/*_impl` 命名隐藏真实职责。
