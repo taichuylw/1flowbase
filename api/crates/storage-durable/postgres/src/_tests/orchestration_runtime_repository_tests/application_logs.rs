@@ -352,6 +352,120 @@ async fn terminal_claude_code_control_run_does_not_project_conversation_messages
         .unwrap();
     assert_eq!(logs.total, 0);
 
+    sqlx::query(
+        r#"
+        insert into application_run_log_summaries (
+            flow_run_id,
+            scope_id,
+            application_id,
+            run_mode,
+            status,
+            target_node_id,
+            title,
+            input_payload,
+            external_user,
+            authorized_account,
+            api_key_id,
+            api_key_name_snapshot,
+            publication_version_id,
+            external_conversation_id,
+            external_trace_id,
+            compatibility_mode,
+            idempotency_key,
+            total_tokens,
+            input_tokens,
+            output_tokens,
+            input_cache_hit_tokens,
+            unique_node_count,
+            tool_callback_count,
+            started_at,
+            finished_at,
+            created_at,
+            updated_at
+        )
+        select
+            flow_runs.id,
+            applications.workspace_id,
+            flow_runs.application_id,
+            flow_runs.run_mode,
+            flow_runs.status,
+            flow_runs.target_node_id,
+            flow_runs.title,
+            '{}'::jsonb,
+            flow_runs.external_user,
+            (
+                select users.account
+                from users
+                where users.id = flow_runs.created_by
+            ),
+            flow_runs.api_key_id,
+            null,
+            flow_runs.publication_version_id,
+            flow_runs.external_conversation_id,
+            flow_runs.external_trace_id,
+            flow_runs.compatibility_mode,
+            flow_runs.idempotency_key,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            flow_runs.started_at,
+            flow_runs.finished_at,
+            flow_runs.created_at,
+            flow_runs.updated_at
+        from flow_runs
+        join applications on applications.id = flow_runs.application_id
+        where flow_runs.id = $1
+        "#,
+    )
+    .bind(run.id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let raw_stale_summary_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_run_log_summaries where flow_run_id = $1",
+    )
+    .bind(run.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(raw_stale_summary_count, 1);
+
+    let logs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationRunsPageInput {
+                page: 1,
+                page_size: 20,
+                created_after: None,
+                sort_by: Some("created_at".to_string()),
+                sort_order: Some("desc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(logs.total, 0);
+    assert!(logs.items.is_empty());
+
+    let report =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_monitoring_report(
+            &store,
+            seeded.application_id,
+            GetApplicationRunMonitoringReportInput {
+                started_from: Some(started_at - Duration::minutes(1)),
+                started_to: Some(started_at + Duration::minutes(10)),
+                bucket: "hour".to_string(),
+                slow_run_threshold_ms: 30_000,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(report.overview.total_count, 0);
+
     let conversation_runs =
         <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_conversation_runs_page(
             &store,

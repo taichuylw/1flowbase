@@ -454,15 +454,18 @@ impl PgControlPlaneStore {
             input.sort_by.as_deref(),
             input.sort_order.as_deref(),
         );
+        let visible_filter =
+            visible_application_run_log_summary_filter_sql("application_run_log_summaries");
 
-        let total = sqlx::query_scalar::<_, i64>(
+        let total = sqlx::query_scalar::<_, i64>(&format!(
             r#"
             select count(*)::bigint
             from application_run_log_summaries
             where application_id = $1
               and ($2::timestamptz is null or created_at >= $2)
+              and {visible_filter}
             "#,
-        )
+        ))
         .bind(application_id)
         .bind(created_after)
         .fetch_one(self.pool())
@@ -497,6 +500,7 @@ impl PgControlPlaneStore {
                 from application_run_log_summaries
                 where application_id = $1
                   and ($2::timestamptz is null or created_at >= $2)
+                  and {visible_filter}
             )
             select
                 id,
@@ -525,7 +529,8 @@ impl PgControlPlaneStore {
             order by {}
             limit $3 offset $4
             "#,
-            order_by
+            order_by,
+            visible_filter = visible_filter
         ))
         .bind(application_id)
         .bind(created_after)
@@ -545,6 +550,55 @@ impl PgControlPlaneStore {
         })
     }
 
+}
+
+fn visible_application_run_log_summary_filter_sql(summary_table: &str) -> String {
+    format!(
+        r#"
+        not exists (
+            select 1
+            from flow_runs runs
+            where runs.id = {summary_table}.flow_run_id
+              and runs.compatibility_mode = 'anthropic-messages-v1'
+              and (
+                  runs.input_payload #>> '{{node-start,compatibility,claude_code_control}}' is not null
+                  or runs.input_payload #>> '{{start,compatibility,claude_code_control}}' is not null
+                  or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
+                      runs.input_payload #>> '{{node-start,query}}',
+                      runs.input_payload #>> '{{start,query}}',
+                      runs.input_payload #>> '{{query}}',
+                      ''
+                  )) > 0
+                  or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
+                      runs.input_payload #>> '{{node-start,query}}',
+                      runs.input_payload #>> '{{start,query}}',
+                      runs.input_payload #>> '{{query}}',
+                      ''
+                  )) > 0
+                  or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
+                      runs.input_payload #>> '{{node-start,query}}',
+                      runs.input_payload #>> '{{start,query}}',
+                      runs.input_payload #>> '{{query}}',
+                      ''
+                  )) > 0
+                  or (
+                      position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
+                          runs.input_payload #>> '{{node-start,query}}',
+                          runs.input_payload #>> '{{start,query}}',
+                          runs.input_payload #>> '{{query}}',
+                          ''
+                      )) > 0
+                      and position('If you need specific details from before compaction' in coalesce(
+                          runs.input_payload #>> '{{node-start,query}}',
+                          runs.input_payload #>> '{{start,query}}',
+                          runs.input_payload #>> '{{query}}',
+                          ''
+                      )) > 0
+                  )
+              )
+        )
+        "#
+    )
 }
 
 #[derive(Debug)]
