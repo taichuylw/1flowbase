@@ -76,7 +76,7 @@ vi.mock('antd', async () => {
 });
 
 describe('JsonPreviewBlock', () => {
-  test('opens the enlarged JSON modal above application log floating windows', () => {
+  test('opens the enlarged JSON modal above application log floating windows', async () => {
     render(
       <JsonPreviewBlock
         fullscreenAriaLabel="放大查看工具调用 JSON"
@@ -84,6 +84,8 @@ describe('JsonPreviewBlock', () => {
         value={{ ok: true }}
       />
     );
+
+    await screen.findByTestId('mock-json-editor');
 
     fireEvent.click(
       screen.getByRole('button', { name: '放大查看工具调用 JSON' })
