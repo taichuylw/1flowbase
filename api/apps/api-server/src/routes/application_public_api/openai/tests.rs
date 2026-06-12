@@ -323,3 +323,43 @@ fn openai_responses_tool_resume_request_decodes_function_call_outputs() {
     );
     assert_eq!(resume.tool_results[0]["content"], json!("{\"stock\":7}"));
 }
+
+#[test]
+fn openai_responses_tool_resume_request_only_reads_trailing_function_call_outputs() {
+    let old_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+    let new_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+    let old_call_id = encode_openai_callback_tool_call_id(old_callback_task_id, "call_old");
+    let new_call_id = encode_openai_callback_tool_call_id(new_callback_task_id, "call_new");
+
+    let resume = openai_responses_tool_resume_request(&json!({
+        "model": "1flowbase",
+        "input": [
+            {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "看图"}]},
+            {"type": "function_call", "call_id": old_call_id, "name": "shell", "arguments": "{}"},
+            {"type": "function_call_output", "call_id": old_call_id, "output": "old result"},
+            {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "继续"}]},
+            {"type": "function_call", "call_id": new_call_id, "name": "shell", "arguments": "{}"},
+            {"type": "function_call_output", "call_id": new_call_id, "output": "new result"}
+        ]
+    }))
+    .expect("resume request should parse")
+    .expect("trailing function_call_output should resume the new callback");
+
+    assert_eq!(resume.callback_task_id, new_callback_task_id);
+    assert_eq!(resume.tool_results.as_array().map(Vec::len), Some(1));
+    assert_eq!(resume.tool_results[0]["tool_call_id"], json!("call_new"));
+
+    let no_resume = openai_responses_tool_resume_request(&json!({
+        "model": "1flowbase",
+        "input": [
+            {"type": "function_call", "call_id": old_call_id, "name": "shell", "arguments": "{}"},
+            {"type": "function_call_output", "call_id": old_call_id, "output": "old result"},
+            {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "新问题"}]}
+        ]
+    }))
+    .expect("resume request should parse");
+    assert!(
+        no_resume.is_none(),
+        "a new user turn after historical tool outputs must start a fresh run"
+    );
+}

@@ -728,13 +728,20 @@ fn openai_responses_tool_resume_request(
     let Some(items) = request.get("input").and_then(Value::as_array) else {
         return Ok(None);
     };
+    // Stateless clients replay the whole conversation, so historical
+    // function_call_output items appear mid-input. Only the trailing
+    // contiguous function_call_output items answer a pending callback.
+    let trailing_outputs = items
+        .iter()
+        .rev()
+        .take_while(|item| {
+            item.get("type").and_then(Value::as_str) == Some("function_call_output")
+        })
+        .collect::<Vec<_>>();
     let mut callback_task_id = None;
     let mut tool_results = Vec::new();
 
-    for item in items {
-        if item.get("type").and_then(Value::as_str) != Some("function_call_output") {
-            continue;
-        }
+    for item in trailing_outputs.into_iter().rev() {
         let Some(call_id) = item.get("call_id").and_then(Value::as_str) else {
             return Err(openai_invalid_request(
                 "input",
