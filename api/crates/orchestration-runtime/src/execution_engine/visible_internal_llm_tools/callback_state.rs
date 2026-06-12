@@ -169,6 +169,12 @@ fn visible_internal_llm_tool_pending_call_value(
     if let Some(input_schema) = pending_call.tool.input_schema.clone() {
         tool.insert("input_schema".to_string(), input_schema);
     }
+    if !pending_call.tool.preconditions.is_empty() {
+        tool.insert(
+            "preconditions".to_string(),
+            visible_internal_llm_tool_preconditions_value(&pending_call.tool.preconditions),
+        );
+    }
 
     json!({
         "tool_call": pending_call.tool_call,
@@ -227,6 +233,9 @@ fn visible_internal_llm_tool_pending_call_from_value(
                 }
                 _ => VisibleInternalLlmToolExternalToolPolicy::Forbidden,
             },
+            preconditions: visible_internal_llm_tool_preconditions_from_value(
+                tool.get("preconditions"),
+            ),
         },
     })
 }

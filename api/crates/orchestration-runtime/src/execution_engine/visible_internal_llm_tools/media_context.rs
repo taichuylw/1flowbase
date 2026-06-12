@@ -76,7 +76,7 @@ pub(in crate::execution_engine) async fn inject_visible_internal_llm_tool_media_
     input: &mut ProviderInvocationInput,
     variable_pool: &Map<String, Value>,
 ) {
-    let media_items = visible_internal_llm_tool_media_argument(variable_pool);
+    let media_items = visible_internal_llm_tool_media_arguments(variable_pool);
     if media_items.is_empty() {
         return;
     }
@@ -119,10 +119,35 @@ pub(in crate::execution_engine) async fn inject_visible_internal_llm_tool_media_
     message.content_blocks = Some(Value::Array(content_blocks));
 }
 
-pub(super) async fn visible_internal_llm_tool_media_unavailable_error(
+pub(super) async fn visible_internal_llm_tool_precondition_error(
     variable_pool: &Map<String, Value>,
 ) -> Option<Value> {
-    let media_items = visible_internal_llm_tool_media_argument(variable_pool);
+    for precondition in visible_internal_llm_tool_preconditions(variable_pool) {
+        match &precondition {
+            VisibleInternalLlmToolPrecondition::MediaContentAvailable(media_precondition) => {
+                if let Some(error_payload) = visible_internal_llm_tool_media_unavailable_error(
+                    media_precondition,
+                    &precondition,
+                    variable_pool,
+                )
+                .await
+                {
+                    return Some(error_payload);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+async fn visible_internal_llm_tool_media_unavailable_error(
+    precondition: &VisibleInternalLlmToolMediaContentPrecondition,
+    precondition_value: &VisibleInternalLlmToolPrecondition,
+    variable_pool: &Map<String, Value>,
+) -> Option<Value> {
+    let media_items =
+        visible_internal_llm_tool_media_arguments_for_precondition(precondition, variable_pool);
     let workspace_media = media_items
         .iter()
         .filter(|media| workspace_image_media_path(media).is_some())
@@ -131,16 +156,15 @@ pub(super) async fn visible_internal_llm_tool_media_unavailable_error(
         return None;
     }
 
-    let mut resolved_count = 0;
     let mut unavailable = Vec::new();
     for media in workspace_media {
         if workspace_image_media_is_available(media).await {
-            resolved_count += 1;
+            continue;
         } else {
             unavailable.push(media.clone());
         }
     }
-    if resolved_count > 0 || !inherited_image_content_blocks(variable_pool).is_empty() {
+    if unavailable.is_empty() || !inherited_image_content_blocks(variable_pool).is_empty() {
         return None;
     }
 
@@ -148,19 +172,91 @@ pub(super) async fn visible_internal_llm_tool_media_unavailable_error(
         "error_code": "visible_internal_llm_tool_media_unavailable",
         "message": "visible internal LLM tool media was not available to the server",
         "recoverable": true,
+        "precondition": visible_internal_llm_tool_precondition_value(precondition_value),
         "media": unavailable,
         "hint": "If this path is local to an external client, read the file with a client file tool first and call the routed LLM tool again after the image content block is present in history."
     }))
 }
 
-fn visible_internal_llm_tool_media_argument(variable_pool: &Map<String, Value>) -> Vec<Value> {
+fn visible_internal_llm_tool_preconditions(
+    variable_pool: &Map<String, Value>,
+) -> Vec<VisibleInternalLlmToolPrecondition> {
     variable_pool
         .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
-        .and_then(|value| value.get("arguments"))
-        .and_then(|arguments| arguments.get("media"))
-        .and_then(Value::as_array)
-        .cloned()
+        .and_then(|value| value.get("preconditions"))
+        .map(|preconditions| {
+            visible_internal_llm_tool_preconditions_from_value(Some(preconditions))
+        })
         .unwrap_or_default()
+}
+
+fn visible_internal_llm_tool_media_arguments(variable_pool: &Map<String, Value>) -> Vec<Value> {
+    let preconditions = visible_internal_llm_tool_preconditions(variable_pool);
+    if preconditions.is_empty() {
+        return visible_internal_llm_tool_media_arguments_at_path(
+            &["media".to_string()],
+            None,
+            variable_pool,
+        );
+    }
+
+    preconditions
+        .iter()
+        .flat_map(|precondition| match precondition {
+            VisibleInternalLlmToolPrecondition::MediaContentAvailable(media_precondition) => {
+                visible_internal_llm_tool_media_arguments_for_precondition(
+                    media_precondition,
+                    variable_pool,
+                )
+            }
+        })
+        .collect()
+}
+
+fn visible_internal_llm_tool_media_arguments_for_precondition(
+    precondition: &VisibleInternalLlmToolMediaContentPrecondition,
+    variable_pool: &Map<String, Value>,
+) -> Vec<Value> {
+    visible_internal_llm_tool_media_arguments_at_path(
+        &precondition.argument_path,
+        precondition.media_kind.as_deref(),
+        variable_pool,
+    )
+}
+
+fn visible_internal_llm_tool_media_arguments_at_path(
+    argument_path: &[String],
+    media_kind: Option<&str>,
+    variable_pool: &Map<String, Value>,
+) -> Vec<Value> {
+    let Some(mut value) = variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|value| value.get("arguments"))
+    else {
+        return Vec::new();
+    };
+
+    for segment in argument_path {
+        let Some(next) = value.get(segment) else {
+            return Vec::new();
+        };
+        value = next;
+    }
+
+    let media_items = if let Some(array) = value.as_array() {
+        array.clone()
+    } else {
+        vec![value.clone()]
+    };
+
+    media_items
+        .into_iter()
+        .filter(|media| {
+            media_kind.is_none_or(|media_kind| {
+                media.get("kind").and_then(Value::as_str) == Some(media_kind)
+            })
+        })
+        .collect()
 }
 
 fn inherited_image_content_blocks(variable_pool: &Map<String, Value>) -> Vec<Value> {

@@ -17,8 +17,7 @@ pub(super) use self::media_context::{
 };
 use self::media_context::{
     visible_internal_llm_tool_external_tool_policy, visible_internal_llm_tool_inherited_context,
-    visible_internal_llm_tool_llm_resolved_inputs,
-    visible_internal_llm_tool_media_unavailable_error,
+    visible_internal_llm_tool_llm_resolved_inputs, visible_internal_llm_tool_precondition_error,
 };
 use self::payloads::*;
 use self::registry::visible_internal_llm_tools;
@@ -36,6 +35,8 @@ const MAX_VISIBLE_INTERNAL_LLM_TOOL_ROUNDS: usize = 8;
 const TOOL_RESULT_NODE_TYPE: &str = "tool_result";
 const EXTERNAL_TOOL_POLICY_FORBIDDEN: &str = "forbidden";
 const EXTERNAL_TOOL_POLICY_INHERITED: &str = "inherited";
+const VISIBLE_INTERNAL_LLM_TOOL_PRECONDITION_MEDIA_CONTENT_AVAILABLE: &str =
+    "media_content_available";
 
 pub(super) enum VisibleInternalLlmToolResume {
     Ready(Map<String, Value>),
@@ -457,6 +458,7 @@ where
                 .cloned()
                 .unwrap_or_else(|| json!({})),
             "external_tool_policy": tool.external_tool_policy.as_str(),
+            "preconditions": visible_internal_llm_tool_preconditions_value(&tool.preconditions),
             "context": inherited_context,
         }),
     );
@@ -709,7 +711,7 @@ where
             let resolved_inputs =
                 visible_internal_llm_tool_llm_resolved_inputs(resolved_inputs, variable_pool);
             if let Some(error_payload) =
-                visible_internal_llm_tool_media_unavailable_error(variable_pool).await
+                visible_internal_llm_tool_precondition_error(variable_pool).await
             {
                 return Ok(VisibleInternalLlmToolNodeExecution::Failed(error_payload));
             }
@@ -807,6 +809,18 @@ where
             "message": format!("visible internal LLM tool branch node type {unsupported} is not supported"),
         }))),
     }
+}
+
+fn visible_internal_llm_tool_preconditions_from_variable_pool(
+    variable_pool: &Map<String, Value>,
+) -> Vec<VisibleInternalLlmToolPrecondition> {
+    variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|tool| tool.get("preconditions"))
+        .map(|preconditions| {
+            visible_internal_llm_tool_preconditions_from_value(Some(preconditions))
+        })
+        .unwrap_or_default()
 }
 
 async fn execute_remaining_visible_internal_llm_tool_calls<I>(
@@ -956,6 +970,9 @@ where
                     external_tool_policy: visible_internal_llm_tool_external_tool_policy(
                         &variable_pool,
                     ),
+                    preconditions: visible_internal_llm_tool_preconditions_from_variable_pool(
+                        &variable_pool,
+                    ),
                 },
                 json!({
                     "waiting_node_id": wait.node_id,
@@ -991,6 +1008,9 @@ where
                 target_node_id: state.target_node_id.clone(),
                 input_schema: None,
                 external_tool_policy: visible_internal_llm_tool_external_tool_policy(
+                    &variable_pool,
+                ),
+                preconditions: visible_internal_llm_tool_preconditions_from_variable_pool(
                     &variable_pool,
                 ),
             };
@@ -1252,6 +1272,9 @@ where
                 target_node_id: state.target_node_id.clone(),
                 input_schema: None,
                 external_tool_policy: visible_internal_llm_tool_external_tool_policy(
+                    &variable_pool,
+                ),
+                preconditions: visible_internal_llm_tool_preconditions_from_variable_pool(
                     &variable_pool,
                 ),
             };

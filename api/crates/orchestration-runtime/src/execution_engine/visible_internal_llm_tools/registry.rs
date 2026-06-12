@@ -97,6 +97,13 @@ fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternal
         .filter(|node_id| !node_id.is_empty())?
         .to_string();
 
+    let input_schema = object
+        .get("input_schema")
+        .or_else(|| object.get("inputSchema"))
+        .cloned();
+    let preconditions =
+        visible_internal_llm_tool_preconditions_from_config(object, input_schema.as_ref());
+
     Some(VisibleInternalLlmTool {
         name,
         description: object
@@ -106,11 +113,9 @@ fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternal
             .filter(|description| !description.is_empty())
             .map(str::to_string),
         target_node_id,
-        input_schema: object
-            .get("input_schema")
-            .or_else(|| object.get("inputSchema"))
-            .cloned(),
+        input_schema,
         external_tool_policy: visible_internal_llm_tool_external_tool_policy_from_object(object),
+        preconditions,
     })
 }
 
@@ -129,9 +134,44 @@ fn visible_internal_llm_tool_external_tool_policy_from_object(
 }
 
 fn visible_internal_llm_tool_has_configured_media_contract(tool: &VisibleInternalLlmTool) -> bool {
-    tool.input_schema
-        .as_ref()
+    tool.preconditions.iter().any(|precondition| {
+        matches!(
+            precondition,
+            VisibleInternalLlmToolPrecondition::MediaContentAvailable(_)
+        )
+    })
+}
+
+fn visible_internal_llm_tool_preconditions_from_config(
+    object: &Map<String, Value>,
+    input_schema: Option<&Value>,
+) -> Vec<VisibleInternalLlmToolPrecondition> {
+    if object.contains_key("preconditions") || object.contains_key("preConditions") {
+        return visible_internal_llm_tool_preconditions_from_value(
+            object
+                .get("preconditions")
+                .or_else(|| object.get("preConditions")),
+        );
+    }
+
+    legacy_media_input_schema_preconditions(input_schema)
+}
+
+fn legacy_media_input_schema_preconditions(
+    input_schema: Option<&Value>,
+) -> Vec<VisibleInternalLlmToolPrecondition> {
+    if input_schema
         .and_then(|schema| schema.get("properties"))
         .and_then(|properties| properties.get("media"))
-        .is_some()
+        .is_none()
+    {
+        return Vec::new();
+    }
+
+    vec![VisibleInternalLlmToolPrecondition::MediaContentAvailable(
+        VisibleInternalLlmToolMediaContentPrecondition {
+            argument_path: vec!["media".to_string()],
+            media_kind: Some("image".to_string()),
+        },
+    )]
 }

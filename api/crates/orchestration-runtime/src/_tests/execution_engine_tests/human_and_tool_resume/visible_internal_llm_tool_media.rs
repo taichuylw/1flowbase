@@ -8,6 +8,13 @@ fn configure_image_llm_tool(plan: &mut CompiledPlan) {
         .expect("main llm node should exist");
     main_llm.config["visible_internal_llm_tools"][0]["tool_name"] = json!("image_llm");
     main_llm.config["visible_internal_llm_tools"][0]["connector_id"] = json!("image_llm");
+    main_llm.config["visible_internal_llm_tools"][0]["preconditions"] = json!([
+        {
+            "kind": "media_content_available",
+            "argument_path": ["media"],
+            "media_kind": "image"
+        }
+    ]);
     main_llm.config["visible_internal_llm_tools"][0]["input_schema"] = json!({
         "type": "object",
         "properties": {
@@ -131,6 +138,18 @@ async fn missing_workspace_image_path_waits_for_client_read_without_invoking_ima
         1,
         "missing server-side workspace media must not invoke the mounted image LLM before client Read returns media"
     );
+    let image_tool = captured[0]
+        .tools
+        .iter()
+        .find(|tool| tool["function"]["name"] == json!("image_llm"))
+        .expect("main model should receive the routed image tool");
+    assert!(
+        image_tool["function"].get("preconditions").is_none()
+            && image_tool["function"]["parameters"]
+                .get("preconditions")
+                .is_none(),
+        "runtime preconditions must stay out of provider function parameters"
+    );
 
     let main_trace = outcome
         .node_traces
@@ -144,6 +163,10 @@ async fn missing_workspace_image_path_waits_for_client_read_without_invoking_ima
         event["event_type"] == json!("visible_internal_llm_tool_failed")
             && event["error_payload"]["details"]["error_code"]
                 == json!("visible_internal_llm_tool_media_unavailable")
+            && event["error_payload"]["details"]["precondition"]["kind"]
+                == json!("media_content_available")
+            && event["error_payload"]["details"]["precondition"]["argument_path"]
+                == json!(["media"])
     }));
 }
 

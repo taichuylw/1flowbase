@@ -23,6 +23,133 @@ pub(super) struct VisibleInternalLlmTool {
     pub(super) target_node_id: String,
     pub(super) input_schema: Option<Value>,
     pub(super) external_tool_policy: VisibleInternalLlmToolExternalToolPolicy,
+    pub(super) preconditions: Vec<VisibleInternalLlmToolPrecondition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct VisibleInternalLlmToolMediaContentPrecondition {
+    pub(super) argument_path: Vec<String>,
+    pub(super) media_kind: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum VisibleInternalLlmToolPrecondition {
+    MediaContentAvailable(VisibleInternalLlmToolMediaContentPrecondition),
+}
+
+pub(super) fn visible_internal_llm_tool_precondition_from_value(
+    value: &Value,
+) -> Option<VisibleInternalLlmToolPrecondition> {
+    let object = value.as_object()?;
+    let kind = object
+        .get("kind")
+        .or_else(|| object.get("type"))
+        .and_then(Value::as_str)
+        .map(str::trim)?;
+    if kind != VISIBLE_INTERNAL_LLM_TOOL_PRECONDITION_MEDIA_CONTENT_AVAILABLE {
+        return None;
+    }
+
+    Some(VisibleInternalLlmToolPrecondition::MediaContentAvailable(
+        VisibleInternalLlmToolMediaContentPrecondition {
+            argument_path: media_content_precondition_argument_path(object)
+                .unwrap_or_else(|| vec!["media".to_string()]),
+            media_kind: object
+                .get("media_kind")
+                .or_else(|| object.get("mediaKind"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|kind| !kind.is_empty())
+                .map(str::to_string),
+        },
+    ))
+}
+
+pub(super) fn visible_internal_llm_tool_preconditions_from_value(
+    value: Option<&Value>,
+) -> Vec<VisibleInternalLlmToolPrecondition> {
+    value
+        .and_then(Value::as_array)
+        .map(|preconditions| {
+            preconditions
+                .iter()
+                .filter_map(visible_internal_llm_tool_precondition_from_value)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub(super) fn visible_internal_llm_tool_preconditions_value(
+    preconditions: &[VisibleInternalLlmToolPrecondition],
+) -> Value {
+    Value::Array(
+        preconditions
+            .iter()
+            .map(visible_internal_llm_tool_precondition_value)
+            .collect(),
+    )
+}
+
+pub(super) fn visible_internal_llm_tool_precondition_value(
+    precondition: &VisibleInternalLlmToolPrecondition,
+) -> Value {
+    match precondition {
+        VisibleInternalLlmToolPrecondition::MediaContentAvailable(media) => json!({
+            "kind": VISIBLE_INTERNAL_LLM_TOOL_PRECONDITION_MEDIA_CONTENT_AVAILABLE,
+            "argument_path": media.argument_path,
+            "media_kind": media.media_kind,
+        }),
+    }
+}
+
+fn media_content_precondition_argument_path(object: &Map<String, Value>) -> Option<Vec<String>> {
+    if let Some(path) = object
+        .get("argument_path")
+        .or_else(|| object.get("argumentPath"))
+        .and_then(argument_path_from_value)
+    {
+        return Some(path);
+    }
+
+    object
+        .get("selector")
+        .and_then(Value::as_str)
+        .and_then(argument_path_from_selector)
+}
+
+fn argument_path_from_value(value: &Value) -> Option<Vec<String>> {
+    if let Some(path) = value.as_array() {
+        let path = path
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|segment| !segment.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        return (!path.is_empty()).then_some(path);
+    }
+
+    value.as_str().and_then(argument_path_from_selector)
+}
+
+fn argument_path_from_selector(selector: &str) -> Option<Vec<String>> {
+    let selector = selector.trim();
+    if selector.is_empty() {
+        return None;
+    }
+    let selector = selector
+        .strip_prefix("$.")
+        .or_else(|| selector.strip_prefix('$'))
+        .unwrap_or(selector)
+        .trim_start_matches('.');
+    let selector = selector.strip_suffix("[*]").unwrap_or(selector);
+    let path = selector
+        .split('.')
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty() && !segment.contains('['))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    (!path.is_empty()).then_some(path)
 }
 
 #[derive(Debug, Clone, PartialEq)]
