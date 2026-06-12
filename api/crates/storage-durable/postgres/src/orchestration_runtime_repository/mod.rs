@@ -890,7 +890,8 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
         input: &ListApplicationPublicConversationMessagesInput,
     ) -> Result<Vec<ApplicationPublicConversationMessageRecord>> {
         let limit = input.limit.clamp(1, 200);
-        let rows = sqlx::query(
+        let hidden_internal_run_filter = hidden_anthropic_claude_code_internal_run_sql("runs");
+        let rows = sqlx::query(&format!(
             r#"
             with conversation_messages as (
                 select
@@ -913,45 +914,7 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
                   and messages.flow_run_id is not null
                   and messages.role in ('user', 'assistant')
                   and btrim(messages.content) <> ''
-                  and not (
-                      runs.compatibility_mode = 'anthropic-messages-v1'
-                      and (
-                          runs.input_payload #>> '{node-start,compatibility,claude_code_control}' is not null
-                          or runs.input_payload #>> '{start,compatibility,claude_code_control}' is not null
-                          or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
-                              runs.input_payload #>> '{node-start,query}',
-                              runs.input_payload #>> '{start,query}',
-                              runs.input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
-                              runs.input_payload #>> '{node-start,query}',
-                              runs.input_payload #>> '{start,query}',
-                              runs.input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
-                              runs.input_payload #>> '{node-start,query}',
-                              runs.input_payload #>> '{start,query}',
-                              runs.input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or (
-                              position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
-                                  runs.input_payload #>> '{node-start,query}',
-                                  runs.input_payload #>> '{start,query}',
-                                  runs.input_payload #>> '{query}',
-                                  ''
-                              )) > 0
-                              and position('If you need specific details from before compaction' in coalesce(
-                                  runs.input_payload #>> '{node-start,query}',
-                                  runs.input_payload #>> '{start,query}',
-                                  runs.input_payload #>> '{query}',
-                                  ''
-                              )) > 0
-                          )
-                      )
-                  )
+                  and not ({hidden_internal_run_filter})
             ),
             current_turn_boundaries as (
                 select
@@ -999,7 +962,8 @@ impl ApplicationPublicConversationRepository for PgControlPlaneStore {
             ) recent
             order by occurred_at asc, sequence asc, created_at asc, id asc
             "#,
-        )
+            hidden_internal_run_filter = hidden_internal_run_filter
+        ))
         .bind(input.application_id)
         .bind(input.api_key_id)
         .bind(&input.external_user)

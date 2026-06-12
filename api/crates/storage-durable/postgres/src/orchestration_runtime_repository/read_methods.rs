@@ -501,7 +501,8 @@ impl PgControlPlaneStore {
             return Ok(empty_application_conversation_runs_page());
         }
 
-        let rows = sqlx::query(
+        let hidden_internal_run_filter = hidden_anthropic_claude_code_internal_run_sql("flow_runs");
+        let rows = sqlx::query(&format!(
             r#"
             with ordered as (
                 select
@@ -541,52 +542,15 @@ impl PgControlPlaneStore {
                 from flow_runs
                 where application_id = $1
                   and external_conversation_id = $2
-                  and not (
-                      compatibility_mode = 'anthropic-messages-v1'
-                      and (
-                          input_payload #>> '{node-start,compatibility,claude_code_control}' is not null
-                          or input_payload #>> '{start,compatibility,claude_code_control}' is not null
-                          or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
-                              input_payload #>> '{node-start,query}',
-                              input_payload #>> '{start,query}',
-                              input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
-                              input_payload #>> '{node-start,query}',
-                              input_payload #>> '{start,query}',
-                              input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
-                              input_payload #>> '{node-start,query}',
-                              input_payload #>> '{start,query}',
-                              input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or (
-                              position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
-                                  input_payload #>> '{node-start,query}',
-                                  input_payload #>> '{start,query}',
-                                  input_payload #>> '{query}',
-                                  ''
-                              )) > 0
-                              and position('If you need specific details from before compaction' in coalesce(
-                                  input_payload #>> '{node-start,query}',
-                                  input_payload #>> '{start,query}',
-                                  input_payload #>> '{query}',
-                                  ''
-                              )) > 0
-                          )
-                      )
-                  )
+                  and not ({hidden_internal_run_filter})
             )
             select *
             from ordered
             where rn between $3 and $4
             order by rn asc
             "#,
-        )
+            hidden_internal_run_filter = hidden_internal_run_filter
+        ))
         .bind(application_id)
         .bind(&input.external_conversation_id)
         .bind(start_rn)
@@ -616,7 +580,8 @@ impl PgControlPlaneStore {
         external_conversation_id: &str,
         flow_run_id: Uuid,
     ) -> Result<Option<(i64, i64)>> {
-        let row = sqlx::query(
+        let hidden_internal_run_filter = hidden_anthropic_claude_code_internal_run_sql("flow_runs");
+        let row = sqlx::query(&format!(
             r#"
             with ordered as (
                 select
@@ -626,51 +591,14 @@ impl PgControlPlaneStore {
                 from flow_runs
                 where application_id = $1
                   and external_conversation_id = $2
-                  and not (
-                      compatibility_mode = 'anthropic-messages-v1'
-                      and (
-                          input_payload #>> '{node-start,compatibility,claude_code_control}' is not null
-                          or input_payload #>> '{start,compatibility,claude_code_control}' is not null
-                          or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
-                              input_payload #>> '{node-start,query}',
-                              input_payload #>> '{start,query}',
-                              input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
-                              input_payload #>> '{node-start,query}',
-                              input_payload #>> '{start,query}',
-                              input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
-                              input_payload #>> '{node-start,query}',
-                              input_payload #>> '{start,query}',
-                              input_payload #>> '{query}',
-                              ''
-                          )) > 0
-                          or (
-                              position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
-                                  input_payload #>> '{node-start,query}',
-                                  input_payload #>> '{start,query}',
-                                  input_payload #>> '{query}',
-                                  ''
-                              )) > 0
-                              and position('If you need specific details from before compaction' in coalesce(
-                                  input_payload #>> '{node-start,query}',
-                                  input_payload #>> '{start,query}',
-                                  input_payload #>> '{query}',
-                                  ''
-                              )) > 0
-                          )
-                      )
-                  )
+                  and not ({hidden_internal_run_filter})
             )
             select rn, total
             from ordered
             where id = $3
             "#,
-        )
+            hidden_internal_run_filter = hidden_internal_run_filter
+        ))
         .bind(application_id)
         .bind(external_conversation_id)
         .bind(flow_run_id)

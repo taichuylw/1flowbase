@@ -72,10 +72,35 @@ fn anthropic_subagent_request(query: &str) -> NativeRunRequest {
     request
 }
 
+fn anthropic_builtin_agent_request(query: &str) -> NativeRunRequest {
+    let mut request = anthropic_request(query);
+    request.system = Some(
+        "x-anthropic-billing-header: cc_version=2.1.141; cc_entrypoint=cli; cch=04e8f;\n\n\
+You are Claude Code, Anthropic's official CLI for Claude.\n\n\
+You are a file search specialist for Claude Code, Anthropic's official CLI for Claude.\n\n\
+Notes:\n\
+- Agent threads always have their cwd reset between bash calls, as a result please only use absolute file paths.\n\
+- Do NOT Write report/summary/findings/analysis .md files. Return findings directly as your final assistant message — the parent agent reads your text output, not files you create."
+            .to_string(),
+    );
+    request
+}
+
 fn anthropic_tool_result_continuation_request(query: &str) -> NativeRunRequest {
     let mut request = anthropic_request(query);
     request.protocol_request_kind =
         Some(NativeProtocolRequestKind::AnthropicToolResultContinuation);
+    request
+}
+
+fn anthropic_claude_code_control_request(query: &str, control_kind: &str) -> NativeRunRequest {
+    let mut request = anthropic_request(query);
+    request.inputs = serde_json::from_value(json!({
+        "compatibility": {
+            "claude_code_control": control_kind
+        }
+    }))
+    .unwrap();
     request
 }
 
@@ -801,6 +826,60 @@ async fn start_anthropic_subagent_run_keeps_parent_waiting_callback_alive() {
 }
 
 #[tokio::test]
+async fn start_anthropic_builtin_agent_run_keeps_parent_waiting_callback_alive() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let repository = harness.repository();
+    let application = harness.seed_application(actor_user_id(), "Anthropic Builtin Agent App");
+    let token = issue_key(&harness, application.id).await;
+    ApplicationPublicationService::new(repository.clone())
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: published_mapping(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let service = ApplicationPublishedRunService::new(repository.clone());
+
+    let parent = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: anthropic_request("uploads/image-1.png 这部分代码在哪里？"),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(parent.id);
+
+    let agent = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token,
+            request: anthropic_builtin_agent_request(
+                "在 /home/taichu/git/1flowbase 项目中，找到工作台页面相关的前端代码。",
+            ),
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(parent.id, agent.id);
+    let parent_run = repository
+        .get_flow_run(application.id, parent.id)
+        .await
+        .unwrap()
+        .expect("parent run should remain durable");
+    let callback_task = repository
+        .get_published_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .expect("callback task should remain durable");
+    assert_eq!(parent_run.status, domain::FlowRunStatus::WaitingCallback);
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Pending);
+    let parent_run_events = repository.run_event_types(parent.id);
+    assert!(!parent_run_events.contains(&"public_run_cancelled".to_string()));
+    assert!(!parent_run_events.contains(&"public_run_callback_cancelled".to_string()));
+}
+
+#[tokio::test]
 async fn start_anthropic_tool_result_continuation_keeps_parent_waiting_callback_alive() {
     let harness = ApplicationPublicApiTestHarness::new();
     let repository = harness.repository();
@@ -838,6 +917,62 @@ async fn start_anthropic_tool_result_continuation_keeps_parent_waiting_callback_
         .unwrap();
 
     assert_ne!(parent.id, continuation.id);
+    let parent_run = repository
+        .get_flow_run(application.id, parent.id)
+        .await
+        .unwrap()
+        .expect("parent run should remain durable");
+    let callback_task = repository
+        .get_published_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .expect("callback task should remain durable");
+    assert_eq!(parent_run.status, domain::FlowRunStatus::WaitingCallback);
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Pending);
+    let parent_run_events = repository.run_event_types(parent.id);
+    assert!(!parent_run_events.contains(&"public_run_cancelled".to_string()));
+    assert!(!parent_run_events.contains(&"public_run_callback_cancelled".to_string()));
+}
+
+#[tokio::test]
+async fn start_anthropic_claude_code_control_run_keeps_parent_waiting_callback_alive() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let repository = harness.repository();
+    let application =
+        harness.seed_application(actor_user_id(), "Anthropic Claude Code Control App");
+    let token = issue_key(&harness, application.id).await;
+    ApplicationPublicationService::new(repository.clone())
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: published_mapping(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let service = ApplicationPublishedRunService::new(repository.clone());
+
+    let parent = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: anthropic_request("uploads/image-1.png 这部分代码在哪里？"),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(parent.id);
+
+    let control = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token,
+            request: anthropic_claude_code_control_request(
+                "CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.",
+                "compact_summary",
+            ),
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(parent.id, control.id);
     let parent_run = repository
         .get_flow_run(application.id, parent.id)
         .await

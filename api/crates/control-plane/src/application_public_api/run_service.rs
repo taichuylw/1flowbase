@@ -393,6 +393,9 @@ where
         if is_anthropic_tool_result_continuation_request(request) {
             return Ok(());
         }
+        if is_claude_code_control_request(request) {
+            return Ok(());
+        }
         let Some(external_user) = request.conversation.string("user") else {
             return Ok(());
         };
@@ -540,10 +543,11 @@ fn public_run_idempotency_fingerprint(
 }
 
 fn is_claude_code_subagent_request(request: &NativeRunRequest) -> bool {
-    request
-        .system
-        .as_deref()
-        .is_some_and(|system| system.contains("cc_is_subagent=true"))
+    request.system.as_deref().is_some_and(|system| {
+        system.contains("cc_is_subagent=true")
+            || (system.contains("Agent threads always have their cwd reset between bash calls")
+                && system.contains("the parent agent reads your text output"))
+    })
 }
 
 fn is_anthropic_tool_result_continuation_request(request: &NativeRunRequest) -> bool {
@@ -551,6 +555,15 @@ fn is_anthropic_tool_result_continuation_request(request: &NativeRunRequest) -> 
         request.protocol_request_kind,
         Some(NativeProtocolRequestKind::AnthropicToolResultContinuation)
     )
+}
+
+fn is_claude_code_control_request(request: &NativeRunRequest) -> bool {
+    request
+        .inputs
+        .get("compatibility")
+        .and_then(|compatibility| compatibility.get("claude_code_control"))
+        .and_then(Value::as_str)
+        .is_some()
 }
 
 fn write_canonical_json(value: &Value, out: &mut Vec<u8>) -> serde_json::Result<()> {
