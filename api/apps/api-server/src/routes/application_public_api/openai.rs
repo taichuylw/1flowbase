@@ -776,10 +776,11 @@ async fn ensure_openai_responses_resume_matches_previous_response(
     callback_task_id: Uuid,
 ) -> Result<(), OpenAiRouteError> {
     let Some(response_id) = previous_response_id else {
-        return Err(openai_invalid_request(
-            "previous_response_id",
-            "previous_response_id is required when submitting function_call_output",
-        ));
+        // Stateless Responses clients (store=false) replay the conversation
+        // instead of sending previous_response_id. The callback task id is
+        // already encoded in the function_call_output call_id, and the resume
+        // service enforces bearer-token / application / run ownership.
+        return Ok(());
     };
     let previous_run_id = run_id_from_response_id(response_id)?;
     let callback_task = state
