@@ -107,12 +107,21 @@ impl OpenAiChatStreamMapper {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OpenAiResponseOutputItemKind {
+    Reasoning,
+    Message,
+}
+
 pub(super) struct OpenAiResponseStreamMapper {
     model: String,
     previous_response_id: Option<String>,
     terminal_answer_fallback: bool,
     emitted_reasoning_delta: bool,
     emitted_text_delta: bool,
+    active_output_item: Option<OpenAiResponseOutputItemKind>,
+    active_output_item_text: String,
+    output_item_index: usize,
 }
 
 impl OpenAiResponseStreamMapper {
@@ -127,7 +136,54 @@ impl OpenAiResponseStreamMapper {
             terminal_answer_fallback,
             emitted_reasoning_delta: false,
             emitted_text_delta: false,
+            active_output_item: None,
+            active_output_item_text: String::new(),
+            output_item_index: 0,
         }
+    }
+
+    fn open_output_item(
+        &mut self,
+        initial_run: &NativeRunResult,
+        kind: OpenAiResponseOutputItemKind,
+        events: &mut Vec<Result<Event, Infallible>>,
+    ) {
+        if self.active_output_item == Some(kind) {
+            return;
+        }
+        self.close_output_item(initial_run, events);
+        events.push(event_json_sse(
+            "response.output_item.added",
+            json!({
+                "type": "response.output_item.added",
+                "response_id": response_id_from_run_id(initial_run.id),
+                "output_index": self.output_item_index,
+                "item": openai_response_output_item_payload(initial_run, kind, None)
+            }),
+        ));
+        self.active_output_item = Some(kind);
+        self.active_output_item_text = String::new();
+    }
+
+    fn close_output_item(
+        &mut self,
+        initial_run: &NativeRunResult,
+        events: &mut Vec<Result<Event, Infallible>>,
+    ) {
+        let Some(kind) = self.active_output_item.take() else {
+            return;
+        };
+        let text = std::mem::take(&mut self.active_output_item_text);
+        events.push(event_json_sse(
+            "response.output_item.done",
+            json!({
+                "type": "response.output_item.done",
+                "response_id": response_id_from_run_id(initial_run.id),
+                "output_index": self.output_item_index,
+                "item": openai_response_output_item_payload(initial_run, kind, Some(text))
+            }),
+        ));
+        self.output_item_index += 1;
     }
 
     pub(super) fn runtime_event_to_sse(
@@ -136,24 +192,29 @@ impl OpenAiResponseStreamMapper {
         envelope: RuntimeEventEnvelope,
     ) -> Vec<Result<Event, Infallible>> {
         let is_answer_presentation_delta = is_answer_presentation_delta(&envelope);
+        let mut events = Vec::new();
         match envelope.event_type.as_str() {
-            "reasoning_delta"
-                if is_answer_presentation_delta
-                    && envelope
-                        .text
-                        .as_deref()
-                        .is_some_and(|text| !text.is_empty()) =>
-            {
-                self.emitted_reasoning_delta = true;
+            "reasoning_delta" if is_answer_presentation_delta => {
+                self.open_output_item(
+                    initial_run,
+                    OpenAiResponseOutputItemKind::Reasoning,
+                    &mut events,
+                );
+                if let Some(text) = envelope.text.as_deref().filter(|text| !text.is_empty()) {
+                    self.active_output_item_text.push_str(text);
+                    self.emitted_reasoning_delta = true;
+                }
             }
-            "text_delta"
-                if is_answer_presentation_delta
-                    && envelope
-                        .text
-                        .as_deref()
-                        .is_some_and(|text| !text.is_empty()) =>
-            {
-                self.emitted_text_delta = true;
+            "text_delta" if is_answer_presentation_delta => {
+                self.open_output_item(
+                    initial_run,
+                    OpenAiResponseOutputItemKind::Message,
+                    &mut events,
+                );
+                if let Some(text) = envelope.text.as_deref().filter(|text| !text.is_empty()) {
+                    self.active_output_item_text.push_str(text);
+                    self.emitted_text_delta = true;
+                }
             }
             _ => {}
         }
@@ -168,12 +229,17 @@ impl OpenAiResponseStreamMapper {
             Vec::new()
         };
 
-        let mut events = Vec::new();
         let had_reasoning_delta = self.emitted_reasoning_delta;
         let had_text_delta = self.emitted_text_delta;
         for delta in terminal_deltas {
             match delta.kind {
                 TerminalAnswerDeltaKind::Reasoning if !had_reasoning_delta => {
+                    self.open_output_item(
+                        initial_run,
+                        OpenAiResponseOutputItemKind::Reasoning,
+                        &mut events,
+                    );
+                    self.active_output_item_text.push_str(&delta.text);
                     events.push(event_json_sse(
                         "response.reasoning_text.delta",
                         openai_response_reasoning_text_delta_payload(initial_run, delta.text),
@@ -181,6 +247,12 @@ impl OpenAiResponseStreamMapper {
                     self.emitted_reasoning_delta = true;
                 }
                 TerminalAnswerDeltaKind::Text if !had_text_delta => {
+                    self.open_output_item(
+                        initial_run,
+                        OpenAiResponseOutputItemKind::Message,
+                        &mut events,
+                    );
+                    self.active_output_item_text.push_str(&delta.text);
                     events.push(event_json_sse(
                         "response.output_text.delta",
                         openai_response_output_text_delta_payload(initial_run, delta.text),
@@ -190,6 +262,12 @@ impl OpenAiResponseStreamMapper {
                 _ => {}
             }
         }
+        if matches!(
+            envelope.event_type.as_str(),
+            "flow_finished" | "flow_failed" | "flow_cancelled" | "waiting_callback"
+        ) {
+            self.close_output_item(initial_run, &mut events);
+        }
         events.extend(openai_response_runtime_event_to_sse(
             initial_run,
             &self.model,
@@ -197,6 +275,32 @@ impl OpenAiResponseStreamMapper {
             envelope,
         ));
         events
+    }
+}
+
+fn openai_response_output_item_payload(
+    initial_run: &NativeRunResult,
+    kind: OpenAiResponseOutputItemKind,
+    text: Option<String>,
+) -> Value {
+    match kind {
+        OpenAiResponseOutputItemKind::Reasoning => json!({
+            "type": "reasoning",
+            "id": format!("rs_{}", initial_run.id),
+            "summary": [],
+            "content": text
+                .map(|text| json!([{ "type": "reasoning_text", "text": text }]))
+                .unwrap_or_else(|| json!([])),
+            "encrypted_content": null
+        }),
+        OpenAiResponseOutputItemKind::Message => json!({
+            "type": "message",
+            "id": format!("msg_{}", initial_run.id),
+            "role": "assistant",
+            "content": text
+                .map(|text| json!([{ "type": "output_text", "text": text }]))
+                .unwrap_or_else(|| json!([]))
+        }),
     }
 }
 
