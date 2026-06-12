@@ -13,8 +13,8 @@ use super::{
         ListApplicationPublicConversationMessagesInput,
     },
     native::{
-        CreateNativeRunCommand, NativeInputMapper, NativeRunRequest, NativeRunResult,
-        NativeRunValidationError,
+        CreateNativeRunCommand, NativeInputMapper, NativeProtocolRequestKind, NativeRunRequest,
+        NativeRunResult, NativeRunValidationError,
     },
     publications::ApplicationPublicationVersionRecord,
 };
@@ -390,6 +390,9 @@ where
         if is_claude_code_subagent_request(request) {
             return Ok(());
         }
+        if is_anthropic_tool_result_continuation_request(request) {
+            return Ok(());
+        }
         let Some(external_user) = request.conversation.string("user") else {
             return Ok(());
         };
@@ -541,6 +544,13 @@ fn is_claude_code_subagent_request(request: &NativeRunRequest) -> bool {
         .system
         .as_deref()
         .is_some_and(|system| system.contains("cc_is_subagent=true"))
+}
+
+fn is_anthropic_tool_result_continuation_request(request: &NativeRunRequest) -> bool {
+    matches!(
+        request.protocol_request_kind,
+        Some(NativeProtocolRequestKind::AnthropicToolResultContinuation)
+    )
 }
 
 fn write_canonical_json(value: &Value, out: &mut Vec<u8>) -> serde_json::Result<()> {

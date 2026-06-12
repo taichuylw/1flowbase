@@ -3,7 +3,10 @@ use control_plane::application_public_api::{
     mapping::{
         ApplicationApiMappingConfig, ApplicationApiMappingInput, ApplicationApiMappingOutput,
     },
-    native::{CreateNativeRunCommand, NativeRunRequest, NativeRunValidationError},
+    native::{
+        CreateNativeRunCommand, NativeProtocolRequestKind, NativeRunRequest,
+        NativeRunValidationError,
+    },
     publications::{ApplicationPublicationService, PublishApplicationCommand},
     run_service::{ApplicationPublishedRunControlRepository, ApplicationPublishedRunService},
     ApplicationPublicApiTestHarness,
@@ -66,6 +69,13 @@ fn anthropic_subagent_request(query: &str) -> NativeRunRequest {
         "x-anthropic-billing-header: cc_version=2.1.165; cc_entrypoint=cli; cch=007d6; cc_is_subagent=true;\n\nYou are Claude Code."
             .to_string(),
     );
+    request
+}
+
+fn anthropic_tool_result_continuation_request(query: &str) -> NativeRunRequest {
+    let mut request = anthropic_request(query);
+    request.protocol_request_kind =
+        Some(NativeProtocolRequestKind::AnthropicToolResultContinuation);
     request
 }
 
@@ -773,6 +783,61 @@ async fn start_anthropic_subagent_run_keeps_parent_waiting_callback_alive() {
         .unwrap();
 
     assert_ne!(parent.id, subagent.id);
+    let parent_run = repository
+        .get_flow_run(application.id, parent.id)
+        .await
+        .unwrap()
+        .expect("parent run should remain durable");
+    let callback_task = repository
+        .get_published_callback_task(callback_task.id)
+        .await
+        .unwrap()
+        .expect("callback task should remain durable");
+    assert_eq!(parent_run.status, domain::FlowRunStatus::WaitingCallback);
+    assert_eq!(callback_task.status, domain::CallbackTaskStatus::Pending);
+    let parent_run_events = repository.run_event_types(parent.id);
+    assert!(!parent_run_events.contains(&"public_run_cancelled".to_string()));
+    assert!(!parent_run_events.contains(&"public_run_callback_cancelled".to_string()));
+}
+
+#[tokio::test]
+async fn start_anthropic_tool_result_continuation_keeps_parent_waiting_callback_alive() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let repository = harness.repository();
+    let application =
+        harness.seed_application(actor_user_id(), "Anthropic Tool Result Continuation App");
+    let token = issue_key(&harness, application.id).await;
+    ApplicationPublicationService::new(repository.clone())
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: published_mapping(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let service = ApplicationPublishedRunService::new(repository.clone());
+
+    let parent = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: anthropic_request("uploads\\test-01.png 找一下这幅图相关代码"),
+        })
+        .await
+        .unwrap();
+    let callback_task = repository.seed_pending_callback_task(parent.id);
+
+    let continuation = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token,
+            request: anthropic_tool_result_continuation_request(
+                "-rw-r--r-- 1 Lw 197121 17907 Jun 12 15:25 uploads/test-01.png",
+            ),
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(parent.id, continuation.id);
     let parent_run = repository
         .get_flow_run(application.id, parent.id)
         .await

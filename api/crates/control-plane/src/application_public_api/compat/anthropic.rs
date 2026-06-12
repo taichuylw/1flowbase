@@ -1,7 +1,7 @@
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
-use crate::application_public_api::native::NativeRunRequest;
+use crate::application_public_api::native::{NativeProtocolRequestKind, NativeRunRequest};
 
 const CLAUDE_CODE_COMPACT_SUMMARY_PROMPT_PREFIX: &str =
     "Your task is to create a detailed summary of the conversation so far";
@@ -136,7 +136,11 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
         .filter(|value| value.is_object())
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
-    let compatibility = compatibility_payload(object, current_control_kind);
+    let compatibility = compatibility_payload(
+        object,
+        current_control_kind,
+        latest_user_is_tool_result_only,
+    );
     let mut metadata = metadata;
     if !compatibility.is_null() {
         metadata["compatibility"] = compatibility.clone();
@@ -165,6 +169,10 @@ pub fn map_messages_request(request: Value) -> Result<NativeRunRequest, Anthropi
     let mut request: NativeRunRequest = serde_json::from_value(native)
         .map_err(|_| AnthropicCompatError::invalid("failed to build Native request"))?;
     request.protocol_compatibility_mode = Some(ANTHROPIC_MESSAGES_COMPATIBILITY_MODE.to_string());
+    if latest_user_is_tool_result_only {
+        request.protocol_request_kind =
+            Some(NativeProtocolRequestKind::AnthropicToolResultContinuation);
+    }
     Ok(request)
 }
 
@@ -230,6 +238,7 @@ fn system_from_parts(parts: Vec<String>) -> Option<String> {
 fn compatibility_payload(
     object: &serde_json::Map<String, Value>,
     claude_code_control: Option<&'static str>,
+    latest_user_is_tool_result_only: bool,
 ) -> Value {
     let mut compatibility = serde_json::Map::new();
     for key in ["tools", "tool_choice"] {
@@ -241,6 +250,12 @@ fn compatibility_payload(
         compatibility.insert(
             "claude_code_control".to_string(),
             Value::String(claude_code_control.to_string()),
+        );
+    }
+    if latest_user_is_tool_result_only {
+        compatibility.insert(
+            "anthropic_message_kind".to_string(),
+            Value::String("tool_result_only".to_string()),
         );
     }
     if compatibility.is_empty() {
@@ -1100,6 +1115,42 @@ mod tests {
         assert_eq!(
             request.history[1]["content_blocks"][0]["source"]["media_type"],
             json!("image/png")
+        );
+    }
+
+    #[test]
+    fn maps_latest_tool_result_only_as_protocol_continuation() {
+        let request = map_messages_request(json!({
+            "model": "1flowbase",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_read",
+                        "name": "Read",
+                        "input": {"file_path": "uploads/test-01.png"}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_read",
+                        "content": "-rw-r--r-- 1 Lw 197121 17907 Jun 12 15:25 uploads/test-01.png"
+                    }]
+                }
+            ]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            request.protocol_request_kind,
+            Some(NativeProtocolRequestKind::AnthropicToolResultContinuation)
+        );
+        assert_eq!(
+            request.metadata.as_value()["compatibility"]["anthropic_message_kind"],
+            json!("tool_result_only")
         );
     }
 }
