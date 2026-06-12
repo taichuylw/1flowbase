@@ -385,16 +385,43 @@ fn responses_input_to_query_and_history(
             matches!(entry, ResponsesInputEntry::Message(message) if message.role == "user")
         })
         .ok_or_else(|| OpenAiCompatError::invalid("input", "user input is required"))?;
-    let mut history = Vec::new();
+    let mut history: Vec<Value> = Vec::new();
+    let mut last_history_was_function_call = false;
     for (index, entry) in entries.into_iter().enumerate() {
         match entry {
             ResponsesInputEntry::Skipped => {}
             ResponsesInputEntry::History(history_entry) => {
                 if index < last_user_index {
-                    history.push(history_entry);
+                    let entry_tool_calls = history_entry
+                        .get("tool_calls")
+                        .and_then(Value::as_array)
+                        .cloned();
+                    match entry_tool_calls {
+                        // Parallel function calls arrive as adjacent items; merge
+                        // them into one assistant turn so every tool_call_id is
+                        // answered by the tool messages that follow.
+                        Some(tool_calls) if last_history_was_function_call => {
+                            if let Some(previous_tool_calls) = history
+                                .last_mut()
+                                .and_then(|previous| previous.get_mut("tool_calls"))
+                                .and_then(Value::as_array_mut)
+                            {
+                                previous_tool_calls.extend(tool_calls);
+                            }
+                        }
+                        Some(_) => {
+                            history.push(history_entry);
+                            last_history_was_function_call = true;
+                        }
+                        None => {
+                            history.push(history_entry);
+                            last_history_was_function_call = false;
+                        }
+                    }
                 }
             }
             ResponsesInputEntry::Message(message) => {
+                last_history_was_function_call = false;
                 if index == last_user_index {
                     if let Some(content_blocks) = message.content_blocks {
                         history.push(serde_json::json!({
@@ -990,6 +1017,44 @@ mod tests {
         assert_eq!(
             request.inputs["tools"][0]["input_schema"]["type"],
             json!("object")
+        );
+    }
+
+    #[test]
+    fn merges_adjacent_responses_function_calls_into_one_assistant_turn() {
+        let request = map_response_request(
+            json!({
+                "model": "1flowbase",
+                "input": [
+                    {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "查代码"}]},
+                    {"type": "function_call", "call_id": "call_a", "name": "shell", "arguments": "{}"},
+                    {"type": "function_call", "call_id": "call_b", "name": "shell", "arguments": "{}"},
+                    {"type": "function_call_output", "call_id": "call_a", "output": "a-result"},
+                    {"type": "function_call_output", "call_id": "call_b", "output": "b-result"},
+                    {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "继续"}]}
+                ]
+            }),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(request.query, "继续");
+        assert_eq!(
+            request.history,
+            vec![
+                json!({"role": "user", "content": "查代码"}),
+                json!({
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {"id": "call_a", "name": "shell", "arguments": {}},
+                        {"id": "call_b", "name": "shell", "arguments": {}}
+                    ]
+                }),
+                json!({"role": "tool", "tool_call_id": "call_a", "content": "a-result"}),
+                json!({"role": "tool", "tool_call_id": "call_b", "content": "b-result"}),
+            ],
+            "parallel function calls must merge into one assistant turn so every tool_call_id is answered consecutively"
         );
     }
 
