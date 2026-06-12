@@ -146,15 +146,33 @@ fn visible_internal_llm_tool_preconditions_from_config(
     object: &Map<String, Value>,
     input_schema: Option<&Value>,
 ) -> Vec<VisibleInternalLlmToolPrecondition> {
-    if object.contains_key("preconditions") || object.contains_key("preConditions") {
-        return visible_internal_llm_tool_preconditions_from_value(
-            object
-                .get("preconditions")
-                .or_else(|| object.get("preConditions")),
-        );
+    let explicit_preconditions = object
+        .get("preconditions")
+        .or_else(|| object.get("preConditions"));
+    if explicit_preconditions.is_some() {
+        let preconditions =
+            visible_internal_llm_tool_preconditions_from_value(explicit_preconditions);
+        if !preconditions.is_empty() {
+            return preconditions;
+        }
+        if explicit_preconditions_are_empty_field_rows(explicit_preconditions) {
+            return legacy_media_input_schema_preconditions(input_schema);
+        }
+        return Vec::new();
     }
 
     legacy_media_input_schema_preconditions(input_schema)
+}
+
+fn explicit_preconditions_are_empty_field_rows(value: Option<&Value>) -> bool {
+    value
+        .and_then(Value::as_array)
+        .filter(|preconditions| !preconditions.is_empty())
+        .is_some_and(|preconditions| {
+            preconditions
+                .iter()
+                .all(|precondition| precondition.as_object().is_some_and(Map::is_empty))
+        })
 }
 
 fn legacy_media_input_schema_preconditions(

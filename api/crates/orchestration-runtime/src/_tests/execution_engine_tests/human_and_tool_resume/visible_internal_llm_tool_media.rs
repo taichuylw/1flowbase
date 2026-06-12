@@ -171,6 +171,89 @@ async fn missing_workspace_image_path_waits_for_client_read_without_invoking_ima
 }
 
 #[tokio::test]
+async fn empty_saved_media_precondition_still_waits_for_client_read() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![tool_call_response(vec![
+        ProviderToolCall {
+            id: "call_image".to_string(),
+            name: "image_llm".to_string(),
+            arguments: json!({
+                "task": "描述这张图片",
+                "media": [
+                    {
+                        "kind": "image",
+                        "source": "workspace_path",
+                        "path": "uploads/windows-only.png"
+                    }
+                ]
+            }),
+            provider_metadata: json!({}),
+        },
+        ProviderToolCall {
+            id: "call_read".to_string(),
+            name: "Read".to_string(),
+            arguments: json!({ "file_path": "E:\\code\\project\\uploads\\windows-only.png" }),
+            provider_metadata: json!({}),
+        },
+    ])]);
+    let mut plan = visible_internal_llm_tool_plan();
+    configure_image_llm_tool(&mut plan);
+    plan.nodes
+        .get_mut("node-llm")
+        .expect("main llm node should exist")
+        .config["visible_internal_llm_tools"][0]["preconditions"] = json!([{}]);
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "uploads\\windows-only.png 找一下这幅图相关代码",
+                "history": [],
+                "tools": [
+                    {
+                        "name": "Read",
+                        "description": "Read a file",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": { "type": "string" }
+                            },
+                            "required": ["file_path"]
+                        }
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(pending.node_id, "node-llm");
+            let pending_tool_names = pending.request_payload["tool_calls"]
+                .as_array()
+                .expect("pending request should include external tool calls")
+                .iter()
+                .filter_map(|tool_call| tool_call["name"].as_str())
+                .collect::<Vec<_>>();
+            assert_eq!(pending_tool_names, vec!["Read"]);
+        }
+        other => panic!("expected external Read callback wait, got {other:?}"),
+    }
+
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(
+        captured.len(),
+        1,
+        "empty saved precondition rows must still inherit the media input schema guard"
+    );
+}
+
+#[tokio::test]
 async fn missing_workspace_image_path_reuses_inherited_image_content_blocks() {
     let (invoker, captured_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {

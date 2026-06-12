@@ -170,7 +170,7 @@ interface JsonSchemaSettingsPanelProps {
   onSave: (schema: Record<string, unknown>) => void;
 }
 
-type JsonSchemaEditorResult =
+export type JsonSchemaEditorResult =
   | { ok: true; schema: Record<string, unknown> }
   | { ok: false; message: string };
 
@@ -185,6 +185,7 @@ interface JsonSchemaEditorContentProps {
   className?: string;
   live?: boolean;
   resetKey?: string | number | null;
+  parseSchemaInput?: (input: string) => JsonSchemaEditorResult;
   onChange?: (schema: Record<string, unknown>) => void;
   onValidityChange?: (valid: boolean) => void;
 }
@@ -200,6 +201,7 @@ export const JsonSchemaEditorContent = forwardRef<
     className,
     live = false,
     resetKey,
+    parseSchemaInput = parseJsonSchemaInput,
     onChange,
     onValidityChange
   }: JsonSchemaEditorContentProps,
@@ -260,7 +262,7 @@ export const JsonSchemaEditorContent = forwardRef<
       };
     }
 
-    return parseJsonSchemaInput(schemaText);
+    return parseSchemaInput(schemaText);
   }
 
   function getSchema() {
@@ -500,7 +502,7 @@ export const JsonSchemaEditorContent = forwardRef<
       return;
     }
 
-    const parsed = parseJsonSchemaInput(schemaText);
+    const parsed = parseSchemaInput(schemaText);
     if (!parsed.ok) {
       setSchemaError(parsed.message);
       onValidityChange?.(false);
@@ -523,7 +525,7 @@ export const JsonSchemaEditorContent = forwardRef<
       return;
     }
 
-    const parsed = parseJsonSchemaInput(nextValue);
+    const parsed = parseSchemaInput(nextValue);
 
     if (!parsed.ok) {
       notifyInvalidSchema(parsed.message);
@@ -990,12 +992,14 @@ export function JsonSchemaInlineEditor({
   schema,
   fallbackRootType = 'object',
   resetKey,
+  parseSchemaInput,
   onChange,
   onValidityChange
 }: {
   schema: Record<string, unknown>;
   fallbackRootType?: JsonSchemaRootType;
   resetKey?: string | number | null;
+  parseSchemaInput?: (input: string) => JsonSchemaEditorResult;
   onChange: (schema: Record<string, unknown>) => void;
   onValidityChange?: (valid: boolean) => void;
 }) {
@@ -1005,6 +1009,7 @@ export function JsonSchemaInlineEditor({
       className="agent-flow-json-schema-settings--inline"
       fallbackRootType={fallbackRootType}
       live
+      parseSchemaInput={parseSchemaInput}
       resetKey={resetKey}
       schema={schema}
       onChange={onChange}

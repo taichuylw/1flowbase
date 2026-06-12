@@ -361,16 +361,30 @@
   background: #fff;
 }
 
+.agent-flow-llm-tool-registration-preconditions {
+  overflow: hidden;
+  padding: 10px 12px 12px;
+  border: 1px solid #d9e3dc;
+  border-radius: 12px;
+  background: #fff;
+}
+
 .agent-flow-llm-tool-registration-preconditions
   .agent-flow-json-schema-settings__editor {
   height: 160px;
 }
 
+.agent-flow-llm-tool-registration-preconditions
+  .agent-flow-json-schema-settings__field-rows,
 .agent-flow-llm-tool-registration-schema
   .agent-flow-json-schema-settings__field-rows {
   max-height: 184px;
 }
 
+.agent-flow-llm-tool-registration-preconditions
+  .agent-flow-json-schema-settings__field-head,
+.agent-flow-llm-tool-registration-preconditions
+  .agent-flow-json-schema-settings__field-row,
 .agent-flow-llm-tool-registration-schema
   .agent-flow-json-schema-settings__field-head,
 .agent-flow-llm-tool-registration-schema

@@ -352,7 +352,7 @@ describe('NodeInspector core', () => {
     expect(screen.getByText('暂无工具注册')).toBeInTheDocument();
   });
 
-  test('edits routed LLM tool preconditions separately from input schema', async () => {
+  test('edits routed LLM tool input parameters from a full protocol JSON', async () => {
     const state = createInitialState();
     let latestDocument = state.draft.document;
     const mountedLlm = createNodeDocument('llm', 'node-mounted-llm', 720, 240);
@@ -427,14 +427,19 @@ describe('NodeInspector core', () => {
     fireEvent.click(await screen.findByRole('button', { name: '编辑 image_llm' }));
 
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
-    const preconditionsInput = within(dialog).getByLabelText('调用前置条件 JSON');
     const preconditionsEditor = within(dialog).getByTestId(
       'agent-flow-llm-tool-preconditions-json-editor'
     );
 
+    expect(within(dialog).getByText('前置拦截')).toBeInTheDocument();
     expect(preconditionsEditor).toHaveClass(
       'agent-flow-llm-tool-registration-preconditions'
     );
+    fireEvent.click(
+      within(preconditionsEditor).getByRole('tab', { name: 'JSON 解析' })
+    );
+    const preconditionsInput =
+      await within(preconditionsEditor).findByLabelText('前置拦截 JSON');
     expect(preconditionsInput).toHaveValue(
       JSON.stringify(
         [
@@ -464,20 +469,77 @@ describe('NodeInspector core', () => {
       within(dialog).queryByDisplayValue('preconditions')
     ).not.toBeInTheDocument();
 
-    fireEvent.change(preconditionsInput, {
+    fireEvent.click(
+      within(dialog).getAllByRole('tab', { name: 'JSON 解析' })[1]
+    );
+    fireEvent.change(await within(dialog).findByLabelText('JSON Schema 内容'), {
       target: {
         value: JSON.stringify(
-          [
-            {
-              kind: 'media_content_available',
-              argument_path: ['attachments'],
-              media_kind: 'image'
-            }
-          ],
+          {
+            input_schema: {
+              type: 'object',
+              required: ['task', 'attachments'],
+              properties: {
+                task: {
+                  type: 'string',
+                  description: '给多模态模型的新任务指示'
+                },
+                attachments: {
+                  type: 'array',
+                  description: '需要交给多模态模型处理的新媒体引用',
+                  items: {
+                    type: 'object',
+                    required: ['kind', 'source', 'path'],
+                    properties: {
+                      kind: {
+                        type: 'string',
+                        enum: ['image'],
+                        description: '媒体类型'
+                      },
+                      source: {
+                        type: 'string',
+                        enum: ['workspace_path'],
+                        description: '媒体来源'
+                      },
+                      path: {
+                        type: 'string',
+                        description: '工作区内图片路径'
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            preconditions: [
+              {
+                kind: 'media_content_available',
+                argument_path: ['attachments'],
+                media_kind: 'image'
+              }
+            ]
+          },
           null,
           2
         )
       }
+    });
+    fireEvent.click(
+      within(dialog).getAllByRole('tab', { name: 'Schema 字段' })[1]
+    );
+
+    await waitFor(() => {
+      expect(within(dialog).getByLabelText('Schema 字段名 1')).toHaveValue(
+        'task'
+      );
+      expect(within(dialog).getByLabelText('Schema 字段名 2')).toHaveValue(
+        'attachments'
+      );
+      expect(
+        within(dialog).queryByDisplayValue('input_schema')
+      ).not.toBeInTheDocument();
+      expect(
+        within(dialog).queryByDisplayValue('preconditions')
+      ).not.toBeInTheDocument();
     });
     fireEvent.click(within(dialog).getByRole('button', { name: '保存工具' }));
 
@@ -497,13 +559,106 @@ describe('NodeInspector core', () => {
               input_schema: expect.objectContaining({
                 properties: expect.objectContaining({
                   task: expect.objectContaining({
-                    description: '给多模态模型的任务指示提示词'
+                    description: '给多模态模型的新任务指示'
                   }),
-                  media: expect.objectContaining({
-                    description: '需要交给多模态模型处理的媒体引用'
+                  attachments: expect.objectContaining({
+                    description: '需要交给多模态模型处理的新媒体引用'
                   })
                 })
               })
+            })
+          ]
+        })
+      );
+    });
+  });
+
+  test('saves routed LLM tool preconditions from the fields editor', async () => {
+    const state = createInitialState();
+    let latestDocument = state.draft.document;
+    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm', 720, 240);
+    const llmNodeConfig = getLlmNodeConfig(state.draft.document);
+
+    state.draft.document.graph.nodes.push(mountedLlm);
+    llmNodeConfig.visible_internal_llm_tools_enabled = true;
+    llmNodeConfig.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'image_llm',
+        connector_id: 'image_llm',
+        target_node_id: 'node-mounted-llm',
+        description: 'Inspect images',
+        preconditions: [{}],
+        input_schema: {
+          type: 'object',
+          required: ['task'],
+          properties: {
+            task: {
+              type: 'string'
+            },
+            media: {
+              type: 'array'
+            }
+          }
+        }
+      }
+    ];
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑 image_llm' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
+    const preconditionsEditor = within(dialog).getByTestId(
+      'agent-flow-llm-tool-preconditions-json-editor'
+    );
+
+    expect(
+      within(preconditionsEditor).getByLabelText(
+        '前置拦截 1 字段值 argument_path'
+      )
+    ).toHaveValue('media');
+    fireEvent.change(
+      within(preconditionsEditor).getByLabelText(
+        '前置拦截 1 字段值 argument_path'
+      ),
+      {
+        target: { value: 'media' }
+      }
+    );
+    fireEvent.change(
+      within(preconditionsEditor).getByLabelText(
+        '前置拦截 1 字段值 media_kind'
+      ),
+      {
+        target: { value: 'image' }
+      }
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存工具' }));
+
+    await waitFor(() => {
+      expect(getLlmNodeConfig(latestDocument)).toEqual(
+        expect.objectContaining({
+          visible_internal_llm_tools: [
+            expect.objectContaining({
+              tool_name: 'image_llm',
+              preconditions: [
+                {
+                  kind: 'media_content_available',
+                  argument_path: ['media'],
+                  media_kind: 'image'
+                }
+              ]
             })
           ]
         })
