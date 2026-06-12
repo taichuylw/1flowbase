@@ -561,7 +561,15 @@ fn compatibility_inputs(compatibility: Value) -> Value {
 }
 
 fn normalize_openai_tool(tool: &Value) -> Option<Value> {
-    let function = tool.get("function")?.as_object()?;
+    // Chat Completions nests the definition under "function"; the Responses
+    // API declares function tools flat on the tool object itself.
+    let function = match tool.get("function").and_then(Value::as_object) {
+        Some(function) => function,
+        None if tool.get("type").and_then(Value::as_str) == Some("function") => {
+            tool.as_object()?
+        }
+        None => return None,
+    };
     let name = function.get("name")?.as_str()?.trim();
     if name.is_empty() {
         return None;
@@ -953,6 +961,36 @@ mod tests {
         );
         assert_eq!(request.conversation["user"], json!("external-user-1"));
         assert_eq!(request.metadata["trace_id"], json!("trace-responses"));
+    }
+
+    #[test]
+    fn maps_responses_flat_function_tools_into_native_inputs() {
+        let request = map_response_request(
+            json!({
+                "model": "1flowbase",
+                "input": "hi",
+                "tools": [
+                    {
+                        "type": "function",
+                        "name": "shell",
+                        "description": "Run a command",
+                        "parameters": {
+                            "type": "object",
+                            "properties": { "command": { "type": "array" } }
+                        },
+                        "strict": false
+                    }
+                ]
+            }),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(request.inputs["tools"][0]["name"], json!("shell"));
+        assert_eq!(
+            request.inputs["tools"][0]["input_schema"]["type"],
+            json!("object")
+        );
     }
 
     #[test]
