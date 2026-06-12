@@ -52,6 +52,21 @@ impl InMemoryProviderRuntime {
         }
     }
 
+    pub(crate) fn with_provider_events_and_result(
+        provider_events: Vec<ProviderStreamEvent>,
+        provider_result: ProviderInvocationResult,
+    ) -> Self {
+        Self {
+            invoke_delay: None,
+            provider_events: Some(provider_events),
+            provider_result: Some(provider_result),
+            provider_results: None,
+            live_events_then_error: None,
+            fail_before_token_models: Vec::new(),
+            captured_inputs: None,
+        }
+    }
+
     pub(crate) fn with_provider_results(provider_results: Vec<ProviderInvocationResult>) -> Self {
         Self {
             invoke_delay: None,

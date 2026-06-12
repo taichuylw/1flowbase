@@ -66,6 +66,9 @@ use llm_final_content::*;
 use llm_invocation::*;
 use llm_metrics::*;
 use llm_node_outputs::*;
+pub use llm_node_outputs::{
+    canonicalize_provider_output_tool_call_names, canonicalize_provider_stream_event_tool_call_name,
+};
 use llm_parameters::*;
 use node_failure_policy::{apply_node_error_policy, NodeErrorPolicyApplication};
 pub(crate) use variable_assignment::execute_variable_assignment_node;
@@ -906,7 +909,8 @@ where
                 },
             );
         }
-        let output = match invoker.invoke_llm(attempt_runtime, invocation.input).await {
+        let invocation_tools = invocation.input.tools.clone();
+        let mut output = match invoker.invoke_llm(attempt_runtime, invocation.input).await {
             Ok(output) => output,
             Err(error) => {
                 let provider_error = provider_runtime_error_from_anyhow(&error);
@@ -950,6 +954,7 @@ where
                 );
             }
         };
+        canonicalize_provider_output_tool_call_names(&mut output, &invocation_tools);
 
         let usage = collect_usage(&output.events, &output.result.usage);
         let finish_reason = output

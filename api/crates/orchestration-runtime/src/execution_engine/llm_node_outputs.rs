@@ -383,6 +383,114 @@ pub(super) fn tool_calls_with_call_usage(
     )
 }
 
+pub fn canonicalize_provider_output_tool_call_names(
+    output: &mut ProviderInvocationOutput,
+    tools: &[Value],
+) {
+    if tools.is_empty() {
+        return;
+    }
+
+    for tool_call in &mut output.result.tool_calls {
+        if let Some(name) = canonical_tool_name_for_provider_output(&tool_call.name, tools) {
+            tool_call.name = name;
+        }
+    }
+
+    for event in &mut output.events {
+        match event {
+            ProviderStreamEvent::ToolCallCommit { call } => {
+                if let Some(name) = canonical_tool_name_for_provider_output(&call.name, tools) {
+                    call.name = name;
+                }
+            }
+            ProviderStreamEvent::ToolCallDelta { delta, .. } => {
+                canonicalize_tool_call_delta_name(delta, tools);
+            }
+            _ => {}
+        }
+    }
+}
+
+pub fn canonicalize_provider_stream_event_tool_call_name(
+    event: &mut ProviderStreamEvent,
+    tools: &[Value],
+) {
+    if tools.is_empty() {
+        return;
+    }
+
+    match event {
+        ProviderStreamEvent::ToolCallCommit { call } => {
+            if let Some(name) = canonical_tool_name_for_provider_output(&call.name, tools) {
+                call.name = name;
+            }
+        }
+        ProviderStreamEvent::ToolCallDelta { delta, .. } => {
+            canonicalize_tool_call_delta_name(delta, tools);
+        }
+        _ => {}
+    }
+}
+
+fn canonicalize_tool_call_delta_name(delta: &mut Value, tools: &[Value]) {
+    let Some(object) = delta.as_object_mut() else {
+        return;
+    };
+
+    if let Some(name) = object
+        .get("name")
+        .and_then(Value::as_str)
+        .and_then(|name| canonical_tool_name_for_provider_output(name, tools))
+    {
+        object.insert("name".to_string(), Value::String(name));
+    }
+
+    let Some(function) = object.get_mut("function").and_then(Value::as_object_mut) else {
+        return;
+    };
+    if let Some(name) = function
+        .get("name")
+        .and_then(Value::as_str)
+        .and_then(|name| canonical_tool_name_for_provider_output(name, tools))
+    {
+        function.insert("name".to_string(), Value::String(name));
+    }
+}
+
+fn canonical_tool_name_for_provider_output(name: &str, tools: &[Value]) -> Option<String> {
+    let requested = name.trim();
+    if requested.is_empty() {
+        return None;
+    }
+
+    let mut matched = None;
+    for tool in tools {
+        let Some(candidate) = provider_tool_name(tool) else {
+            continue;
+        };
+        if !candidate.eq_ignore_ascii_case(requested) {
+            continue;
+        }
+        match matched {
+            Some(existing) if existing != candidate => return None,
+            Some(_) => {}
+            None => matched = Some(candidate),
+        }
+    }
+
+    matched.map(str::to_string)
+}
+
+fn provider_tool_name(tool: &Value) -> Option<&str> {
+    tool.get("function")
+        .and_then(|function| function.get("name"))
+        .or_else(|| tool.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+}
+
 pub(super) fn apply_result_context_usage_to_last_tool_results(rounds: &mut [Value], usage: &Value) {
     let Some(tool_results) = rounds
         .last_mut()

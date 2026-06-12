@@ -542,6 +542,10 @@ pub(super) fn provider_tools(
     variable_pool: &Map<String, Value>,
     runtime_context: &ExecutionRuntimeContext,
 ) -> Vec<Value> {
+    if claude_code_control_run_blocks_tools(resolved_inputs, variable_pool) {
+        return Vec::new();
+    }
+
     let mut tools = external_provider_tools(
         node,
         resolved_inputs,
@@ -555,6 +559,26 @@ pub(super) fn provider_tools(
     tools
 }
 
+fn claude_code_control_run_blocks_tools(
+    resolved_inputs: &Map<String, Value>,
+    variable_pool: &Map<String, Value>,
+) -> bool {
+    payload_has_claude_code_control(resolved_inputs)
+        || variable_pool
+            .values()
+            .filter_map(Value::as_object)
+            .any(payload_has_claude_code_control)
+}
+
+fn payload_has_claude_code_control(payload: &Map<String, Value>) -> bool {
+    payload
+        .get("compatibility")
+        .and_then(|compatibility| compatibility.get("claude_code_control"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|value| matches!(value, "compact_summary" | "session_title"))
+}
+
 fn external_provider_tools(
     node: &CompiledNode,
     resolved_inputs: &Map<String, Value>,
@@ -563,9 +587,6 @@ fn external_provider_tools(
     runtime_context: &ExecutionRuntimeContext,
 ) -> Vec<Value> {
     if visible_internal_llm_tool_blocks_external_tools(variable_pool) {
-        return Vec::new();
-    }
-    if media_route_should_hold_external_tools(node, resolved_inputs, variable_pool) {
         return Vec::new();
     }
 
@@ -609,16 +630,6 @@ fn external_provider_tools(
                 })
         })
         .unwrap_or_else(|| runtime_context.tools.clone())
-}
-
-fn media_route_should_hold_external_tools(
-    node: &CompiledNode,
-    resolved_inputs: &Map<String, Value>,
-    variable_pool: &Map<String, Value>,
-) -> bool {
-    visible_internal_llm_node_has_media_tool(node)
-        && media_route_context_mentions_image_path(resolved_inputs, variable_pool)
-        && !media_route_has_returned_to_main(node, resolved_inputs, variable_pool)
 }
 
 fn media_route_has_returned_to_main(

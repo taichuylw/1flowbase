@@ -98,6 +98,105 @@ async fn visible_internal_llm_tool_outputs_visible_text_and_recalls_main_llm() {
 }
 
 #[tokio::test]
+async fn visible_internal_llm_tool_is_hidden_for_claude_code_control_runs() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![final_llm_response("summary")]);
+    let plan = visible_internal_llm_tool_plan();
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "Your task is to create a detailed summary of the conversation so far",
+                "compatibility": {
+                    "claude_code_control": "compact_summary"
+                },
+                "tools": [
+                    {
+                        "name": "Bash",
+                        "description": "Run a shell command",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": { "type": "string" }
+                            },
+                            "required": ["command"]
+                        }
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "expected completed control run, got {:?}",
+        outcome.stop_reason
+    );
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured.len(), 1);
+    assert!(
+        captured[0].tools.is_empty(),
+        "control runs must not expose client or visible internal LLM tools"
+    );
+}
+
+#[tokio::test]
+async fn visible_internal_llm_tool_stays_available_for_claude_code_compact_resume() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![final_llm_response("resume")]);
+    let plan = visible_internal_llm_tool_plan();
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "This session is being continued from a previous conversation that ran out of context.\n\nIf you need specific details from before compaction, use the summary.",
+                "compatibility": {
+                    "claude_code_control": "compact_resume"
+                },
+                "tools": [
+                    {
+                        "name": "Bash",
+                        "description": "Run a shell command",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": { "type": "string" }
+                            },
+                            "required": ["command"]
+                        }
+                    }
+                ]
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "expected completed compact resume run, got {:?}",
+        outcome.stop_reason
+    );
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    let tool_names = captured[0]
+        .tools
+        .iter()
+        .filter_map(|tool| tool["function"]["name"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(tool_names, vec!["Bash", "inspect_visible_context"]);
+}
+
+#[tokio::test]
 async fn visible_internal_llm_tool_executes_composed_connector_branch() {
     let (invoker, captured_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {
@@ -368,6 +467,81 @@ async fn visible_internal_llm_tool_branch_llm_can_wait_for_external_tool_callbac
 }
 
 #[tokio::test]
+async fn visible_internal_llm_tool_branch_canonicalizes_inherited_tool_name_case() {
+    let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![ProviderToolCall {
+                id: "call_visible".to_string(),
+                name: "inspect_visible_context".to_string(),
+                arguments: json!({ "query": "image?" }),
+                provider_metadata: json!({}),
+            }],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        tool_call_response(vec![ProviderToolCall {
+            id: "call_bash".to_string(),
+            name: "bash".to_string(),
+            arguments: json!({ "command": "pwd" }),
+            provider_metadata: json!({}),
+        }]),
+    ]);
+    let mut plan = visible_internal_llm_tool_plan();
+    plan.nodes
+        .get_mut("node-llm")
+        .expect("main llm node should exist")
+        .config["visible_internal_llm_tools"][0]["external_tool_policy"] = json!("inherited");
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "describe the picture",
+                "history": [],
+                "tools": [
+                    {
+                        "name": "Bash",
+                        "description": "Run a shell command",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": { "type": "string" }
+                            },
+                            "required": ["command"]
+                        }
+                    }
+                ]
+            }
+        }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+
+    match waiting.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(pending.node_id, "node-mounted-llm");
+            assert_eq!(
+                pending.request_payload["tool_calls"][0]["name"],
+                json!("Bash")
+            );
+        }
+        other => panic!("expected mounted llm external tool callback wait, got {other:?}"),
+    }
+    let main_wait_trace = waiting
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("main llm waiting trace should exist");
+    assert_eq!(
+        main_wait_trace.debug_payload["visible_internal_llm_tool_events"][1]["request_payload"]
+            ["tool_calls"][0]["name"],
+        json!("Bash")
+    );
+}
+
+#[tokio::test]
 async fn visible_internal_llm_tool_branch_inherits_run_context_query_when_argument_is_only_task() {
     let (invoker, captured_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {
@@ -589,7 +763,10 @@ async fn visible_internal_image_llm_tool_injects_workspace_path_media_blocks() {
         .iter()
         .filter_map(|tool| tool["function"]["name"].as_str())
         .collect::<Vec<_>>();
-    assert_eq!(main_tool_names, vec!["inspect_visible_context"]);
+    assert_eq!(
+        main_tool_names,
+        vec!["Bash", "Read", "inspect_visible_context"]
+    );
     let image_tool_schema = captured[0]
         .tools
         .iter()
@@ -1286,9 +1463,8 @@ async fn visible_internal_llm_tool_mixed_round_runs_internal_inline_and_waits_fo
         .clone()
         .expect("mixed round should checkpoint while waiting for the client tool");
 
-    let (resume_invoker, resumed_inputs) = sequential_tool_invoker(vec![final_llm_response(
-        "main-after",
-    )]);
+    let (resume_invoker, resumed_inputs) =
+        sequential_tool_invoker(vec![final_llm_response("main-after")]);
     let resumed = resume_flow_debug_run(
         &plan,
         &checkpoint,

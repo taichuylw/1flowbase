@@ -77,3 +77,67 @@ mod llm_round_timeline_tests {
         assert!(rounds[0]["tool_results"][0].get("token_delta").is_none());
     }
 }
+
+#[cfg(test)]
+mod tool_call_name_tests {
+    use super::*;
+
+    #[test]
+    fn provider_output_tool_call_names_use_registered_tool_case() {
+        let mut output = ProviderInvocationOutput {
+            events: vec![
+                ProviderStreamEvent::ToolCallDelta {
+                    call_id: "call_bash".to_string(),
+                    delta: json!({
+                        "function": {
+                            "name": "bash",
+                            "arguments": ""
+                        }
+                    }),
+                },
+                ProviderStreamEvent::ToolCallCommit {
+                    call: ProviderToolCall {
+                        id: "call_bash".to_string(),
+                        name: "bash".to_string(),
+                        arguments: json!({ "command": "pwd" }),
+                        provider_metadata: json!({}),
+                    },
+                },
+            ],
+            result: ProviderInvocationResult {
+                tool_calls: vec![ProviderToolCall {
+                    id: "call_bash".to_string(),
+                    name: "bash".to_string(),
+                    arguments: json!({ "command": "pwd" }),
+                    provider_metadata: json!({}),
+                }],
+                ..ProviderInvocationResult::default()
+            },
+            first_token_at: None,
+            time_to_first_token_ms: None,
+        };
+        let tools = vec![json!({
+            "type": "function",
+            "function": {
+                "name": "Bash",
+                "description": "Run shell commands"
+            }
+        })];
+
+        canonicalize_provider_output_tool_call_names(&mut output, &tools);
+
+        assert_eq!(output.result.tool_calls[0].name, "Bash");
+        match &output.events[0] {
+            ProviderStreamEvent::ToolCallDelta { delta, .. } => {
+                assert_eq!(delta["function"]["name"], json!("Bash"));
+            }
+            other => panic!("expected tool call delta, got {other:?}"),
+        }
+        match &output.events[1] {
+            ProviderStreamEvent::ToolCallCommit { call } => {
+                assert_eq!(call.name, "Bash");
+            }
+            other => panic!("expected tool call commit, got {other:?}"),
+        }
+    }
+}

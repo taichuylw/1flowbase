@@ -78,6 +78,7 @@ where
             "runtime config finished"
         );
 
+        let canonical_tool_registry = input.tools.clone();
         let provider_invoke_started_at = OffsetDateTime::now_utc();
         let provider_invoke_started = std::time::Instant::now();
         let first_token_timing = Arc::new(Mutex::new(None::<FirstTokenTiming>));
@@ -92,12 +93,17 @@ where
             let repository = self.repository.clone();
             let flow_run_id = self.flow_run_id;
             let first_token_timing_for_task = first_token_timing.clone();
+            let canonical_tool_registry_for_task = canonical_tool_registry.clone();
             let (provider_sender, mut provider_receiver) =
                 mpsc::unbounded_channel::<ProviderStreamEvent>();
             if live_sender.is_some() || runtime_event_stream.is_some() || persist_sender.is_some() {
                 live_forward_handle = Some(tokio::spawn(async move {
                     let mut think_tag_splitter = ThinkTagStreamSplitter::default();
-                    while let Some(event) = provider_receiver.recv().await {
+                    while let Some(mut event) = provider_receiver.recv().await {
+                        orchestration_runtime::execution_engine::canonicalize_provider_stream_event_tool_call_name(
+                            &mut event,
+                            &canonical_tool_registry_for_task,
+                        );
                         record_first_token_timing(
                             &first_token_timing_for_task,
                             &event,
@@ -264,24 +270,27 @@ where
             }
         }
         let invocation_output = invocation_result?;
+        let captured_first_token_timing = first_token_timing.lock().ok().and_then(|timing| *timing);
+        let mut output = orchestration_runtime::execution_engine::ProviderInvocationOutput {
+            events: invocation_output.events,
+            result: invocation_output.result,
+            first_token_at: captured_first_token_timing.map(|timing| timing.first_token_at),
+            time_to_first_token_ms: captured_first_token_timing
+                .map(|timing| timing.time_to_first_token_ms),
+        };
+        orchestration_runtime::execution_engine::canonicalize_provider_output_tool_call_names(
+            &mut output,
+            &canonical_tool_registry,
+        );
         if let Some(persist) = &self.persist_events {
             if !has_live_provider_events {
-                for event in invocation_output.events.iter().cloned() {
+                for event in output.events.iter().cloned() {
                     let _ = persist.send(event);
                 }
             }
         }
 
-        let captured_first_token_timing = first_token_timing.lock().ok().and_then(|timing| *timing);
-        Ok(
-            orchestration_runtime::execution_engine::ProviderInvocationOutput {
-                events: invocation_output.events,
-                result: invocation_output.result,
-                first_token_at: captured_first_token_timing.map(|timing| timing.first_token_at),
-                time_to_first_token_ms: captured_first_token_timing
-                    .map(|timing| timing.time_to_first_token_ms),
-            },
-        )
+        Ok(output)
     }
 }
 
