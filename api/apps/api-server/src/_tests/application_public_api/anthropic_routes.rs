@@ -565,6 +565,41 @@ async fn anthropic_messages_routes_hidden_system_reminder_tool_result_to_callbac
 }
 
 #[tokio::test]
+async fn anthropic_messages_routes_latest_message_only_tool_result_to_callback_resume() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "Anthropic Latest Tool Result App").await;
+    let before = flow_run_count(state.as_ref()).await;
+    let callback_task_id = uuid::Uuid::from_u128(0xffffffffffffffffffffffffffffffff);
+    let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_read");
+
+    let response = post_json(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": "Found 3 files"
+                    }]
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let payload = response_json(response).await;
+    assert_eq!(payload["error"]["type"], json!("callback_task"));
+    assert_eq!(flow_run_count(state.as_ref()).await, before);
+}
+
+#[tokio::test]
 async fn anthropic_messages_rejects_orphan_tool_result_without_creating_run() {
     let (app, state) = test_app_with_state().await;
     let token = setup_published_app(&app, "Anthropic Orphan Tool Result App").await;

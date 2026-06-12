@@ -276,11 +276,11 @@ fn anthropic_tool_resume_request_accepts_hidden_system_reminder_text() {
 }
 
 #[test]
-fn anthropic_tool_resume_request_rejects_orphan_trailing_tool_result() {
+fn anthropic_tool_resume_request_decodes_latest_message_only_tool_result() {
     let callback_task_id = Uuid::from_u128(0xffffffffffffffffffffffffffffffff);
     let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_123");
 
-    let error = anthropic_tool_resume_request(&json!({
+    let resume = anthropic_tool_resume_request(&json!({
         "model": "1flowbase",
         "messages": [
             {
@@ -289,6 +289,72 @@ fn anthropic_tool_resume_request_rejects_orphan_trailing_tool_result() {
                     {
                         "type": "tool_result",
                         "tool_use_id": tool_use_id,
+                        "content": "Found 3 files"
+                    }
+                ]
+            }
+        ]
+    }))
+    .expect("latest-message-only tool_result should parse")
+    .expect("encoded tool_result should resume callback");
+
+    assert_eq!(resume.callback_task_id, callback_task_id);
+    assert_eq!(resume.tool_results[0]["tool_call_id"], json!("toolu_123"));
+    assert_eq!(resume.tool_results[0]["content"], json!("Found 3 files"));
+}
+
+#[test]
+fn anthropic_tool_resume_request_uses_latest_callback_from_latest_message_only_results() {
+    let previous_callback_task_id = Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+    let current_callback_task_id = Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb);
+    let previous_tool_use_id =
+        encode_anthropic_callback_tool_use_id(previous_callback_task_id, "toolu_previous");
+    let current_tool_use_id =
+        encode_anthropic_callback_tool_use_id(current_callback_task_id, "toolu_current");
+
+    let resume = anthropic_tool_resume_request(&json!({
+        "model": "1flowbase",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": previous_tool_use_id,
+                        "content": "old result replayed"
+                    },
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": current_tool_use_id,
+                        "content": "new result"
+                    }
+                ]
+            }
+        ]
+    }))
+    .expect("latest-message-only tool_result replay should parse")
+    .expect("latest callback should be resumed");
+
+    assert_eq!(resume.callback_task_id, current_callback_task_id);
+    assert_eq!(resume.tool_results.as_array().unwrap().len(), 1);
+    assert_eq!(
+        resume.tool_results[0]["tool_call_id"],
+        json!("toolu_current")
+    );
+    assert_eq!(resume.tool_results[0]["content"], json!("new result"));
+}
+
+#[test]
+fn anthropic_tool_resume_request_rejects_orphan_trailing_tool_result() {
+    let error = anthropic_tool_resume_request(&json!({
+        "model": "1flowbase",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_123",
                         "content": "stale result"
                     }
                 ]

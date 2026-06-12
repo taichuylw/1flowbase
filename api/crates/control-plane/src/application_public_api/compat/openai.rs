@@ -460,9 +460,7 @@ fn responses_input_entry(item: &Value) -> Result<ResponsesInputEntry, OpenAiComp
         .as_object()
         .ok_or_else(|| OpenAiCompatError::invalid("input", "input message must be an object"))?;
     match object.get("type").and_then(Value::as_str) {
-        None | Some("message") => Ok(ResponsesInputEntry::Message(responses_input_message(
-            item,
-        )?)),
+        None | Some("message") => Ok(ResponsesInputEntry::Message(responses_input_message(item)?)),
         Some("reasoning") | Some("item_reference") => Ok(ResponsesInputEntry::Skipped),
         Some("function_call") => {
             let call_id = object
@@ -592,9 +590,7 @@ fn normalize_openai_tool(tool: &Value) -> Option<Value> {
     // API declares function tools flat on the tool object itself.
     let function = match tool.get("function").and_then(Value::as_object) {
         Some(function) => function,
-        None if tool.get("type").and_then(Value::as_str) == Some("function") => {
-            tool.as_object()?
-        }
+        None if tool.get("type").and_then(Value::as_str) == Some("function") => tool.as_object()?,
         None => return None,
     };
     let name = function.get("name")?.as_str()?.trim();

@@ -494,9 +494,6 @@ fn anthropic_tool_resume_request(
     trailing_tool_result_messages.reverse();
     let trailing_start = messages.len() - trailing_tool_result_messages.len();
     let matching_tool_use_ids = anthropic_trailing_assistant_tool_use_ids(messages, trailing_start);
-    if matching_tool_use_ids.is_empty() {
-        return Err(anthropic_tool_result_orphan_error());
-    }
 
     let mut decoded_results = Vec::new();
 
@@ -515,7 +512,7 @@ fn anthropic_tool_resume_request(
                 }
                 .into());
             };
-            if !matching_tool_use_ids.contains(tool_use_id) {
+            if !matching_tool_use_ids.is_empty() && !matching_tool_use_ids.contains(tool_use_id) {
                 continue;
             }
             let Some((decoded_callback_task_id, original_tool_use_id)) =
