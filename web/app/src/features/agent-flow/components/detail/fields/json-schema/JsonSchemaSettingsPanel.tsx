@@ -55,17 +55,19 @@ function JsonSchemaEditorFallback() {
 
 function JsonSchemaCodeEditor({
   value,
-  onChange
+  onChange,
+  ariaLabel = i18nText('agentFlow', 'auto.json_schema_content')
 }: {
   value: string;
   onChange: (value: string) => void;
+  ariaLabel?: string;
 }) {
   const options = useMemo(
     () => ({
       ...JSON_SCHEMA_EDITOR_OPTIONS,
-      ariaLabel: i18nText('agentFlow', 'auto.json_schema_content')
+      ariaLabel
     }),
-    []
+    [ariaLabel]
   );
 
   return (
@@ -81,6 +83,30 @@ function JsonSchemaCodeEditor({
           onChange={(nextValue) => onChange(nextValue ?? '')}
         />
       </Suspense>
+    </div>
+  );
+}
+
+export function InlineJsonCodeEditor({
+  ariaLabel,
+  className,
+  testId,
+  value,
+  onChange
+}: {
+  ariaLabel: string;
+  className?: string;
+  testId?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className={className} data-testid={testId}>
+      <JsonSchemaCodeEditor
+        ariaLabel={ariaLabel}
+        value={value}
+        onChange={onChange}
+      />
     </div>
   );
 }

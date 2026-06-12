@@ -16,7 +16,10 @@ import {
 } from '../../../lib/llm-node-config';
 import { i18nText } from '../../../../../shared/i18n/text';
 import { FloatingSettingsPanel } from '../FloatingSettingsPanel';
-import { JsonSchemaInlineEditor } from './json-schema/JsonSchemaSettingsPanel';
+import {
+  InlineJsonCodeEditor,
+  JsonSchemaInlineEditor
+} from './json-schema/JsonSchemaSettingsPanel';
 import { createDefaultJsonSchema } from './json-schema/json-schema-utils';
 
 const TOOL_FORM_ROW_STYLE = {
@@ -571,17 +574,15 @@ export function LlmToolRegistrationsField({
             </div>
             <div style={TOOL_FORM_ROW_STYLE}>
               <span>{i18nText('agentFlow', 'auto.tool_preconditions')}</span>
-              <Input.TextArea
-                aria-label={i18nText(
+              <InlineJsonCodeEditor
+                ariaLabel={i18nText(
                   'agentFlow',
                   'auto.tool_preconditions_json'
                 )}
-                autoSize={{ minRows: 4, maxRows: 8 }}
-                status={preconditionsEditorValid ? undefined : 'error'}
+                className="agent-flow-llm-tool-registration-preconditions"
+                testId="agent-flow-llm-tool-preconditions-json-editor"
                 value={preconditionsText}
-                onChange={(event) =>
-                  updatePreconditionsText(event.target.value)
-                }
+                onChange={updatePreconditionsText}
               />
               {preconditionsEditorError ? (
                 <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>

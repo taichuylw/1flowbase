@@ -428,7 +428,13 @@ describe('NodeInspector core', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
     const preconditionsInput = within(dialog).getByLabelText('调用前置条件 JSON');
+    const preconditionsEditor = within(dialog).getByTestId(
+      'agent-flow-llm-tool-preconditions-json-editor'
+    );
 
+    expect(preconditionsEditor).toHaveClass(
+      'agent-flow-llm-tool-registration-preconditions'
+    );
     expect(preconditionsInput).toHaveValue(
       JSON.stringify(
         [

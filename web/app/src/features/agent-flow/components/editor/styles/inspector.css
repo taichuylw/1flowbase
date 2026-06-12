@@ -361,6 +361,11 @@
   background: #fff;
 }
 
+.agent-flow-llm-tool-registration-preconditions
+  .agent-flow-json-schema-settings__editor {
+  height: 160px;
+}
+
 .agent-flow-llm-tool-registration-schema
   .agent-flow-json-schema-settings__field-rows {
   max-height: 184px;
