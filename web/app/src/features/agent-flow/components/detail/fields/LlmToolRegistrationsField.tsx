@@ -87,18 +87,92 @@ interface LlmToolRegistrationDraft {
   tool_name: string;
   description: string;
   input_schema: Record<string, unknown>;
+  preconditions: Array<Record<string, unknown>>;
   connector_id: string;
   internal_llm_node_policy: LlmInternalLlmNodePolicy;
   external_tool_policy: LlmExternalToolPolicy;
 }
 
+function recordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isRecord).map((item) => ({ ...item }));
+}
+
+function stringifyToolPreconditions(
+  preconditions: Array<Record<string, unknown>>
+) {
+  return JSON.stringify(preconditions, null, 2);
+}
+
+function parseToolPreconditionsInput(
+  value: string
+): { ok: true; preconditions: Array<Record<string, unknown>> } | {
+  ok: false;
+  message: string;
+} {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return { ok: true, preconditions: [] };
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(trimmedValue);
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : i18nText('agentFlow', 'auto.invalid_json')
+    };
+  }
+
+  if (!Array.isArray(parsed) || parsed.some((item) => !isRecord(item))) {
+    return {
+      ok: false,
+      message: i18nText('agentFlow', 'auto.preconditions_json_array_required')
+    };
+  }
+
+  return { ok: true, preconditions: recordArray(parsed) };
+}
+
+function splitToolRegistrationSchema(value: Record<string, unknown>):
+  | {
+      input_schema: Record<string, unknown>;
+      preconditions: Array<Record<string, unknown>>;
+    }
+  | null {
+  if (!isRecord(value.input_schema)) {
+    return null;
+  }
+
+  return {
+    input_schema: value.input_schema,
+    preconditions: recordArray(value.preconditions)
+  };
+}
+
 function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
+  const inputSchema = isRecord(tool.input_schema)
+    ? tool.input_schema
+    : createDefaultJsonSchema();
+  const embeddedToolConfig = splitToolRegistrationSchema(inputSchema);
+
   return {
     tool_name: tool.tool_name,
     description: tool.description ?? '',
-    input_schema: isRecord(tool.input_schema)
-      ? tool.input_schema
-      : createDefaultJsonSchema(),
+    input_schema: embeddedToolConfig?.input_schema ?? inputSchema,
+    preconditions:
+      recordArray(tool.preconditions).length > 0
+        ? recordArray(tool.preconditions)
+        : (embeddedToolConfig?.preconditions ?? []),
     connector_id: tool.connector_id ?? tool.tool_name,
     internal_llm_node_policy:
       tool.internal_llm_node_policy ?? DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
@@ -123,7 +197,9 @@ function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
     description: draft.description.trim() || undefined,
     internal_llm_node_policy: draft.internal_llm_node_policy,
     external_tool_policy: draft.external_tool_policy,
-    input_schema: draft.input_schema
+    input_schema: draft.input_schema,
+    preconditions:
+      draft.preconditions.length > 0 ? draft.preconditions : undefined
   };
 }
 
@@ -151,6 +227,13 @@ export function LlmToolRegistrationsField({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<LlmToolRegistrationDraft | null>(null);
   const [schemaEditorValid, setSchemaEditorValid] = useState(true);
+  const [schemaEditorRevision, setSchemaEditorRevision] = useState(0);
+  const [preconditionsText, setPreconditionsText] = useState('[]');
+  const [preconditionsEditorValid, setPreconditionsEditorValid] =
+    useState(true);
+  const [preconditionsEditorError, setPreconditionsEditorError] = useState<
+    string | null
+  >(null);
   const toolEditorTriggerRef = useRef<HTMLElement | null>(null);
   const currentNode = getCurrentNode(adapter);
 
@@ -178,7 +261,11 @@ export function LlmToolRegistrationsField({
     ? identifierError(draft.connector_id, existingConnectorIds)
     : null;
   const toolEditorValid =
-    draft !== null && !toolNameError && !connectorIdError && schemaEditorValid;
+    draft !== null &&
+    !toolNameError &&
+    !connectorIdError &&
+    schemaEditorValid &&
+    preconditionsEditorValid;
 
   function updateTools(nextTools: LlmVisibleInternalTool[]) {
     adapter.setValue('config.visible_internal_llm_tools', nextTools);
@@ -189,16 +276,26 @@ export function LlmToolRegistrationsField({
     tool: LlmVisibleInternalTool,
     trigger: HTMLElement | null
   ) {
+    const nextDraft = draftFromTool(tool);
+
     toolEditorTriggerRef.current = trigger;
     setEditingIndex(index);
-    setDraft(draftFromTool(tool));
+    setDraft(nextDraft);
     setSchemaEditorValid(true);
+    setSchemaEditorRevision(0);
+    setPreconditionsText(stringifyToolPreconditions(nextDraft.preconditions));
+    setPreconditionsEditorValid(true);
+    setPreconditionsEditorError(null);
   }
 
   function closeToolEditor() {
     setEditingIndex(null);
     setDraft(null);
     setSchemaEditorValid(true);
+    setSchemaEditorRevision(0);
+    setPreconditionsText('[]');
+    setPreconditionsEditorValid(true);
+    setPreconditionsEditorError(null);
   }
 
   function updateDraft(patch: Partial<LlmToolRegistrationDraft>) {
@@ -234,6 +331,46 @@ export function LlmToolRegistrationsField({
       );
     }
     closeToolEditor();
+  }
+
+  function updateInputSchema(schema: Record<string, unknown>) {
+    const embeddedToolConfig = splitToolRegistrationSchema(schema);
+
+    if (embeddedToolConfig) {
+      updateDraft({
+        input_schema: embeddedToolConfig.input_schema,
+        preconditions:
+          embeddedToolConfig.preconditions.length > 0
+            ? embeddedToolConfig.preconditions
+            : (draft?.preconditions ?? [])
+      });
+      if (embeddedToolConfig.preconditions.length > 0) {
+        setPreconditionsText(
+          stringifyToolPreconditions(embeddedToolConfig.preconditions)
+        );
+        setPreconditionsEditorValid(true);
+        setPreconditionsEditorError(null);
+      }
+      setSchemaEditorRevision((revision) => revision + 1);
+      return;
+    }
+
+    updateDraft({ input_schema: schema });
+  }
+
+  function updatePreconditionsText(value: string) {
+    setPreconditionsText(value);
+    const parsed = parseToolPreconditionsInput(value);
+
+    if (!parsed.ok) {
+      setPreconditionsEditorValid(false);
+      setPreconditionsEditorError(parsed.message);
+      return;
+    }
+
+    setPreconditionsEditorValid(true);
+    setPreconditionsEditorError(null);
+    updateDraft({ preconditions: parsed.preconditions });
   }
 
   const modalTitle = i18nText('agentFlow', 'auto.edit', {
@@ -433,12 +570,32 @@ export function LlmToolRegistrationsField({
               />
             </div>
             <div style={TOOL_FORM_ROW_STYLE}>
+              <span>{i18nText('agentFlow', 'auto.tool_preconditions')}</span>
+              <Input.TextArea
+                aria-label={i18nText(
+                  'agentFlow',
+                  'auto.tool_preconditions_json'
+                )}
+                autoSize={{ minRows: 4, maxRows: 8 }}
+                status={preconditionsEditorValid ? undefined : 'error'}
+                value={preconditionsText}
+                onChange={(event) =>
+                  updatePreconditionsText(event.target.value)
+                }
+              />
+              {preconditionsEditorError ? (
+                <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>
+                  {preconditionsEditorError}
+                </Typography.Text>
+              ) : null}
+            </div>
+            <div style={TOOL_FORM_ROW_STYLE}>
               <span>{i18nText('agentFlow', 'auto.input_parameters')}</span>
               <div className="agent-flow-llm-tool-registration-schema">
                 <JsonSchemaInlineEditor
-                  resetKey={editingIndex ?? 'new'}
+                  resetKey={`${editingIndex ?? 'new'}:${schemaEditorRevision}`}
                   schema={draft.input_schema}
-                  onChange={(schema) => updateDraft({ input_schema: schema })}
+                  onChange={updateInputSchema}
                   onValidityChange={setSchemaEditorValid}
                 />
               </div>

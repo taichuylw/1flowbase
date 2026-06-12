@@ -47,6 +47,7 @@ export interface LlmVisibleInternalTool {
   target_node_id: string;
   description?: string;
   input_schema?: Record<string, unknown>;
+  preconditions?: Array<Record<string, unknown>>;
   internal_llm_node_policy?: LlmInternalLlmNodePolicy;
   external_tool_policy?: LlmExternalToolPolicy;
 }
@@ -85,6 +86,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+function recordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(isRecord).map((item) => ({ ...item }));
 }
 
 export function createLlmToolSourceHandleId(connectorId: string) {
@@ -334,6 +343,10 @@ export function getLlmVisibleInternalTools(
     }
     if (isRecord(tool.input_schema)) {
       registration.input_schema = tool.input_schema as Record<string, unknown>;
+    }
+    const preconditions = recordArray(tool.preconditions);
+    if (preconditions.length > 0) {
+      registration.preconditions = preconditions;
     }
     if (tool.internal_llm_node_policy === 'allowed') {
       registration.internal_llm_node_policy = 'allowed';

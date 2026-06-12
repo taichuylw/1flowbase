@@ -123,7 +123,15 @@ describe('llm-node-config', () => {
             connector_id: ' inspect_visible_context ',
             target_node_id: ' node-mounted-llm ',
             description: ' Read visible context ',
-            input_schema: { type: 'object' }
+            input_schema: { type: 'object' },
+            preconditions: [
+              {
+                kind: 'media_content_available',
+                argument_path: ['media'],
+                media_kind: 'image'
+              },
+              null
+            ]
           },
           {
             type: 'visible_internal_llm_tool',
@@ -151,7 +159,14 @@ describe('llm-node-config', () => {
         connector_id: 'inspect_visible_context',
         target_node_id: 'node-mounted-llm',
         description: 'Read visible context',
-        input_schema: { type: 'object' }
+        input_schema: { type: 'object' },
+        preconditions: [
+          {
+            kind: 'media_content_available',
+            argument_path: ['media'],
+            media_kind: 'image'
+          }
+        ]
       },
       {
         type: 'visible_internal_llm_tool',

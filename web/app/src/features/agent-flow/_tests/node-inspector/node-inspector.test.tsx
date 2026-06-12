@@ -352,6 +352,159 @@ describe('NodeInspector core', () => {
     expect(screen.getByText('暂无工具注册')).toBeInTheDocument();
   });
 
+  test('edits routed LLM tool preconditions separately from input schema', async () => {
+    const state = createInitialState();
+    let latestDocument = state.draft.document;
+    const mountedLlm = createNodeDocument('llm', 'node-mounted-llm', 720, 240);
+    const llmNodeConfig = getLlmNodeConfig(state.draft.document);
+
+    state.draft.document.graph.nodes.push(mountedLlm);
+    llmNodeConfig.visible_internal_llm_tools_enabled = true;
+    llmNodeConfig.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'image_llm',
+        connector_id: 'image_llm',
+        target_node_id: 'node-mounted-llm',
+        description: 'Inspect images',
+        preconditions: [
+          {
+            kind: 'media_content_available',
+            argument_path: ['media'],
+            media_kind: 'image'
+          }
+        ],
+        input_schema: {
+          type: 'object',
+          required: ['task'],
+          properties: {
+            task: {
+              type: 'string',
+              description: '给多模态模型的任务指示提示词'
+            },
+            media: {
+              type: 'array',
+              description: '需要交给多模态模型处理的媒体引用',
+              items: {
+                type: 'object',
+                required: ['kind', 'source', 'path'],
+                properties: {
+                  kind: {
+                    type: 'string',
+                    enum: ['image'],
+                    description: '媒体类型'
+                  },
+                  source: {
+                    type: 'string',
+                    enum: ['workspace_path'],
+                    description: '媒体来源'
+                  },
+                  path: {
+                    type: 'string',
+                    description:
+                      '工作区内图片路径，例如 uploads/image_aionui_1781014667000.png'
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ];
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑 image_llm' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
+    const preconditionsInput = within(dialog).getByLabelText('调用前置条件 JSON');
+
+    expect(preconditionsInput).toHaveValue(
+      JSON.stringify(
+        [
+          {
+            kind: 'media_content_available',
+            argument_path: ['media'],
+            media_kind: 'image'
+          }
+        ],
+        null,
+        2
+      )
+    );
+    expect(within(dialog).getByLabelText('Schema 字段名 1')).toHaveValue(
+      'task'
+    );
+    expect(within(dialog).getByLabelText('Schema 字段描述 1')).toHaveValue(
+      '给多模态模型的任务指示提示词'
+    );
+    expect(within(dialog).getByLabelText('Schema 字段名 2')).toHaveValue(
+      'media'
+    );
+    expect(
+      within(dialog).queryByLabelText('Schema 字段名 3')
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByDisplayValue('preconditions')
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(preconditionsInput, {
+      target: {
+        value: JSON.stringify(
+          [
+            {
+              kind: 'media_content_available',
+              argument_path: ['attachments'],
+              media_kind: 'image'
+            }
+          ],
+          null,
+          2
+        )
+      }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存工具' }));
+
+    await waitFor(() => {
+      expect(getLlmNodeConfig(latestDocument)).toEqual(
+        expect.objectContaining({
+          visible_internal_llm_tools: [
+            expect.objectContaining({
+              tool_name: 'image_llm',
+              preconditions: [
+                {
+                  kind: 'media_content_available',
+                  argument_path: ['attachments'],
+                  media_kind: 'image'
+                }
+              ],
+              input_schema: expect.objectContaining({
+                properties: expect.objectContaining({
+                  task: expect.objectContaining({
+                    description: '给多模态模型的任务指示提示词'
+                  }),
+                  media: expect.objectContaining({
+                    description: '需要交给多模态模型处理的媒体引用'
+                  })
+                })
+              })
+            })
+          ]
+        })
+      );
+    });
+  });
+
   test('keeps the floating tool editor drag handle visible while the body crosses viewport boundaries', async () => {
     const state = createInitialState();
     const llmNodeConfig = getLlmNodeConfig(state.draft.document);
