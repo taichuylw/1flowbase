@@ -387,6 +387,9 @@ where
         {
             return Ok(());
         }
+        if is_claude_code_subagent_request(request) {
+            return Ok(());
+        }
         let Some(external_user) = request.conversation.string("user") else {
             return Ok(());
         };
@@ -531,6 +534,13 @@ fn public_run_idempotency_fingerprint(
         .map_err(|_| NativeRunValidationError::InvalidMapping)?;
     let hash = Sha256::digest(canonical);
     Ok(format!("sha256:{}", hex_lower(&hash)))
+}
+
+fn is_claude_code_subagent_request(request: &NativeRunRequest) -> bool {
+    request
+        .system
+        .as_deref()
+        .is_some_and(|system| system.contains("cc_is_subagent=true"))
 }
 
 fn write_canonical_json(value: &Value, out: &mut Vec<u8>) -> serde_json::Result<()> {
