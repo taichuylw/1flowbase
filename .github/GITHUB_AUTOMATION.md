@@ -72,9 +72,12 @@ for the same branch before stale runs can publish or close quality issues.
 ## Container Image CD
 
 `container-images.yml` publishes the `web`, `api-server`, and `plugin-runner` images for
-`latest` pushes and for the selected `workflow_dispatch` component. Each enabled matrix row
-builds a multi-platform scan-candidate tag named `scan-<run_id>-<run_attempt>-<sha>` first.
-The workflow does not push the official version tag or `latest` tag from the build step.
+`latest` pushes and for the selected `workflow_dispatch` component. Enabled components first
+build native artifacts outside the publish job: `web` uploads per-architecture `dist`
+artifacts, and the Rust components upload per-architecture binaries. Publish jobs then build
+multi-platform scan-candidate tags named `scan-<run_id>-<run_attempt>-<sha>` from those
+prebuilt artifacts. The workflow does not push the official version tag or `latest` tag from
+the build step.
 
 Before promotion, Trivy scans the candidate image with a pinned `aquasecurity/trivy-action`
 commit for action version `v0.36.0`; the action installs Trivy `v0.70.0`. `HIGH` and
@@ -86,7 +89,7 @@ tmp/test-governance/trivy-${component}-high.json
 tmp/test-governance/trivy-${component}-critical.json
 ```
 
-After the publish matrix finishes, the report job downloads the Trivy artifacts and runs
+After the publish jobs finish, the report job downloads the Trivy artifacts and runs
 `scope: container-images` through the local Quality Gate Action with `publish_issue: "false"`.
 Container CD reports are artifact-only so vulnerability and system-error details stay in
 Actions artifacts instead of GitHub Issues. The local reporter writes:
