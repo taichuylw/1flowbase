@@ -1199,3 +1199,143 @@ async fn visible_internal_llm_tool_inherited_policy_keeps_run_context_tools_with
                 .is_some_and(|url| url.starts_with("data:image/png;base64,"))
     }));
 }
+
+#[tokio::test]
+async fn visible_internal_llm_tool_mixed_round_runs_internal_inline_and_waits_for_external() {
+    let (waiting_invoker, waiting_inputs) = sequential_tool_invoker(vec![
+        ProviderInvocationResult {
+            final_content: Some("main-before ".to_string()),
+            tool_calls: vec![
+                ProviderToolCall {
+                    id: "call_visible".to_string(),
+                    name: "inspect_visible_context".to_string(),
+                    arguments: json!({ "query": "image?" }),
+                    provider_metadata: json!({}),
+                },
+                ProviderToolCall {
+                    id: "call_bash".to_string(),
+                    name: "Bash".to_string(),
+                    arguments: json!({ "command": "ls uploads" }),
+                    provider_metadata: json!({}),
+                },
+            ],
+            finish_reason: Some(ProviderFinishReason::ToolCall),
+            ..ProviderInvocationResult::default()
+        },
+        final_llm_response("mounted-visible "),
+    ]);
+    let plan = visible_internal_llm_tool_plan();
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "describe the picture then inspect the repo",
+                "history": [],
+                "tools": [
+                    {
+                        "name": "Bash",
+                        "description": "Run a shell command",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": { "type": "string" }
+                            },
+                            "required": ["command"]
+                        }
+                    }
+                ]
+            }
+        }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+
+    match waiting.stop_reason {
+        ExecutionStopReason::WaitingCallback(ref pending) => {
+            assert_eq!(pending.node_id, "node-llm");
+            assert_eq!(pending.callback_kind, "llm_tool_calls");
+            let pending_tool_names = pending.request_payload["tool_calls"]
+                .as_array()
+                .expect("mixed round waiting payload should carry tool calls")
+                .iter()
+                .filter_map(|tool_call| tool_call["name"].as_str())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                pending_tool_names,
+                vec!["Bash"],
+                "internal tool call must not leak into the client-facing waiting payload"
+            );
+        }
+        other => panic!("expected main llm external tool callback wait, got {other:?}"),
+    }
+
+    let captured_waiting = waiting_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(
+        captured_waiting.len(),
+        2,
+        "mixed round should execute the mounted branch inline before waiting"
+    );
+
+    let checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("mixed round should checkpoint while waiting for the client tool");
+
+    let (resume_invoker, resumed_inputs) = sequential_tool_invoker(vec![final_llm_response(
+        "main-after",
+    )]);
+    let resumed = resume_flow_debug_run(
+        &plan,
+        &checkpoint,
+        "node-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_bash",
+                    "content": "image-1.png"
+                }
+            ]
+        }),
+        &resume_invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(resumed.stop_reason, ExecutionStopReason::Completed),
+        "expected completed run, got {:?}",
+        resumed.stop_reason
+    );
+    assert_eq!(
+        resumed.variable_pool["node-answer"]["answer"],
+        json!("main-before mounted-visible main-after")
+    );
+
+    let captured_resumed = resumed_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(captured_resumed.len(), 1);
+    let recall_messages = &captured_resumed[0].messages;
+    let internal_result = recall_messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_visible")
+        })
+        .expect("main llm recall should include the hidden internal tool result");
+    assert_eq!(internal_result.content, "mounted-visible ");
+    let external_result = recall_messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_bash")
+        })
+        .expect("main llm recall should include the client tool result");
+    assert_eq!(external_result.content, "image-1.png");
+}

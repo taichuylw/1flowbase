@@ -156,15 +156,144 @@ where
                 attach_visible_internal_llm_tool_events(&mut execution, &route_events);
                 return Ok(execution);
             }
-            return visible_internal_llm_tool_failure(
+
+            // Mixed round: run hidden internal calls inline, splice their results
+            // into the pending history, and hand only the external calls to the
+            // normal client callback wait.
+            append_output_text(&mut visible_transcript, &execution.output_payload);
+            let request_payload_pool = llm_variable_pool.clone();
+            llm_variable_pool = variable_pool_with_pending_llm_tool_callback(
                 node,
+                resolved_inputs,
+                &llm_variable_pool,
+                &execution.output_payload,
+            );
+            set_pending_llm_tool_callback_visible_internal_transcript(
+                &mut llm_variable_pool,
+                &node.node_id,
+                visible_transcript.clone(),
+            )?;
+
+            let mut internal_tool_results = Vec::new();
+            for (tool_call, tool) in &internal_tool_calls {
+                match execute_visible_internal_llm_tool_call(
+                    plan,
+                    &llm_variable_pool,
+                    runtime_context,
+                    invoker,
+                    &node.node_id,
+                    tool_call,
+                    tool,
+                )
+                .await?
+                {
+                    VisibleInternalLlmToolBranchExecution::Completed(output) => {
+                        provider_events.extend(output.provider_events);
+                        route_events.extend(output.route_events);
+                        visible_transcript.push_str(&output.text);
+                        internal_tool_results.push(visible_internal_llm_tool_result(
+                            tool_call,
+                            &tool.name,
+                            output.text,
+                        ));
+                    }
+                    VisibleInternalLlmToolBranchExecution::Waiting {
+                        route_events: waiting_route_events,
+                        ..
+                    } => {
+                        route_events.extend(waiting_route_events);
+                        let error_payload = json!({
+                            "error_code": "visible_internal_llm_tool_mixed_round_callback_unavailable",
+                            "message": "visible internal LLM tool branch requires an external tool callback and cannot run alongside client tool calls; call this tool again in its own round",
+                        });
+                        route_events.push(visible_internal_llm_tool_route_event(
+                            "visible_internal_llm_tool_failed",
+                            &node.node_id,
+                            tool_call,
+                            tool,
+                            json!({ "error_payload": error_payload }),
+                        ));
+                        internal_tool_results.push(visible_internal_llm_tool_result(
+                            tool_call,
+                            &tool.name,
+                            visible_internal_llm_tool_error_result_content(&error_payload),
+                        ));
+                    }
+                    VisibleInternalLlmToolBranchExecution::Failed {
+                        error_payload,
+                        route_events: failed_route_events,
+                    } => {
+                        route_events.extend(failed_route_events);
+                        if !visible_internal_llm_tool_error_is_recoverable(&error_payload) {
+                            return visible_internal_llm_tool_failure(
+                                node,
+                                provider_events,
+                                error_payload,
+                                route_events,
+                            );
+                        }
+                        internal_tool_results.push(visible_internal_llm_tool_result(
+                            tool_call,
+                            &tool.name,
+                            visible_internal_llm_tool_error_result_content(&error_payload),
+                        ));
+                    }
+                }
+            }
+
+            let internal_call_ids = internal_tool_calls
+                .iter()
+                .map(|(tool_call, _)| tool_call_id(tool_call))
+                .collect::<BTreeSet<_>>();
+            let external_tool_calls = tool_calls
+                .iter()
+                .filter(|tool_call| !internal_call_ids.contains(&tool_call_id(tool_call)))
+                .cloned()
+                .collect::<Vec<_>>();
+            apply_mixed_llm_tool_callback_results(
+                &mut llm_variable_pool,
+                &node.node_id,
+                &internal_tool_results,
+                &external_tool_calls,
+            )?;
+            set_pending_llm_tool_callback_visible_internal_transcript(
+                &mut llm_variable_pool,
+                &node.node_id,
+                visible_transcript.clone(),
+            )?;
+            set_pending_llm_tool_callback_visible_internal_events(
+                &mut llm_variable_pool,
+                &node.node_id,
+                route_events.clone(),
+            )?;
+
+            remove_visible_internal_tool_calls(&mut execution.output_payload, &internal_tool_calls);
+            if let Some(output) = execution.output_payload.as_object_mut() {
+                output.insert(
+                    "text".to_string(),
+                    Value::String(visible_transcript.clone()),
+                );
+            }
+            let wait = LlmToolCallbackWait {
+                node_id: node.node_id.clone(),
+                node_alias: node.alias.clone(),
+                request_payload: build_llm_tool_callback_request_payload(
+                    node,
+                    resolved_inputs,
+                    &request_payload_pool,
+                    &execution.output_payload,
+                ),
+                checkpoint_variable_pool: llm_variable_pool,
+                node_trace: None,
+            };
+            let mut pending_execution = execution_with_visible_transcript(
+                execution,
+                visible_transcript,
                 provider_events,
-                json!({
-                    "error_code": "visible_internal_llm_tool_mixed_tool_calls",
-                    "message": "visible internal LLM tools cannot be mixed with external client tool calls in the same provider round",
-                }),
                 route_events,
             );
+            pending_execution.pending_callback = Some(wait);
+            return Ok(pending_execution);
         }
 
         append_output_text(&mut visible_transcript, &execution.output_payload);

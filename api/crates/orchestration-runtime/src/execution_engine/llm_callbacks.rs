@@ -152,6 +152,61 @@ pub(super) fn llm_callback_history_after_assistant_tool_call(
     history
 }
 
+pub(super) fn apply_mixed_llm_tool_callback_results(
+    variable_pool: &mut Map<String, Value>,
+    waiting_node_id: &str,
+    internal_tool_results: &[Value],
+    external_tool_calls: &[Value],
+) -> Result<()> {
+    let state = variable_pool
+        .get_mut(waiting_node_id)
+        .and_then(|node_state| node_state.get_mut(LLM_TOOL_CALLBACK_STATE_KEY))
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| anyhow!("llm tool callback state not found for {waiting_node_id}"))?;
+    let history = state
+        .get_mut("history")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| anyhow!("llm tool callback state is missing history"))?;
+    for tool_result in internal_tool_results {
+        let object = tool_result
+            .as_object()
+            .ok_or_else(|| anyhow!("internal tool result must be an object"))?;
+        let tool_call_id = object
+            .get("tool_call_id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("internal tool result is missing tool_call_id"))?;
+        let mut message = Map::new();
+        message.insert("role".to_string(), Value::String("tool".to_string()));
+        message.insert(
+            "tool_call_id".to_string(),
+            Value::String(tool_call_id.to_string()),
+        );
+        let (content, content_blocks) = tool_result_prompt_content(
+            object
+                .get("content")
+                .cloned()
+                .unwrap_or_else(|| Value::String(String::new())),
+        );
+        message.insert("content".to_string(), content);
+        if let Some(content_blocks) = content_blocks {
+            message.insert("content_blocks".to_string(), content_blocks);
+        }
+        if let Some(name) = object
+            .get("name")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+        {
+            message.insert("name".to_string(), Value::String(name.to_string()));
+        }
+        history.push(Value::Object(message));
+    }
+    state.insert(
+        "pending_tool_calls".to_string(),
+        Value::Array(external_tool_calls.to_vec()),
+    );
+    Ok(())
+}
+
 pub(super) fn append_llm_tool_result_messages(
     variable_pool: &mut Map<String, Value>,
     waiting_node_id: &str,
