@@ -375,39 +375,129 @@ fn responses_input_to_query_and_history(
     let items = input
         .as_array()
         .ok_or_else(|| OpenAiCompatError::invalid("input", "input must be text or messages"))?;
-    let messages = items
+    let entries = items
         .iter()
-        .map(responses_input_message)
+        .map(responses_input_entry)
         .collect::<Result<Vec<_>, _>>()?;
-    let last_user_index = messages
+    let last_user_index = entries
         .iter()
-        .rposition(|message| message.role == "user")
+        .rposition(|entry| {
+            matches!(entry, ResponsesInputEntry::Message(message) if message.role == "user")
+        })
         .ok_or_else(|| OpenAiCompatError::invalid("input", "user input is required"))?;
     let mut history = Vec::new();
-    for (index, message) in messages.into_iter().enumerate() {
-        if index == last_user_index {
-            if let Some(content_blocks) = message.content_blocks {
-                history.push(serde_json::json!({
-                    "role": message.role,
-                    "content": message.content.clone(),
-                    "content_blocks": content_blocks,
-                }));
+    for (index, entry) in entries.into_iter().enumerate() {
+        match entry {
+            ResponsesInputEntry::Skipped => {}
+            ResponsesInputEntry::History(history_entry) => {
+                if index < last_user_index {
+                    history.push(history_entry);
+                }
             }
-            return Ok((message.content, history));
+            ResponsesInputEntry::Message(message) => {
+                if index == last_user_index {
+                    if let Some(content_blocks) = message.content_blocks {
+                        history.push(serde_json::json!({
+                            "role": message.role,
+                            "content": message.content.clone(),
+                            "content_blocks": content_blocks,
+                        }));
+                    }
+                    return Ok((message.content, history));
+                }
+                let mut history_entry = serde_json::json!({
+                    "role": message.role,
+                    "content": message.content
+                });
+                if let Some(content_blocks) = message.content_blocks {
+                    history_entry["content_blocks"] = content_blocks;
+                }
+                history.push(history_entry);
+            }
         }
-        let mut history_entry = serde_json::json!({
-            "role": message.role,
-            "content": message.content
-        });
-        if let Some(content_blocks) = message.content_blocks {
-            history_entry["content_blocks"] = content_blocks;
-        }
-        history.push(history_entry);
     }
     Err(OpenAiCompatError::invalid(
         "input",
         "user input is required",
     ))
+}
+
+enum ResponsesInputEntry {
+    Message(ResponsesInputMessage),
+    History(Value),
+    Skipped,
+}
+
+fn responses_input_entry(item: &Value) -> Result<ResponsesInputEntry, OpenAiCompatError> {
+    let object = item
+        .as_object()
+        .ok_or_else(|| OpenAiCompatError::invalid("input", "input message must be an object"))?;
+    match object.get("type").and_then(Value::as_str) {
+        None | Some("message") => Ok(ResponsesInputEntry::Message(responses_input_message(
+            item,
+        )?)),
+        Some("reasoning") | Some("item_reference") => Ok(ResponsesInputEntry::Skipped),
+        Some("function_call") => {
+            let call_id = object
+                .get("call_id")
+                .or_else(|| object.get("id"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    OpenAiCompatError::invalid("input", "function_call requires call_id")
+                })?;
+            let name = object
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    OpenAiCompatError::invalid("input", "function_call requires name")
+                })?;
+            let arguments = match object.get("arguments") {
+                Some(Value::String(raw)) => serde_json::from_str::<Value>(raw)
+                    .unwrap_or_else(|_| Value::String(raw.clone())),
+                Some(value) => value.clone(),
+                None => serde_json::json!({}),
+            };
+            Ok(ResponsesInputEntry::History(serde_json::json!({
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{
+                    "id": call_id,
+                    "name": name,
+                    "arguments": arguments
+                }]
+            })))
+        }
+        Some("function_call_output") => {
+            let call_id = object
+                .get("call_id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    OpenAiCompatError::invalid("input", "function_call_output requires call_id")
+                })?;
+            let output = match object.get("output") {
+                Some(Value::String(text)) => text.clone(),
+                Some(value) => value
+                    .get("content")
+                    .or_else(|| value.get("output"))
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| value.to_string()),
+                None => String::new(),
+            };
+            Ok(ResponsesInputEntry::History(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": output
+            })))
+        }
+        Some(_) => Err(OpenAiCompatError::unsupported("input")),
+    }
 }
 
 struct ResponsesInputMessage {
@@ -543,7 +633,7 @@ fn openai_content(content: &Value) -> Result<OpenAiMappedContent, OpenAiCompatEr
     for part in parts {
         let part_type = part.get("type").and_then(Value::as_str).unwrap_or_default();
         match part_type {
-            "text" | "input_text" => {
+            "text" | "input_text" | "output_text" => {
                 if let Some(value) = part.get("text").and_then(Value::as_str) {
                     if !text.is_empty() {
                         text.push('\n');
@@ -863,6 +953,40 @@ mod tests {
         );
         assert_eq!(request.conversation["user"], json!("external-user-1"));
         assert_eq!(request.metadata["trace_id"], json!("trace-responses"));
+    }
+
+    #[test]
+    fn maps_responses_stateless_replay_items_into_native_history() {
+        let request = map_response_request(
+            json!({
+                "model": "1flowbase",
+                "input": [
+                    {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "看图"}]},
+                    {"type": "reasoning", "id": "rs_1", "summary": [], "content": [{"type": "reasoning_text", "text": "想一想"}], "encrypted_content": null},
+                    {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "先查目录"}]},
+                    {"type": "function_call", "id": "fc_1", "call_id": "call_shell_1", "name": "shell", "arguments": "{\"command\":[\"ls\"]}"},
+                    {"type": "function_call_output", "call_id": "call_shell_1", "output": "uploads\nweb"},
+                    {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "继续找导航栏代码"}]}
+                ]
+            }),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(request.query, "继续找导航栏代码");
+        assert_eq!(
+            request.history,
+            vec![
+                json!({"role": "user", "content": "看图"}),
+                json!({"role": "assistant", "content": "先查目录"}),
+                json!({
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{"id": "call_shell_1", "name": "shell", "arguments": {"command": ["ls"]}}]
+                }),
+                json!({"role": "tool", "tool_call_id": "call_shell_1", "content": "uploads\nweb"}),
+            ]
+        );
     }
 
     #[test]
