@@ -404,6 +404,18 @@ test('container image workflow scans temporary image tags before official promot
   assert.match(workflow, /output: tmp\/test-governance\/trivy-web-critical\.json/u);
 
   assert.match(workflow, /name: Promote scanned image to official tags/u);
+  assert.match(
+    workflow,
+    /if: github\.event_name != 'workflow_dispatch' \|\| inputs\.promote_official_tags == true \|\| inputs\.promote_official_tags == 'true'/u,
+  );
+  assert.equal(
+    [
+      ...workflow.matchAll(
+        /if: github\.event_name != 'workflow_dispatch' \|\| inputs\.promote_official_tags == true \|\| inputs\.promote_official_tags == 'true'/gu,
+      ),
+    ].length,
+    3,
+  );
   assert.match(workflow, /docker buildx imagetools create/u);
   assert.match(workflow, /--tag "\$\{\{ steps\.image_refs\.outputs\.version_image_ref \}\}"/u);
   assert.match(workflow, /--tag "\$\{\{ steps\.image_refs\.outputs\.latest_image_ref \}\}"/u);

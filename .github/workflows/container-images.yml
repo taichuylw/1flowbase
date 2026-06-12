@@ -394,7 +394,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Promote scanned image to official tags
-        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags
+        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags == true || inputs.promote_official_tags == 'true'
         run: |
           docker buildx imagetools create \
             --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
@@ -595,7 +595,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Promote scanned api-server image to official tags
-        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags
+        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags == true || inputs.promote_official_tags == 'true'
         run: |
           docker buildx imagetools create \
             --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
@@ -796,7 +796,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Promote scanned plugin-runner image to official tags
-        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags
+        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags == true || inputs.promote_official_tags == 'true'
         run: |
           docker buildx imagetools create \
             --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
