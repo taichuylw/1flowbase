@@ -120,6 +120,7 @@ fn to_stitched_trace_response(
         node_runs: trace
             .node_runs
             .into_iter()
+            .filter(stitched_trace_node_run_is_trace_step)
             .map(to_node_run_response)
             .collect(),
         callback_tasks: trace
@@ -133,6 +134,10 @@ fn to_stitched_trace_response(
             .map(to_run_event_response)
             .collect(),
     }
+}
+
+fn stitched_trace_node_run_is_trace_step(run: &domain::NodeRunRecord) -> bool {
+    !matches!(run.node_type.as_str(), "start" | "answer")
 }
 
 fn is_waiting_prefix_answer_node_run(run: &domain::NodeRunRecord) -> bool {

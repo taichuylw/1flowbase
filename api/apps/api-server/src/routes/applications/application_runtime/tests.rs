@@ -426,6 +426,7 @@ fn run_detail_response_exposes_stitched_trace_sources() {
     let current_flow_run_id = Uuid::now_v7();
     let source_flow_run_id = Uuid::now_v7();
     let source_node_run_id = Uuid::now_v7();
+    let source_answer_node_run_id = Uuid::now_v7();
     let callback_task_id = Uuid::now_v7();
     let detail = domain::ApplicationRunDetail {
         flow_run: test_flow_run_record(
@@ -445,30 +446,51 @@ fn run_detail_response_exposes_stitched_trace_sources() {
                 domain::FlowRunStatus::Cancelled,
                 serde_json::json!({}),
             ),
-            node_runs: vec![domain::NodeRunRecord {
-                id: source_node_run_id,
-                flow_run_id: source_flow_run_id,
-                node_id: "node-llm".to_string(),
-                node_type: "llm".to_string(),
-                node_alias: "LLM".to_string(),
-                status: domain::NodeRunStatus::Succeeded,
-                input_payload: serde_json::json!({}),
-                output_payload: serde_json::json!({ "usage": { "total_tokens": 33520 } }),
-                error_payload: None,
-                metrics_payload: serde_json::json!({}),
-                debug_payload: serde_json::json!({
-                    "visible_internal_llm_tool_trace": [
-                        {
-                            "kind": "visible_internal_llm_tool_trace",
-                            "tool_call_id": "call_image",
-                            "tool_name": "image_llm",
-                            "status": "succeeded"
+            node_runs: vec![
+                domain::NodeRunRecord {
+                    id: source_node_run_id,
+                    flow_run_id: source_flow_run_id,
+                    node_id: "node-llm".to_string(),
+                    node_type: "llm".to_string(),
+                    node_alias: "LLM".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: serde_json::json!({}),
+                    output_payload: serde_json::json!({ "usage": { "total_tokens": 33520 } }),
+                    error_payload: None,
+                    metrics_payload: serde_json::json!({}),
+                    debug_payload: serde_json::json!({
+                        "visible_internal_llm_tool_trace": [
+                            {
+                                "kind": "visible_internal_llm_tool_trace",
+                                "tool_call_id": "call_image",
+                                "tool_name": "image_llm",
+                                "status": "succeeded"
+                            }
+                        ]
+                    }),
+                    started_at: OffsetDateTime::UNIX_EPOCH,
+                    finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+                },
+                domain::NodeRunRecord {
+                    id: source_answer_node_run_id,
+                    flow_run_id: source_flow_run_id,
+                    node_id: "node-answer".to_string(),
+                    node_type: "answer".to_string(),
+                    node_alias: "Answer".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: serde_json::json!({
+                        "presentation": {
+                            "materialized_from": "waiting_prefix"
                         }
-                    ]
-                }),
-                started_at: OffsetDateTime::UNIX_EPOCH,
-                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
-            }],
+                    }),
+                    output_payload: serde_json::json!({ "answer": "route prefix" }),
+                    error_payload: None,
+                    metrics_payload: serde_json::json!({}),
+                    debug_payload: serde_json::json!({}),
+                    started_at: OffsetDateTime::UNIX_EPOCH,
+                    finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+                },
+            ],
             callback_tasks: vec![domain::CallbackTaskRecord {
                 id: callback_task_id,
                 flow_run_id: source_flow_run_id,
@@ -502,6 +524,11 @@ fn run_detail_response_exposes_stitched_trace_sources() {
         response.stitched_trace[0].node_runs[0].id,
         source_node_run_id.to_string()
     );
+    assert_eq!(response.stitched_trace[0].node_runs.len(), 1);
+    assert!(response.stitched_trace[0]
+        .node_runs
+        .iter()
+        .all(|node_run| node_run.node_type != "answer"));
     assert_eq!(
         response.stitched_trace[0].callback_tasks[0].id,
         callback_task_id.to_string()
