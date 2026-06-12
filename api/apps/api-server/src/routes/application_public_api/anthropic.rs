@@ -14,7 +14,8 @@ use control_plane::application_public_api::{
         PublishedCallbackResumeTarget, ResumePublishedCallbackCommand,
     },
     compat::anthropic::{
-        map_messages_request, sanitize_anthropic_compat_assistant_text, AnthropicCompatError,
+        anthropic_content_is_tool_result_only, map_messages_request,
+        sanitize_anthropic_compat_assistant_text, AnthropicCompatError,
     },
     native::{
         ApplicationNativeRunService, CreateNativeRunCommand, GetNativeRunCommand, NativeRunRequest,
@@ -135,6 +136,7 @@ pub struct AnthropicCountTokensResponse {
     pub input_tokens: u64,
 }
 
+#[derive(Debug)]
 struct AnthropicToolResumeRequest {
     callback_task_id: Uuid,
     tool_results: Value,
@@ -493,7 +495,7 @@ fn anthropic_tool_resume_request(
     let trailing_start = messages.len() - trailing_tool_result_messages.len();
     let matching_tool_use_ids = anthropic_trailing_assistant_tool_use_ids(messages, trailing_start);
     if matching_tool_use_ids.is_empty() {
-        return Ok(None);
+        return Err(anthropic_tool_result_orphan_error());
     }
 
     let mut decoded_results = Vec::new();
@@ -531,7 +533,7 @@ fn anthropic_tool_resume_request(
 
     let Some(callback_task_id) = decoded_results.last().map(|result| result.callback_task_id)
     else {
-        return Ok(None);
+        return Err(anthropic_tool_result_orphan_error());
     };
     let mut tool_results = decoded_results
         .into_iter()
@@ -580,13 +582,15 @@ fn anthropic_message_has_only_tool_results(message: &Value) -> bool {
     message.get("role").and_then(Value::as_str) == Some("user")
         && message
             .get("content")
-            .and_then(Value::as_array)
-            .is_some_and(|blocks| {
-                !blocks.is_empty()
-                    && blocks.iter().all(|block| {
-                        block.get("type").and_then(Value::as_str) == Some("tool_result")
-                    })
-            })
+            .is_some_and(anthropic_content_is_tool_result_only)
+}
+
+fn anthropic_tool_result_orphan_error() -> AnthropicRouteError {
+    AnthropicCompatError {
+        message: "tool_result continuation could not be matched to a callback task".to_string(),
+        error_type: "tool_result_only_orphan".to_string(),
+    }
+    .into()
 }
 
 fn anthropic_tool_result_content(block: &Value) -> Value {

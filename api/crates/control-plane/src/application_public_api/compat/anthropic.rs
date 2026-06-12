@@ -531,7 +531,7 @@ fn anthropic_blocks_have_visible_user_text(blocks: &[Value]) -> bool {
     })
 }
 
-fn anthropic_content_is_tool_result_only(content: &Value) -> bool {
+pub fn anthropic_content_is_tool_result_only(content: &Value) -> bool {
     let Some(blocks) = content.as_array() else {
         return false;
     };

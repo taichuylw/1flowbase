@@ -1,6 +1,7 @@
 use crate::{
     _tests::support::{login_and_capture_cookie, test_api_state_with_database_url, test_config},
     app_state::ApiState,
+    routes::application_public_api::tool_callback_ids::encode_anthropic_callback_tool_use_id,
 };
 use axum::{
     body::{to_bytes, Body},
@@ -510,6 +511,98 @@ async fn anthropic_count_tokens_returns_usage_without_creating_run() {
         payload["input_tokens"].as_u64().unwrap_or_default() > 0,
         "{payload}"
     );
+    assert_eq!(flow_run_count(state.as_ref()).await, before);
+}
+
+#[tokio::test]
+async fn anthropic_messages_routes_hidden_system_reminder_tool_result_to_callback_resume() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "Anthropic Hidden Reminder Tool Result App").await;
+    let before = flow_run_count(state.as_ref()).await;
+    let callback_task_id = uuid::Uuid::from_u128(0xffffffffffffffffffffffffffffffff);
+    let tool_use_id = encode_anthropic_callback_tool_use_id(callback_task_id, "toolu_read");
+
+    let response = post_json(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": tool_use_id,
+                        "name": "Read",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": "Found 3 files"
+                        },
+                        {
+                            "type": "text",
+                            "text": "<system-reminder>Claude Code internal reminder</system-reminder>"
+                        }
+                    ]
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let payload = response_json(response).await;
+    assert_eq!(payload["error"]["type"], json!("callback_task"));
+    assert_eq!(flow_run_count(state.as_ref()).await, before);
+}
+
+#[tokio::test]
+async fn anthropic_messages_rejects_orphan_tool_result_without_creating_run() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "Anthropic Orphan Tool Result App").await;
+    let before = flow_run_count(state.as_ref()).await;
+
+    let response = post_json(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_read",
+                        "name": "Read",
+                        "input": {}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_read",
+                        "content": "plain Anthropic tool result"
+                    }]
+                }
+            ]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let payload = response_json(response).await;
+    assert_eq!(payload["error"]["type"], json!("tool_result_only_orphan"));
     assert_eq!(flow_run_count(state.as_ref()).await, before);
 }
 
