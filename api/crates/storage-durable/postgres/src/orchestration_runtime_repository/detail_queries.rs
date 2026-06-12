@@ -5,7 +5,7 @@ use crate::repositories::PgControlPlaneStore;
 
 use super::record_mappers::{
     map_callback_task_record, map_checkpoint_record, map_flow_run_record, map_node_run_record,
-    map_run_event_record,
+    map_run_event_record, map_runtime_event_record,
 };
 
 pub(super) async fn fetch_flow_run_for_application(
@@ -233,6 +233,139 @@ pub(super) async fn list_callback_tasks_for_flow_run(
     .await?;
 
     rows.into_iter().map(map_callback_task_record).collect()
+}
+
+pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
+    store: &PgControlPlaneStore,
+    current_run: &domain::FlowRunRecord,
+) -> Result<Vec<domain::FlowRunRecord>> {
+    let Some(external_conversation_id) = current_run
+        .external_conversation_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(Vec::new());
+    };
+
+    let rows = sqlx::query(
+        r#"
+        select
+            prior.id,
+            prior.application_id,
+            prior.flow_id,
+            prior.flow_draft_id,
+            prior.compiled_plan_id,
+            prior.debug_session_id,
+            prior.flow_schema_version,
+            prior.document_hash,
+            prior.run_mode,
+            prior.target_node_id,
+            prior.title,
+            prior.status,
+            prior.input_payload,
+            prior.output_payload,
+            prior.error_payload,
+            prior.created_by,
+            (
+                select users.account
+                from users
+                where users.id = prior.created_by
+            ) as authorized_account,
+            prior.api_key_id,
+            prior.publication_version_id,
+            prior.external_user,
+            prior.external_conversation_id,
+            prior.external_trace_id,
+            prior.compatibility_mode,
+            prior.idempotency_key,
+            prior.started_at,
+            prior.finished_at,
+            prior.created_at,
+            prior.updated_at
+        from flow_runs prior
+        where prior.application_id = $1
+          and prior.external_conversation_id = $2
+          and prior.id <> $3
+          and prior.started_at < $4
+          and prior.status in ('cancelled', 'waiting_callback')
+          and not exists (
+              select 1
+              from flow_runs boundary
+              where boundary.application_id = prior.application_id
+                and boundary.external_conversation_id = prior.external_conversation_id
+                and boundary.id <> $3
+                and boundary.started_at > prior.started_at
+                and boundary.started_at < $4
+                and boundary.status in ('succeeded', 'failed')
+          )
+        order by prior.started_at asc, prior.id asc
+        limit 12
+        "#,
+    )
+    .bind(current_run.application_id)
+    .bind(external_conversation_id)
+    .bind(current_run.id)
+    .bind(current_run.started_at)
+    .fetch_all(store.pool())
+    .await?;
+
+    rows.into_iter().map(map_flow_run_record).collect()
+}
+
+pub(super) async fn list_runtime_events_for_flow_run(
+    store: &PgControlPlaneStore,
+    flow_run_id: Uuid,
+) -> Result<Vec<domain::RuntimeEventRecord>> {
+    let rows = sqlx::query(
+        r#"
+        select
+            id,
+            flow_run_id,
+            node_run_id,
+            span_id,
+            parent_span_id,
+            sequence,
+            event_type,
+            layer,
+            source,
+            trust_level,
+            item_id,
+            ledger_ref,
+            payload,
+            visibility,
+            durability,
+            created_at
+        from runtime_events
+        where flow_run_id = $1
+        order by sequence asc, id asc
+        "#,
+    )
+    .bind(flow_run_id)
+    .fetch_all(store.pool())
+    .await?;
+
+    rows.into_iter().map(map_runtime_event_record).collect()
+}
+
+pub(super) async fn list_stitched_trace_for_flow_run(
+    store: &PgControlPlaneStore,
+    flow_run: &domain::FlowRunRecord,
+) -> Result<Vec<domain::ApplicationRunStitchedTrace>> {
+    let source_runs = list_stitched_trace_source_runs_for_flow_run(store, flow_run).await?;
+    let mut stitched_trace = Vec::with_capacity(source_runs.len());
+
+    for source_flow_run in source_runs {
+        stitched_trace.push(domain::ApplicationRunStitchedTrace {
+            node_runs: list_node_runs_for_flow_run(store, source_flow_run.id).await?,
+            callback_tasks: list_callback_tasks_for_flow_run(store, source_flow_run.id).await?,
+            events: list_events_for_flow_run(store, source_flow_run.id).await?,
+            runtime_events: list_runtime_events_for_flow_run(store, source_flow_run.id).await?,
+            source_flow_run,
+        });
+    }
+
+    Ok(stitched_trace)
 }
 
 pub(super) async fn list_events_for_node_context(

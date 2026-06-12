@@ -714,6 +714,7 @@ impl PgControlPlaneStore {
             checkpoints: list_checkpoints_for_flow_run(self, flow_run.id).await?,
             callback_tasks: list_callback_tasks_for_flow_run(self, flow_run.id).await?,
             events: list_events_for_flow_run(self, flow_run.id).await?,
+            stitched_trace: list_stitched_trace_for_flow_run(self, &flow_run).await?,
             flow_run,
         }))
     }

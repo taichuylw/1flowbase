@@ -196,40 +196,107 @@ function mapMessageStatus(status: string): AgentFlowDebugMessageStatus {
   }
 }
 
+function traceItemDurationMs({
+  finished_at,
+  started_at
+}: {
+  finished_at: string | null;
+  started_at: string;
+}) {
+  return finished_at
+    ? Math.max(
+        new Date(finished_at).getTime() - new Date(started_at).getTime(),
+        0
+      )
+    : null;
+}
+
+function nodeRunDebugPayload(nodeRun: FlowDebugRunDetail['node_runs'][number]) {
+  return isRecord(nodeRun.debug_payload) ? nodeRun.debug_payload : {};
+}
+
+function mapNodeRunToTraceItem({
+  answerSnapshot,
+  debugPayload,
+  nodeRun
+}: {
+  answerSnapshot?: AgentFlowAnswerSnapshot;
+  debugPayload?: Record<string, unknown>;
+  nodeRun: FlowDebugRunDetail['node_runs'][number];
+}): AgentFlowTraceItem {
+  return {
+    nodeRunId: nodeRun.id,
+    nodeId: nodeRun.node_id,
+    nodeAlias: nodeRun.node_alias,
+    nodeType: nodeRun.node_type,
+    status: nodeRun.status,
+    startedAt: nodeRun.started_at,
+    finishedAt: nodeRun.finished_at,
+    durationMs: traceItemDurationMs(nodeRun),
+    inputPayload: nodeRun.input_payload,
+    outputPayload: nodeRun.output_payload,
+    errorPayload: nodeRun.error_payload,
+    metricsPayload: nodeRun.metrics_payload,
+    debugPayload: debugPayload ?? nodeRunDebugPayload(nodeRun),
+    answerSnapshot
+  };
+}
+
+function stitchedTraceDebugPayload({
+  nodeRun,
+  trace
+}: {
+  nodeRun: FlowDebugRunDetail['node_runs'][number];
+  trace: NonNullable<FlowDebugRunDetail['stitched_trace']>[number];
+}) {
+  const callbackTaskIds = trace.callback_tasks
+    .filter((task) => task.node_run_id === nodeRun.id)
+    .map((task) => task.id);
+
+  return {
+    ...nodeRunDebugPayload(nodeRun),
+    stitched_trace_source: {
+      source_flow_run_id: trace.source_flow_run.id,
+      source_node_run_id: nodeRun.id,
+      callback_task_ids: callbackTaskIds
+    }
+  };
+}
+
+function mapStitchedTraceToTraceItems(
+  detail: FlowDebugRunDetail
+): AgentFlowTraceItem[] {
+  const stitchedTrace =
+    detail.stitched_trace ?? detail.detail?.stitched_trace ?? [];
+
+  return stitchedTrace.flatMap((trace) =>
+    trace.node_runs.map((nodeRun) =>
+      mapNodeRunToTraceItem({
+        debugPayload: stitchedTraceDebugPayload({ nodeRun, trace }),
+        nodeRun
+      })
+    )
+  );
+}
+
 export function mapRunDetailToTrace(
   detail: FlowDebugRunDetail
 ): AgentFlowTraceItem[] {
   const answerSnapshot = mapAnswerSnapshot(detail);
 
-  return detail.node_runs.map((nodeRun) => {
+  const currentTraceItems = detail.node_runs.map((nodeRun) => {
     const nodeAnswerSnapshot =
       answerSnapshot && answerSnapshotBelongsToNodeRun(nodeRun, answerSnapshot)
         ? answerSnapshot
         : undefined;
 
-    return {
-      nodeRunId: nodeRun.id,
-      nodeId: nodeRun.node_id,
-      nodeAlias: nodeRun.node_alias,
-      nodeType: nodeRun.node_type,
-      status: nodeRun.status,
-      startedAt: nodeRun.started_at,
-      finishedAt: nodeRun.finished_at,
-      durationMs: nodeRun.finished_at
-        ? Math.max(
-            new Date(nodeRun.finished_at).getTime() -
-              new Date(nodeRun.started_at).getTime(),
-            0
-          )
-        : null,
-      inputPayload: nodeRun.input_payload,
-      outputPayload: nodeRun.output_payload,
-      errorPayload: nodeRun.error_payload,
-      metricsPayload: nodeRun.metrics_payload,
-      debugPayload: nodeRun.debug_payload ?? {},
-      answerSnapshot: nodeAnswerSnapshot
-    };
+    return mapNodeRunToTraceItem({
+      answerSnapshot: nodeAnswerSnapshot,
+      nodeRun
+    });
   });
+
+  return [...currentTraceItems, ...mapStitchedTraceToTraceItems(detail)];
 }
 
 export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {

@@ -1138,6 +1138,7 @@ impl OrchestrationRuntimeRepository for InMemoryOrchestrationRuntimeRepository {
                 .get(&flow_run_id)
                 .cloned()
                 .unwrap_or_default(),
+            stitched_trace: Vec::new(),
         }))
     }
 

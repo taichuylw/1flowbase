@@ -313,10 +313,7 @@ export type ConsoleApplicationRuntimeHealthState =
   | 'failing'
   | 'failing_now';
 
-export type ConsoleApplicationRuntimeTrend =
-  | 'rising'
-  | 'steady'
-  | 'falling';
+export type ConsoleApplicationRuntimeTrend = 'rising' | 'steady' | 'falling';
 
 export interface ConsoleApplicationRuntimeActivityHealth {
   state: ConsoleApplicationRuntimeHealthState;
@@ -438,6 +435,13 @@ export interface ConsoleAnswerSnapshot {
   waiting_node_run_id?: string | null;
 }
 
+export interface ConsoleApplicationRunStitchedTrace {
+  source_flow_run: ConsoleFlowRunDetail;
+  node_runs: ConsoleNodeRunDetail[];
+  callback_tasks: ConsoleCallbackTask[];
+  events: ConsoleRunEvent[];
+}
+
 export interface ConsoleApplicationRunDetail {
   run?: ConsoleApplicationRunLog;
   statistics?: ConsoleApplicationRunStatistics;
@@ -448,6 +452,7 @@ export interface ConsoleApplicationRunDetail {
   checkpoints: ConsoleRunCheckpoint[];
   callback_tasks: ConsoleCallbackTask[];
   events: ConsoleRunEvent[];
+  stitched_trace?: ConsoleApplicationRunStitchedTrace[];
 }
 
 export interface ConsoleApplicationConversationMessage {
@@ -490,6 +495,7 @@ export interface ConsoleApplicationRunTypedDetail {
   checkpoints: ConsoleRunCheckpoint[];
   callback_tasks: ConsoleCallbackTask[];
   events: ConsoleRunEvent[];
+  stitched_trace?: ConsoleApplicationRunStitchedTrace[];
 }
 
 export interface ConsoleDebugVariableCacheKey {

@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::runtime_observability::RuntimeEventRecord;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FlowRunMode {
@@ -318,6 +320,16 @@ pub struct ApplicationRunDetail {
     pub checkpoints: Vec<CheckpointRecord>,
     pub callback_tasks: Vec<CallbackTaskRecord>,
     pub events: Vec<RunEventRecord>,
+    pub stitched_trace: Vec<ApplicationRunStitchedTrace>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunStitchedTrace {
+    pub source_flow_run: FlowRunRecord,
+    pub node_runs: Vec<NodeRunRecord>,
+    pub callback_tasks: Vec<CallbackTaskRecord>,
+    pub events: Vec<RunEventRecord>,
+    pub runtime_events: Vec<RuntimeEventRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -388,6 +388,7 @@ fn run_detail_response_moves_waiting_prefix_answer_into_answer_snapshot() {
         }],
         callback_tasks: Vec::new(),
         events: Vec::new(),
+        stitched_trace: Vec::new(),
     };
 
     let response = to_application_run_detail_response(&application, detail);
@@ -417,6 +418,98 @@ fn run_detail_response_moves_waiting_prefix_answer_into_answer_snapshot() {
         .node_runs
         .iter()
         .all(|node_run| node_run.node_id != "node-answer"));
+}
+
+#[test]
+fn run_detail_response_exposes_stitched_trace_sources() {
+    let application = test_application_record();
+    let current_flow_run_id = Uuid::now_v7();
+    let source_flow_run_id = Uuid::now_v7();
+    let source_node_run_id = Uuid::now_v7();
+    let callback_task_id = Uuid::now_v7();
+    let detail = domain::ApplicationRunDetail {
+        flow_run: test_flow_run_record(
+            application.id,
+            current_flow_run_id,
+            domain::FlowRunStatus::Succeeded,
+            serde_json::json!({ "answer": "done" }),
+        ),
+        node_runs: Vec::new(),
+        checkpoints: Vec::new(),
+        callback_tasks: Vec::new(),
+        events: Vec::new(),
+        stitched_trace: vec![domain::ApplicationRunStitchedTrace {
+            source_flow_run: test_flow_run_record(
+                application.id,
+                source_flow_run_id,
+                domain::FlowRunStatus::Cancelled,
+                serde_json::json!({}),
+            ),
+            node_runs: vec![domain::NodeRunRecord {
+                id: source_node_run_id,
+                flow_run_id: source_flow_run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: serde_json::json!({}),
+                output_payload: serde_json::json!({ "usage": { "total_tokens": 33520 } }),
+                error_payload: None,
+                metrics_payload: serde_json::json!({}),
+                debug_payload: serde_json::json!({
+                    "visible_internal_llm_tool_trace": [
+                        {
+                            "kind": "visible_internal_llm_tool_trace",
+                            "tool_call_id": "call_image",
+                            "tool_name": "image_llm",
+                            "status": "succeeded"
+                        }
+                    ]
+                }),
+                started_at: OffsetDateTime::UNIX_EPOCH,
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            }],
+            callback_tasks: vec![domain::CallbackTaskRecord {
+                id: callback_task_id,
+                flow_run_id: source_flow_run_id,
+                node_run_id: source_node_run_id,
+                callback_kind: "llm_tool_calls".to_string(),
+                status: domain::CallbackTaskStatus::Completed,
+                request_payload: serde_json::json!({
+                    "tool_calls": [
+                        { "id": "call_image", "name": "image_llm" }
+                    ]
+                }),
+                response_payload: None,
+                external_ref_payload: None,
+                created_at: OffsetDateTime::UNIX_EPOCH,
+                completed_at: Some(OffsetDateTime::UNIX_EPOCH),
+            }],
+            events: Vec::new(),
+            runtime_events: Vec::new(),
+        }],
+    };
+
+    let response = to_application_run_detail_response(&application, detail);
+
+    assert_eq!(response.callback_tasks.len(), 0);
+    assert_eq!(response.stitched_trace.len(), 1);
+    assert_eq!(
+        response.stitched_trace[0].source_flow_run.id,
+        source_flow_run_id.to_string()
+    );
+    assert_eq!(
+        response.stitched_trace[0].node_runs[0].id,
+        source_node_run_id.to_string()
+    );
+    assert_eq!(
+        response.stitched_trace[0].callback_tasks[0].id,
+        callback_task_id.to_string()
+    );
+    assert_eq!(
+        response.detail.stitched_trace[0].callback_tasks[0].flow_run_id,
+        source_flow_run_id.to_string()
+    );
 }
 
 #[test]
@@ -510,6 +603,7 @@ fn run_detail_response_hides_historical_waiting_prefix_after_run_finishes() {
         }],
         callback_tasks: Vec::new(),
         events: Vec::new(),
+        stitched_trace: Vec::new(),
     };
 
     let response = to_application_run_detail_response(&application, detail);
@@ -843,6 +937,7 @@ async fn run_conversation_reads_llm_system_when_run_input_system_is_split_from_p
         checkpoints: Vec::new(),
         callback_tasks: Vec::new(),
         events: Vec::new(),
+        stitched_trace: Vec::new(),
     };
 
     let load_debug_artifact = |_| async { None::<serde_json::Value> };

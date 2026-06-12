@@ -4,8 +4,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{
-    AnswerSnapshotResponse, CallbackTaskResponse, CheckpointResponse, FlowRunResponse,
-    NodeRunResponse, RunEventResponse,
+    AnswerSnapshotResponse, ApplicationRunStitchedTraceResponse, CallbackTaskResponse,
+    CheckpointResponse, FlowRunResponse, NodeRunResponse, RunEventResponse,
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
@@ -85,6 +85,7 @@ pub struct ApplicationRunTypedDetailResponse {
     pub checkpoints: Vec<CheckpointResponse>,
     pub callback_tasks: Vec<CallbackTaskResponse>,
     pub events: Vec<RunEventResponse>,
+    pub stitched_trace: Vec<ApplicationRunStitchedTraceResponse>,
 }
 
 pub fn actor_from_console_user(

@@ -570,6 +570,166 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     expect(within(logPanel).queryByText('call_policy')).not.toBeInTheDocument();
   }, 20_000);
 
+  test('shows route tool callbacks from stitched conversation trace', async () => {
+    const detail = sampleRunDetail();
+    const llmNodeRun = detail.node_runs[0]!;
+    detail.callback_tasks = [];
+    detail.stitched_trace = [
+      {
+        source_flow_run: {
+          ...detail.flow_run,
+          id: 'run-prior-route',
+          status: 'cancelled',
+          started_at: '2026-04-17T08:59:50Z',
+          finished_at: '2026-04-17T08:59:59Z'
+        },
+        node_runs: [
+          {
+            ...llmNodeRun,
+            id: 'node-run-prior-llm',
+            flow_run_id: 'run-prior-route',
+            output_payload: {
+              usage: {
+                total_tokens: 33520
+              }
+            },
+            debug_payload: {
+              llm_rounds: [
+                {
+                  round_index: 0,
+                  assistant: {
+                    role: 'assistant',
+                    content: 'need image route',
+                    tool_calls: [
+                      {
+                        id: 'call_image',
+                        name: 'image_llm'
+                      }
+                    ]
+                  }
+                },
+                {
+                  round_index: 1,
+                  tool_results: [
+                    {
+                      tool_call_id: 'call_image',
+                      name: 'image_llm',
+                      content: '{"answer":"route ok"}'
+                    }
+                  ]
+                },
+                {
+                  round_index: 2,
+                  assistant: {
+                    role: 'assistant',
+                    content: 'main resumed'
+                  }
+                }
+              ],
+              visible_internal_llm_tool_trace: [
+                {
+                  kind: 'visible_internal_llm_tool_trace',
+                  preview_kind: 'visible_internal_llm_tool_trace',
+                  tool_call_id: 'call_image',
+                  tool_name: 'image_llm',
+                  status: 'succeeded',
+                  route_model: 'image-route-v1',
+                  target_node_id: 'node-llm-image',
+                  route_node_id: 'node-llm-image',
+                  route_node_alias: 'Image LLM',
+                  returned_to_main: true,
+                  main_resume: true,
+                  route_output_summary: {
+                    kind: 'text',
+                    preview: 'image route completed',
+                    char_count: 21,
+                    truncated: false
+                  },
+                  final_output_summary: {
+                    kind: 'text',
+                    preview: 'main resumed',
+                    char_count: 12,
+                    truncated: false
+                  }
+                }
+              ]
+            },
+            started_at: '2026-04-17T08:59:51Z',
+            finished_at: '2026-04-17T08:59:58Z'
+          }
+        ],
+        callback_tasks: [
+          {
+            id: 'callback-prior-image',
+            flow_run_id: 'run-prior-route',
+            node_run_id: 'node-run-prior-llm',
+            callback_kind: 'llm_tool_calls',
+            status: 'completed',
+            request_payload: {
+              tool_calls: [
+                {
+                  id: 'call_image',
+                  name: 'image_llm'
+                }
+              ]
+            },
+            response_payload: null,
+            external_ref_payload: null,
+            created_at: '2026-04-17T08:59:52Z',
+            completed_at: '2026-04-17T08:59:58Z'
+          }
+        ],
+        events: []
+      }
+    ];
+    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const openLogButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      ),
+      'expected conversation log button'
+    );
+    fireEvent.click(openLogButton);
+
+    const logPanel = await screen.findByRole('complementary', {
+      name: '对话日志'
+    });
+    fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+
+    const llmTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
+    expect(llmTraceNode).toHaveTextContent('工具 1');
+    fireEvent.click(llmTraceNode);
+
+    const toolsNode = within(logPanel).getByRole('button', {
+      name: /工具 1 次工具回调/
+    });
+    fireEvent.click(toolsNode);
+
+    const toolCallbackNode = within(logPanel).getByRole('button', {
+      name: /image_llm/
+    });
+    expect(toolCallbackNode).toHaveTextContent('route');
+    fireEvent.click(toolCallbackNode);
+
+    const routeNode = within(logPanel).getByTestId('debug-llm-route-node');
+    expect(routeNode).toHaveTextContent('Image LLM');
+    expect(within(routeNode).getByLabelText('route JSON')).toHaveTextContent(
+      'image-route-v1'
+    );
+  }, 20_000);
+
   test('keeps expanded trace tools and loaded tool details across floating window activation', async () => {
     const detail = sampleRunDetail();
     const llmNodeRun = detail.node_runs[0]!;

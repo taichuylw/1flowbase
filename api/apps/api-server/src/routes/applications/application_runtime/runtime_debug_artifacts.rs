@@ -1170,20 +1170,13 @@ pub fn enrich_application_run_detail_visible_internal_llm_route_traces(
     mut detail: domain::ApplicationRunDetail,
     runtime_events: &[domain::RuntimeEventRecord],
 ) -> domain::ApplicationRunDetail {
-    let runtime_events_by_node_run_id =
-        visible_internal_llm_tool_runtime_events_by_node_run_id(&detail.node_runs, runtime_events);
+    enrich_node_runs_visible_internal_llm_route_traces(&mut detail.node_runs, runtime_events);
 
-    for node_run in &mut detail.node_runs {
-        let debug_payload = runtime_events_by_node_run_id
-            .get(&node_run.id)
-            .map(|runtime_events| {
-                with_runtime_visible_internal_llm_tool_events(
-                    node_run.debug_payload.clone(),
-                    runtime_events,
-                )
-            })
-            .unwrap_or_else(|| node_run.debug_payload.clone());
-        node_run.debug_payload = with_inline_visible_internal_llm_tool_trace_index(debug_payload);
+    for trace in &mut detail.stitched_trace {
+        enrich_node_runs_visible_internal_llm_route_traces(
+            &mut trace.node_runs,
+            &trace.runtime_events,
+        );
     }
 
     detail
@@ -1210,6 +1203,27 @@ pub fn enrich_node_last_run_visible_internal_llm_route_traces(
         with_inline_visible_internal_llm_tool_trace_index(debug_payload);
 
     last_run
+}
+
+fn enrich_node_runs_visible_internal_llm_route_traces(
+    node_runs: &mut [domain::NodeRunRecord],
+    runtime_events: &[domain::RuntimeEventRecord],
+) {
+    let runtime_events_by_node_run_id =
+        visible_internal_llm_tool_runtime_events_by_node_run_id(node_runs, runtime_events);
+
+    for node_run in node_runs {
+        let debug_payload = runtime_events_by_node_run_id
+            .get(&node_run.id)
+            .map(|runtime_events| {
+                with_runtime_visible_internal_llm_tool_events(
+                    node_run.debug_payload.clone(),
+                    runtime_events,
+                )
+            })
+            .unwrap_or_else(|| node_run.debug_payload.clone());
+        node_run.debug_payload = with_inline_visible_internal_llm_tool_trace_index(debug_payload);
+    }
 }
 
 fn visible_internal_llm_tool_runtime_events_by_node_run_id(

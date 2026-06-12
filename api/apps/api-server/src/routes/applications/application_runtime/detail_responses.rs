@@ -112,6 +112,29 @@ fn to_run_event_response(event: domain::RunEventRecord) -> RunEventResponse {
     }
 }
 
+fn to_stitched_trace_response(
+    trace: domain::ApplicationRunStitchedTrace,
+) -> ApplicationRunStitchedTraceResponse {
+    ApplicationRunStitchedTraceResponse {
+        source_flow_run: to_flow_run_response(trace.source_flow_run),
+        node_runs: trace
+            .node_runs
+            .into_iter()
+            .map(to_node_run_response)
+            .collect(),
+        callback_tasks: trace
+            .callback_tasks
+            .into_iter()
+            .map(to_callback_task_response)
+            .collect(),
+        events: trace
+            .events
+            .into_iter()
+            .map(to_run_event_response)
+            .collect(),
+    }
+}
+
 fn is_waiting_prefix_answer_node_run(run: &domain::NodeRunRecord) -> bool {
     if run.node_type != "answer" {
         return false;
@@ -279,6 +302,12 @@ fn to_application_run_detail_response(
         .into_iter()
         .map(to_run_event_response)
         .collect::<Vec<_>>();
+    let stitched_trace = detail
+        .stitched_trace
+        .clone()
+        .into_iter()
+        .map(to_stitched_trace_response)
+        .collect::<Vec<_>>();
     let application_type = application.application_type.as_str().to_string();
     let run = application_logs::ApplicationRunLogResponse {
         id: detail.flow_run.id.to_string(),
@@ -325,6 +354,7 @@ fn to_application_run_detail_response(
         checkpoints: checkpoints.clone(),
         callback_tasks: callback_tasks.clone(),
         events: events.clone(),
+        stitched_trace: stitched_trace.clone(),
     };
 
     ApplicationRunDetailResponse {
@@ -337,6 +367,7 @@ fn to_application_run_detail_response(
         checkpoints,
         callback_tasks,
         events,
+        stitched_trace,
     }
 }
 

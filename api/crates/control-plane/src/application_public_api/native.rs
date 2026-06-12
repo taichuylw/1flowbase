@@ -539,7 +539,10 @@ where
 }
 
 fn build_run_metadata(request: &NativeRunRequest) -> Value {
-    let compatibility_mode = request.protocol_compatibility_mode.clone();
+    let compatibility_mode = request
+        .protocol_compatibility_mode
+        .clone()
+        .or_else(|| request.compatibility_mode.clone());
     let idempotency_key = string_field(&request.execution, "idempotency_key");
     let external_user = request
         .expand_id

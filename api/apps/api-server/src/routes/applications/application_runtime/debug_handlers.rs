@@ -566,6 +566,7 @@ pub async fn start_node_debug_preview(
             checkpoints: Vec::new(),
             callback_tasks: Vec::new(),
             events: outcome.events,
+            stitched_trace: Vec::new(),
         },
     )
     .await?;

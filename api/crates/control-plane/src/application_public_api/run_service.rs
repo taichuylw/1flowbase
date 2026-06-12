@@ -646,6 +646,7 @@ mod tests {
             checkpoints: Vec::new(),
             callback_tasks: Vec::new(),
             events: Vec::new(),
+            stitched_trace: Vec::new(),
         };
 
         let run = native_result_from_run_detail(&detail, json!({}));
@@ -682,6 +683,7 @@ mod tests {
             checkpoints: Vec::new(),
             callback_tasks: Vec::new(),
             events: Vec::new(),
+            stitched_trace: Vec::new(),
         };
 
         let run = native_result_from_run_detail(&detail, json!({}));

@@ -13,11 +13,11 @@ export function getTraceItemKey(item: AgentFlowTraceItem) {
 
 export function nodeDisplayName(item: AgentFlowTraceItem) {
   if (item.nodeType === 'start') {
-    return i18nText("agentFlow", "auto.user_input");
+    return i18nText('agentFlow', 'auto.user_input');
   }
 
   if (item.nodeType === 'answer') {
-    return i18nText("agentFlow", "auto.reply_directly");
+    return i18nText('agentFlow', 'auto.reply_directly');
   }
 
   return item.nodeAlias;
@@ -88,6 +88,8 @@ function lastPayload(
 function mergeDebugPayloads(items: AgentFlowTraceItem[]) {
   const merged: Record<string, unknown> = {};
   const llmRounds: unknown[] = [];
+  const visibleInternalRouteTraces: unknown[] = [];
+  const visibleInternalRouteEvents: unknown[] = [];
 
   for (const item of items) {
     const debugPayload = item.debugPayload;
@@ -105,6 +107,22 @@ function mergeDebugPayloads(items: AgentFlowTraceItem[]) {
         }
         continue;
       }
+      if (key === 'visible_internal_llm_tool_trace') {
+        if (Array.isArray(value)) {
+          visibleInternalRouteTraces.push(...value);
+        } else if (merged.visible_internal_llm_tool_trace === undefined) {
+          merged.visible_internal_llm_tool_trace = value;
+        }
+        continue;
+      }
+      if (key === 'visible_internal_llm_tool_events') {
+        if (Array.isArray(value)) {
+          visibleInternalRouteEvents.push(...value);
+        } else if (merged.visible_internal_llm_tool_events === undefined) {
+          merged.visible_internal_llm_tool_events = value;
+        }
+        continue;
+      }
 
       if (merged[key] === undefined) {
         merged[key] = value;
@@ -114,6 +132,12 @@ function mergeDebugPayloads(items: AgentFlowTraceItem[]) {
 
   if (llmRounds.length > 0) {
     merged.llm_rounds = llmRounds;
+  }
+  if (visibleInternalRouteTraces.length > 0) {
+    merged.visible_internal_llm_tool_trace = visibleInternalRouteTraces;
+  }
+  if (visibleInternalRouteEvents.length > 0) {
+    merged.visible_internal_llm_tool_events = visibleInternalRouteEvents;
   }
 
   return merged;
