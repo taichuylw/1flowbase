@@ -169,6 +169,7 @@ pub(super) fn visible_internal_llm_tool_error_is_recoverable(error_payload: &Val
         .unwrap_or_default();
 
     details_code == "model_multimodal_unsupported"
+        || details_code == "visible_internal_llm_tool_media_unavailable"
         || message.contains("model_multimodal_unsupported")
         || runtime_message.contains("model_multimodal_unsupported")
         || details_message.contains("model_multimodal_unsupported")

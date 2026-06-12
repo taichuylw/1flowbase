@@ -18,6 +18,7 @@ pub(super) use self::media_context::{
 use self::media_context::{
     visible_internal_llm_tool_external_tool_policy, visible_internal_llm_tool_inherited_context,
     visible_internal_llm_tool_llm_resolved_inputs,
+    visible_internal_llm_tool_media_unavailable_error,
 };
 use self::payloads::*;
 use self::registry::visible_internal_llm_tools;
@@ -707,6 +708,11 @@ where
         "llm" => {
             let resolved_inputs =
                 visible_internal_llm_tool_llm_resolved_inputs(resolved_inputs, variable_pool);
+            if let Some(error_payload) =
+                visible_internal_llm_tool_media_unavailable_error(variable_pool).await
+            {
+                return Ok(VisibleInternalLlmToolNodeExecution::Failed(error_payload));
+            }
             let execution = execute_llm_node_provider_round(
                 node,
                 &resolved_inputs,

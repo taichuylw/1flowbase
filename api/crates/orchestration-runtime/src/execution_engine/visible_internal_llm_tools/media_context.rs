@@ -34,13 +34,13 @@ pub(super) fn visible_internal_llm_tool_llm_resolved_inputs(
     let inherited_tools = (!inputs.contains_key("tools")
         && visible_internal_llm_tool_external_tool_policy(variable_pool)
             == VisibleInternalLlmToolExternalToolPolicy::Inherited)
-    .then(|| {
-        context
-            .get("tools")
-            .and_then(Value::as_array)
-            .filter(|tools| !tools.is_empty())
-    })
-    .flatten();
+        .then(|| {
+            context
+                .get("tools")
+                .and_then(Value::as_array)
+                .filter(|tools| !tools.is_empty())
+        })
+        .flatten();
     if let Some(tools) = inherited_tools {
         inputs.insert("tools".to_string(), Value::Array(tools.clone()));
     }
@@ -87,6 +87,9 @@ pub(in crate::execution_engine) async fn inject_visible_internal_llm_tool_media_
             injected_blocks.push(block);
         }
     }
+    if injected_blocks.is_empty() && !provider_input_has_image_content_blocks(input) {
+        injected_blocks.extend(inherited_image_content_blocks(variable_pool));
+    }
     if injected_blocks.is_empty() {
         return;
     }
@@ -116,6 +119,40 @@ pub(in crate::execution_engine) async fn inject_visible_internal_llm_tool_media_
     message.content_blocks = Some(Value::Array(content_blocks));
 }
 
+pub(super) async fn visible_internal_llm_tool_media_unavailable_error(
+    variable_pool: &Map<String, Value>,
+) -> Option<Value> {
+    let media_items = visible_internal_llm_tool_media_argument(variable_pool);
+    let workspace_media = media_items
+        .iter()
+        .filter(|media| workspace_image_media_path(media).is_some())
+        .collect::<Vec<_>>();
+    if workspace_media.is_empty() {
+        return None;
+    }
+
+    let mut resolved_count = 0;
+    let mut unavailable = Vec::new();
+    for media in workspace_media {
+        if workspace_image_media_is_available(media).await {
+            resolved_count += 1;
+        } else {
+            unavailable.push(media.clone());
+        }
+    }
+    if resolved_count > 0 || !inherited_image_content_blocks(variable_pool).is_empty() {
+        return None;
+    }
+
+    Some(json!({
+        "error_code": "visible_internal_llm_tool_media_unavailable",
+        "message": "visible internal LLM tool media was not available to the server",
+        "recoverable": true,
+        "media": unavailable,
+        "hint": "If this path is local to an external client, read the file with a client file tool first and call the routed LLM tool again after the image content block is present in history."
+    }))
+}
+
 fn visible_internal_llm_tool_media_argument(variable_pool: &Map<String, Value>) -> Vec<Value> {
     variable_pool
         .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
@@ -126,13 +163,56 @@ fn visible_internal_llm_tool_media_argument(variable_pool: &Map<String, Value>) 
         .unwrap_or_default()
 }
 
+fn inherited_image_content_blocks(variable_pool: &Map<String, Value>) -> Vec<Value> {
+    variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|value| value.get("context"))
+        .and_then(|context| context.get("history"))
+        .and_then(Value::as_array)
+        .map(|history| {
+            history
+                .iter()
+                .flat_map(image_content_blocks_from_message)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn image_content_blocks_from_message(message: &Value) -> Vec<Value> {
+    [message.get("content_blocks"), message.get("content")]
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_array)
+        .flat_map(|blocks| blocks.iter())
+        .filter(|block| image_content_block_is_supported(block))
+        .cloned()
+        .collect()
+}
+
+fn image_content_block_is_supported(block: &Value) -> bool {
+    matches!(
+        block.get("type").and_then(Value::as_str),
+        Some("image" | "image_url" | "input_image")
+    )
+}
+
+fn provider_input_has_image_content_blocks(input: &ProviderInvocationInput) -> bool {
+    input.messages.iter().any(|message| {
+        message
+            .content_blocks
+            .as_ref()
+            .and_then(Value::as_array)
+            .is_some_and(|blocks| blocks.iter().any(image_content_block_is_supported))
+    })
+}
+
 async fn image_content_block_from_workspace_media(media: &Value) -> Option<Value> {
     if media.get("kind").and_then(Value::as_str) != Some("image")
         || media.get("source").and_then(Value::as_str) != Some("workspace_path")
     {
         return None;
     }
-    let raw_path = media.get("path").and_then(Value::as_str)?.trim();
+    let raw_path = workspace_image_media_path(media)?;
     if raw_path.is_empty() || !looks_like_image_path(raw_path) {
         return None;
     }
@@ -147,6 +227,32 @@ async fn image_content_block_from_workspace_media(media: &Value) -> Option<Value
             "url": format!("data:{media_type};base64,{encoded}")
         }
     }))
+}
+
+fn workspace_image_media_path(media: &Value) -> Option<&str> {
+    if media.get("kind").and_then(Value::as_str) != Some("image")
+        || media.get("source").and_then(Value::as_str) != Some("workspace_path")
+    {
+        return None;
+    }
+    media
+        .get("path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|path| !path.is_empty() && looks_like_image_path(path))
+}
+
+async fn workspace_image_media_is_available(media: &Value) -> bool {
+    let Some(raw_path) = workspace_image_media_path(media) else {
+        return false;
+    };
+    let Some(resolved_path) = resolve_workspace_media_path(raw_path).await else {
+        return false;
+    };
+    image_media_type_from_path(&resolved_path).is_some()
+        && tokio::fs::metadata(&resolved_path)
+            .await
+            .is_ok_and(|metadata| metadata.is_file())
 }
 
 async fn resolve_workspace_media_path(raw_path: &str) -> Option<std::path::PathBuf> {
