@@ -215,7 +215,7 @@ where
                             tool,
                             json!({ "error_payload": error_payload }),
                         ));
-                        internal_tool_results.push(visible_internal_llm_tool_result(
+                        internal_tool_results.push(visible_internal_llm_tool_error_result(
                             tool_call,
                             &tool.name,
                             visible_internal_llm_tool_error_result_content(&error_payload),
@@ -234,7 +234,7 @@ where
                                 route_events,
                             );
                         }
-                        internal_tool_results.push(visible_internal_llm_tool_result(
+                        internal_tool_results.push(visible_internal_llm_tool_error_result(
                             tool_call,
                             &tool.name,
                             visible_internal_llm_tool_error_result_content(&error_payload),
@@ -368,7 +368,7 @@ where
                 } => {
                     route_events.extend(failed_route_events);
                     if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
-                        tool_results.push(visible_internal_llm_tool_result(
+                        tool_results.push(visible_internal_llm_tool_error_result(
                             tool_call,
                             &tool.name,
                             visible_internal_llm_tool_error_result_content(&error_payload),
@@ -896,7 +896,7 @@ where
             } => {
                 route_events.extend(failed_route_events);
                 if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
-                    completed_tool_results.push(visible_internal_llm_tool_result(
+                    completed_tool_results.push(visible_internal_llm_tool_error_result(
                         &pending_call.tool_call,
                         &pending_call.tool.name,
                         visible_internal_llm_tool_error_result_content(&error_payload),
@@ -1090,7 +1090,7 @@ where
                 } => {
                     if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
                         let mut completed_tool_results = state.completed_tool_results.clone();
-                        completed_tool_results.push(visible_internal_llm_tool_result(
+                        completed_tool_results.push(visible_internal_llm_tool_error_result(
                             &state.tool_call,
                             &state.tool_name,
                             visible_internal_llm_tool_error_result_content(&error_payload),
@@ -1300,7 +1300,7 @@ where
             ));
             if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
                 let mut completed_tool_results = state.completed_tool_results.clone();
-                completed_tool_results.push(visible_internal_llm_tool_result(
+                completed_tool_results.push(visible_internal_llm_tool_error_result(
                     &state.tool_call,
                     &state.tool_name,
                     visible_internal_llm_tool_error_result_content(&error_payload),

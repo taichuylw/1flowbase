@@ -168,7 +168,8 @@ pub(super) fn visible_internal_llm_tool_error_is_recoverable(error_payload: &Val
         .and_then(Value::as_str)
         .unwrap_or_default();
 
-    details_code == "model_multimodal_unsupported"
+    visible_internal_llm_tool_error_has_provider_details(error_payload)
+        || details_code == "model_multimodal_unsupported"
         || details_code == "visible_internal_llm_tool_media_unavailable"
         || message.contains("model_multimodal_unsupported")
         || runtime_message.contains("model_multimodal_unsupported")
@@ -183,11 +184,42 @@ pub(super) fn visible_internal_llm_tool_error_result_content(error_payload: &Val
             .or_else(|| error_payload.get("error_code"))
             .cloned()
             .unwrap_or(Value::String("visible_internal_llm_tool_failed".to_string())),
-        "message": "visible internal LLM tool failed recoverably",
+        "message": visible_internal_llm_tool_recoverable_error_message(error_payload),
         "recoverable": true,
         "details": error_payload,
     })
     .to_string()
+}
+
+fn visible_internal_llm_tool_error_has_provider_details(error_payload: &Value) -> bool {
+    let Some(details) = error_payload.get("details").and_then(Value::as_object) else {
+        return false;
+    };
+    let has_provider_route = details.get("provider_instance_id").is_some()
+        || details.get("provider_code").is_some()
+        || details.get("protocol").is_some();
+    let has_error_details = details
+        .get("error_code")
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
+        || details
+            .get("message")
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty());
+
+    has_provider_route && has_error_details
+}
+
+fn visible_internal_llm_tool_recoverable_error_message(error_payload: &Value) -> String {
+    error_payload
+        .get("details")
+        .and_then(|details| details.get("message"))
+        .and_then(Value::as_str)
+        .or_else(|| error_payload.get("runtime_message").and_then(Value::as_str))
+        .or_else(|| error_payload.get("message").and_then(Value::as_str))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("visible internal LLM tool failed recoverably")
+        .to_string()
 }
 
 pub(super) fn visible_internal_llm_tool_route_event(
@@ -281,5 +313,18 @@ pub(super) fn visible_internal_llm_tool_result(
         "tool_call_id": tool_call_id(tool_call),
         "name": tool_name,
         "content": content
+    })
+}
+
+pub(super) fn visible_internal_llm_tool_error_result(
+    tool_call: &Value,
+    tool_name: &str,
+    content: String,
+) -> Value {
+    json!({
+        "tool_call_id": tool_call_id(tool_call),
+        "name": tool_name,
+        "content": content,
+        "is_error": true
     })
 }

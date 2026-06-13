@@ -191,6 +191,9 @@ pub(super) fn apply_mixed_llm_tool_callback_results(
         if let Some(content_blocks) = content_blocks {
             message.insert("content_blocks".to_string(), content_blocks);
         }
+        if let Some(is_error) = object.get("is_error").and_then(Value::as_bool) {
+            message.insert("is_error".to_string(), Value::Bool(is_error));
+        }
         if let Some(name) = object
             .get("name")
             .and_then(Value::as_str)
@@ -301,6 +304,9 @@ pub(super) fn append_llm_tool_result_messages(
         message.insert("content".to_string(), content);
         if let Some(content_blocks) = content_blocks {
             message.insert("content_blocks".to_string(), content_blocks);
+        }
+        if let Some(is_error) = result.get("is_error").and_then(Value::as_bool) {
+            message.insert("is_error".to_string(), Value::Bool(is_error));
         }
         let name = result
             .get("name")

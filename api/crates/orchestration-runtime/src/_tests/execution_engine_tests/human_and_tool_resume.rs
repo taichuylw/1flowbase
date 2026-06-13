@@ -744,6 +744,8 @@ async fn resume_llm_tool_results_preserves_media_content_blocks() {
     );
 }
 
+mod visible_internal_llm_tool_claude_code;
+mod visible_internal_llm_tool_errors;
 mod visible_internal_llm_tool_fixtures;
 mod visible_internal_llm_tool_media;
 mod visible_internal_llm_tool_resume;

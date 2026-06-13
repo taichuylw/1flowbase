@@ -305,6 +305,7 @@ async fn orchestration_runtime_textualizes_user_media_when_selected_model_is_not
             content: "Describe image".to_string(),
             name: None,
             tool_call_id: None,
+            is_error: None,
             tool_calls: None,
             content_blocks: Some(json!([
                 {"type": "text", "text": "Describe image"},
@@ -366,6 +367,7 @@ async fn orchestration_runtime_keeps_user_media_when_configured_model_supports_m
             content: "Describe image".to_string(),
             name: None,
             tool_call_id: None,
+            is_error: None,
             tool_calls: None,
             content_blocks: Some(json!([
                 {"type": "text", "text": "Describe image"},
@@ -468,6 +470,7 @@ async fn orchestration_runtime_canonicalizes_live_provider_tool_call_names() {
             content: "run pwd".to_string(),
             name: None,
             tool_call_id: None,
+            is_error: None,
             tool_calls: None,
             content_blocks: None,
         }],
@@ -515,6 +518,7 @@ fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
                 content: "Describe image".to_string(),
                 name: None,
                 tool_call_id: None,
+                is_error: None,
                 tool_calls: None,
                 content_blocks: None,
             },
@@ -523,6 +527,7 @@ fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
                 content: String::new(),
                 name: Some("Read".to_string()),
                 tool_call_id: Some("call_read".to_string()),
+                is_error: None,
                 tool_calls: None,
                 content_blocks: Some(json!([
                     {

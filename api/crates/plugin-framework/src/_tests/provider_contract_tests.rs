@@ -150,6 +150,7 @@ fn provider_invocation_input_preserves_tool_message_metadata() {
                 content: String::new(),
                 name: None,
                 tool_call_id: None,
+                is_error: None,
                 tool_calls: Some(json!([
                     {
                         "id": "call-1",
@@ -167,6 +168,7 @@ fn provider_invocation_input_preserves_tool_message_metadata() {
                 content: "{\"status\":\"shipped\"}".to_string(),
                 name: None,
                 tool_call_id: Some("call-1".to_string()),
+                is_error: Some(true),
                 tool_calls: None,
                 content_blocks: None,
             },
@@ -185,6 +187,7 @@ fn provider_invocation_input_preserves_tool_message_metadata() {
     assert_eq!(payload["messages"][0]["tool_calls"][0]["id"], "call-1");
     assert_eq!(payload["messages"][1]["role"], "tool");
     assert_eq!(payload["messages"][1]["tool_call_id"], "call-1");
+    assert_eq!(payload["messages"][1]["is_error"], true);
 }
 
 #[test]

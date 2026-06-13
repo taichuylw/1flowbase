@@ -295,6 +295,8 @@ pub struct ProviderMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_error: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_blocks: Option<Value>,

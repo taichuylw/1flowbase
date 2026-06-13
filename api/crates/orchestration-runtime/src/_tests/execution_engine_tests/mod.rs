@@ -386,7 +386,7 @@ impl CapabilityInvoker for ToolMcpMetadataInvoker {
 }
 
 struct SequentialLlmToolCallInvoker {
-    responses: Arc<Mutex<Vec<ProviderInvocationResult>>>,
+    responses: Arc<Mutex<Vec<ProviderInvocationOutput>>>,
     captured_inputs: Arc<Mutex<Vec<ProviderInvocationInput>>>,
 }
 
@@ -401,24 +401,14 @@ impl ProviderInvoker for SequentialLlmToolCallInvoker {
             .lock()
             .expect("captured inputs mutex poisoned")
             .push(input);
-        let result = self
+        let output = self
             .responses
             .lock()
             .expect("responses mutex poisoned")
             .pop()
             .expect("provider response should exist");
 
-        Ok(ProviderInvocationOutput {
-            events: result
-                .finish_reason
-                .clone()
-                .map(|reason| ProviderStreamEvent::Finish { reason })
-                .into_iter()
-                .collect(),
-            result,
-            first_token_at: None,
-            time_to_first_token_ms: None,
-        })
+        Ok(output)
     }
 }
 
@@ -895,6 +885,20 @@ fn sequential_tool_invoker(
     SequentialLlmToolCallInvoker,
     Arc<Mutex<Vec<ProviderInvocationInput>>>,
 ) {
+    sequential_tool_output_invoker(
+        responses_in_call_order
+            .into_iter()
+            .map(provider_output)
+            .collect(),
+    )
+}
+
+fn sequential_tool_output_invoker(
+    responses_in_call_order: Vec<ProviderInvocationOutput>,
+) -> (
+    SequentialLlmToolCallInvoker,
+    Arc<Mutex<Vec<ProviderInvocationInput>>>,
+) {
     let captured_inputs = Arc::new(Mutex::new(Vec::new()));
     let invoker = SequentialLlmToolCallInvoker {
         responses: Arc::new(Mutex::new(
@@ -903,6 +907,20 @@ fn sequential_tool_invoker(
         captured_inputs: captured_inputs.clone(),
     };
     (invoker, captured_inputs)
+}
+
+fn provider_output(result: ProviderInvocationResult) -> ProviderInvocationOutput {
+    ProviderInvocationOutput {
+        events: result
+            .finish_reason
+            .clone()
+            .map(|reason| ProviderStreamEvent::Finish { reason })
+            .into_iter()
+            .collect(),
+        result,
+        first_token_at: None,
+        time_to_first_token_ms: None,
+    }
 }
 
 mod answer_and_failover;

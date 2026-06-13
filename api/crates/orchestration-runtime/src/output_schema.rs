@@ -80,6 +80,7 @@ pub fn history_messages_schema() -> Value {
                 "content": { "type": "string" },
                 "name": { "type": "string" },
                 "tool_call_id": { "type": "string" },
+                "is_error": { "type": "boolean" },
                 "tool_calls": { "type": "array" },
                 "content_blocks": { "type": "array" }
             }
