@@ -36,7 +36,10 @@ use payloads::{
     should_keep_runtime_payload_field_inline, with_application_run_input_summary,
     with_debug_artifact_field_path,
 };
-use visible_internal_llm_route_traces::collect_visible_internal_llm_tool_route_traces;
+use visible_internal_llm_route_traces::{
+    collect_visible_internal_llm_tool_route_traces,
+    collect_visible_internal_llm_tool_route_traces_with_main_output,
+};
 
 struct RuntimeDebugArtifactScope {
     workspace_id: Uuid,
@@ -1200,7 +1203,10 @@ pub fn enrich_node_last_run_visible_internal_llm_route_traces(
         })
         .unwrap_or_else(|| last_run.node_run.debug_payload.clone());
     last_run.node_run.debug_payload =
-        with_inline_visible_internal_llm_tool_trace_index(debug_payload);
+        with_inline_visible_internal_llm_tool_trace_index_with_main_output(
+            debug_payload,
+            Some(&last_run.node_run.output_payload),
+        );
 
     last_run
 }
@@ -1222,7 +1228,10 @@ fn enrich_node_runs_visible_internal_llm_route_traces(
                 )
             })
             .unwrap_or_else(|| node_run.debug_payload.clone());
-        node_run.debug_payload = with_inline_visible_internal_llm_tool_trace_index(debug_payload);
+        node_run.debug_payload = with_inline_visible_internal_llm_tool_trace_index_with_main_output(
+            debug_payload,
+            Some(&node_run.output_payload),
+        );
     }
 }
 
@@ -1457,7 +1466,10 @@ fn synthetic_visible_internal_llm_tool_result(
     Value::Object(result)
 }
 
-fn with_inline_visible_internal_llm_tool_trace_index(mut payload: Value) -> Value {
+fn with_inline_visible_internal_llm_tool_trace_index_with_main_output(
+    mut payload: Value,
+    main_resume_output_fallback: Option<&Value>,
+) -> Value {
     let Some(object) = payload.as_object() else {
         return payload;
     };
@@ -1471,7 +1483,10 @@ fn with_inline_visible_internal_llm_tool_trace_index(mut payload: Value) -> Valu
         .unwrap_or_default();
     payload = with_synthetic_visible_internal_llm_tool_rounds(payload, &runtime_events);
 
-    let traces = collect_visible_internal_llm_tool_route_traces(&payload);
+    let traces = collect_visible_internal_llm_tool_route_traces_with_main_output(
+        &payload,
+        main_resume_output_fallback,
+    );
     if traces.is_empty() {
         return payload;
     }

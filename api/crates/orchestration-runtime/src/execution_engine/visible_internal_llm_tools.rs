@@ -666,6 +666,7 @@ where
                         .get("provider_route")
                         .cloned()
                         .unwrap_or(Value::Null),
+                    "content": branch_text.clone(),
                 }),
             ));
         }
@@ -1029,6 +1030,7 @@ where
                         .get("provider_route")
                         .cloned()
                         .unwrap_or(Value::Null),
+                    "content": branch_text.clone(),
                 }),
             ));
 

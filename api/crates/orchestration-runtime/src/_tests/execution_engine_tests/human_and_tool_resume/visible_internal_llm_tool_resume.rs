@@ -50,6 +50,7 @@ async fn visible_internal_llm_tool_emits_structured_route_events_in_main_debug_p
         event["event_type"] == json!("visible_internal_llm_tool_completed")
             && event["target_node_id"] == json!("node-mounted-llm")
             && event["provider_route"]["model"] == json!("gpt-5.4-mini")
+            && event["content"] == json!("mounted-visible ")
     }));
 }
 

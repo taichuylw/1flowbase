@@ -839,44 +839,17 @@ async fn application_runtime_routes_log_detail_exposes_visible_internal_llm_rout
     let node_run_id =
         Uuid::parse_str(preview_payload["data"]["node_run"]["id"].as_str().unwrap()).unwrap();
     let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
-    let debug_payload = json!({
-        "llm_rounds": [
-            {
-                "round_index": 0,
-                "assistant": {
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": "call-image",
-                            "name": "image_llm",
-                            "arguments": {
-                                "task": "描述图片里的导航栏"
-                            }
-                        }
-                    ]
-                }
-            },
-            {
-                "round_index": 1,
-                "tool_results": [
-                    {
-                        "tool_call_id": "call-image",
-                        "name": "image_llm",
-                        "content": "图片里有 1flowbase 品牌和 工作台、前台、子系统、工具 导航。"
-                    }
-                ]
-            },
-            {
-                "round_index": 2,
-                "assistant": {
-                    "content": "根据图片内容继续搜索导航栏代码。"
-                }
-            }
-        ]
+    let debug_payload = json!({});
+    let output_payload = json!({
+        "text": "很好，图片分析出来了！这是一个 1flowbase 的顶部导航栏。",
+        "usage": {
+            "total_tokens": 128
+        }
     });
-    sqlx::query("update node_runs set debug_payload = $2 where id = $1")
+    sqlx::query("update node_runs set debug_payload = $2, output_payload = $3 where id = $1")
         .bind(node_run_id)
         .bind(&debug_payload)
+        .bind(&output_payload)
         .execute(&pool)
         .await
         .unwrap();
@@ -984,6 +957,11 @@ async fn application_runtime_routes_log_detail_exposes_visible_internal_llm_rout
     assert_eq!(trace["route_model"], json!("mimo-v2.5"));
     assert_eq!(trace["returned_to_main"], json!(true));
     assert_eq!(trace["main_resume"], json!(true));
+    assert_eq!(trace["route_output_summary"]["preview"], json!("null"));
+    assert_eq!(
+        trace["final_output_summary"]["preview"],
+        json!("很好，图片分析出来了！这是一个 1flowbase 的顶部导航栏。")
+    );
     assert!(trace.get("artifact_ref").is_none());
 
     let scoped_node = app

@@ -80,13 +80,19 @@ function metricText(item: AgentFlowTraceItem) {
   if (toolCount > 0) {
     elements.push(
       <span key="tools">
-        {i18nText("agentFlow", "auto.tools_alt", { value1: toolCount })}
+        {i18nText('agentFlow', 'auto.tools_alt', { value1: toolCount })}
       </span>
     );
   }
 
   if (elements.length === 0) {
-    return i18nText("agentFlow", "auto.in_progress");
+    if (statusTone(item.status) === 'success') {
+      return i18nText('agentFlow', 'auto.executed_successfully');
+    }
+    if (statusTone(item.status) === 'error') {
+      return i18nText('agentFlow', 'auto.execution_failed');
+    }
+    return i18nText('agentFlow', 'auto.in_progress');
   }
 
   const joined: ReactNode[] = [];
@@ -106,7 +112,9 @@ export function StatusIcon({ status }: { status: string }) {
   if (tone === 'running') {
     return (
       <LoadingOutlined
-        aria-label={i18nText("agentFlow", "auto.status_alt", { value1: status })}
+        aria-label={i18nText('agentFlow', 'auto.status_alt', {
+          value1: status
+        })}
         className="agent-flow-editor__debug-workflow-status-icon"
         spin
       />
@@ -116,7 +124,9 @@ export function StatusIcon({ status }: { status: string }) {
   if (tone === 'error' || tone === 'warning') {
     return (
       <WarningFilled
-        aria-label={i18nText("agentFlow", "auto.status_alt", { value1: status })}
+        aria-label={i18nText('agentFlow', 'auto.status_alt', {
+          value1: status
+        })}
         className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
       />
     );
@@ -124,7 +134,7 @@ export function StatusIcon({ status }: { status: string }) {
 
   return (
     <CheckCircleFilled
-      aria-label={i18nText("agentFlow", "auto.status_alt", { value1: status })}
+      aria-label={i18nText('agentFlow', 'auto.status_alt', { value1: status })}
       className={`agent-flow-editor__debug-workflow-status-icon agent-flow-editor__debug-workflow-status-icon--${tone}`}
     />
   );
@@ -133,7 +143,9 @@ export function StatusIcon({ status }: { status: string }) {
 export function NodeTypeIcon({ nodeType }: { nodeType: string }) {
   return (
     <span
-      aria-label={i18nText("agentFlow", "auto.node_type_alt", { value1: nodeType })}
+      aria-label={i18nText('agentFlow', 'auto.node_type_alt', {
+        value1: nodeType
+      })}
       className="agent-flow-editor__debug-workflow-node-icon"
       role="img"
     >
