@@ -193,6 +193,9 @@ pub(super) fn prompt_messages_from_provider_messages(messages: &[ProviderMessage
                     Value::String(tool_call_id.clone()),
                 );
             }
+            if let Some(is_error) = message.is_error {
+                payload.insert("is_error".to_string(), Value::Bool(is_error));
+            }
             if let Some(tool_calls) = &message.tool_calls {
                 payload.insert("tool_calls".to_string(), tool_calls.clone());
             }

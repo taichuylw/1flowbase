@@ -83,6 +83,7 @@ test('runMergeCurrentToMainLatest merges the current branch into main, then main
     ['pull', '--ff-only', 'origin', 'latest'],
     ['merge', '--no-edit', 'main'],
     ['push', 'origin', 'latest'],
+    ['switch', 'feature/shipping'],
   ]);
   assert.match(output.join(''), /done/u);
 });

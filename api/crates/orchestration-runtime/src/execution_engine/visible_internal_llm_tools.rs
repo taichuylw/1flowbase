@@ -215,30 +215,38 @@ where
                             tool,
                             json!({ "error_payload": error_payload }),
                         ));
-                        internal_tool_results.push(visible_internal_llm_tool_result(
+                        let Some(tool_result) = visible_internal_llm_tool_recoverable_result(
                             tool_call,
                             &tool.name,
-                            visible_internal_llm_tool_error_result_content(&error_payload),
-                        ));
-                    }
-                    VisibleInternalLlmToolBranchExecution::Failed {
-                        error_payload,
-                        route_events: failed_route_events,
-                    } => {
-                        route_events.extend(failed_route_events);
-                        if !visible_internal_llm_tool_error_is_recoverable(&error_payload) {
+                            &error_payload,
+                        ) else {
                             return visible_internal_llm_tool_failure(
                                 node,
                                 provider_events,
                                 error_payload,
                                 route_events,
                             );
-                        }
-                        internal_tool_results.push(visible_internal_llm_tool_result(
+                        };
+                        internal_tool_results.push(tool_result);
+                    }
+                    VisibleInternalLlmToolBranchExecution::Failed {
+                        error_payload,
+                        route_events: failed_route_events,
+                    } => {
+                        route_events.extend(failed_route_events);
+                        let Some(tool_result) = visible_internal_llm_tool_recoverable_result(
                             tool_call,
                             &tool.name,
-                            visible_internal_llm_tool_error_result_content(&error_payload),
-                        ));
+                            &error_payload,
+                        ) else {
+                            return visible_internal_llm_tool_failure(
+                                node,
+                                provider_events,
+                                error_payload,
+                                route_events,
+                            );
+                        };
+                        internal_tool_results.push(tool_result);
                     }
                 }
             }
@@ -367,12 +375,12 @@ where
                     route_events: failed_route_events,
                 } => {
                     route_events.extend(failed_route_events);
-                    if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
-                        tool_results.push(visible_internal_llm_tool_result(
-                            tool_call,
-                            &tool.name,
-                            visible_internal_llm_tool_error_result_content(&error_payload),
-                        ));
+                    if let Some(tool_result) = visible_internal_llm_tool_recoverable_result(
+                        tool_call,
+                        &tool.name,
+                        &error_payload,
+                    ) {
+                        tool_results.push(tool_result);
                         continue;
                     }
                     return visible_internal_llm_tool_failure(
@@ -895,12 +903,12 @@ where
                 route_events: failed_route_events,
             } => {
                 route_events.extend(failed_route_events);
-                if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
-                    completed_tool_results.push(visible_internal_llm_tool_result(
-                        &pending_call.tool_call,
-                        &pending_call.tool.name,
-                        visible_internal_llm_tool_error_result_content(&error_payload),
-                    ));
+                if let Some(tool_result) = visible_internal_llm_tool_recoverable_result(
+                    &pending_call.tool_call,
+                    &pending_call.tool.name,
+                    &error_payload,
+                ) {
+                    completed_tool_results.push(tool_result);
                     continue;
                 }
                 return Ok(VisibleInternalLlmToolRemainingExecution::Failed {
@@ -1088,13 +1096,13 @@ where
                     error_payload,
                     route_events,
                 } => {
-                    if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
+                    if let Some(tool_result) = visible_internal_llm_tool_recoverable_result(
+                        &state.tool_call,
+                        &state.tool_name,
+                        &error_payload,
+                    ) {
                         let mut completed_tool_results = state.completed_tool_results.clone();
-                        completed_tool_results.push(visible_internal_llm_tool_result(
-                            &state.tool_call,
-                            &state.tool_name,
-                            visible_internal_llm_tool_error_result_content(&error_payload),
-                        ));
+                        completed_tool_results.push(tool_result);
                         let visible_transcript =
                             format!("{}{}", state.main_visible_transcript, state.branch_text);
                         match execute_remaining_visible_internal_llm_tool_calls(
@@ -1298,13 +1306,13 @@ where
                     "error_payload": error_payload,
                 }),
             ));
-            if visible_internal_llm_tool_error_is_recoverable(&error_payload) {
+            if let Some(tool_result) = visible_internal_llm_tool_recoverable_result(
+                &state.tool_call,
+                &state.tool_name,
+                &error_payload,
+            ) {
                 let mut completed_tool_results = state.completed_tool_results.clone();
-                completed_tool_results.push(visible_internal_llm_tool_result(
-                    &state.tool_call,
-                    &state.tool_name,
-                    visible_internal_llm_tool_error_result_content(&error_payload),
-                ));
+                completed_tool_results.push(tool_result);
                 let visible_transcript =
                     format!("{}{}", state.main_visible_transcript, state.branch_text);
                 match execute_remaining_visible_internal_llm_tool_calls(

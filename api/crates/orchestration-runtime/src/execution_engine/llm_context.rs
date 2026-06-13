@@ -337,6 +337,7 @@ pub(super) fn provider_context_from_prompt_messages(
 
         let carries_tool_payload = message.get("tool_calls").is_some()
             || message.get("tool_call_id").is_some()
+            || message.get("is_error").is_some()
             || message.get("content_blocks").is_some();
         if content.trim().is_empty() && !carries_tool_payload {
             continue;
@@ -370,6 +371,7 @@ pub(super) fn provider_context_from_prompt_messages(
                     .get("tool_call_id")
                     .and_then(Value::as_str)
                     .map(ToOwned::to_owned),
+                is_error: message.get("is_error").and_then(Value::as_bool),
                 tool_calls: message.get("tool_calls").map(provider_tool_calls_payload),
                 content_blocks: message.get("content_blocks").cloned(),
             });
@@ -414,6 +416,7 @@ pub(super) fn seed_user_turn_from_system_only_node_prompt(
         content: seeded_content,
         name: None,
         tool_call_id: None,
+        is_error: None,
         tool_calls: None,
         content_blocks: None,
     });
