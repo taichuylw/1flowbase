@@ -2,7 +2,7 @@
 memory_type: feedback
 feedback_category: repository
 topic: visible-internal-llm-tool-routing-authoring
-summary: `visible_internal_llm_tool` 是 1flowbase runtime 路由层语义，不是 provider 插件语义；它是 hidden internal routing call，不隔离目标 LLM 的真实执行环境，目标 LLM 仍可拿上下文、history、files、外部 tools 并发起真实外部 tool callback；authoring 入口应是 LLM 节点的“挂载工具”开关和节点底部外置圆形工具连接点；#810 继续承接路由可观测性和目标分支上下文交接缺口。
+summary: `visible_internal_llm_tool` 是 1flowbase runtime 路由层语义，不是 provider 插件语义；它是 hidden internal routing call，不隔离目标 LLM 的真实执行环境，目标 LLM 仍可拿上下文、history、files、外部 tools 并发起真实外部 tool callback；authoring 入口应是 LLM 节点的“挂载工具”开关和节点底部外置圆形工具连接点；可恢复错误反馈要分级，主 LLM 只接收短 guidance 或 provider 原始错误内容，完整 runtime payload 留在 debug / trace。
 keywords:
   - visible_internal_llm_tool
   - 挂载工具
@@ -16,9 +16,12 @@ keywords:
   - react-flow handle
   - external tool callback
   - hidden routing call
+  - error feedback
+  - expected guidance
+  - provider failure
 created_at: 2026-06-08 10
-updated_at: 2026-06-08 22
-last_verified_at: 2026-06-08 22
+updated_at: 2026-06-13 22
+last_verified_at: 2026-06-13 22
 decision_policy: direct_reference
 scope:
   - api/crates/orchestration-runtime
@@ -36,6 +39,8 @@ scope:
 `visible_internal_llm_tool` 的目标分支 / 目标 LLM 不是隔离执行环境。它是 hidden internal routing call：外部客户端不能看到 `image_llm` / `visible_internal_llm_tool` 这个内部路由 tool call；但 runtime 切到目标 LLM 后，目标 LLM 是真实 execution，应继续拿到当前上下文、history、files、外部 tools 与 callback 能力。目标 LLM 执行期间产生的 `Bash` / `Read` / 其他 client tool call，是当前活跃 LLM 的真实外部 tool call，应按现有 callback / resume 协议暴露给客户端执行。
 
 `flow_run_id=019ea782-4b1d-75f0-9756-ee36d634ecc9` 的验收发现不要误判为 #809 回退：目标 LLM 外部 callback 已执行，剩余问题是缺少显式 `visible_internal_llm_tool` 路由事件，以及目标分支只拿到 `visible_internal_llm_tool.arguments.task`、没有拿到原始请求中的文件路径等上下文线索。该缺口已挂 #810；实现时应补路由可观测性、目标分支 context/history/files/tools 交接，以及隐藏路由内可恢复错误回灌。顶层主 LLM 的 `model_multimodal_unsupported` 暂不全局吞掉，避免隐藏真实模型配置错误。
+
+`visible_internal_llm_tool` 的可恢复错误反馈必须分级给主 LLM：内置或用户配置可预见场景（例如 media content 未进入 history / server、模型不支持多模态、混合 callback 需要独立轮次）返回短的 expected guidance，默认不带 `is_error: true`，不返回嵌套 runtime details；未知上游供应商失败（例如 429、quota、provider body）返回 provider 原始错误主体或最接近的 provider message/body，带 `is_error: true`；runtime invariant（目标节点缺失、callback state 丢失、编排结构损坏）继续 fail-fast。完整 `visible internal LLM tool branch node failed`、node、tool_call 和原始 payload 保留在 debug / trace，避免排障信息丢失。
 
 Authoring 侧不向用户暴露 `LLM 执行角色` 或 `execution_role` 下拉。LLM 节点只提供“挂载工具”开关；开启后编辑工具注册表。每条工具注册在同一个 LLM 节点底部显示一个外置圆形工具连接点，随节点移动，不占用左右主流程连接器。工具连接点要像左右连接器一样是节点边界端口：圆心落在节点底边，常态只显示蓝点白描边；hover / focus 时轻微放大并显示蓝色 halo，同时用 tooltip 显示工具名。实现时工具 handle 必须渲染在 `.agent-flow-node-card` 内部，用真实卡片作为绝对定位基准，不能挂在 React Flow node wrapper 下面再用 wrapper 高度推底边。画布默认不显示“挂载工具”静态文案、竖线、工具名方块或外置工具区。用户从该连接点拉线时，应生成普通可编排 `graph.edges`，`sourceHandle` 使用 `visible_internal_llm_tool:<connector_id>`；这条分支可以继续连接任意后续节点，由 runtime 在主 LLM tool call 时按路由执行，主流程普通 downstream 激活需跳过该 sourceHandle。
 
