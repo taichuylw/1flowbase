@@ -1242,10 +1242,14 @@ fn visible_internal_llm_tool_runtime_events_by_node_run_id(
         let Some(payload) = visible_internal_llm_tool_runtime_event_payload(event) else {
             continue;
         };
-        let owner_node_run_id = visible_internal_llm_tool_runtime_event_owner_node_id(&payload)
-            .and_then(|node_id| latest_node_run_id_by_node_id.get(node_id).copied())
-            .or_else(|| visible_internal_llm_tool_runtime_event_node_run_id(event, &payload))
-            .filter(|node_run_id| node_run_ids.contains(node_run_id));
+        let explicit_node_run_id =
+            visible_internal_llm_tool_runtime_event_node_run_id(event, &payload);
+        let owner_node_run_id = match explicit_node_run_id {
+            Some(node_run_id) if node_run_ids.contains(&node_run_id) => Some(node_run_id),
+            Some(_) => None,
+            None => visible_internal_llm_tool_runtime_event_owner_node_id(&payload)
+                .and_then(|node_id| latest_node_run_id_by_node_id.get(node_id).copied()),
+        };
         let Some(owner_node_run_id) = owner_node_run_id else {
             continue;
         };
@@ -1304,21 +1308,153 @@ fn with_runtime_visible_internal_llm_tool_events(
     if runtime_events.is_empty() {
         return payload;
     }
-    let Some(object) = payload.as_object() else {
+    let Some(object) = payload.as_object_mut() else {
         return payload;
     };
-    if object.contains_key("visible_internal_llm_tool_events") {
-        return payload;
-    }
 
-    if let Some(object) = payload.as_object_mut() {
+    if !object.contains_key("visible_internal_llm_tool_events") {
         object.insert(
             "visible_internal_llm_tool_events".to_string(),
             Value::Array(runtime_events.to_vec()),
         );
     }
 
+    with_synthetic_visible_internal_llm_tool_rounds(payload, runtime_events)
+}
+
+fn with_synthetic_visible_internal_llm_tool_rounds(
+    mut payload: Value,
+    runtime_events: &[Value],
+) -> Value {
+    let Some(object) = payload.as_object_mut() else {
+        return payload;
+    };
+    if object.contains_key("llm_rounds") {
+        return payload;
+    }
+
+    let rounds = synthetic_visible_internal_llm_tool_rounds(runtime_events);
+    if rounds.is_empty() {
+        return payload;
+    }
+
+    object.insert("llm_rounds".to_string(), Value::Array(rounds));
     payload
+}
+
+fn synthetic_visible_internal_llm_tool_rounds(runtime_events: &[Value]) -> Vec<Value> {
+    let mut calls_by_id = std::collections::BTreeMap::<String, Value>::new();
+    let mut results_by_id = std::collections::BTreeMap::<String, Value>::new();
+
+    for event in runtime_events {
+        let Some(event_object) = event.as_object() else {
+            continue;
+        };
+        let Some(tool_call_id) =
+            record_string_field(event_object, &["tool_call_id", "id", "call_id"])
+        else {
+            continue;
+        };
+        let tool_name = record_string_field(event_object, &["tool_name", "name"])
+            .unwrap_or_else(|| "Tool".to_string());
+
+        calls_by_id.entry(tool_call_id.clone()).or_insert_with(|| {
+            let mut call = Map::new();
+            call.insert("id".to_string(), json!(tool_call_id));
+            call.insert("name".to_string(), json!(tool_name));
+            call.insert("type".to_string(), json!("visible_internal_llm_tool"));
+            if let Some(arguments) = event_object.get("arguments") {
+                call.insert("arguments".to_string(), arguments.clone());
+            }
+            Value::Object(call)
+        });
+
+        match event_object
+            .get("event_type")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+        {
+            "visible_internal_llm_tool_completed" => {
+                results_by_id.insert(
+                    tool_call_id.clone(),
+                    synthetic_visible_internal_llm_tool_result(
+                        &tool_call_id,
+                        &tool_name,
+                        event_object,
+                        false,
+                    ),
+                );
+            }
+            "visible_internal_llm_tool_failed" => {
+                results_by_id.insert(
+                    tool_call_id.clone(),
+                    synthetic_visible_internal_llm_tool_result(
+                        &tool_call_id,
+                        &tool_name,
+                        event_object,
+                        true,
+                    ),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    if calls_by_id.is_empty() {
+        return Vec::new();
+    }
+
+    let mut rounds = vec![json!({
+        "round_index": 0,
+        "assistant": {
+            "role": "assistant",
+            "tool_calls": calls_by_id.into_values().collect::<Vec<_>>()
+        }
+    })];
+
+    if !results_by_id.is_empty() {
+        rounds.push(json!({
+            "round_index": 1,
+            "tool_results": results_by_id.into_values().collect::<Vec<_>>()
+        }));
+    }
+
+    rounds
+}
+
+fn synthetic_visible_internal_llm_tool_result(
+    tool_call_id: &str,
+    tool_name: &str,
+    event_object: &Map<String, Value>,
+    is_error: bool,
+) -> Value {
+    let mut result = Map::new();
+    result.insert("role".to_string(), json!("tool"));
+    result.insert("tool_call_id".to_string(), json!(tool_call_id));
+    result.insert("name".to_string(), json!(tool_name));
+    result.insert("is_error".to_string(), json!(is_error));
+
+    if is_error {
+        if let Some(error_payload) = event_object.get("error_payload") {
+            result.insert("error".to_string(), error_payload.clone());
+            result.insert("content".to_string(), error_payload.clone());
+        }
+    } else if let Some(content) = record_value_field(
+        event_object,
+        &[
+            "content",
+            "output",
+            "output_payload",
+            "result",
+            "response_payload",
+        ],
+    ) {
+        result.insert("content".to_string(), content);
+    } else {
+        result.insert("content".to_string(), json!(null));
+    }
+
+    Value::Object(result)
 }
 
 fn with_inline_visible_internal_llm_tool_trace_index(mut payload: Value) -> Value {
@@ -1328,6 +1464,12 @@ fn with_inline_visible_internal_llm_tool_trace_index(mut payload: Value) -> Valu
     if object.contains_key("visible_internal_llm_tool_trace") {
         return payload;
     }
+    let runtime_events = object
+        .get("visible_internal_llm_tool_events")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    payload = with_synthetic_visible_internal_llm_tool_rounds(payload, &runtime_events);
 
     let traces = collect_visible_internal_llm_tool_route_traces(&payload);
     if traces.is_empty() {
