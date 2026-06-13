@@ -26,6 +26,7 @@ function readJson(filePath) {
 function createFixtureRepo() {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-bump-version-'));
 
+  writeFile(path.join(repoRoot, 'VERSION'), '0.1.0\n');
   writeJson(path.join(repoRoot, 'web', 'app', 'package.json'), {
     name: '@1flowbase/web',
     version: '0.1.1',
@@ -133,6 +134,27 @@ test('parseCliArgs defaults to applying a patch bump', () => {
   });
 });
 
+test('parseCliArgs accepts numeric release aliases', () => {
+  assert.deepEqual(parseCliArgs(['0']), {
+    dryRun: false,
+    help: false,
+    release: 'patch',
+    targetVersion: null,
+  });
+  assert.deepEqual(parseCliArgs(['1']), {
+    dryRun: false,
+    help: false,
+    release: 'minor',
+    targetVersion: null,
+  });
+  assert.deepEqual(parseCliArgs(['2']), {
+    dryRun: false,
+    help: false,
+    release: 'major',
+    targetVersion: null,
+  });
+});
+
 test('bumpSemver increments the requested segment', () => {
   assert.equal(bumpSemver('0.1.9', 'patch'), '0.1.10');
   assert.equal(bumpSemver('0.1.9', 'minor'), '0.2.0');
@@ -153,10 +175,10 @@ test('runVersionBump previews changes during dry-run without writing files', () 
   assert.equal(status, 0);
   assert.equal(fs.readFileSync(path.join(repoRoot, 'web', 'app', 'package.json'), 'utf8'), originalPackage);
   assert.match(output.join(''), /dry-run/u);
-  assert.match(output.join(''), /web\/app\/package\.json/u);
+  assert.match(output.join(''), /web\/packages\/api-client\/package\.json/u);
 });
 
-test('runVersionBump updates frontend, backend, and lockfile versions', () => {
+test('runVersionBump updates VERSION, frontend, backend, and lockfile versions to one target', () => {
   const repoRoot = createFixtureRepo();
   const originalDockerExample = fs.readFileSync(path.join(repoRoot, 'docker', '.env.example'), 'utf8');
   const originalDockerEnv = fs.readFileSync(path.join(repoRoot, 'docker', '.env'), 'utf8');
@@ -168,7 +190,8 @@ test('runVersionBump updates frontend, backend, and lockfile versions', () => {
   });
 
   assert.equal(status, 0);
-  assert.equal(readJson(path.join(repoRoot, 'web', 'app', 'package.json')).version, '0.1.2');
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'VERSION'), 'utf8'), '0.1.1\n');
+  assert.equal(readJson(path.join(repoRoot, 'web', 'app', 'package.json')).version, '0.1.1');
   assert.equal(readJson(path.join(repoRoot, 'web', 'packages', 'api-client', 'package.json')).version, '0.1.1');
 
   assert.match(fs.readFileSync(path.join(repoRoot, 'api', 'Cargo.toml'), 'utf8'), /version = "0\.1\.1"/u);
@@ -206,6 +229,7 @@ test('runVersionBump can pin every owned component to an explicit version', () =
   });
 
   assert.equal(status, 0);
+  assert.equal(fs.readFileSync(path.join(repoRoot, 'VERSION'), 'utf8'), '0.3.0\n');
   assert.equal(readJson(path.join(repoRoot, 'web', 'app', 'package.json')).version, '0.3.0');
   assert.match(fs.readFileSync(path.join(repoRoot, 'api', 'Cargo.toml'), 'utf8'), /version = "0\.3\.0"/u);
   assert.match(
@@ -213,4 +237,31 @@ test('runVersionBump can pin every owned component to an explicit version', () =
     /FLOWBASE_API_SERVER_VERSION=latest/u
   );
   assert.match(fs.readFileSync(path.join(repoRoot, 'docker', '.env'), 'utf8'), /FLOWBASE_API_SERVER_VERSION=0\.0\.1/u);
+});
+
+test('runVersionBump accepts numeric aliases for larger releases', () => {
+  const minorRepoRoot = createFixtureRepo();
+  const majorRepoRoot = createFixtureRepo();
+
+  assert.equal(
+    runVersionBump({
+      repoRoot: minorRepoRoot,
+      options: parseCliArgs(['1']),
+      writeStdout: () => {},
+    }),
+    0
+  );
+  assert.equal(fs.readFileSync(path.join(minorRepoRoot, 'VERSION'), 'utf8'), '0.2.0\n');
+  assert.equal(readJson(path.join(minorRepoRoot, 'web', 'app', 'package.json')).version, '0.2.0');
+
+  assert.equal(
+    runVersionBump({
+      repoRoot: majorRepoRoot,
+      options: parseCliArgs(['2']),
+      writeStdout: () => {},
+    }),
+    0
+  );
+  assert.equal(fs.readFileSync(path.join(majorRepoRoot, 'VERSION'), 'utf8'), '1.0.0\n');
+  assert.equal(readJson(path.join(majorRepoRoot, 'web', 'app', 'package.json')).version, '1.0.0');
 });

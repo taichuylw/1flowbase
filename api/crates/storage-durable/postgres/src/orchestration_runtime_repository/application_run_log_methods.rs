@@ -21,7 +21,7 @@ impl PgControlPlaneStore {
         tx: &mut sqlx::Transaction<'_, Postgres>,
         flow_run: &domain::FlowRunRecord,
     ) -> Result<()> {
-        if is_anthropic_claude_code_control_run(flow_run) {
+        if is_anthropic_claude_code_internal_run(flow_run) {
             Self::delete_application_run_log_summary_projection(tx, flow_run.id).await?;
             return Ok(());
         }
@@ -553,51 +553,17 @@ impl PgControlPlaneStore {
 }
 
 fn visible_application_run_log_summary_filter_sql(summary_table: &str) -> String {
+    let hidden_internal_run_filter = hidden_anthropic_claude_code_internal_run_sql("runs");
     format!(
         r#"
         not exists (
             select 1
             from flow_runs runs
             where runs.id = {summary_table}.flow_run_id
-              and runs.compatibility_mode = 'anthropic-messages-v1'
-              and (
-                  runs.input_payload #>> '{{node-start,compatibility,claude_code_control}}' is not null
-                  or runs.input_payload #>> '{{start,compatibility,claude_code_control}}' is not null
-                  or position('Your task is to create a detailed summary of the conversation so far' in coalesce(
-                      runs.input_payload #>> '{{node-start,query}}',
-                      runs.input_payload #>> '{{start,query}}',
-                      runs.input_payload #>> '{{query}}',
-                      ''
-                  )) > 0
-                  or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in coalesce(
-                      runs.input_payload #>> '{{node-start,query}}',
-                      runs.input_payload #>> '{{start,query}}',
-                      runs.input_payload #>> '{{query}}',
-                      ''
-                  )) > 0
-                  or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in coalesce(
-                      runs.input_payload #>> '{{node-start,query}}',
-                      runs.input_payload #>> '{{start,query}}',
-                      runs.input_payload #>> '{{query}}',
-                      ''
-                  )) > 0
-                  or (
-                      position('This session is being continued from a previous conversation that ran out of context.' in coalesce(
-                          runs.input_payload #>> '{{node-start,query}}',
-                          runs.input_payload #>> '{{start,query}}',
-                          runs.input_payload #>> '{{query}}',
-                          ''
-                      )) > 0
-                      and position('If you need specific details from before compaction' in coalesce(
-                          runs.input_payload #>> '{{node-start,query}}',
-                          runs.input_payload #>> '{{start,query}}',
-                          runs.input_payload #>> '{{query}}',
-                          ''
-                      )) > 0
-                  )
-              )
+              and ({hidden_internal_run_filter})
         )
-        "#
+        "#,
+        hidden_internal_run_filter = hidden_internal_run_filter
     )
 }
 
@@ -621,7 +587,7 @@ fn application_conversation_key(flow_run: &domain::FlowRunRecord) -> String {
 fn application_conversation_messages_from_flow_run(
     flow_run: &domain::FlowRunRecord,
 ) -> Vec<ApplicationConversationMessageProjection> {
-    if is_anthropic_claude_code_control_run(flow_run) {
+    if is_anthropic_claude_code_internal_run(flow_run) {
         return Vec::new();
     }
 
@@ -667,6 +633,14 @@ fn application_conversation_messages_from_flow_run(
     messages
 }
 
+fn is_anthropic_claude_code_internal_run(flow_run: &domain::FlowRunRecord) -> bool {
+    if flow_run.compatibility_mode.as_deref() != Some("anthropic-messages-v1") {
+        return false;
+    }
+
+    is_anthropic_claude_code_control_run(flow_run) || is_anthropic_claude_code_subagent_run(flow_run)
+}
+
 fn is_anthropic_claude_code_control_run(flow_run: &domain::FlowRunRecord) -> bool {
     if flow_run.compatibility_mode.as_deref() != Some("anthropic-messages-v1") {
         return false;
@@ -683,6 +657,81 @@ fn is_anthropic_claude_code_control_run(flow_run: &domain::FlowRunRecord) -> boo
                 control_plane::application_public_api::compat::anthropic::claude_code_control_kind,
             )
             .is_some()
+}
+
+fn is_anthropic_claude_code_subagent_run(flow_run: &domain::FlowRunRecord) -> bool {
+    if flow_run.compatibility_mode.as_deref() != Some("anthropic-messages-v1") {
+        return false;
+    }
+
+    application_conversation_system_text(&flow_run.input_payload)
+        .as_deref()
+        .is_some_and(is_claude_code_subagent_system)
+}
+
+fn is_claude_code_subagent_system(system: &str) -> bool {
+    system.contains("cc_is_subagent=true")
+        || (system.contains("Agent threads always have their cwd reset between bash calls")
+            && system.contains("the parent agent reads your text output"))
+}
+
+fn hidden_anthropic_claude_code_internal_run_sql(run_table: &str) -> String {
+    let query_text = anthropic_claude_code_query_sql(run_table);
+    let system_text = anthropic_claude_code_system_sql(run_table);
+    format!(
+        r#"
+        {run_table}.compatibility_mode = 'anthropic-messages-v1'
+        and (
+            {run_table}.input_payload #>> '{{node-start,compatibility,claude_code_control}}' is not null
+            or {run_table}.input_payload #>> '{{start,compatibility,claude_code_control}}' is not null
+            or position('Your task is to create a detailed summary of the conversation so far' in {query_text}) > 0
+            or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in {query_text}) > 0
+            or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in {query_text}) > 0
+            or (
+                position('The user stepped away and is coming back. Write exactly 1-3 short sentences.' in {query_text}) > 0
+                and position('Next: the concrete next step.' in {query_text}) > 0
+            )
+            or (
+                position('This session is being continued from a previous conversation that ran out of context.' in {query_text}) > 0
+                and (
+                    position('The summary below covers the earlier portion of the conversation.' in {query_text}) > 0
+                    or position('If you need specific details from before compaction' in {query_text}) > 0
+                )
+            )
+            or position('cc_is_subagent=true' in {system_text}) > 0
+            or (
+                position('Agent threads always have their cwd reset between bash calls' in {system_text}) > 0
+                and position('the parent agent reads your text output' in {system_text}) > 0
+            )
+        )
+        "#
+    )
+}
+
+fn anthropic_claude_code_query_sql(run_table: &str) -> String {
+    format!(
+        r#"
+        coalesce(
+            {run_table}.input_payload #>> '{{node-start,query}}',
+            {run_table}.input_payload #>> '{{start,query}}',
+            {run_table}.input_payload #>> '{{query}}',
+            ''
+        )
+        "#
+    )
+}
+
+fn anthropic_claude_code_system_sql(run_table: &str) -> String {
+    format!(
+        r#"
+        coalesce(
+            {run_table}.input_payload #>> '{{node-start,system}}',
+            {run_table}.input_payload #>> '{{start,system}}',
+            {run_table}.input_payload #>> '{{system}}',
+            ''
+        )
+        "#
+    )
 }
 
 fn push_application_conversation_message(

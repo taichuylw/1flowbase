@@ -632,7 +632,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
                   preview_kind: 'visible_internal_llm_tool_trace',
                   tool_call_id: 'call_image',
                   tool_name: 'image_llm',
-                  status: 'succeeded',
+                  status: 'returned_to_main',
                   route_model: 'image-route-v1',
                   target_node_id: 'node-llm-image',
                   route_node_id: 'node-llm-image',
@@ -725,6 +725,11 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
 
     const routeNode = within(logPanel).getByTestId('debug-llm-route-node');
     expect(routeNode).toHaveTextContent('Image LLM');
+    expect(routeNode).toHaveTextContent('执行成功');
+    expect(routeNode).not.toHaveTextContent('进行中');
+    expect(
+      within(routeNode).getByLabelText('succeeded 状态')
+    ).toBeInTheDocument();
     expect(within(routeNode).getByLabelText('route JSON')).toHaveTextContent(
       'image-route-v1'
     );

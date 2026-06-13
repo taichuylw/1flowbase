@@ -72,6 +72,13 @@ struct VisibleInternalLlmToolTraceFacts {
 pub(super) fn collect_visible_internal_llm_tool_route_traces(
     debug_payload: &Value,
 ) -> Vec<VisibleInternalLlmToolRouteTrace> {
+    collect_visible_internal_llm_tool_route_traces_with_main_output(debug_payload, None)
+}
+
+pub(super) fn collect_visible_internal_llm_tool_route_traces_with_main_output(
+    debug_payload: &Value,
+    main_resume_output_fallback: Option<&Value>,
+) -> Vec<VisibleInternalLlmToolRouteTrace> {
     let Some(events) = debug_payload
         .get("visible_internal_llm_tool_events")
         .and_then(Value::as_array)
@@ -91,10 +98,15 @@ pub(super) fn collect_visible_internal_llm_tool_route_traces(
             .unwrap_or_default(),
         &mut facts_by_tool_call_id,
     );
+    let main_resume_output_fallback = if facts_by_tool_call_id.len() == 1 {
+        main_resume_output_fallback.and_then(main_resume_output_from_node_output)
+    } else {
+        None
+    };
 
     facts_by_tool_call_id
         .into_values()
-        .filter_map(route_trace_from_facts)
+        .filter_map(|facts| route_trace_from_facts(facts, main_resume_output_fallback.as_ref()))
         .collect()
 }
 
@@ -153,6 +165,26 @@ fn collect_trace_event_facts(
             }
             "visible_internal_llm_tool_completed" => {
                 entry.completed_event = Some(event.clone());
+                if entry.tool_result.is_none() {
+                    if let Some(content) = value_field(
+                        event_object,
+                        &[
+                            "content",
+                            "output",
+                            "output_payload",
+                            "result",
+                            "response_payload",
+                        ],
+                    ) {
+                        entry.tool_result = Some(json!({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "name": entry.tool_name.clone().unwrap_or_else(|| "Tool".to_string()),
+                            "is_error": false,
+                            "content": content,
+                        }));
+                    }
+                }
                 if let Some(provider_route) = event_object.get("provider_route") {
                     entry.provider_route = Some(provider_route.clone());
                     set_if_some(
@@ -253,6 +285,7 @@ fn collect_trace_round_facts(
 
 fn route_trace_from_facts(
     facts: VisibleInternalLlmToolTraceFacts,
+    main_resume_output_fallback: Option<&Value>,
 ) -> Option<VisibleInternalLlmToolRouteTrace> {
     let route_output = facts
         .tool_result
@@ -263,8 +296,19 @@ fn route_trace_from_facts(
         .as_ref()
         .map(summarize_runtime_value)
         .unwrap_or_else(|| summarize_runtime_value(&Value::Null));
-    let final_output = facts
+    let fallback_main_resume_output = if facts.main_resume_output.is_none()
+        && facts.failed_event.is_none()
+        && facts.completed_event.is_some()
+    {
+        main_resume_output_fallback.cloned()
+    } else {
+        None
+    };
+    let main_resume_output = facts
         .main_resume_output
+        .clone()
+        .or(fallback_main_resume_output);
+    let final_output = main_resume_output
         .as_ref()
         .and_then(|value| value.get("content"))
         .cloned();
@@ -272,8 +316,9 @@ fn route_trace_from_facts(
         .as_ref()
         .map(summarize_runtime_value)
         .unwrap_or_else(|| summarize_runtime_value(&Value::Null));
-    let returned_to_main = facts.tool_result.is_some();
-    let main_resume = facts.main_resume_round_index.is_some();
+    let returned_to_main = facts.tool_result.is_some()
+        || (facts.completed_event.is_some() && facts.failed_event.is_none());
+    let main_resume = main_resume_output.is_some();
     let status = route_trace_status(&facts, returned_to_main, main_resume);
     let tool_name = facts.tool_name.unwrap_or_else(|| "Tool".to_string());
 
@@ -323,7 +368,7 @@ fn route_trace_from_facts(
         "tool_result": facts.tool_result,
         "route_output": route_output,
         "route_output_summary": summary_payload["route_output_summary"],
-        "main_resume_output": facts.main_resume_output,
+        "main_resume_output": main_resume_output,
         "final_output": final_output,
         "final_output_summary": summary_payload["final_output_summary"],
         "callback_requests": facts.waiting_events.iter().map(callback_request_detail).collect::<Vec<_>>(),
@@ -334,6 +379,42 @@ fn route_trace_from_facts(
         detail_payload,
         summary_payload,
     })
+}
+
+fn main_resume_output_from_node_output(output_payload: &Value) -> Option<Value> {
+    if let Some(text) = output_payload
+        .as_object()
+        .and_then(|object| string_field(object, &["text", "answer", "content"]))
+    {
+        return Some(json!({
+            "role": "assistant",
+            "content": text,
+            "source": "node_output_payload",
+        }));
+    }
+
+    if let Some(text) = output_payload
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(json!({
+            "role": "assistant",
+            "content": text,
+            "source": "node_output_payload",
+        }));
+    }
+
+    output_payload
+        .as_object()
+        .filter(|object| !object.is_empty())
+        .map(|_| {
+            json!({
+                "role": "assistant",
+                "content": output_payload,
+                "source": "node_output_payload",
+            })
+        })
 }
 
 fn route_trace_status(
@@ -487,6 +568,10 @@ fn string_field(record: &Map<String, Value>, keys: &[&str]) -> Option<String> {
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned)
     })
+}
+
+fn value_field(record: &Map<String, Value>, keys: &[&str]) -> Option<Value> {
+    keys.iter().find_map(|key| record.get(*key).cloned())
 }
 
 fn set_if_some(target: &mut Option<String>, value: Option<String>) {
@@ -664,5 +749,98 @@ mod tests {
         });
 
         assert!(collect_visible_internal_llm_tool_route_traces(&debug_payload).is_empty());
+    }
+
+    #[test]
+    fn route_trace_uses_completed_event_content_without_persisted_rounds() {
+        let debug_payload = json!({
+            "visible_internal_llm_tool_events": [
+                {
+                    "event_type": "visible_internal_llm_tool_started",
+                    "main_node_id": "node-llm",
+                    "target_node_id": "node-llm-1",
+                    "tool_name": "image_llm",
+                    "tool_call_id": "call_image",
+                    "arguments": {
+                        "media": [
+                            {
+                                "kind": "image",
+                                "path": "uploads/test-01.png",
+                                "source": "workspace_path"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "event_type": "visible_internal_llm_tool_completed",
+                    "main_node_id": "node-llm",
+                    "target_node_id": "node-llm-1",
+                    "tool_name": "image_llm",
+                    "tool_call_id": "call_image",
+                    "node_id": "node-llm-1",
+                    "provider_route": {
+                        "model": "mimo-v2.5",
+                        "provider_code": "anthropic"
+                    },
+                    "content": "图片是 1flowbase 顶部导航栏。"
+                }
+            ]
+        });
+
+        let traces = collect_visible_internal_llm_tool_route_traces(&debug_payload);
+
+        assert_eq!(traces.len(), 1);
+        let summary = traces[0].inline_summary_payload();
+        assert_eq!(summary["status"], json!("returned_to_main"));
+        assert_eq!(summary["route_model"], json!("mimo-v2.5"));
+        assert_eq!(
+            summary["route_output_summary"]["preview"],
+            json!("图片是 1flowbase 顶部导航栏。")
+        );
+    }
+
+    #[test]
+    fn route_trace_projects_node_output_as_main_resume_for_current_run_sample() {
+        let debug_payload = json!({
+            "visible_internal_llm_tool_events": [
+                {
+                    "event_type": "visible_internal_llm_tool_started",
+                    "main_node_id": "node-llm",
+                    "target_node_id": "node-llm-1",
+                    "tool_name": "image_llm",
+                    "tool_call_id": "call_image"
+                },
+                {
+                    "event_type": "visible_internal_llm_tool_completed",
+                    "main_node_id": "node-llm",
+                    "target_node_id": "node-llm-1",
+                    "tool_name": "image_llm",
+                    "tool_call_id": "call_image",
+                    "node_id": "node-llm-1",
+                    "provider_route": {
+                        "model": "mimo-v2.5",
+                        "provider_code": "anthropic"
+                    }
+                }
+            ]
+        });
+        let node_output = json!({
+            "text": "很好，图片分析出来了！这是一个 1flowbase 的顶部导航栏。"
+        });
+
+        let traces = collect_visible_internal_llm_tool_route_traces_with_main_output(
+            &debug_payload,
+            Some(&node_output),
+        );
+
+        assert_eq!(traces.len(), 1);
+        let summary = traces[0].inline_summary_payload();
+        assert_eq!(summary["status"], json!("succeeded"));
+        assert_eq!(summary["returned_to_main"], json!(true));
+        assert_eq!(summary["main_resume"], json!(true));
+        assert_eq!(
+            summary["final_output_summary"]["preview"],
+            json!("很好，图片分析出来了！这是一个 1flowbase 的顶部导航栏。")
+        );
     }
 }

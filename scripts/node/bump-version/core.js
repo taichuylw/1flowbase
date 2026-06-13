@@ -2,6 +2,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const RELEASES = new Set(['patch', 'minor', 'major']);
+const RELEASE_ALIASES = new Map([
+  ['0', 'patch'],
+  ['1', 'minor'],
+  ['2', 'major'],
+]);
+const VERSION_SOURCE_FILE = 'VERSION';
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -31,10 +37,12 @@ function bumpSemver(version, release) {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(`Usage: node scripts/node/cli/bump-version.js [patch|minor|major] [--dry-run]
+  writeStdout(`Usage: node scripts/node/cli/bump-version.js [0|1|2|patch|minor|major] [--dry-run]
        node scripts/node/cli/bump-version.js --to <x.y.z> [--dry-run]
 
 Defaults to applying a patch bump.
+Release aliases: 0/patch, 1/minor, 2/major.
+Reads the current repository version from VERSION and writes one resolved version everywhere.
 Targets owned frontend packages, owned Rust backend packages, and Cargo.lock owned entries.
 Plugin manifests, Docker env files, and third-party image tags are not touched.
 `);
@@ -79,11 +87,12 @@ function parseCliArgs(argv) {
       continue;
     }
 
-    if (RELEASES.has(arg)) {
+    const release = RELEASE_ALIASES.get(arg) || arg;
+    if (RELEASES.has(release)) {
       if (explicitRelease) {
         throw new Error(`重复的升级类型：${arg}`);
       }
-      options.release = arg;
+      options.release = release;
       explicitRelease = true;
       continue;
     }
@@ -92,7 +101,7 @@ function parseCliArgs(argv) {
   }
 
   if (options.targetVersion && explicitRelease) {
-    throw new Error('--to 不能和 patch/minor/major 同时使用');
+    throw new Error('--to 不能和 0/1/2/patch/minor/major 同时使用');
   }
 
   return options;
@@ -111,6 +120,21 @@ function readIfExists(filePath) {
     return null;
   }
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function readVersionSource(repoRoot) {
+  const filePath = path.join(repoRoot, VERSION_SOURCE_FILE);
+  const text = readIfExists(filePath);
+  if (text === null) {
+    throw new Error(`缺少统一版本源：${VERSION_SOURCE_FILE}`);
+  }
+
+  const version = text.trim();
+  if (!isSemver(version)) {
+    throw new Error(`${VERSION_SOURCE_FILE} 只支持 x.y.z 版本号：${version || '(empty)'}`);
+  }
+
+  return { filePath, version };
 }
 
 function pushChange(changes, repoRoot, filePath, label, oldVersion, newVersion) {
@@ -134,6 +158,13 @@ function getMutableText(mutatedFiles, filePath) {
 
 function setMutableText(mutatedFiles, filePath, text) {
   mutatedFiles.set(filePath, text);
+}
+
+function updateVersionSource({ changes, currentVersion, filePath, mutatedFiles, repoRoot, targetVersion }) {
+  pushChange(changes, repoRoot, filePath, 'repository version source', currentVersion, targetVersion);
+  if (currentVersion !== targetVersion) {
+    setMutableText(mutatedFiles, filePath, `${targetVersion}\n`);
+  }
 }
 
 function discoverFrontendPackageFiles(repoRoot) {
@@ -160,19 +191,18 @@ function discoverFrontendPackageFiles(repoRoot) {
   return packageFiles;
 }
 
-function updateFrontendVersions({ changes, mutatedFiles, options, repoRoot }) {
+function updateFrontendVersions({ changes, mutatedFiles, repoRoot, targetVersion }) {
   for (const filePath of discoverFrontendPackageFiles(repoRoot)) {
     const packageJson = JSON.parse(getMutableText(mutatedFiles, filePath));
     if (!packageJson.version) {
       continue;
     }
-    const nextVersion = resolveNextVersion(packageJson.version, options);
     const label = `frontend ${packageJson.name || relativePath(repoRoot, filePath)}`;
 
-    pushChange(changes, repoRoot, filePath, label, packageJson.version, nextVersion);
+    pushChange(changes, repoRoot, filePath, label, packageJson.version, targetVersion);
 
-    if (packageJson.version !== nextVersion) {
-      packageJson.version = nextVersion;
+    if (packageJson.version !== targetVersion) {
+      packageJson.version = targetVersion;
       setMutableText(mutatedFiles, filePath, `${JSON.stringify(packageJson, null, 2)}\n`);
     }
   }
@@ -253,7 +283,7 @@ function parseCargoWorkspaceMembers(text) {
   return members;
 }
 
-function updateBackendVersions({ backendVersions, changes, mutatedFiles, options, repoRoot }) {
+function updateBackendVersions({ backendVersions, changes, mutatedFiles, repoRoot, targetVersion }) {
   const apiRoot = path.join(repoRoot, 'api');
   const workspaceFile = path.join(apiRoot, 'Cargo.toml');
   const workspaceText = readIfExists(workspaceFile);
@@ -267,13 +297,14 @@ function updateBackendVersions({ backendVersions, changes, mutatedFiles, options
     throw new Error('api/Cargo.toml 缺少 [workspace.package].version');
   }
 
-  const nextWorkspaceVersion = resolveNextVersion(workspaceVersion, options);
-  pushChange(changes, repoRoot, workspaceFile, 'backend workspace package', workspaceVersion, nextWorkspaceVersion);
-  setMutableText(
-    mutatedFiles,
-    workspaceFile,
-    replaceTomlSectionValue(workspaceText, 'workspace.package', 'version', nextWorkspaceVersion)
-  );
+  pushChange(changes, repoRoot, workspaceFile, 'backend workspace package', workspaceVersion, targetVersion);
+  if (workspaceVersion !== targetVersion) {
+    setMutableText(
+      mutatedFiles,
+      workspaceFile,
+      replaceTomlSectionValue(workspaceText, 'workspace.package', 'version', targetVersion)
+    );
+  }
 
   for (const member of parseCargoWorkspaceMembers(workspaceText)) {
     const cargoFile = path.join(apiRoot, member, 'Cargo.toml');
@@ -288,7 +319,7 @@ function updateBackendVersions({ backendVersions, changes, mutatedFiles, options
     }
 
     if (hasTomlWorkspaceVersion(memberText)) {
-      backendVersions.set(`cargo:${packageName}`, nextWorkspaceVersion);
+      backendVersions.set(`cargo:${packageName}`, targetVersion);
       continue;
     }
 
@@ -297,14 +328,15 @@ function updateBackendVersions({ backendVersions, changes, mutatedFiles, options
       continue;
     }
 
-    const nextPackageVersion = resolveNextVersion(packageVersion, options);
-    backendVersions.set(`cargo:${packageName}`, nextPackageVersion);
-    pushChange(changes, repoRoot, cargoFile, `backend ${packageName}`, packageVersion, nextPackageVersion);
-    setMutableText(
-      mutatedFiles,
-      cargoFile,
-      replaceTomlSectionValue(memberText, 'package', 'version', nextPackageVersion)
-    );
+    backendVersions.set(`cargo:${packageName}`, targetVersion);
+    pushChange(changes, repoRoot, cargoFile, `backend ${packageName}`, packageVersion, targetVersion);
+    if (packageVersion !== targetVersion) {
+      setMutableText(
+        mutatedFiles,
+        cargoFile,
+        replaceTomlSectionValue(memberText, 'package', 'version', targetVersion)
+      );
+    }
   }
 }
 
@@ -368,19 +400,29 @@ function runVersionBump({
   const changes = [];
   const mutatedFiles = new Map();
   const backendVersions = new Map();
+  const versionSource = readVersionSource(repoRoot);
+  const targetVersion = resolveNextVersion(versionSource.version, options);
 
+  updateVersionSource({
+    changes,
+    currentVersion: versionSource.version,
+    filePath: versionSource.filePath,
+    mutatedFiles,
+    repoRoot,
+    targetVersion,
+  });
   updateFrontendVersions({
     changes,
     mutatedFiles,
-    options,
     repoRoot,
+    targetVersion,
   });
   updateBackendVersions({
     backendVersions,
     changes,
     mutatedFiles,
-    options,
     repoRoot,
+    targetVersion,
   });
   updateCargoLockVersions({
     backendVersions,

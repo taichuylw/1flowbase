@@ -734,9 +734,7 @@ fn openai_responses_tool_resume_request(
     let trailing_outputs = items
         .iter()
         .rev()
-        .take_while(|item| {
-            item.get("type").and_then(Value::as_str) == Some("function_call_output")
-        })
+        .take_while(|item| item.get("type").and_then(Value::as_str) == Some("function_call_output"))
         .collect::<Vec<_>>();
     let mut callback_task_id = None;
     let mut tool_results = Vec::new();

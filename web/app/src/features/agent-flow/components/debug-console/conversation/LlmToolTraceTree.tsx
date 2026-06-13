@@ -124,7 +124,21 @@ function routeNodeStatus(callback: LlmToolCallback) {
   const traceStatus = callback.routeTrace?.status;
 
   if (traceStatus) {
-    return traceStatus;
+    switch (traceStatus) {
+      case 'succeeded':
+      case 'returned_to_main':
+      case 'route_completed':
+        return 'succeeded';
+      case 'failed':
+        return 'failed';
+      case 'cancelled':
+      case 'canceled':
+        return 'cancelled';
+      case 'waiting_callback':
+        return 'waiting_callback';
+      default:
+        return traceStatus;
+    }
   }
 
   switch (callback.executionStatus) {

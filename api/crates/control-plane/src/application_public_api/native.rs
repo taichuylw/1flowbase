@@ -59,6 +59,14 @@ pub struct NativeRunRequest {
     // Protocol mappers set this after deserialization; public Native JSON cannot own compat policy.
     #[serde(skip)]
     pub protocol_compatibility_mode: Option<String>,
+    // Protocol mappers set this after deserialization; public Native JSON cannot own run-control policy.
+    #[serde(skip)]
+    pub protocol_request_kind: Option<NativeProtocolRequestKind>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeProtocolRequestKind {
+    AnthropicToolResultContinuation,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]

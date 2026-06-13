@@ -134,6 +134,7 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
     let seeded = seed_runtime_base(&store).await;
     let compiled = seed_compiled_plan(&store, &seeded).await;
     let conversation_id = "conversation-stitch-fixture";
+    let external_user = "claude-code-user-fixture";
     let prior_started_at = datetime!(2026-05-24 09:00:00 UTC);
     let current_started_at = datetime!(2026-05-24 09:00:10 UTC);
     let prior_run = seed_flow_run_with_mode(
@@ -288,12 +289,21 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
     )
     .await
     .unwrap();
-    sqlx::query("update flow_runs set external_conversation_id = $2 where id = $1")
-        .bind(prior_run.id)
-        .bind(conversation_id)
-        .execute(store.pool())
-        .await
-        .unwrap();
+    sqlx::query(
+        r#"
+        update flow_runs
+        set external_user = $2,
+            external_conversation_id = $3,
+            compatibility_mode = 'anthropic-messages-v1'
+        where id = $1
+        "#,
+    )
+    .bind(prior_run.id)
+    .bind(external_user)
+    .bind(conversation_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
     <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
         &store,
         &UpdateFlowRunInput {
@@ -302,6 +312,42 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
             output_payload: json!({}),
             error_payload: None,
             finished_at: Some(prior_started_at + Duration::seconds(6)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let other_user_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        prior_started_at + Duration::seconds(7),
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    sqlx::query(
+        r#"
+        update flow_runs
+        set external_user = 'other-claude-code-user',
+            external_conversation_id = $2,
+            compatibility_mode = 'anthropic-messages-v1'
+        where id = $1
+        "#,
+    )
+    .bind(other_user_run.id)
+    .bind(conversation_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: other_user_run.id,
+            status: FlowRunStatus::Cancelled,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: Some(prior_started_at + Duration::seconds(8)),
         },
     )
     .await
@@ -316,12 +362,21 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
         None,
     )
     .await;
-    sqlx::query("update flow_runs set external_conversation_id = $2 where id = $1")
-        .bind(current_run.id)
-        .bind(conversation_id)
-        .execute(store.pool())
-        .await
-        .unwrap();
+    sqlx::query(
+        r#"
+        update flow_runs
+        set external_user = $2,
+            external_conversation_id = $3,
+            compatibility_mode = 'anthropic-messages-v1'
+        where id = $1
+        "#,
+    )
+    .bind(current_run.id)
+    .bind(external_user)
+    .bind(conversation_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
     let current_node = seed_node_run_for(
         &store,
         &current_run,
@@ -757,6 +812,159 @@ async fn terminal_claude_code_control_run_does_not_project_conversation_messages
         .await
         .unwrap();
     assert!(conversation_runs.items.is_empty());
+}
+
+#[tokio::test]
+async fn terminal_claude_code_away_summary_run_does_not_project_business_logs() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-06-04 13:00:00 UTC);
+    let run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "claude-code-away-summary".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "away summary".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": "The user stepped away and is coming back. Write exactly 1-3 short sentences. Start by stating the high-level task — what they are building or debugging, not implementation details. Next: the concrete next step. Skip status reports and commit recaps."
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("claude-code-user".to_string()),
+            external_conversation_id: Some("claude-code-session".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({
+                "answer": "You are debugging Claude Code callback handling. Next, resume the pending callback."
+            }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let projected_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_conversation_messages where flow_run_id = $1",
+    )
+    .bind(run.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(projected_count, 0);
+
+    let summary_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_run_log_summaries where flow_run_id = $1",
+    )
+    .bind(run.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(summary_count, 0);
+}
+
+#[tokio::test]
+async fn terminal_claude_code_compact_resume_run_without_transcript_does_not_project_business_logs()
+{
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-06-04 13:05:00 UTC);
+    let run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "claude-code-compact-resume".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "compact resume".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n- user asked where uploads/image-1.png is implemented\n\nContinue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with \"I'll continue\" or similar. Pick up the last task as if the break never happened."
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("claude-code-user".to_string()),
+            external_conversation_id: Some("claude-code-session".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({
+                "answer": "Continue by checking the application list page."
+            }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let projected_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_conversation_messages where flow_run_id = $1",
+    )
+    .bind(run.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(projected_count, 0);
+
+    let summary_count: i64 = sqlx::query_scalar(
+        "select count(*)::bigint from application_run_log_summaries where flow_run_id = $1",
+    )
+    .bind(run.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(summary_count, 0);
 }
 
 #[tokio::test]

@@ -314,6 +314,32 @@ fn test_flow_run_record(
     }
 }
 
+fn test_runtime_event_record(
+    flow_run_id: Uuid,
+    node_run_id: Option<Uuid>,
+    event_type: &str,
+    payload: serde_json::Value,
+) -> domain::RuntimeEventRecord {
+    domain::RuntimeEventRecord {
+        id: Uuid::now_v7(),
+        flow_run_id,
+        node_run_id,
+        span_id: None,
+        parent_span_id: None,
+        sequence: 1,
+        event_type: event_type.to_string(),
+        layer: domain::RuntimeEventLayer::RuntimeItem,
+        source: domain::RuntimeEventSource::Host,
+        trust_level: domain::RuntimeTrustLevel::HostFact,
+        item_id: None,
+        ledger_ref: None,
+        payload,
+        visibility: domain::RuntimeEventVisibility::Workspace,
+        durability: domain::RuntimeEventDurability::Durable,
+        created_at: OffsetDateTime::UNIX_EPOCH,
+    }
+}
+
 #[test]
 fn run_detail_response_moves_waiting_prefix_answer_into_answer_snapshot() {
     let application = test_application_record();
@@ -537,6 +563,121 @@ fn run_detail_response_exposes_stitched_trace_sources() {
         response.detail.stitched_trace[0].callback_tasks[0].flow_run_id,
         source_flow_run_id.to_string()
     );
+}
+
+#[test]
+fn visible_internal_llm_route_trace_uses_precise_node_run_id_before_reused_node_id() {
+    let application = test_application_record();
+    let flow_run_id = Uuid::now_v7();
+    let routed_node_run_id = Uuid::now_v7();
+    let later_node_run_id = Uuid::now_v7();
+    let detail = domain::ApplicationRunDetail {
+        flow_run: test_flow_run_record(
+            application.id,
+            flow_run_id,
+            domain::FlowRunStatus::Succeeded,
+            serde_json::json!({ "answer": "done" }),
+        ),
+        node_runs: vec![
+            domain::NodeRunRecord {
+                id: routed_node_run_id,
+                flow_run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: serde_json::json!({}),
+                output_payload: serde_json::json!({}),
+                error_payload: None,
+                metrics_payload: serde_json::json!({}),
+                debug_payload: serde_json::json!({
+                    "callback_kind": "llm_tool_calls",
+                    "callback_task_id": Uuid::now_v7().to_string()
+                }),
+                started_at: OffsetDateTime::UNIX_EPOCH,
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            },
+            domain::NodeRunRecord {
+                id: later_node_run_id,
+                flow_run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: serde_json::json!({}),
+                output_payload: serde_json::json!({}),
+                error_payload: None,
+                metrics_payload: serde_json::json!({}),
+                debug_payload: serde_json::json!({
+                    "llm_rounds": [
+                        {
+                            "round_index": 0,
+                            "assistant": {
+                                "role": "assistant",
+                                "content": "later continuation"
+                            }
+                        }
+                    ]
+                }),
+                started_at: OffsetDateTime::UNIX_EPOCH + Duration::seconds(1),
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH + Duration::seconds(1)),
+            },
+        ],
+        checkpoints: Vec::new(),
+        callback_tasks: Vec::new(),
+        events: Vec::new(),
+        stitched_trace: Vec::new(),
+    };
+    let runtime_events = vec![test_runtime_event_record(
+        flow_run_id,
+        Some(routed_node_run_id),
+        "visible_internal_llm_tool_completed",
+        serde_json::json!({
+            "main_node_id": "node-llm",
+            "target_node_id": "node-llm-1",
+            "tool_name": "image_llm",
+            "tool_call_id": "call_image",
+            "node_run_id": routed_node_run_id.to_string(),
+            "provider_route": {
+                "model": "mimo-v2.5",
+                "provider_code": "anthropic"
+            }
+        }),
+    )];
+
+    let detail =
+        enrich_application_run_detail_visible_internal_llm_route_traces(detail, &runtime_events);
+
+    let routed_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.id == routed_node_run_id)
+        .expect("routed node run should stay visible");
+    assert_eq!(
+        routed_node.debug_payload["visible_internal_llm_tool_trace"][0]["tool_name"],
+        serde_json::json!("image_llm")
+    );
+    assert_eq!(
+        routed_node.debug_payload["visible_internal_llm_tool_trace"][0]["route_model"],
+        serde_json::json!("mimo-v2.5")
+    );
+    assert_eq!(
+        routed_node.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["id"],
+        serde_json::json!("call_image")
+    );
+    assert_eq!(
+        routed_node.debug_payload["llm_rounds"][0]["assistant"]["tool_calls"][0]["name"],
+        serde_json::json!("image_llm")
+    );
+    let later_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.id == later_node_run_id)
+        .expect("later node run should stay visible");
+    assert!(later_node
+        .debug_payload
+        .get("visible_internal_llm_tool_trace")
+        .is_none());
 }
 
 #[test]

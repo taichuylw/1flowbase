@@ -245,24 +245,28 @@ node scripts/node/cli/claude-skill-sync.js --source .agents/skills --target .cla
 
 ## Version Tools
 
-### `node scripts/node/cli/bump-version.js [patch|minor|major] [--dry-run]`
+### `node scripts/node/cli/bump-version.js [0|1|2|patch|minor|major] [--dry-run]`
 
-一键升级仓库自有组件版本号。默认执行 `patch` 升级，也可以指定升级类型或直接锁定到目标版本。
+一键升级仓库自有组件版本号。脚本从根目录 `VERSION` 读取当前仓库版本，先计算一个目标版本，再统一写入自有前端 package、Rust 后端 package 和 `api/Cargo.lock`。
+
+默认执行 `patch` 升级，也可以指定升级类型或直接锁定到目标版本。数字别名为：`0` = `patch`，`1` = `minor`，`2` = `major`。
 
 ```bash
 node scripts/node/cli/bump-version.js --dry-run
 node scripts/node/cli/bump-version.js patch
 node scripts/node/cli/bump-version.js minor
 node scripts/node/cli/bump-version.js major
+node scripts/node/cli/bump-version.js 1
+node scripts/node/cli/bump-version.js 2
 node scripts/node/cli/bump-version.js --to 0.3.0
 ```
 
 说明：
 
-- 会更新自有前端 package、Rust 后端 package，以及 `api/Cargo.lock` 中对应自有 package 版本。
+- 会更新根目录 `VERSION`、自有前端 package、Rust 后端 package，以及 `api/Cargo.lock` 中对应自有 package 版本。
 - `--dry-run` 只打印将要修改的文件和版本变化，不写入文件。
 - 不修改插件 manifest、Docker env 文件或第三方镜像 tag。
-- `--to <x.y.z>` 不能和 `patch`、`minor`、`major` 同时使用。
+- `--to <x.y.z>` 不能和 `0`、`1`、`2`、`patch`、`minor`、`major` 同时使用。
 
 ### `node scripts/node/cli/verify-container-version.js <component> <vX.Y.Z>`
 
