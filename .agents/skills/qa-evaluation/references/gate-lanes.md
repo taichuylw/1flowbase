@@ -2,7 +2,7 @@
 
 ## Purpose
 
-质量门禁先按场景分 lane，再选择证据。三条 lane 的目标、资源预算和停止条件不同，不要把开发后轻量验收、PR 合并门禁和项目全量体检混成一套脚本清单。
+质量门禁先按场景分 lane，再选择证据。三条 lane 的目标、资源预算和停止条件不同，不要把开发后轻量验收、PR 合并门禁和项目全量体检混成一套脚本清单。Project Health Gate 先由质量维度矩阵定义体检范围，脚本失败、artifact 和日志只作为被归类的证据。
 
 ## Lane Matrix
 
@@ -10,7 +10,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `Dev Acceptance Gate` | 当前任务是否完成，是否明显破坏主路径 | 低，优先快 | 本地、TDD 结果、定向脚本、截图 / page-debug | 风险向量 -> 最小证据链 -> 时间预算 -> 早停 | 已验证、未验证、残余风险 | 核心验收已被证据覆盖，或预算耗尽后明确未验证 |
 | `PR Merge Gate` | PR 是否达到可合入基线 | 中，允许 GitHub Actions 消耗 | CI、artifact、warningFiles、PR comment | Gate DAG -> 并行调度 -> 失败归因 -> 合并风险评分 | blocker、warning、advisory、cost | 足以判断能否合并，或缺少 artifact 时标 unavailable |
-| `Project Health Gate` | 当前项目整体健康度与维护方向 | 高，优先远端完整门禁 | GitHub Actions、quality artifact、coverage、hygiene、security、热点数据 | 质量维度矩阵 -> 风险热力图 -> 趋势对比 -> 轮转深挖 | 健康快照、硬性失败、风险热区、维护建议 | 全量维度有证据或明确未覆盖，维护问题已转入建议 |
+| `Project Health Gate` | 当前项目整体健康度与维护方向 | 高，优先维度覆盖 | 质量维度矩阵、GitHub Actions、quality artifact、coverage、hygiene、security、热点数据 | lane 确认 -> 质量维度矩阵 -> 证据归类 -> 风险热力图 -> 趋势对比 -> 轮转深挖 | 健康快照、硬性失败、风险热区、维护建议 | 全量维度有证据或明确未覆盖，维护问题已转入建议 |
 
 ## Dev Acceptance Gate
 
@@ -31,7 +31,8 @@
 ## Project Health Gate
 
 - 目标是维护者感知和项目治理，不是单次合并判断。
-- 优先用 GitHub Actions / artifact 跑完整门禁；本地 AI 主要负责读取证据、归纳风险、提出维护方向。
+- 先建立质量维度矩阵，再用 GitHub Actions / artifact / warningFiles / 本地验证结果填充证据；本地 AI 主要负责证据归类、归纳风险、提出维护方向。
+- 当前失败脚本或错误报告必须先归入维度、硬性失败、warning、advisory 或未覆盖项，不得直接决定体检范围。
 - 硬性门禁失败可以进入质量回归修复；非硬性维护问题联动 `problem-framing`，输出现状、方向、风险收益和建议。
 - 自动化门禁要覆盖全局质量维度；人工深挖按风险热力图和轮转策略选择 1-3 个高风险域，不假装每次人工读完整仓库。
 - 报告要包含本次快照、相对上次的新增失败 / 新增 warning / 风险升降、未覆盖项和下一步维护优先级。
@@ -41,6 +42,7 @@
 - `risk vector`: 由改动文件、共享程度、contract、状态写入口、权限、runtime、migration、历史失败和 churn 构成。
 - `minimum evidence set`: 选择能覆盖当前风险的最小门禁组合；只适用于开发后验收，不适用于项目体检的维度覆盖。
 - `gate DAG`: 门禁有依赖顺序；上游 tooling 失败时先修上游，避免浪费下游解释成本。
+- `evidence classification`: 把脚本输出、artifact、日志、截图、代码阅读和记忆证据映射到质量维度、严重级别、覆盖状态和归因。
 - `risk heatmap`: 用失败门禁、warning、coverage 缺口、churn、文件 / 目录压力、中心模块权重生成维护优先级。
 - `rotating deep dive`: 全量体检每次固定全局自动化，再轮转人工深挖高风险域，避免无限加重。
 
@@ -49,3 +51,4 @@
 - 没有直接证据，不要用“应该会过”替代门禁结果。
 - 没有用户明确授权，不要从 `Dev Acceptance Gate` 升级到 `PR Merge Gate` 或 `Project Health Gate`。
 - `Project Health Gate` 的本地结论不能冒充远端 GitHub 门禁通过；必须有 workflow conclusion 和 artifact 证据。
+- `Project Health Gate` 没有维度矩阵和证据归类时，不要输出全量体检 findings。

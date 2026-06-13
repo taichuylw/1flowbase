@@ -11,6 +11,8 @@ description: Evidence-driven QA evaluation for 1flowbase dev acceptance, PR merg
 
 质量门禁先分 lane 再选证据：开发后验收优先快，PR 门禁优先合并信心，项目体检优先完整健康快照和维护者感知。不要把三种资源预算混成一套重门禁。
 
+Project Health Gate 的顺序固定为：先确认 lane 和范围，再建立质量维度矩阵，再把脚本、artifact、日志、截图、代码证据归类到矩阵，最后输出 findings。当前失败脚本或错误报告只是证据来源，不得成为项目体检的完整范围或主线。
+
 ## When to Use
 
 - 功能完成后，需要对当前任务做质量回归
@@ -41,7 +43,8 @@ description: Evidence-driven QA evaluation for 1flowbase dev acceptance, PR merg
 - 默认 `Dev Acceptance Gate / task mode`；用户明确要求 PR 校验、全量门禁、项目体检或完整 QA 审计时，才升级到对应 lane
 - `Dev Acceptance Gate` 追求快速反馈：复用 TDD 红绿结果，按风险向量选择最小证据链，证据足够或预算耗尽就停，不用仓库级门禁惩罚局部开发
 - `PR Merge Gate` 追求合并信心：优先 GitHub Actions / artifact，报告 blocker、warning、advisory、资源耗时和合并风险
-- `Project Health Gate` 追求维护者感知：优先远端完整门禁与 artifact，输出全局快照、风险热力图、趋势、轮转深挖和维护建议
+- `Project Health Gate` 追求维护者感知：先按 `references/project-evaluation-checklist.md` 建质量维度矩阵，再读取远端完整门禁、artifact、warningFiles 和本地证据，输出全局快照、风险热力图、趋势、轮转深挖和维护建议
+- `Project Health Gate` 不得只围绕当前失败脚本或错误报告展开；脚本失败必须先归入对应质量维度、硬性门禁失败、warning 或未覆盖项，再进入 findings
 - 评估前先读 `.memory/AGENTS.md`、`.memory/user-memory.md`、项目记忆、反馈记忆和相关 spec
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`
 - 多语言 key / value hygiene、warning 解释和修复边界看 `references/i18n-hygiene-gate.md`
@@ -97,6 +100,7 @@ description: Evidence-driven QA evaluation for 1flowbase dev acceptance, PR merg
 
 - 把 QA 当成修复流程
 - 把开发后验收、PR 门禁和项目体检混成同一套重门禁
+- 项目体检被当前错误脚本、最新日志或单个 artifact 锚定，跳过质量维度矩阵
 - 没有证据就下结论
 - 把代码审查写成 QA 报告
 - 小任务也直接上全量审计

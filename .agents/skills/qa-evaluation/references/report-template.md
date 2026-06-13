@@ -8,6 +8,32 @@
 - 已运行的验证：
 - 未运行的验证：
 
+## Gate Lane
+
+- 当前 lane：
+- lane 选择理由：
+- 资源预算与停止条件：
+- 是否存在当前失败脚本 / 错误报告输入：
+- 该失败输入的归属：证据来源，不作为完整评估范围
+
+## Coverage Matrix
+
+- 适用范围：`Project Health Gate` 必填；其他 lane 可写不适用
+- 维度：
+- 覆盖证据：
+- 当前结论：
+- 未覆盖项：
+- 本轮轮转深挖域：
+
+## Evidence Classification
+
+- 自动化门禁 / CI / artifact：
+- 当前失败脚本 / 日志：
+- 运行态 / 截图：
+- 代码 / 契约 / 状态证据：
+- 记忆 / spec / 历史趋势证据：
+- 归因：硬性失败 / warning / advisory / 未覆盖
+
 ## Conclusion
 
 - 是否存在 `Blocking` 问题：
