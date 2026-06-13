@@ -99,6 +99,42 @@ require_value() {
   printf '%s\n' "$2"
 }
 
+provider_secret_master_key_is_placeholder() {
+  value="$(printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  case "$value" in
+    ""|change-me-provider-secret-master-key|dev-provider-secret-master-key-unsafe)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+generate_provider_secret_master_key() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+    return
+  fi
+
+  if [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
+    printf '\n'
+    return
+  fi
+
+  fail "Could not generate API_PROVIDER_SECRET_MASTER_KEY. Install openssl or set FLOWBASE_PROVIDER_SECRET / --provider-secret."
+}
+
+ensure_provider_secret_master_key() {
+  current_value="$(read_env_value API_PROVIDER_SECRET_MASTER_KEY ./docker/.env)"
+  if provider_secret_master_key_is_placeholder "$current_value"; then
+    generated_value="$(generate_provider_secret_master_key)"
+    set_env_value API_PROVIDER_SECRET_MASTER_KEY "$generated_value" ./docker/.env
+    echo "Generated API_PROVIDER_SECRET_MASTER_KEY in docker/.env."
+  fi
+}
+
 read_from_tty() {
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
     IFS= read -r value < /dev/tty || value=""
@@ -606,6 +642,8 @@ if [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tt
 elif [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "No interactive terminal was found. Keeping docker/.env values."
 fi
+
+ensure_provider_secret_master_key
 
 NEW_POSTGRES_PASSWORD="$(read_env_value POSTGRES_PASSWORD ./docker/.env)"
 NEW_BOOTSTRAP_ROOT_ACCOUNT="$(read_env_value BOOTSTRAP_ROOT_ACCOUNT ./docker/.env)"

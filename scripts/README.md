@@ -306,6 +306,24 @@ node scripts/node/plugin.js package <plugin-path> --out ./dist
 
 ## Artifact Cleanup
 
+### `node scripts/node/clean-build-cache.js [all|backend|frontend] [选项]`
+
+停止 `api-server` 与 `plugin-runner`，然后清理本地构建缓存。默认范围是 `all`，会真实删除。
+
+```bash
+node scripts/node/clean-build-cache.js --dry-run
+node scripts/node/clean-build-cache.js
+node scripts/node/clean-build-cache.js --backend-only
+node scripts/node/clean-build-cache.js --frontend-only
+```
+
+范围：
+
+- `all`: 清理 `api/target`、`web/.turbo`、`web/app/.turbo` 和 `web/app/dist`。
+- `backend` / `--backend-only`: 仅清理 `api/target`。
+- `frontend` / `--frontend-only`: 仅清理前端构建缓存。
+- `--dry-run`: 只打印将要清理的路径，不停止进程、不删除文件。
+
 ### `node scripts/node/clean-artifacts.js [profile] [--apply]`
 
 查看或清理本地临时产物。默认 profile 是 `status`，只打印体积，不删除。
@@ -361,6 +379,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 - `API_PROVIDER_SECRET_MASTER_KEY`
 - `WEB_PORT`
 - 官方插件 GitHub raw 下载加速：提示 `Use CN GitHub plugin download accelerator? [y/N]` 时默认不启用；输入 `y` 后继续填写 `API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL`，地址提示中直接回车会使用默认 `https://gh-proxy.com/`。
+
+如果 `API_PROVIDER_SECRET_MASTER_KEY` 仍是默认占位值，脚本会自动生成随机 key 写入 `docker/.env`，不需要首次部署时手动填写。
 
 之后脚本会继续询问：
 
