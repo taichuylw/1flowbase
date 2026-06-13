@@ -79,6 +79,55 @@ test('docker deploy shell script can prefill official plugin GitHub proxy URL', 
   );
 });
 
+test('docker deploy shell script generates provider secret when env example keeps placeholder', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
+  const tempBin = path.join(tempRoot, 'bin');
+  const dockerDir = path.join(tempRoot, 'docker');
+  fs.mkdirSync(tempBin);
+  fs.mkdirSync(dockerDir);
+  fs.writeFileSync(
+    path.join(dockerDir, '.env.example'),
+    [
+      'FLOWBASE_WEB_VERSION=latest',
+      'FLOWBASE_API_SERVER_VERSION=latest',
+      'FLOWBASE_PLUGIN_RUNNER_VERSION=latest',
+      'POSTGRES_PASSWORD=example-password',
+      'BOOTSTRAP_ROOT_PASSWORD=example-root-password',
+      'API_PROVIDER_SECRET_MASTER_KEY=change-me-provider-secret-master-key',
+      'API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=',
+      '',
+    ].join('\n'),
+  );
+  makeExecutable(
+    path.join(tempBin, 'docker'),
+    '#!/usr/bin/env sh\nif [ "$1 $2" = "compose version" ]; then exit 0; fi\nexit 0\n',
+  );
+
+  const result = spawnSync(
+    'sh',
+    [
+      path.join(repoRoot, 'scripts', 'shell', 'docker-deploy.sh'),
+      '--non-interactive',
+      '--no-pull',
+      '--no-start',
+    ],
+    {
+      cwd: tempRoot,
+      env: {
+        ...process.env,
+        PATH: `${tempBin}${path.delimiter}${process.env.PATH || ''}`,
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  const envFile = fs.readFileSync(path.join(dockerDir, '.env'), 'utf8');
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Generated API_PROVIDER_SECRET_MASTER_KEY in docker\/.env/u);
+  assert.doesNotMatch(envFile, /^API_PROVIDER_SECRET_MASTER_KEY=change-me-provider-secret-master-key$/mu);
+  assert.match(envFile, /^API_PROVIDER_SECRET_MASTER_KEY=[0-9a-f]{64}$/mu);
+});
+
 test('docker deploy shell script shows and updates existing env configuration', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
   const tempBin = path.join(tempRoot, 'bin');
@@ -333,9 +382,13 @@ test('docker deploy scripts document the CN accelerator prompt and default proxy
     assert.match(script, /Current docker\/.env configuration/u);
     assert.match(script, /Update current docker\/.env configuration\?/u);
     assert.match(script, /Local latest Docker images were found\. Update Docker images\?/u);
+    assert.match(script, /Generated API_PROVIDER_SECRET_MASTER_KEY in docker\/.env/u);
+    assert.match(script, /change-me-provider-secret-master-key/u);
   }
 
+  assert.match(shellScript, /openssl rand -hex 32/u);
   assert.match(shellScript, /--plugin-github-proxy-url VALUE/u);
+  assert.match(powershellScript, /RandomNumberGenerator/u);
   assert.match(powershellScript, /\$PluginGithubProxyUrl/u);
 });
 

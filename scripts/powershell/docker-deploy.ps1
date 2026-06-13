@@ -87,6 +87,39 @@ function Set-EnvValue([string]$Key, [string]$Value, [string]$Path) {
   Set-Content -Path $Path -Value $Lines -Encoding UTF8
 }
 
+function Test-ProviderSecretMasterKeyPlaceholder([string]$Value) {
+  if ($null -eq $Value) {
+    return $true
+  }
+
+  $TrimmedValue = $Value.Trim()
+  return $TrimmedValue -in @(
+    "",
+    "change-me-provider-secret-master-key",
+    "dev-provider-secret-master-key-unsafe"
+  )
+}
+
+function New-ProviderSecretMasterKey() {
+  $Bytes = New-Object byte[] 32
+  $Generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $Generator.GetBytes($Bytes)
+  } finally {
+    $Generator.Dispose()
+  }
+
+  return [System.BitConverter]::ToString($Bytes).Replace("-", "").ToLowerInvariant()
+}
+
+function Ensure-ProviderSecretMasterKey() {
+  $CurrentValue = Read-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" ".\docker\.env"
+  if (Test-ProviderSecretMasterKeyPlaceholder $CurrentValue) {
+    Set-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" (New-ProviderSecretMasterKey) ".\docker\.env"
+    Write-Host "Generated API_PROVIDER_SECRET_MASTER_KEY in docker/.env."
+  }
+}
+
 function Format-EnvDisplayValue([string]$Key, [string]$Value) {
   if (-not $Value) {
     return "<empty>"
@@ -468,6 +501,8 @@ if ($ShouldPrompt -and $PromptConfigValues) {
   Prompt-EnvValue "WEB_PORT" "Web port"
   Prompt-OfficialPluginGithubProxyUrl
 }
+
+Ensure-ProviderSecretMasterKey
 
 $NewPostgresPassword = Read-EnvValue "POSTGRES_PASSWORD" ".\docker\.env"
 $NewBootstrapRootAccount = Read-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" ".\docker\.env"
