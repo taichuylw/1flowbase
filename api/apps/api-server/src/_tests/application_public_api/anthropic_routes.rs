@@ -802,6 +802,123 @@ async fn anthropic_messages_matches_plain_tool_result_to_same_conversation_pendi
 }
 
 #[tokio::test]
+async fn anthropic_messages_resumes_embedded_encoded_tool_results_before_control_message() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "Anthropic Embedded Tool Result Control App").await;
+    let before = flow_run_count(state.as_ref()).await;
+    let session_id = "claude-code-session-embedded-tool-result".to_string();
+    let metadata = json!({
+        "expand_id": "claude-code-user"
+    });
+
+    let first = post_json_with_headers(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token.clone()),
+        vec![("x-claude-code-session-id", session_id.clone())],
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "messages": [
+                {"role": "user", "content": "uploads/image-1.png 这部分代码在哪里？"}
+            ],
+            "metadata": metadata
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_payload = response_json(first).await;
+    let run_id = Uuid::parse_str(
+        first_payload["id"]
+            .as_str()
+            .expect("anthropic response id")
+            .strip_prefix("msg_")
+            .expect("anthropic response id should include msg_ prefix"),
+    )
+    .unwrap();
+    let callback_task = seed_pending_anthropic_llm_callback_with_tools(
+        state.as_ref(),
+        run_id,
+        &["call_a", "call_b"],
+    )
+    .await;
+    let encoded_a = encode_anthropic_callback_tool_use_id(callback_task.id, "call_a");
+    let encoded_b = encode_anthropic_callback_tool_use_id(callback_task.id, "call_b");
+
+    let response = post_json_with_headers(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        vec![("x-claude-code-session-id", session_id)],
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": encoded_a,
+                            "name": "Bash",
+                            "input": {"command": "rg -l Navigation web/app/src"}
+                        },
+                        {
+                            "type": "tool_use",
+                            "id": encoded_b,
+                            "name": "Bash",
+                            "input": {"command": "rg -l AgentFlow web/app/src"}
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": encoded_a,
+                            "content": "web/app/src/app-shell/Navigation.tsx"
+                        },
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": encoded_b,
+                            "content": "web/app/src/features/applications/components/ApplicationCardGrid.tsx"
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": "This session is being continued from a previous conversation that ran out of context. Continue the conversation from where it left off."
+                }
+            ],
+            "metadata": metadata
+        }),
+    )
+    .await;
+
+    assert!(
+        response.status().is_success() || response.status() == StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(flow_run_count(state.as_ref()).await, before + 1);
+    let resume_payload: Value = sqlx::query_scalar(
+        "select payload from flow_run_events where flow_run_id = $1 and event_type = 'public_run_resume_requested' order by sequence desc limit 1",
+    )
+    .bind(run_id)
+    .fetch_one(state.store.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        resume_payload["response_payload"]["tool_results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool_result| tool_result["tool_call_id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["call_a", "call_b"]
+    );
+}
+
+#[tokio::test]
 async fn anthropic_messages_routes_claude_code_plain_stdout_to_pending_callback_without_new_run() {
     let (app, state) = test_app_with_state().await;
     let token = setup_published_app(&app, "Anthropic Claude Code Stdout Resume App").await;

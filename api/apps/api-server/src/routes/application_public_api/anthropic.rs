@@ -547,19 +547,24 @@ async fn anthropic_tool_resume_request_for_route(
     bearer_token: &str,
     request: &Value,
 ) -> Result<Option<AnthropicToolResumeRequest>, AnthropicRouteError> {
-    let Some(candidate) = anthropic_tool_resume_candidate(request)? else {
-        return Ok(None);
-    };
-    if let Some(resume) = candidate.encoded_resume_request() {
+    if let Some(candidate) = anthropic_tool_resume_candidate(request)? {
+        if let Some(resume) = candidate.encoded_resume_request() {
+            return Ok(Some(resume));
+        }
+        let Some(resume) = resolve_plain_anthropic_tool_resume(
+            state,
+            bearer_token,
+            request,
+            &candidate.raw_results,
+        )
+        .await?
+        else {
+            return Err(anthropic_tool_result_orphan_error());
+        };
         return Ok(Some(resume));
     }
-    let Some(resume) =
-        resolve_plain_anthropic_tool_resume(state, bearer_token, request, &candidate.raw_results)
-            .await?
-    else {
-        return Err(anthropic_tool_result_orphan_error());
-    };
-    Ok(Some(resume))
+
+    resolve_embedded_anthropic_encoded_tool_resume(state, bearer_token, request).await
 }
 
 fn anthropic_tool_resume_candidate(
@@ -711,6 +716,143 @@ async fn resolve_plain_anthropic_tool_resume(
     }
 
     Ok(None)
+}
+
+async fn resolve_embedded_anthropic_encoded_tool_resume(
+    state: Arc<ApiState>,
+    bearer_token: &str,
+    request: &Value,
+) -> Result<Option<AnthropicToolResumeRequest>, AnthropicRouteError> {
+    let decoded_results = anthropic_decoded_tool_results_in_request(request)?;
+    if decoded_results.is_empty() {
+        return Ok(None);
+    }
+    let native_request = map_messages_request(request.clone())?;
+    let Some(external_user) = native_request.conversation.string("user") else {
+        return Ok(None);
+    };
+    let Some(external_conversation_id) = native_request.conversation.string("id") else {
+        return Ok(None);
+    };
+    let actor = ApplicationApiKeyService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .authenticate_bearer_token(bearer_token)
+        .await
+        .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
+    let waiting_runs = state
+        .store
+        .list_waiting_callback_published_flow_runs_for_conversation(
+            &ListWaitingCallbackPublishedRunsInput {
+                application_id: actor.application_id,
+                api_key_id: actor.api_key_id,
+                external_user,
+                external_conversation_id,
+                compatibility_mode: "anthropic-messages-v1".to_string(),
+            },
+        )
+        .await
+        .map_err(native::service_error)?;
+
+    for waiting_run in waiting_runs.iter().rev() {
+        let Some(detail) = state
+            .store
+            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .await
+            .map_err(native::service_error)?
+        else {
+            continue;
+        };
+        for callback_task in detail.callback_tasks.iter().rev() {
+            if let Some(tool_results) =
+                anthropic_decoded_tool_results_for_callback(&decoded_results, callback_task)
+            {
+                return Ok(Some(AnthropicToolResumeRequest {
+                    callback_task_id: callback_task.id,
+                    tool_results,
+                }));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn anthropic_decoded_tool_results_in_request(
+    request: &Value,
+) -> Result<Vec<AnthropicDecodedToolResult>, AnthropicRouteError> {
+    let Some(messages) = request.get("messages").and_then(Value::as_array) else {
+        return Ok(Vec::new());
+    };
+    let mut decoded_results = Vec::new();
+    for message in messages {
+        let Some(blocks) = message.get("content").and_then(Value::as_array) else {
+            continue;
+        };
+        for block in blocks {
+            if block.get("type").and_then(Value::as_str) != Some("tool_result") {
+                continue;
+            }
+            let Some(tool_use_id) = block.get("tool_use_id").and_then(Value::as_str) else {
+                return Err(AnthropicCompatError {
+                    message: "tool_result tool_use_id is required".to_string(),
+                    error_type: "invalid_request".to_string(),
+                }
+                .into());
+            };
+            let Some((callback_task_id, original_tool_use_id)) =
+                decode_anthropic_callback_tool_use_id(tool_use_id)
+            else {
+                continue;
+            };
+            decoded_results.push(AnthropicDecodedToolResult {
+                callback_task_id,
+                original_tool_use_id,
+                content: anthropic_tool_result_content(block),
+            });
+        }
+    }
+    Ok(decoded_results)
+}
+
+fn anthropic_decoded_tool_results_for_callback(
+    decoded_results: &[AnthropicDecodedToolResult],
+    callback_task: &domain::CallbackTaskRecord,
+) -> Option<Value> {
+    if callback_task.status != domain::CallbackTaskStatus::Pending
+        || callback_task.callback_kind != "llm_tool_calls"
+    {
+        return None;
+    }
+    let tool_calls = callback_task
+        .request_payload
+        .get("tool_calls")
+        .and_then(Value::as_array)?;
+    let tool_call_ids = tool_calls
+        .iter()
+        .filter_map(|tool_call| tool_call.get("id").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    if tool_call_ids.is_empty() {
+        return None;
+    }
+    let matching_results = decoded_results
+        .iter()
+        .filter(|result| result.callback_task_id == callback_task.id)
+        .collect::<Vec<_>>();
+    if matching_results.len() != tool_call_ids.len() {
+        return None;
+    }
+
+    let mut tool_results = Vec::with_capacity(tool_call_ids.len());
+    for tool_call_id in tool_call_ids {
+        let result = matching_results
+            .iter()
+            .find(|result| result.original_tool_use_id == tool_call_id)?;
+        tool_results.push(json!({
+            "tool_call_id": tool_call_id,
+            "content": result.content.clone(),
+        }));
+    }
+    Some(Value::Array(tool_results))
 }
 
 async fn anthropic_plain_stdout_resume_request_for_route(
