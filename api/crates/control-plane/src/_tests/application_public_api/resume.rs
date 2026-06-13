@@ -438,6 +438,12 @@ async fn anthropic_agent_callback_result_projects_matching_subagent_terminal_out
     assert_eq!(projected.status, domain::FlowRunStatus::Succeeded);
     assert_eq!(projected.output_payload["answer"], json!(agent_report));
     assert!(projected.finished_at.is_some());
+    let projected_node = repository
+        .get_node_run(subagent_callback.node_run_id)
+        .expect("subagent waiting node should remain durable");
+    assert_eq!(projected_node.status, domain::NodeRunStatus::Succeeded);
+    assert_eq!(projected_node.output_payload["answer"], json!(agent_report));
+    assert!(projected_node.finished_at.is_some());
     let subagent_callback = repository
         .get_published_callback_task(subagent_callback.id)
         .await

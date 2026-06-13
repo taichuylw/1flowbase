@@ -39,6 +39,15 @@ impl ApplicationPublicApiTestRepository {
             .cloned())
     }
 
+    pub fn get_node_run(&self, node_run_id: Uuid) -> Option<domain::NodeRunRecord> {
+        self.inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .node_runs
+            .get(&node_run_id)
+            .cloned()
+    }
+
     pub fn clear_native_run_results(&self) {
         self.inner
             .lock()
@@ -65,6 +74,24 @@ impl ApplicationPublicApiTestRepository {
         if let Some(flow_run) = inner.flow_runs.get_mut(&flow_run_id) {
             flow_run.status = domain::FlowRunStatus::WaitingCallback;
         }
+        inner.node_runs.insert(
+            node_run_id,
+            domain::NodeRunRecord {
+                id: node_run_id,
+                flow_run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM".to_string(),
+                status: domain::NodeRunStatus::WaitingCallback,
+                input_payload: serde_json::json!({}),
+                output_payload: serde_json::json!({}),
+                error_payload: None,
+                metrics_payload: serde_json::json!({}),
+                debug_payload: serde_json::json!({}),
+                started_at: OffsetDateTime::now_utc(),
+                finished_at: None,
+            },
+        );
         let task = domain::CallbackTaskRecord {
             id: Uuid::now_v7(),
             flow_run_id,
@@ -94,6 +121,24 @@ impl ApplicationPublicApiTestRepository {
         if let Some(flow_run) = inner.flow_runs.get_mut(&flow_run_id) {
             flow_run.status = domain::FlowRunStatus::WaitingCallback;
         }
+        inner.node_runs.insert(
+            node_run_id,
+            domain::NodeRunRecord {
+                id: node_run_id,
+                flow_run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM".to_string(),
+                status: domain::NodeRunStatus::WaitingCallback,
+                input_payload: serde_json::json!({}),
+                output_payload: serde_json::json!({}),
+                error_payload: None,
+                metrics_payload: serde_json::json!({}),
+                debug_payload: serde_json::json!({}),
+                started_at: OffsetDateTime::now_utc(),
+                finished_at: None,
+            },
+        );
         let task = domain::CallbackTaskRecord {
             id: Uuid::now_v7(),
             flow_run_id,

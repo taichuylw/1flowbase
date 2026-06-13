@@ -526,11 +526,24 @@ impl callback_resume::ApplicationPublishedCallbackAttemptRepository
         if record.status != domain::FlowRunStatus::WaitingCallback {
             return Ok(None);
         }
-        record.status = domain::FlowRunStatus::Succeeded;
-        record.output_payload = output_payload;
-        record.error_payload = None;
-        record.finished_at = Some(finished_at);
-        Ok(Some(record.clone()))
+        let completed = {
+            record.status = domain::FlowRunStatus::Succeeded;
+            record.output_payload = output_payload.clone();
+            record.error_payload = None;
+            record.finished_at = Some(finished_at);
+            record.clone()
+        };
+        for node_run in inner.node_runs.values_mut() {
+            if node_run.flow_run_id == flow_run_id
+                && node_run.status == domain::NodeRunStatus::WaitingCallback
+            {
+                node_run.status = domain::NodeRunStatus::Succeeded;
+                node_run.output_payload = output_payload.clone();
+                node_run.error_payload = None;
+                node_run.finished_at = Some(finished_at);
+            }
+        }
+        Ok(Some(completed))
     }
 }
 

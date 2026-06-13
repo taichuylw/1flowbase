@@ -813,18 +813,39 @@ impl ApplicationPublishedCallbackAttemptRepository for PgControlPlaneStore {
         output_payload: serde_json::Value,
         finished_at: OffsetDateTime,
     ) -> Result<Option<domain::FlowRunRecord>> {
-        PgControlPlaneStore::update_flow_run_if_status(
+        let completed = PgControlPlaneStore::update_flow_run_if_status(
             self,
             &UpdateFlowRunInput {
                 flow_run_id,
                 status: domain::FlowRunStatus::Succeeded,
-                output_payload,
+                output_payload: output_payload.clone(),
                 error_payload: None,
                 finished_at: Some(finished_at),
             },
             domain::FlowRunStatus::WaitingCallback,
         )
-        .await
+        .await?;
+
+        if completed.is_some() {
+            sqlx::query(
+                r#"
+                update node_runs
+                set status = 'succeeded',
+                    output_payload = $2,
+                    error_payload = null,
+                    finished_at = $3
+                where flow_run_id = $1
+                  and status = 'waiting_callback'
+                "#,
+            )
+            .bind(flow_run_id)
+            .bind(&output_payload)
+            .bind(finished_at)
+            .execute(self.pool())
+            .await?;
+        }
+
+        Ok(completed)
     }
 }
 
