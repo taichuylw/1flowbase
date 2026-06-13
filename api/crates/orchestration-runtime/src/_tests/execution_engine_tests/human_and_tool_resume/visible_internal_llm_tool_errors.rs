@@ -67,7 +67,11 @@ async fn visible_internal_llm_tool_provider_error_returns_error_tool_result_to_m
         })
         .expect("main llm recall should receive the internal tool failure result");
     assert_eq!(tool_result.is_error, Some(true));
-    assert!(tool_result.content.contains(provider_error_message));
+    assert_eq!(tool_result.content, provider_error_message);
+    assert!(!tool_result
+        .content
+        .contains("visible internal LLM tool branch node failed"));
+    assert!(!tool_result.content.contains("\"details\""));
 
     let recall_trace = outcome
         .node_traces

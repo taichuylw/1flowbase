@@ -254,6 +254,92 @@ async fn empty_saved_media_precondition_still_waits_for_client_read() {
 }
 
 #[tokio::test]
+async fn missing_workspace_image_path_returns_short_guidance_without_error_flag() {
+    let (invoker, captured_inputs) = sequential_tool_invoker(vec![
+        tool_call_response(vec![ProviderToolCall {
+            id: "call_image".to_string(),
+            name: "image_llm".to_string(),
+            arguments: json!({
+                "task": "描述这张图片",
+                "media": [
+                    {
+                        "kind": "image",
+                        "source": "workspace_path",
+                        "path": "uploads/windows-only.png"
+                    }
+                ]
+            }),
+            provider_metadata: json!({}),
+        }]),
+        final_llm_response("main-after-guidance"),
+    ]);
+    let mut plan = visible_internal_llm_tool_plan();
+    configure_image_llm_tool(&mut plan);
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "uploads\\windows-only.png 描述这张图片",
+                "history": []
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "expected main llm to continue after media guidance, got {:?}",
+        outcome.stop_reason
+    );
+    let captured = captured_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(
+        captured.len(),
+        2,
+        "missing server-side workspace media must not invoke the mounted image LLM before media content is available"
+    );
+    let tool_result = captured[1]
+        .messages
+        .iter()
+        .find(|message| {
+            message.role == ProviderMessageRole::Tool
+                && message.tool_call_id.as_deref() == Some("call_image")
+        })
+        .expect("main recall should receive media guidance as tool result");
+    assert_eq!(tool_result.is_error, None);
+    assert!(
+        tool_result
+            .content
+            .contains("read the file with a client file tool first"),
+        "expected actionable media guidance, got {:?}",
+        tool_result.content
+    );
+    assert!(!tool_result.content.contains("\"details\""));
+    assert!(!tool_result
+        .content
+        .contains("visible internal LLM tool branch node failed"));
+
+    let main_trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("main llm trace should exist");
+    let route_events = main_trace.debug_payload["visible_internal_llm_tool_events"]
+        .as_array()
+        .expect("main debug payload should include route events");
+    assert!(route_events.iter().any(|event| {
+        event["event_type"] == json!("visible_internal_llm_tool_failed")
+            && event["error_payload"]["details"]["error_code"]
+                == json!("visible_internal_llm_tool_media_unavailable")
+    }));
+}
+
+#[tokio::test]
 async fn missing_workspace_image_path_reuses_inherited_image_content_blocks() {
     let (invoker, captured_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {
