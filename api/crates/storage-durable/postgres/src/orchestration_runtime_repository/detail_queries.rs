@@ -247,6 +247,14 @@ pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
     else {
         return Ok(Vec::new());
     };
+    let Some(external_user) = current_run
+        .external_user
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(Vec::new());
+    };
 
     let rows = sqlx::query(
         r#"
@@ -288,12 +296,18 @@ pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
           and prior.external_conversation_id = $2
           and prior.id <> $3
           and prior.started_at < $4
+          and prior.external_user = $5
+          and prior.api_key_id is not distinct from $6
+          and prior.compatibility_mode is not distinct from $7
           and prior.status in ('cancelled', 'waiting_callback')
           and not exists (
               select 1
               from flow_runs boundary
               where boundary.application_id = prior.application_id
                 and boundary.external_conversation_id = prior.external_conversation_id
+                and boundary.external_user = prior.external_user
+                and boundary.api_key_id is not distinct from prior.api_key_id
+                and boundary.compatibility_mode is not distinct from prior.compatibility_mode
                 and boundary.id <> $3
                 and boundary.started_at > prior.started_at
                 and boundary.started_at < $4
@@ -307,6 +321,9 @@ pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
     .bind(external_conversation_id)
     .bind(current_run.id)
     .bind(current_run.started_at)
+    .bind(external_user)
+    .bind(current_run.api_key_id)
+    .bind(current_run.compatibility_mode.as_deref())
     .fetch_all(store.pool())
     .await?;
 

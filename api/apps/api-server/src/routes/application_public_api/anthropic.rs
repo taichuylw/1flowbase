@@ -154,6 +154,11 @@ struct AnthropicToolResumeCandidate {
     decoded_results: Vec<AnthropicDecodedToolResult>,
 }
 
+struct AnthropicPlainStdoutResumeCandidate {
+    content: String,
+    tool_use_ids: HashSet<String>,
+}
+
 struct AnthropicRawToolResult {
     tool_use_id: String,
     content: Value,
@@ -227,6 +232,39 @@ pub async fn create_message(
         }
         if response_mode.as_deref() == Some("streaming") {
             return Ok(compat_sse::completed_anthropic_stream(run, model));
+        }
+        return Ok(Json(to_anthropic_response(run, model)).into_response());
+    }
+    if let Some(resume) =
+        anthropic_plain_stdout_resume_request_for_route(state.clone(), &bearer_token, &value)
+            .await?
+    {
+        if response_mode.as_deref() == Some("streaming") {
+            let resume_plan = prepare_anthropic_tool_resume(
+                state.clone(),
+                &bearer_token,
+                resume.callback_task_id,
+                resume.tool_results,
+            )
+            .await?;
+            return compat_sse::start_anthropic_resume_stream(
+                state,
+                resume_plan.initial_run,
+                model,
+                resume_plan.command,
+            )
+            .await
+            .map_err(Into::into);
+        }
+        let run = resume_anthropic_tool_call(
+            state,
+            &bearer_token,
+            resume.callback_task_id,
+            resume.tool_results,
+        )
+        .await?;
+        if !anthropic_required_action_is_supported(&run) {
+            return Err(AnthropicRouteError::RequiredAction);
         }
         return Ok(Json(to_anthropic_response(run, model)).into_response());
     }
@@ -675,6 +713,99 @@ async fn resolve_plain_anthropic_tool_resume(
     Ok(None)
 }
 
+async fn anthropic_plain_stdout_resume_request_for_route(
+    state: Arc<ApiState>,
+    bearer_token: &str,
+    request: &Value,
+) -> Result<Option<AnthropicToolResumeRequest>, AnthropicRouteError> {
+    let Some(candidate) = anthropic_plain_stdout_resume_candidate(request)? else {
+        return Ok(None);
+    };
+    let native_request = map_messages_request(request.clone())?;
+    if !anthropic_request_has_claude_code_context(request, &native_request) {
+        return Ok(None);
+    }
+    let Some(external_user) = native_request.conversation.string("user") else {
+        return Ok(None);
+    };
+    let Some(external_conversation_id) = native_request.conversation.string("id") else {
+        return Ok(None);
+    };
+    let actor = ApplicationApiKeyService::new(state.store.clone())
+        .with_last_used_cache(state.infrastructure.cache_store())
+        .authenticate_bearer_token(bearer_token)
+        .await
+        .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
+    let waiting_runs = state
+        .store
+        .list_waiting_callback_published_flow_runs_for_conversation(
+            &ListWaitingCallbackPublishedRunsInput {
+                application_id: actor.application_id,
+                api_key_id: actor.api_key_id,
+                external_user,
+                external_conversation_id,
+                compatibility_mode: "anthropic-messages-v1".to_string(),
+            },
+        )
+        .await
+        .map_err(native::service_error)?;
+
+    for waiting_run in waiting_runs.iter().rev() {
+        let Some(detail) = state
+            .store
+            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .await
+            .map_err(native::service_error)?
+        else {
+            continue;
+        };
+        for callback_task in detail.callback_tasks.iter().rev() {
+            if let Some(tool_results) =
+                anthropic_plain_stdout_tool_results_for_callback(&candidate, callback_task)
+            {
+                return Ok(Some(AnthropicToolResumeRequest {
+                    callback_task_id: callback_task.id,
+                    tool_results,
+                }));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn anthropic_plain_stdout_resume_candidate(
+    request: &Value,
+) -> Result<Option<AnthropicPlainStdoutResumeCandidate>, AnthropicRouteError> {
+    let Some(messages) = request.get("messages").and_then(Value::as_array) else {
+        return Ok(None);
+    };
+    let Some(latest_user_index) = messages
+        .iter()
+        .rposition(|message| message.get("role").and_then(Value::as_str) == Some("user"))
+    else {
+        return Ok(None);
+    };
+    let Some(content) = messages[latest_user_index].get("content") else {
+        return Ok(None);
+    };
+    let Some(content) = anthropic_plain_text_content(content) else {
+        return Ok(None);
+    };
+    if !looks_like_claude_code_tool_stdout(&content) {
+        return Ok(None);
+    }
+    let tool_use_ids = anthropic_trailing_assistant_tool_use_ids(messages, latest_user_index);
+    if tool_use_ids.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(AnthropicPlainStdoutResumeCandidate {
+        content,
+        tool_use_ids,
+    }))
+}
+
 fn anthropic_raw_tool_results_match_callback_task(
     raw_results: &[AnthropicRawToolResult],
     callback_task: &domain::CallbackTaskRecord,
@@ -715,6 +846,47 @@ fn anthropic_raw_tool_results_payload(raw_results: &[AnthropicRawToolResult]) ->
     )
 }
 
+fn anthropic_plain_stdout_tool_results_for_callback(
+    candidate: &AnthropicPlainStdoutResumeCandidate,
+    callback_task: &domain::CallbackTaskRecord,
+) -> Option<Value> {
+    if callback_task.status != domain::CallbackTaskStatus::Pending
+        || callback_task.callback_kind != "llm_tool_calls"
+    {
+        return None;
+    }
+    let tool_calls = callback_task
+        .request_payload
+        .get("tool_calls")
+        .and_then(Value::as_array)?;
+    let tool_call_ids = tool_calls
+        .iter()
+        .filter_map(|tool_call| tool_call.get("id").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    if tool_call_ids.is_empty() {
+        return None;
+    }
+    if candidate.tool_use_ids.len() != tool_call_ids.len()
+        || !tool_call_ids
+            .iter()
+            .all(|tool_call_id| candidate.tool_use_ids.contains(*tool_call_id))
+    {
+        return None;
+    }
+
+    Some(Value::Array(
+        tool_call_ids
+            .into_iter()
+            .map(|tool_call_id| {
+                json!({
+                    "tool_call_id": tool_call_id,
+                    "content": candidate.content.clone(),
+                })
+            })
+            .collect(),
+    ))
+}
+
 fn anthropic_trailing_assistant_tool_use_ids(
     messages: &[Value],
     trailing_start: usize,
@@ -737,6 +909,66 @@ fn anthropic_trailing_assistant_tool_use_ids(
         }
     }
     tool_use_ids
+}
+
+fn anthropic_plain_text_content(content: &Value) -> Option<String> {
+    if let Some(text) = content.as_str() {
+        return Some(text.to_string());
+    }
+    let blocks = content.as_array()?;
+    let mut text = String::new();
+    for block in blocks {
+        if block.get("type").and_then(Value::as_str) != Some("text") {
+            return None;
+        }
+        let value = block.get("text").and_then(Value::as_str)?;
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(value);
+    }
+    Some(text)
+}
+
+fn looks_like_claude_code_tool_stdout(content: &str) -> bool {
+    let content = content.trim();
+    if content.is_empty() {
+        return false;
+    }
+    const MARKERS: [&str; 12] = [
+        "No matches found",
+        "No files found",
+        "File does not exist.",
+        "Note: your current working directory is",
+        "Found ",
+        "Took a screenshot",
+        "Saved screenshot to",
+        "## Pages",
+        "## Latest page snapshot",
+        "RootWebArea",
+        "-rw-r--r--",
+        "uid=",
+    ];
+    MARKERS.iter().any(|marker| content.contains(marker))
+        || content.lines().any(|line| {
+            line.split_once('\t')
+                .is_some_and(|(prefix, _)| prefix.parse::<u32>().is_ok())
+        })
+}
+
+fn anthropic_request_has_claude_code_context(
+    request: &Value,
+    native_request: &NativeRunRequest,
+) -> bool {
+    request
+        .get("metadata")
+        .and_then(|metadata| metadata.get("session_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty())
+        || native_request.system.as_deref().is_some_and(|system| {
+            system.contains("Claude Code") || system.contains("x-anthropic-billing-header")
+        })
 }
 
 fn anthropic_message_has_only_tool_results(message: &Value) -> bool {

@@ -134,6 +134,7 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
     let seeded = seed_runtime_base(&store).await;
     let compiled = seed_compiled_plan(&store, &seeded).await;
     let conversation_id = "conversation-stitch-fixture";
+    let external_user = "claude-code-user-fixture";
     let prior_started_at = datetime!(2026-05-24 09:00:00 UTC);
     let current_started_at = datetime!(2026-05-24 09:00:10 UTC);
     let prior_run = seed_flow_run_with_mode(
@@ -288,12 +289,21 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
     )
     .await
     .unwrap();
-    sqlx::query("update flow_runs set external_conversation_id = $2 where id = $1")
-        .bind(prior_run.id)
-        .bind(conversation_id)
-        .execute(store.pool())
-        .await
-        .unwrap();
+    sqlx::query(
+        r#"
+        update flow_runs
+        set external_user = $2,
+            external_conversation_id = $3,
+            compatibility_mode = 'anthropic-messages-v1'
+        where id = $1
+        "#,
+    )
+    .bind(prior_run.id)
+    .bind(external_user)
+    .bind(conversation_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
     <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
         &store,
         &UpdateFlowRunInput {
@@ -302,6 +312,42 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
             output_payload: json!({}),
             error_payload: None,
             finished_at: Some(prior_started_at + Duration::seconds(6)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let other_user_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        prior_started_at + Duration::seconds(7),
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    sqlx::query(
+        r#"
+        update flow_runs
+        set external_user = 'other-claude-code-user',
+            external_conversation_id = $2,
+            compatibility_mode = 'anthropic-messages-v1'
+        where id = $1
+        "#,
+    )
+    .bind(other_user_run.id)
+    .bind(conversation_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: other_user_run.id,
+            status: FlowRunStatus::Cancelled,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: Some(prior_started_at + Duration::seconds(8)),
         },
     )
     .await
@@ -316,12 +362,21 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
         None,
     )
     .await;
-    sqlx::query("update flow_runs set external_conversation_id = $2 where id = $1")
-        .bind(current_run.id)
-        .bind(conversation_id)
-        .execute(store.pool())
-        .await
-        .unwrap();
+    sqlx::query(
+        r#"
+        update flow_runs
+        set external_user = $2,
+            external_conversation_id = $3,
+            compatibility_mode = 'anthropic-messages-v1'
+        where id = $1
+        "#,
+    )
+    .bind(current_run.id)
+    .bind(external_user)
+    .bind(conversation_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
     let current_node = seed_node_run_for(
         &store,
         &current_run,
