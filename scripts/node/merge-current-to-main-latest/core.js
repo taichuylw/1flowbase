@@ -12,7 +12,8 @@ function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(`Usage: node scripts/node/merge-current-to-main-latest.js [options]
        node scripts/node/cli/merge-current-to-main-latest.js [options]
 
-Merges the current branch into main, pushes main, then merges main into latest and pushes latest.
+Merges the current branch into main, pushes main, then merges main into latest, pushes latest,
+and switches back to the original branch.
 Any git failure stops the script immediately and leaves the repository at the failing step.
 
 Options:
@@ -250,6 +251,9 @@ function runMergeCurrentToMainLatest({
       `push ${selectedOptions.latestBranch}`,
       deps
     );
+
+    log(`switching back to ${currentBranch}`, writeStdout);
+    runGitStep(['switch', currentBranch], `switch back to ${currentBranch}`, deps);
 
     log('done', writeStdout);
     return 0;
