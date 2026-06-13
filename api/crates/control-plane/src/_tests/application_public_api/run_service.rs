@@ -1107,6 +1107,85 @@ async fn start_anthropic_compact_resume_run_keeps_parent_waiting_callback_alive(
 }
 
 #[tokio::test]
+async fn start_anthropic_compact_resume_run_cancels_previous_control_waiting_callback_only() {
+    let harness = ApplicationPublicApiTestHarness::new();
+    let repository = harness.repository();
+    let application =
+        harness.seed_application(actor_user_id(), "Anthropic Compact Control Cleanup App");
+    let token = issue_key(&harness, application.id).await;
+    ApplicationPublicationService::new(repository.clone())
+        .publish_active_version(PublishApplicationCommand {
+            actor_user_id: actor_user_id(),
+            application_id: application.id,
+            mapping: published_mapping(),
+            api_enabled: true,
+        })
+        .await
+        .unwrap();
+    let service = ApplicationPublishedRunService::new(repository.clone());
+
+    let parent = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: anthropic_request("uploads/image-1.png 这部分代码在哪里？"),
+        })
+        .await
+        .unwrap();
+    let parent_callback = repository.seed_pending_callback_task(parent.id);
+    let old_control = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token.clone(),
+            request: anthropic_compact_resume_request(),
+        })
+        .await
+        .unwrap();
+    let old_control_callback = repository.seed_pending_callback_task(old_control.id);
+
+    let next_control = service
+        .start_native_run(CreateNativeRunCommand {
+            bearer_token: token,
+            request: anthropic_compact_resume_request(),
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(old_control.id, next_control.id);
+    let parent_run = repository
+        .get_flow_run(application.id, parent.id)
+        .await
+        .unwrap()
+        .expect("parent run should remain durable");
+    let parent_callback = repository
+        .get_published_callback_task(parent_callback.id)
+        .await
+        .unwrap()
+        .expect("parent callback task should remain durable");
+    assert_eq!(parent_run.status, domain::FlowRunStatus::WaitingCallback);
+    assert_eq!(parent_callback.status, domain::CallbackTaskStatus::Pending);
+    let old_control_run = repository
+        .get_flow_run(application.id, old_control.id)
+        .await
+        .unwrap()
+        .expect("old control run should remain durable");
+    let old_control_callback = repository
+        .get_published_callback_task(old_control_callback.id)
+        .await
+        .unwrap()
+        .expect("old control callback task should remain durable");
+    assert_eq!(old_control_run.status, domain::FlowRunStatus::Cancelled);
+    assert_eq!(
+        old_control_callback.status,
+        domain::CallbackTaskStatus::Cancelled
+    );
+    let parent_run_events = repository.run_event_types(parent.id);
+    assert!(!parent_run_events.contains(&"public_run_cancelled".to_string()));
+    assert!(!parent_run_events.contains(&"public_run_callback_cancelled".to_string()));
+    let old_control_events = repository.run_event_types(old_control.id);
+    assert!(old_control_events.contains(&"public_run_cancelled".to_string()));
+    assert!(old_control_events.contains(&"public_run_callback_cancelled".to_string()));
+}
+
+#[tokio::test]
 async fn start_native_run_does_not_trust_request_compatibility_mode_for_anthropic_cancellation() {
     let harness = ApplicationPublicApiTestHarness::new();
     let repository = harness.repository();

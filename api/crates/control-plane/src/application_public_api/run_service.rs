@@ -393,9 +393,7 @@ where
         if is_anthropic_tool_result_continuation_request(request) {
             return Ok(());
         }
-        if is_claude_code_control_request(request) {
-            return Ok(());
-        }
+        let current_request_is_claude_code_control = is_claude_code_control_request(request);
         let Some(external_user) = request.conversation.string("user") else {
             return Ok(());
         };
@@ -418,6 +416,11 @@ where
             .map_err(|_| NativeRunValidationError::InvalidState)?;
 
         for waiting_run in waiting_runs {
+            if current_request_is_claude_code_control
+                && !is_claude_code_control_flow_run(&waiting_run)
+            {
+                continue;
+            }
             let cancelled = self.cancel_published_run(actor, &waiting_run).await?;
             if cancelled.status == domain::FlowRunStatus::Cancelled {
                 let completed_at = cancelled
@@ -565,6 +568,40 @@ fn is_claude_code_control_request(request: &NativeRunRequest) -> bool {
         .and_then(Value::as_str)
         .is_some()
         || super::compat::anthropic::claude_code_control_kind(&request.query).is_some()
+}
+
+fn is_claude_code_control_flow_run(flow_run: &domain::FlowRunRecord) -> bool {
+    flow_run.compatibility_mode.as_deref() == Some(ANTHROPIC_MESSAGES_COMPATIBILITY_MODE)
+        && (application_public_run_start_payload(&flow_run.input_payload)
+            .get("compatibility")
+            .and_then(|compatibility| compatibility.get("claude_code_control"))
+            .and_then(Value::as_str)
+            .is_some()
+            || application_public_run_query(&flow_run.input_payload)
+                .as_deref()
+                .and_then(super::compat::anthropic::claude_code_control_kind)
+                .is_some())
+}
+
+fn application_public_run_query(payload: &Value) -> Option<String> {
+    for source in [payload, application_public_run_start_payload(payload)] {
+        if let Some(query) = source
+            .get("query")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|query| !query.is_empty())
+        {
+            return Some(query.to_string());
+        }
+    }
+    None
+}
+
+fn application_public_run_start_payload(payload: &Value) -> &Value {
+    payload
+        .get("node-start")
+        .or_else(|| payload.get("start"))
+        .unwrap_or(payload)
 }
 
 fn write_canonical_json(value: &Value, out: &mut Vec<u8>) -> serde_json::Result<()> {

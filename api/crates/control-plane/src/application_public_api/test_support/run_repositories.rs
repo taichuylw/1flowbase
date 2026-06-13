@@ -509,6 +509,29 @@ impl callback_resume::ApplicationPublishedCallbackAttemptRepository
         record.finished_at = Some(finished_at);
         Ok(Some(record.clone()))
     }
+
+    async fn complete_waiting_callback_published_internal_run(
+        &self,
+        flow_run_id: Uuid,
+        output_payload: serde_json::Value,
+        finished_at: OffsetDateTime,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let Some(record) = inner.flow_runs.get_mut(&flow_run_id) else {
+            return Ok(None);
+        };
+        if record.status != domain::FlowRunStatus::WaitingCallback {
+            return Ok(None);
+        }
+        record.status = domain::FlowRunStatus::Succeeded;
+        record.output_payload = output_payload;
+        record.error_payload = None;
+        record.finished_at = Some(finished_at);
+        Ok(Some(record.clone()))
+    }
 }
 
 #[async_trait]

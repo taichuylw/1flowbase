@@ -81,6 +81,35 @@ impl ApplicationPublicApiTestRepository {
         task
     }
 
+    pub fn seed_pending_llm_tool_callback_task(
+        &self,
+        flow_run_id: Uuid,
+        request_payload: serde_json::Value,
+    ) -> domain::CallbackTaskRecord {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let node_run_id = Uuid::now_v7();
+        if let Some(flow_run) = inner.flow_runs.get_mut(&flow_run_id) {
+            flow_run.status = domain::FlowRunStatus::WaitingCallback;
+        }
+        let task = domain::CallbackTaskRecord {
+            id: Uuid::now_v7(),
+            flow_run_id,
+            node_run_id,
+            callback_kind: "llm_tool_calls".to_string(),
+            status: domain::CallbackTaskStatus::Pending,
+            request_payload,
+            response_payload: None,
+            external_ref_payload: None,
+            created_at: OffsetDateTime::now_utc(),
+            completed_at: None,
+        };
+        inner.callback_tasks.insert(task.id, task.clone());
+        task
+    }
+
     pub fn run_event_types(&self, flow_run_id: Uuid) -> Vec<String> {
         self.inner
             .lock()

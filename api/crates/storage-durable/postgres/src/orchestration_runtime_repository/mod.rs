@@ -806,6 +806,26 @@ impl ApplicationPublishedCallbackAttemptRepository for PgControlPlaneStore {
         )
         .await
     }
+
+    async fn complete_waiting_callback_published_internal_run(
+        &self,
+        flow_run_id: Uuid,
+        output_payload: serde_json::Value,
+        finished_at: OffsetDateTime,
+    ) -> Result<Option<domain::FlowRunRecord>> {
+        PgControlPlaneStore::update_flow_run_if_status(
+            self,
+            &UpdateFlowRunInput {
+                flow_run_id,
+                status: domain::FlowRunStatus::Succeeded,
+                output_payload,
+                error_payload: None,
+                finished_at: Some(finished_at),
+            },
+            domain::FlowRunStatus::WaitingCallback,
+        )
+        .await
+    }
 }
 
 #[async_trait]
