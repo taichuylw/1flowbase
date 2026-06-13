@@ -346,24 +346,51 @@ test('container image workflow publishes linux amd64 and arm64 manifests', () =>
   assert.match(workflow, /^\s+platforms:\s+linux\/amd64,linux\/arm64$/mu);
 });
 
+test('container image workflow builds web dist on native runners before publishing', () => {
+  const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
+
+  assert.match(workflow, /select-web:/u);
+  assert.match(workflow, /build-web-dist:/u);
+  assert.match(workflow, /publish-web:/u);
+  assert.match(workflow, /- arch: amd64\n\s+runner: ubuntu-latest/u);
+  assert.match(workflow, /- arch: arm64\n\s+runner: ubuntu-24\.04-arm/u);
+  assert.match(workflow, /pnpm --dir web install --frozen-lockfile/u);
+  assert.match(workflow, /pnpm --dir web --filter @1flowbase\/web build/u);
+  assert.match(workflow, /name: web-dist-\$\{\{ matrix\.arch \}\}/u);
+  assert.match(workflow, /name: Download web dist artifacts/u);
+  assert.match(workflow, /web_dist=\.\/tmp\/web-dist/u);
+  assert.match(workflow, /target: runtime-prebuilt/u);
+});
+
+test('web Dockerfile keeps local runtime default while exposing prebuilt runtime target', () => {
+  const dockerfile = readRepoFile('docker', 'web.Dockerfile');
+  const prebuiltStageIndex = dockerfile.indexOf('FROM runtime-base AS runtime-prebuilt');
+  const runtimeStageIndex = dockerfile.indexOf('FROM runtime-base AS runtime\n');
+
+  assert.notEqual(prebuiltStageIndex, -1);
+  assert.notEqual(runtimeStageIndex, -1);
+  assert.ok(runtimeStageIndex > prebuiltStageIndex);
+  assert.match(dockerfile, /ARG TARGETARCH\n\nCOPY --from=web_dist \/\$\{TARGETARCH\}\/dist \/usr\/share\/nginx\/html/u);
+  assert.match(dockerfile, /FROM runtime-base AS runtime\n\nCOPY --from=builder \/workspace\/web\/app\/dist \/usr\/share\/nginx\/html/u);
+});
+
 test('container image workflow scans temporary image tags before official promotion', () => {
   const workflow = readRepoFile('.github', 'workflows', 'container-images.yml');
 
   assert.match(workflow, /permissions:\n\s+contents: read/u);
   assert.match(
     workflow,
-    /publish:\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+packages: write/u,
+    /publish-web:\n\s+needs:\n\s+- select-web\n\s+- build-web-dist\n\s+if: needs\.select-web\.outputs\.enabled == 'true'\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+packages: write/u,
   );
-  assert.match(workflow, /component: web/u);
   assert.match(workflow, /publish-api-server:/u);
   assert.match(workflow, /publish-plugin-runner:/u);
 
   assert.match(workflow, /scan_tag=scan-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}-\$\{\{ github\.sha \}\}/u);
-  assert.match(workflow, /echo "scan_image_ref=ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:\$scan_tag"/u);
-  assert.match(workflow, /name: Build and push scan candidate \$\{\{ matrix\.image \}\}/u);
-  assert.match(workflow, /ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:\$\{\{ steps\.image_refs\.outputs\.scan_tag \}\}/u);
-  assert.doesNotMatch(workflow, /Build and push[\s\S]*?ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:\$\{\{ steps\.select\.outputs\.image_tag \}\}/u);
-  assert.doesNotMatch(workflow, /Build and push[\s\S]*?ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/\$\{\{ matrix\.image \}\}:latest/u);
+  assert.match(workflow, /echo "scan_image_ref=ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/1flowbase-web:\$scan_tag"/u);
+  assert.match(workflow, /name: Build and push prebuilt web scan candidate/u);
+  assert.match(workflow, /\$\{\{ steps\.image_refs\.outputs\.scan_image_ref \}\}/u);
+  assert.doesNotMatch(workflow, /Build and push[\s\S]*?ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/1flowbase-web:\$\{\{ needs\.select-web\.outputs\.image_tag \}\}/u);
+  assert.doesNotMatch(workflow, /Build and push[\s\S]*?ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/1flowbase-web:latest/u);
 
   assert.match(workflow, /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/u);
   assert.match(workflow, /version: v0\.70\.0/u);
@@ -373,16 +400,28 @@ test('container image workflow scans temporary image tags before official promot
   assert.match(workflow, /name: Enforce CRITICAL Trivy release gate/u);
   assert.match(workflow, /severity: CRITICAL/u);
   assert.match(workflow, /exit-code: "0"/u);
-  assert.match(workflow, /output: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-high\.json/u);
-  assert.match(workflow, /output: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-critical\.json/u);
+  assert.match(workflow, /output: tmp\/test-governance\/trivy-web-high\.json/u);
+  assert.match(workflow, /output: tmp\/test-governance\/trivy-web-critical\.json/u);
 
   assert.match(workflow, /name: Promote scanned image to official tags/u);
+  assert.match(
+    workflow,
+    /if: github\.event_name != 'workflow_dispatch' \|\| inputs\.promote_official_tags == true \|\| inputs\.promote_official_tags == 'true'/u,
+  );
+  assert.equal(
+    [
+      ...workflow.matchAll(
+        /if: github\.event_name != 'workflow_dispatch' \|\| inputs\.promote_official_tags == true \|\| inputs\.promote_official_tags == 'true'/gu,
+      ),
+    ].length,
+    3,
+  );
   assert.match(workflow, /docker buildx imagetools create/u);
   assert.match(workflow, /--tag "\$\{\{ steps\.image_refs\.outputs\.version_image_ref \}\}"/u);
   assert.match(workflow, /--tag "\$\{\{ steps\.image_refs\.outputs\.latest_image_ref \}\}"/u);
   assert.match(workflow, /"\$\{\{ steps\.image_refs\.outputs\.scan_image_ref \}\}"/u);
-  assert.match(workflow, /name: test-governance-trivy-\$\{\{ matrix\.component \}\}/u);
-  assert.match(workflow, /path: tmp\/test-governance\/trivy-\$\{\{ matrix\.component \}\}-\*\.json/u);
+  assert.match(workflow, /name: test-governance-trivy-web/u);
+  assert.match(workflow, /path: tmp\/test-governance\/trivy-web-\*\.json/u);
 });
 
 test('container image workflow publishes a GitHub release for the latest API version', () => {
@@ -413,7 +452,7 @@ test('container image workflow records a CD quality gate artifact for Trivy repo
 
   assert.match(
     workflow,
-    /report:\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs:\n\s+- publish\n\s+- publish-api-server\n\s+- publish-plugin-runner\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+actions: read\n\s+issues: write/u,
+    /report:\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs:\n\s+- publish-web\n\s+- publish-api-server\n\s+- publish-plugin-runner\n\s+runs-on: ubuntu-latest\n\s+permissions:\n\s+contents: read\n\s+actions: read\n\s+issues: write/u,
   );
   assert.match(workflow, /pattern: test-governance-trivy-\*/u);
   assert.match(workflow, /path: tmp\/test-governance/u);

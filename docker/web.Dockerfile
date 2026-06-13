@@ -33,9 +33,18 @@ COPY scripts ./scripts
 
 RUN pnpm --dir web --filter @1flowbase/web build
 
-FROM nginx:alpine AS runtime
+FROM nginx:alpine AS runtime-base
 
 COPY docker/web/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /workspace/web/app/dist /usr/share/nginx/html
 
 EXPOSE 80
+
+FROM runtime-base AS runtime-prebuilt
+
+ARG TARGETARCH
+
+COPY --from=web_dist /${TARGETARCH}/dist /usr/share/nginx/html
+
+FROM runtime-base AS runtime
+
+COPY --from=builder /workspace/web/app/dist /usr/share/nginx/html

@@ -48,6 +48,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  select-web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.select.outputs.enabled }}
+      image_tag: ${{ steps.select.outputs.image_tag }}
+      old_tag: ${{ steps.select.outputs.old_tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Select web
+        id: select
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          enabled=false
+          image_tag=""
+          old_tag=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.component }}" == "web" ]]; then
+              enabled=true
+              image_tag="${{ inputs.image_tag }}"
+            fi
+          else
+            image_tag="$(node scripts/node/cli/verify-container-version.js print-tag web)"
+            before_sha="${{ github.event.before }}"
+            zero_sha="0000000000000000000000000000000000000000"
+
+            if [[ "$before_sha" != "$zero_sha" ]] \
+              && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
+              && git cat-file -e "$before_sha:web/app/package.json" 2>/dev/null; then
+              if old_version="$(git show "$before_sha:web/app/package.json" | node scripts/node/cli/verify-container-version.js read-stdin-version web)"; then
+                old_tag="v${old_version}"
+              fi
+            fi
+
+            if [[ "$image_tag" != "$old_tag" ]]; then
+              enabled=true
+            fi
+          fi
+
+          {
+            echo "enabled=$enabled"
+            echo "image_tag=$image_tag"
+            echo "old_tag=$old_tag"
+          } >> "$GITHUB_OUTPUT"
+
   select-api-server:
     runs-on: ubuntu-latest
     permissions:
@@ -152,85 +204,119 @@ jobs:
             echo "old_tag=$old_tag"
           } >> "$GITHUB_OUTPUT"
 
-  publish:
-    runs-on: ubuntu-latest
+  build-web-dist:
+    needs:
+      - select-web
+    if: needs.select-web.outputs.enabled == 'true'
     permissions:
       contents: read
-      packages: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - component: web
-            image: 1flowbase-web
-            dockerfile: docker/web.Dockerfile
-            manifest: web/app/package.json
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
-      - name: Select component
-        id: select
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.5.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Restore web pnpm store
+        uses: actions/cache@v5
+        with:
+          path: tmp/container-cache/web/${{ matrix.arch }}/pnpm-store
+          key: web-pnpm-store-${{ matrix.arch }}-${{ hashFiles('web/pnpm-lock.yaml', 'web/package.json', 'web/app/package.json', 'web/packages/*/package.json') }}
+          restore-keys: |
+            web-pnpm-store-${{ matrix.arch }}-${{ hashFiles('web/pnpm-lock.yaml') }}-
+            web-pnpm-store-${{ matrix.arch }}-
+
+      - name: Build web dist on native ${{ matrix.arch }}
         shell: bash
         run: |
           set -euo pipefail
 
-          enabled=false
-          image_tag=""
-          old_tag=""
+          cache_root="tmp/container-cache/web/${{ matrix.arch }}"
+          artifact_root="tmp/container-artifacts/web/${{ matrix.arch }}"
+          mkdir -p "$cache_root/pnpm-store" "$artifact_root"
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.component }}" == "${{ matrix.component }}" ]]; then
-              enabled=true
-              image_tag="${{ inputs.image_tag }}"
-            fi
-          else
-            image_tag="$(node scripts/node/cli/verify-container-version.js print-tag "${{ matrix.component }}")"
-            before_sha="${{ github.event.before }}"
-            zero_sha="0000000000000000000000000000000000000000"
+          pnpm config set store-dir "$PWD/$cache_root/pnpm-store"
+          pnpm config set package-import-method copy
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir web --filter @1flowbase/web build
 
-            if [[ "$before_sha" != "$zero_sha" ]] \
-              && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
-              && git cat-file -e "$before_sha:${{ matrix.manifest }}" 2>/dev/null; then
-              if old_version="$(git show "$before_sha:${{ matrix.manifest }}" | node scripts/node/cli/verify-container-version.js read-stdin-version "${{ matrix.component }}")"; then
-                old_tag="v${old_version}"
-              fi
-            fi
+          rm -rf "$artifact_root/dist"
+          cp -a web/app/dist "$artifact_root/dist"
+          (cd "$artifact_root/dist" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$artifact_root/web-dist.sha256"
+          du -sh "$artifact_root/dist"
 
-            if [[ "$image_tag" != "$old_tag" ]]; then
-              enabled=true
-            fi
-          fi
+      - name: Upload web dist artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: web-dist-${{ matrix.arch }}
+          path: tmp/container-artifacts/web/${{ matrix.arch }}
+          if-no-files-found: error
 
-          {
-            echo "enabled=$enabled"
-            echo "image_tag=$image_tag"
-            echo "old_tag=$old_tag"
-          } >> "$GITHUB_OUTPUT"
+  publish-web:
+    needs:
+      - select-web
+      - build-web-dist
+    if: needs.select-web.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
 
       - uses: docker/setup-qemu-action@v4
-        if: steps.select.outputs.enabled == 'true'
         with:
           cache-image: false
 
       - uses: docker/setup-buildx-action@v4
-        if: steps.select.outputs.enabled == 'true'
 
       - uses: docker/login-action@v4
-        if: steps.select.outputs.enabled == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Validate component version
-        if: steps.select.outputs.enabled == 'true'
-        run: node scripts/node/cli/verify-container-version.js ${{ matrix.component }} ${{ steps.select.outputs.image_tag }}
+      - name: Validate web version
+        run: node scripts/node/cli/verify-container-version.js web ${{ needs.select-web.outputs.image_tag }}
+
+      - name: Download web dist artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: web-dist-*
+          path: tmp/web-dist-artifacts
+          merge-multiple: false
+
+      - name: Prepare web dist build context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p tmp/web-dist/amd64 tmp/web-dist/arm64
+          cp -a tmp/web-dist-artifacts/web-dist-amd64/dist tmp/web-dist/amd64/dist
+          cp -a tmp/web-dist-artifacts/web-dist-arm64/dist tmp/web-dist/arm64/dist
+          test -f tmp/web-dist/amd64/dist/index.html
+          test -f tmp/web-dist/arm64/dist/index.html
+          cat tmp/web-dist-artifacts/web-dist-amd64/web-dist.sha256
+          if ! diff -u tmp/web-dist-artifacts/web-dist-amd64/web-dist.sha256 tmp/web-dist-artifacts/web-dist-arm64/web-dist.sha256; then
+            echo "Web dist checksums differ across native runners; publishing per-arch dist artifacts."
+          fi
+          du -sh tmp/web-dist/amd64/dist tmp/web-dist/arm64/dist
 
       - name: Prepare image references
         id: image_refs
-        if: steps.select.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -238,35 +324,40 @@ jobs:
           scan_tag=scan-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           {
             echo "scan_tag=$scan_tag"
-            echo "scan_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:$scan_tag"
-            echo "version_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.select.outputs.image_tag }}"
-            echo "latest_image_ref=ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest"
+            echo "scan_image_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-web:$scan_tag"
+            echo "version_image_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-web:${{ needs.select-web.outputs.image_tag }}"
+            echo "latest_image_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-web:latest"
+            echo "buildcache_ref=ghcr.io/${{ github.repository_owner }}/1flowbase-web:buildcache"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build and push scan candidate ${{ matrix.image }}
-        if: steps.select.outputs.enabled == 'true'
+      - name: Build and push prebuilt web scan candidate
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: docker/web.Dockerfile
+          target: runtime-prebuilt
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.image_refs.outputs.scan_tag }}
+            ${{ steps.image_refs.outputs.scan_image_ref }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.select.outputs.image_tag }}
-            org.opencontainers.image.title=${{ matrix.image }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+            org.opencontainers.image.version=${{ needs.select-web.outputs.image_tag }}
+            org.opencontainers.image.title=1flowbase-web
+          build-contexts: |
+            web_dist=./tmp/web-dist
+          cache-from: |
+            type=gha,scope=1flowbase-web-runtime
+            type=registry,ref=${{ steps.image_refs.outputs.buildcache_ref }}
+          cache-to: |
+            type=gha,mode=max,scope=1flowbase-web-runtime
+            type=registry,ref=${{ steps.image_refs.outputs.buildcache_ref }},mode=max
 
       - name: Prepare Trivy report directory
-        if: steps.select.outputs.enabled == 'true'
         run: mkdir -p tmp/test-governance
 
       - name: Generate HIGH Trivy warning report
-        if: steps.select.outputs.enabled == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         env:
           TRIVY_USERNAME: ${{ github.actor }}
@@ -277,11 +368,10 @@ jobs:
           scanners: vuln
           severity: HIGH
           format: json
-          output: tmp/test-governance/trivy-${{ matrix.component }}-high.json
+          output: tmp/test-governance/trivy-web-high.json
           exit-code: "0"
 
       - name: Enforce CRITICAL Trivy release gate
-        if: steps.select.outputs.enabled == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         env:
           TRIVY_USERNAME: ${{ github.actor }}
@@ -292,19 +382,19 @@ jobs:
           scanners: vuln
           severity: CRITICAL
           format: json
-          output: tmp/test-governance/trivy-${{ matrix.component }}-critical.json
+          output: tmp/test-governance/trivy-web-critical.json
           exit-code: "0"
 
       - name: Upload Trivy reports
-        if: always() && steps.select.outputs.enabled == 'true'
+        if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: test-governance-trivy-${{ matrix.component }}
-          path: tmp/test-governance/trivy-${{ matrix.component }}-*.json
+          name: test-governance-trivy-web
+          path: tmp/test-governance/trivy-web-*.json
           if-no-files-found: warn
 
       - name: Promote scanned image to official tags
-        if: steps.select.outputs.enabled == 'true' && (github.event_name != 'workflow_dispatch' || inputs.promote_official_tags)
+        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags == true || inputs.promote_official_tags == 'true'
         run: |
           docker buildx imagetools create \
             --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
@@ -505,7 +595,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Promote scanned api-server image to official tags
-        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags
+        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags == true || inputs.promote_official_tags == 'true'
         run: |
           docker buildx imagetools create \
             --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
@@ -706,7 +796,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Promote scanned plugin-runner image to official tags
-        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags
+        if: github.event_name != 'workflow_dispatch' || inputs.promote_official_tags == true || inputs.promote_official_tags == 'true'
         run: |
           docker buildx imagetools create \
             --tag "${{ steps.image_refs.outputs.version_image_ref }}" \
@@ -714,11 +804,12 @@ jobs:
             "${{ steps.image_refs.outputs.scan_image_ref }}"
 
   publish-release:
-    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/latest' && needs.select-api-server.result == 'success' && needs.select-plugin-runner.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') && (needs.publish-api-server.result == 'success' || needs.publish-api-server.result == 'skipped') && (needs.publish-plugin-runner.result == 'success' || needs.publish-plugin-runner.result == 'skipped') }}
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/latest' && needs.select-web.result == 'success' && needs.select-api-server.result == 'success' && needs.select-plugin-runner.result == 'success' && (needs.publish-web.result == 'success' || needs.publish-web.result == 'skipped') && (needs.publish-api-server.result == 'success' || needs.publish-api-server.result == 'skipped') && (needs.publish-plugin-runner.result == 'success' || needs.publish-plugin-runner.result == 'skipped') }}
     needs:
+      - select-web
       - select-api-server
       - select-plugin-runner
-      - publish
+      - publish-web
       - publish-api-server
       - publish-plugin-runner
     runs-on: ubuntu-latest
@@ -792,7 +883,7 @@ jobs:
   report:
     if: ${{ always() }}
     needs:
-      - publish
+      - publish-web
       - publish-api-server
       - publish-plugin-runner
     runs-on: ubuntu-latest
