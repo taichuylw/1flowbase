@@ -8,9 +8,14 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+use control_plane::ports::{
+    CreateCallbackTaskInput, CreateNodeRunInput, OrchestrationRuntimeRepository, UpdateFlowRunInput,
+};
 use serde_json::{json, Value};
 use std::sync::Arc;
+use time::OffsetDateTime;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 async fn response_json(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -219,6 +224,67 @@ async fn test_app_with_state() -> (Router, Arc<ApiState>) {
 async fn flow_run_count(state: &ApiState) -> i64 {
     sqlx::query_scalar("select count(*) from flow_runs")
         .fetch_one(state.store.pool())
+        .await
+        .unwrap()
+}
+
+async fn seed_pending_anthropic_llm_callback(
+    state: &ApiState,
+    flow_run_id: Uuid,
+    tool_use_id: &str,
+) -> domain::CallbackTaskRecord {
+    state
+        .store
+        .update_flow_run(&UpdateFlowRunInput {
+            flow_run_id,
+            status: domain::FlowRunStatus::WaitingCallback,
+            output_payload: json!({
+                "tool_calls": [
+                    {
+                        "id": tool_use_id,
+                        "name": "Grep",
+                        "arguments": { "pattern": "image-1.png" }
+                    }
+                ]
+            }),
+            error_payload: None,
+            finished_at: None,
+        })
+        .await
+        .unwrap();
+    let node_run = state
+        .store
+        .create_node_run(&CreateNodeRunInput {
+            flow_run_id,
+            node_id: "node-llm".to_string(),
+            node_type: "llm".to_string(),
+            node_alias: "LLM".to_string(),
+            status: domain::NodeRunStatus::WaitingCallback,
+            input_payload: json!({}),
+            debug_payload: json!({ "llm_rounds": [] }),
+            started_at: OffsetDateTime::now_utc(),
+        })
+        .await
+        .unwrap();
+
+    state
+        .store
+        .create_callback_task(&CreateCallbackTaskInput {
+            flow_run_id,
+            node_run_id: node_run.id,
+            callback_kind: "llm_tool_calls".to_string(),
+            request_payload: json!({
+                "tool_calls": [
+                    {
+                        "id": tool_use_id,
+                        "name": "Grep",
+                        "arguments": { "pattern": "image-1.png" }
+                    }
+                ],
+                "finish_reason": "tool_call"
+            }),
+            external_ref_payload: None,
+        })
         .await
         .unwrap()
 }
@@ -639,6 +705,96 @@ async fn anthropic_messages_rejects_orphan_tool_result_without_creating_run() {
     let payload = response_json(response).await;
     assert_eq!(payload["error"]["type"], json!("tool_result_only_orphan"));
     assert_eq!(flow_run_count(state.as_ref()).await, before);
+}
+
+#[tokio::test]
+async fn anthropic_messages_matches_plain_tool_result_to_same_conversation_pending_callback() {
+    let (app, state) = test_app_with_state().await;
+    let token = setup_published_app(&app, "Anthropic Plain Tool Result Resume App").await;
+    let before = flow_run_count(state.as_ref()).await;
+    let session_id = "claude-code-session-plain-tool".to_string();
+    let metadata = json!({
+        "expand_id": "claude-code-user"
+    });
+
+    let first = post_json_with_headers(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token.clone()),
+        vec![("x-claude-code-session-id", session_id.clone())],
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "messages": [
+                {"role": "user", "content": "uploads/image-1.png 这部分代码在哪里？"}
+            ],
+            "metadata": metadata
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_payload = response_json(first).await;
+    let run_id = Uuid::parse_str(
+        first_payload["id"]
+            .as_str()
+            .expect("anthropic response id")
+            .strip_prefix("msg_")
+            .expect("anthropic response id should include msg_ prefix"),
+    )
+    .unwrap();
+    seed_pending_anthropic_llm_callback(state.as_ref(), run_id, "toolu_read").await;
+
+    let response = post_json_with_headers(
+        &app,
+        "/v1/messages",
+        ("x-api-key", token),
+        vec![("x-claude-code-session-id", session_id)],
+        json!({
+            "model": "anthropic/custom-model:latest",
+            "max_tokens": 64,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_read",
+                        "name": "Grep",
+                        "input": {"pattern": "image-1.png"}
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_read",
+                            "content": "No files found"
+                        },
+                        {
+                            "type": "text",
+                            "text": "<system-reminder>Claude Code internal reminder</system-reminder>"
+                        }
+                    ]
+                }
+            ],
+            "metadata": metadata
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(flow_run_count(state.as_ref()).await, before + 1);
+    let event_types = sqlx::query_scalar::<_, String>(
+        "select event_type from flow_run_events where flow_run_id = $1 order by sequence asc",
+    )
+    .bind(run_id)
+    .fetch_all(state.store.pool())
+    .await
+    .unwrap();
+    assert!(
+        event_types.contains(&"public_run_resume_requested".to_string()),
+        "plain tool_result should route to callback resume, not a new run: {event_types:?}"
+    );
 }
 
 #[tokio::test]

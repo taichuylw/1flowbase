@@ -564,6 +564,7 @@ fn is_claude_code_control_request(request: &NativeRunRequest) -> bool {
         .and_then(|compatibility| compatibility.get("claude_code_control"))
         .and_then(Value::as_str)
         .is_some()
+        || super::compat::anthropic::claude_code_control_kind(&request.query).is_some()
 }
 
 fn write_canonical_json(value: &Value, out: &mut Vec<u8>) -> serde_json::Result<()> {

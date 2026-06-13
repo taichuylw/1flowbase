@@ -402,6 +402,58 @@ fn claude_code_session_title_request_marks_control_metadata() {
 }
 
 #[test]
+fn claude_code_away_summary_request_marks_control_metadata() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "metadata": {
+            "user_id": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        },
+        "messages": [
+            {
+                "role": "user",
+                "content": "The user stepped away and is coming back. Write exactly 1-3 short sentences. Start by stating the high-level task — what they are building or debugging, not implementation details. Next: the concrete next step. Skip status reports and commit recaps."
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        native.metadata.as_value()["compatibility"]["claude_code_control"],
+        json!("away_summary")
+    );
+    assert_eq!(
+        native.inputs.as_value()["compatibility"]["claude_code_control"],
+        json!("away_summary")
+    );
+}
+
+#[test]
+fn claude_code_compact_resume_request_without_transcript_marks_control_metadata() {
+    let native = map_messages_request(json!({
+        "model": "claude-compatible-custom",
+        "metadata": {
+            "user_id": "user_31fb5a_account__session_3e7058c2-3120-4222-bb14-c99ec85e1c0f"
+        },
+        "messages": [
+            {
+                "role": "user",
+                "content": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n- user asked where uploads/image-1.png is implemented\n\nContinue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with \"I'll continue\" or similar. Pick up the last task as if the break never happened."
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        native.metadata.as_value()["compatibility"]["claude_code_control"],
+        json!("compact_resume")
+    );
+    assert_eq!(
+        native.inputs.as_value()["compatibility"]["claude_code_control"],
+        json!("compact_resume")
+    );
+}
+
+#[test]
 fn claude_code_compact_resume_history_is_marked_hidden_from_conversation() {
     let native = map_messages_request(json!({
         "model": "claude-compatible-custom",

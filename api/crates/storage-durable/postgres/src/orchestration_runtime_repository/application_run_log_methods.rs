@@ -688,8 +688,15 @@ fn hidden_anthropic_claude_code_internal_run_sql(run_table: &str) -> String {
             or position('Your task is to create a detailed summary of the RECENT portion of the conversation' in {query_text}) > 0
             or position('Your task is to create a detailed summary of this conversation. This summary will be placed at the start of a continuing session' in {query_text}) > 0
             or (
+                position('The user stepped away and is coming back. Write exactly 1-3 short sentences.' in {query_text}) > 0
+                and position('Next: the concrete next step.' in {query_text}) > 0
+            )
+            or (
                 position('This session is being continued from a previous conversation that ran out of context.' in {query_text}) > 0
-                and position('If you need specific details from before compaction' in {query_text}) > 0
+                and (
+                    position('The summary below covers the earlier portion of the conversation.' in {query_text}) > 0
+                    or position('If you need specific details from before compaction' in {query_text}) > 0
+                )
             )
             or position('cc_is_subagent=true' in {system_text}) > 0
             or (
