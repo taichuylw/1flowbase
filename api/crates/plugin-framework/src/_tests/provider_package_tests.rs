@@ -245,6 +245,35 @@ fn provider_package_loads_manifest_v1_runtime_entry_and_static_models() {
 }
 
 #[test]
+fn provider_package_treats_vision_capability_as_multimodal() {
+    let fixture = make_package_fixture();
+    fixture.write(
+        "models/llm/acme_vision.yaml",
+        r#"model: acme_vision
+label: Acme Vision
+family: llm
+capabilities:
+  - stream
+  - tool_call
+  - vision
+context_window: 128000
+max_output_tokens: 4096
+provider_metadata:
+  tier: vision
+"#,
+    );
+
+    let package = ProviderPackage::load_from_dir(fixture.path()).unwrap();
+    let model = package
+        .predefined_models
+        .iter()
+        .find(|model| model.model_id == "acme_vision")
+        .expect("vision model should load");
+
+    assert!(model.supports_multimodal);
+}
+
+#[test]
 fn provider_package_falls_back_to_default_locale_for_missing_keys() {
     let fixture = make_package_fixture();
 

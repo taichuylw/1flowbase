@@ -22,8 +22,9 @@ use self::media_context::{
 use self::payloads::*;
 use self::registry::visible_internal_llm_tools;
 pub(super) use self::registry::{
-    is_visible_internal_llm_tool_source_handle, visible_internal_llm_node_has_media_tool,
-    visible_internal_llm_provider_tools, visible_internal_llm_tool_target_node_ids,
+    is_visible_internal_llm_tool_source_handle, visible_internal_llm_media_tool_context,
+    visible_internal_llm_node_has_media_tool, visible_internal_llm_provider_tools,
+    visible_internal_llm_tool_target_node_ids,
 };
 use self::types::*;
 

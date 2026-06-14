@@ -566,3 +566,65 @@ fn orchestration_runtime_textualizes_tool_result_media_for_text_models() {
         .contains("\"url\":\"data:image/png;base64,[redacted]\""));
     assert!(!tool_message.content.contains("SHOULD_NOT_BE_VISIBLE"));
 }
+
+#[test]
+fn orchestration_runtime_textualizes_routed_media_as_retry_guidance_for_text_models() {
+    let mut input = ProviderInvocationInput {
+        messages: vec![
+            ProviderMessage {
+                role: ProviderMessageRole::User,
+                content: "Describe image".to_string(),
+                name: None,
+                tool_call_id: None,
+                is_error: None,
+                tool_calls: None,
+                content_blocks: None,
+            },
+            ProviderMessage {
+                role: ProviderMessageRole::Tool,
+                content: String::new(),
+                name: Some("Read".to_string()),
+                tool_call_id: Some("call_read".to_string()),
+                is_error: None,
+                tool_calls: None,
+                content_blocks: Some(json!([
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "aW1hZ2U="
+                        }
+                    }
+                ])),
+            },
+        ],
+        run_context: std::collections::BTreeMap::from([(
+            "visible_internal_llm_media_tools".to_string(),
+            json!([
+                {
+                    "name": "image_llm",
+                    "media_kind": "image"
+                }
+            ]),
+        )]),
+        ..ProviderInvocationInput::default()
+    };
+
+    provider_invoker::textualize_media_content_blocks_for_text_model(&mut input);
+
+    let tool_message = &input.messages[1];
+    assert!(tool_message.content_blocks.is_none());
+    assert!(tool_message
+        .content
+        .contains("\"event\":\"routed_media_content_available\""));
+    assert!(tool_message.content.contains("\"name\":\"image_llm\""));
+    assert!(tool_message
+        .content
+        .contains("Call the routed media tool again"));
+    assert!(!tool_message
+        .content
+        .contains("tool_result_media_unsupported"));
+    assert!(!tool_message.content.contains("message_media_unsupported"));
+    assert!(!tool_message.content.contains("aW1hZ2U="));
+}

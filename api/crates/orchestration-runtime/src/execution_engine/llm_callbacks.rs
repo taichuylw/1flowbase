@@ -366,15 +366,55 @@ pub(super) fn tool_result_prompt_content(value: Value) -> (Value, Option<Value>)
     match value {
         Value::String(_) => (value, None),
         Value::Array(blocks) => {
-            let text = blocks
+            let content_blocks = normalize_tool_result_content_blocks(blocks);
+            let text = content_blocks
                 .iter()
                 .filter_map(|entry| entry.get("text").and_then(Value::as_str))
                 .collect::<Vec<_>>()
                 .join("\n");
-            (Value::String(text), Some(Value::Array(blocks)))
+            (Value::String(text), Some(Value::Array(content_blocks)))
         }
         other => (Value::String(other.to_string()), None),
     }
+}
+
+fn normalize_tool_result_content_blocks(blocks: Vec<Value>) -> Vec<Value> {
+    blocks
+        .into_iter()
+        .map(normalize_tool_result_content_block)
+        .collect()
+}
+
+fn normalize_tool_result_content_block(block: Value) -> Value {
+    let Value::Object(mut object) = block else {
+        return block;
+    };
+    if object.get("type").and_then(Value::as_str) == Some("image") {
+        normalize_image_block_base64_source(&mut object);
+    }
+    Value::Object(object)
+}
+
+fn normalize_image_block_base64_source(object: &mut Map<String, Value>) {
+    let Some(source) = object.get_mut("source").and_then(Value::as_object_mut) else {
+        return;
+    };
+    let source_type = source.get("type").and_then(Value::as_str);
+    if !matches!(source_type, None | Some("base64"))
+        || source
+            .get("data")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .is_none()
+    {
+        return;
+    }
+    source
+        .entry("type".to_string())
+        .or_insert_with(|| Value::String("base64".to_string()));
+    source
+        .entry("media_type".to_string())
+        .or_insert_with(|| Value::String("image/png".to_string()));
 }
 
 pub(super) fn pending_llm_tool_callback_state<'a>(
@@ -517,4 +557,27 @@ pub(super) fn pending_llm_tool_callback_route_matches(
             == Some(runtime.provider_code.as_str())
         && provider_route.get("protocol").and_then(Value::as_str) == Some(runtime.protocol.as_str())
         && provider_route.get("model").and_then(Value::as_str) == Some(runtime.model.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tool_result_prompt_content_normalizes_bare_base64_image_source() {
+        let (_content, content_blocks) = tool_result_prompt_content(json!([
+            {
+                "type": "image",
+                "source": {
+                    "data": "aW1hZ2U="
+                }
+            }
+        ]));
+
+        let blocks = content_blocks.expect("image blocks should be preserved");
+        assert_eq!(blocks[0]["type"], json!("image"));
+        assert_eq!(blocks[0]["source"]["type"], json!("base64"));
+        assert_eq!(blocks[0]["source"]["media_type"], json!("image/png"));
+        assert_eq!(blocks[0]["source"]["data"], json!("aW1hZ2U="));
+    }
 }

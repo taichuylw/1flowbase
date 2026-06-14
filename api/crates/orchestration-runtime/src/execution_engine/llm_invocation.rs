@@ -139,6 +139,14 @@ pub(super) fn build_provider_invocation(
         &provider_context,
     );
 
+    let mut run_context = BTreeMap::from([(
+        "resolved_inputs".to_string(),
+        Value::Object(resolved_inputs.clone()),
+    )]);
+    if let Some(media_tools) = visible_internal_llm_media_tool_context(node) {
+        run_context.insert("visible_internal_llm_media_tools".to_string(), media_tools);
+    }
+
     let input = ProviderInvocationInput {
         provider_instance_id: runtime.provider_instance_id.clone(),
         provider_code: runtime.provider_code.clone(),
@@ -159,10 +167,7 @@ pub(super) fn build_provider_invocation(
         response_format: build_response_format(&node.config),
         model_parameters: build_model_parameters(node, runtime, variable_pool),
         trace_context,
-        run_context: BTreeMap::from([(
-            "resolved_inputs".to_string(),
-            Value::Object(resolved_inputs.clone()),
-        )]),
+        run_context,
     };
 
     Ok(BuiltProviderInvocation {
