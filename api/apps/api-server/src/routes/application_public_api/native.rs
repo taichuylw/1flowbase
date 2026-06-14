@@ -373,8 +373,10 @@ fn parse_native_run_request(bytes: Bytes) -> Result<NativeRunRequest, NativeApiE
             format!("invalid native request field: {field}"),
         ));
     }
-    serde_json::from_value(value)
-        .map_err(|error| NativeApiError::new(StatusCode::BAD_REQUEST, "body", error.to_string()))
+    let mut request: NativeRunRequest = serde_json::from_value(value)
+        .map_err(|error| NativeApiError::new(StatusCode::BAD_REQUEST, "body", error.to_string()))?;
+    request.protocol_compatibility_mode = Some("native-v1".to_string());
+    Ok(request)
 }
 
 fn invalid_native_field(value: &Value) -> Option<&'static str> {
