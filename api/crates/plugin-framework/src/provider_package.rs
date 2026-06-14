@@ -324,7 +324,9 @@ fn load_predefined_models(models_dir: &Path) -> FrameworkResult<Vec<ProviderMode
             supports_streaming: capabilities.iter().any(|value| value == "stream"),
             supports_tool_call: capabilities.iter().any(|value| value == "tool_call"),
             supports_multimodal: raw_model.supports_multimodal
-                || capabilities.iter().any(|value| value == "multimodal"),
+                || capabilities
+                    .iter()
+                    .any(|value| value == "multimodal" || value == "vision"),
             context_window: raw_model.context_window,
             max_output_tokens: raw_model.max_output_tokens,
             provider_metadata: raw_model.provider_metadata,
