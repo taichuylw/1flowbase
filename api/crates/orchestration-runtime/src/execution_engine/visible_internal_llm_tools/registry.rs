@@ -69,12 +69,45 @@ pub(in crate::execution_engine) fn visible_internal_llm_provider_tools(
         .collect()
 }
 
+pub(in crate::execution_engine) fn visible_internal_llm_media_tool_context(
+    node: &CompiledNode,
+) -> Option<Value> {
+    let tools = visible_internal_llm_tools(node)
+        .into_iter()
+        .flat_map(|tool| {
+            let tool_name = tool.name.clone();
+            visible_internal_llm_tool_media_kinds(&tool)
+                .into_iter()
+                .map(move |media_kind| {
+                    json!({
+                        "name": tool_name.clone(),
+                        "media_kind": media_kind,
+                    })
+                })
+        })
+        .collect::<Vec<_>>();
+
+    (!tools.is_empty()).then(|| Value::Array(tools))
+}
+
 pub(in crate::execution_engine) fn visible_internal_llm_node_has_media_tool(
     node: &CompiledNode,
 ) -> bool {
     visible_internal_llm_tools(node)
         .iter()
         .any(visible_internal_llm_tool_has_configured_media_contract)
+}
+
+fn visible_internal_llm_tool_media_kinds(tool: &VisibleInternalLlmTool) -> Vec<String> {
+    tool.preconditions
+        .iter()
+        .map(|precondition| match precondition {
+            VisibleInternalLlmToolPrecondition::MediaContentAvailable(precondition) => precondition
+                .media_kind
+                .clone()
+                .unwrap_or_else(|| "image".to_string()),
+        })
+        .collect()
 }
 
 fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternalLlmTool> {

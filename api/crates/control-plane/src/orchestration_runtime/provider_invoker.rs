@@ -1,6 +1,8 @@
 use super::*;
 use plugin_framework::provider_contract::ProviderMessageRole;
 
+const VISIBLE_INTERNAL_LLM_MEDIA_TOOLS_CONTEXT_KEY: &str = "visible_internal_llm_media_tools";
+
 #[async_trait]
 impl<R, H> orchestration_runtime::execution_engine::ProviderInvoker for RuntimeProviderInvoker<R, H>
 where
@@ -738,6 +740,7 @@ fn content_blocks_have_media(content_blocks: &Value) -> bool {
 }
 
 pub(super) fn textualize_media_content_blocks_for_text_model(input: &mut ProviderInvocationInput) {
+    let routed_media_tools = routed_media_tool_context(input);
     for message in &mut input.messages {
         let Some(content_blocks) = message.content_blocks.take() else {
             continue;
@@ -747,24 +750,11 @@ pub(super) fn textualize_media_content_blocks_for_text_model(input: &mut Provide
             message.content_blocks = Some(content_blocks);
             continue;
         }
-        let (error_code, message_text) = if matches!(message.role, ProviderMessageRole::Tool) {
-            (
-                "tool_result_media_unsupported",
-                "Tool result contained media blocks that were not injected into the selected text model context.",
-            )
+        let fallback = if let Some(routed_media_tools) = &routed_media_tools {
+            routed_media_guidance_content(routed_media_tools, &media_blocks)
         } else {
-            (
-                "message_media_unsupported",
-                "Message contained media blocks that were not injected into the selected text model context.",
-            )
+            unsupported_media_content(&message.role, &media_blocks)
         };
-        let fallback = json!({
-            "error_code": error_code,
-            "message": message_text,
-            "recoverable": true,
-            "media_blocks": media_blocks,
-        })
-        .to_string();
         if message.content.trim().is_empty() {
             message.content = fallback;
         } else {
@@ -776,6 +766,66 @@ pub(super) fn textualize_media_content_blocks_for_text_model(input: &mut Provide
             message.content_blocks = Some(remaining_content_blocks);
         }
     }
+}
+
+fn routed_media_tool_context(input: &ProviderInvocationInput) -> Option<Value> {
+    let tools = input
+        .run_context
+        .get(VISIBLE_INTERNAL_LLM_MEDIA_TOOLS_CONTEXT_KEY)?
+        .as_array()?
+        .iter()
+        .filter_map(|tool| {
+            let object = tool.as_object()?;
+            let name = object
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|name| !name.is_empty())?;
+            let media_kind = object
+                .get("media_kind")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|kind| !kind.is_empty())
+                .unwrap_or("image");
+            Some(json!({
+                "name": name,
+                "media_kind": media_kind,
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    (!tools.is_empty()).then(|| Value::Array(tools))
+}
+
+fn routed_media_guidance_content(routed_media_tools: &Value, media_blocks: &Value) -> String {
+    json!({
+        "event": "routed_media_content_available",
+        "message": "Media content is available in conversation history for routed media tools. Call the routed media tool again with the same media path and task; do not ask the user to re-upload the image.",
+        "media_tools": routed_media_tools,
+        "media_blocks": media_blocks,
+    })
+    .to_string()
+}
+
+fn unsupported_media_content(role: &ProviderMessageRole, media_blocks: &Value) -> String {
+    let (error_code, message_text) = if matches!(role, ProviderMessageRole::Tool) {
+        (
+            "tool_result_media_unsupported",
+            "Tool result contained media blocks that were not injected into the selected text model context.",
+        )
+    } else {
+        (
+            "message_media_unsupported",
+            "Message contained media blocks that were not injected into the selected text model context.",
+        )
+    };
+    json!({
+        "error_code": error_code,
+        "message": message_text,
+        "recoverable": true,
+        "media_blocks": media_blocks,
+    })
+    .to_string()
 }
 
 fn summarize_media_blocks(content_blocks: &Value) -> Value {
