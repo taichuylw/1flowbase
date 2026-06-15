@@ -912,26 +912,6 @@ export function LlmToolRegistrationsField({
                 }
               />
             </label>
-            <label style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.tool_mode')}</span>
-              <Select
-                aria-label={i18nText('agentFlow', 'auto.tool_mode')}
-                options={[
-                  {
-                    label: i18nText('agentFlow', 'auto.tool_mode_agent'),
-                    value: 'agent'
-                  },
-                  {
-                    label: i18nText('agentFlow', 'auto.tool_mode_fusion'),
-                    value: 'fusion'
-                  }
-                ]}
-                value={draft.tool_mode}
-                onChange={(nextMode: LlmToolMode) =>
-                  updateDraft({ tool_mode: nextMode })
-                }
-              />
-            </label>
             <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
               <span>
                 {i18nText('agentFlow', 'auto.internal_llm_node_policy')}
@@ -945,11 +925,34 @@ export function LlmToolRegistrationsField({
                 disabled={draft.tool_mode === 'fusion'}
                 onChange={(checked) =>
                   updateDraft({
-                    internal_llm_node_policy: checked ? 'allowed' : 'forbidden'
+                    internal_llm_node_policy: checked ? 'allowed' : 'forbidden',
+                    ...(checked ? {} : { tool_mode: 'agent' as const })
                   })
                 }
               />
             </div>
+            {draft.internal_llm_node_policy === 'allowed' ? (
+              <label style={TOOL_FORM_ROW_STYLE}>
+                <span>{i18nText('agentFlow', 'auto.tool_mode')}</span>
+                <Select
+                  aria-label={i18nText('agentFlow', 'auto.tool_mode')}
+                  options={[
+                    {
+                      label: i18nText('agentFlow', 'auto.tool_mode_agent'),
+                      value: 'agent'
+                    },
+                    {
+                      label: i18nText('agentFlow', 'auto.tool_mode_fusion'),
+                      value: 'fusion'
+                    }
+                  ]}
+                  value={draft.tool_mode}
+                  onChange={(nextMode: LlmToolMode) =>
+                    updateDraft({ tool_mode: nextMode })
+                  }
+                />
+              </label>
+            ) : null}
             {draft.tool_mode === 'agent' ? (
               <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
                 <span>

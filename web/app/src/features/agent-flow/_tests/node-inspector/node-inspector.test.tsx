@@ -288,13 +288,13 @@ describe('NodeInspector core', () => {
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
 
     expect(within(dialog).queryByLabelText('目标 LLM')).not.toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('combobox', { name: '工具模式' })
-    ).toBeInTheDocument();
     const internalLlmSwitch = within(dialog).getByRole('switch', {
       name: '允许分支 LLM'
     });
     expect(internalLlmSwitch).not.toBeChecked();
+    expect(
+      within(dialog).queryByRole('combobox', { name: '工具模式' })
+    ).not.toBeInTheDocument();
     const saveToolButton = within(dialog).getByRole('button', {
       name: '保存工具'
     });
@@ -316,6 +316,13 @@ describe('NodeInspector core', () => {
       target: { value: 'Inspect uploaded image' }
     });
     fireEvent.click(internalLlmSwitch);
+    const toolModeSelect = within(dialog).getByRole('combobox', {
+      name: '工具模式'
+    });
+    expect(
+      internalLlmSwitch.compareDocumentPosition(toolModeSelect) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     fireEvent.click(saveToolButton);
 
     await waitFor(() => {
@@ -404,9 +411,17 @@ describe('NodeInspector core', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
 
+    const internalLlmSwitch = within(dialog).getByRole('switch', {
+      name: '允许分支 LLM'
+    });
+    const toolModeSelect = within(dialog).getByRole('combobox', {
+      name: '工具模式'
+    });
+    expect(internalLlmSwitch).toBeChecked();
     expect(
-      within(dialog).getByRole('combobox', { name: '工具模式' })
-    ).toBeInTheDocument();
+      internalLlmSwitch.compareDocumentPosition(toolModeSelect) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     expect(
       within(dialog).queryByRole('switch', { name: '开放外部工具' })
     ).not.toBeInTheDocument();
