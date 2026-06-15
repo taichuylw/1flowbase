@@ -215,7 +215,7 @@ async fn export_agent_flow_template_omits_secret_fields_and_collects_dependencie
 }
 
 #[tokio::test]
-async fn preview_agent_flow_template_marks_missing_model_as_unresolved_node() {
+async fn preview_agent_flow_template_keeps_llm_node_when_model_provider_is_missing() {
     let owner_id = Uuid::now_v7();
     let service = FlowService::for_tests();
     let application = service
@@ -245,6 +245,76 @@ async fn preview_agent_flow_template_marks_missing_model_as_unresolved_node() {
         .export_agent_flow_template(owner_id, application.id)
         .await
         .unwrap();
+    let expected_bindings = template.flow_document["graph"]["nodes"][1]["bindings"].clone();
+    let expected_outputs = template.flow_document["graph"]["nodes"][1]["outputs"].clone();
+
+    let preview = service
+        .preview_agent_flow_template(PreviewAgentFlowTemplateCommand {
+            actor_user_id: owner_id,
+            template: template.clone(),
+            resources: AgentFlowTemplateResourceSnapshot::default(),
+        })
+        .await
+        .unwrap();
+    let llm_node = &preview.document["graph"]["nodes"][1];
+    let dependency = preview
+        .dependencies
+        .iter()
+        .find(|dependency| dependency.dependency.kind == "model_provider")
+        .expect("missing model provider dependency should be reported");
+
+    assert!(preview.unresolved_nodes.is_empty());
+    assert_eq!(dependency.status, "missing_dependency");
+    assert_eq!(dependency.reason.as_deref(), Some("missing_model_provider"));
+    assert_eq!(llm_node["type"], "llm");
+    assert_eq!(
+        llm_node["config"]["model_provider"]["provider_code"],
+        "missing_provider"
+    );
+    assert_eq!(
+        llm_node["config"]["model_provider"]["model_id"],
+        "lost-model"
+    );
+    assert_eq!(llm_node["bindings"], expected_bindings);
+    assert_eq!(llm_node["outputs"], expected_outputs);
+
+    let imported = service
+        .import_agent_flow_template(ImportAgentFlowTemplateCommand {
+            actor_user_id: owner_id,
+            template,
+            name: Some("Imported missing provider".to_string()),
+            description: None,
+            resources: AgentFlowTemplateResourceSnapshot::default(),
+        })
+        .await
+        .unwrap();
+    let imported_llm = &imported.orchestration.draft.document["graph"]["nodes"][1];
+
+    assert!(imported.preview.unresolved_nodes.is_empty());
+    assert_eq!(imported_llm["type"], "llm");
+    assert_eq!(
+        imported_llm["config"]["model_provider"]["provider_code"],
+        "missing_provider"
+    );
+    assert_eq!(
+        imported_llm["config"]["model_provider"]["model_id"],
+        "lost-model"
+    );
+}
+
+#[tokio::test]
+async fn preview_agent_flow_template_marks_unsupported_node_type_as_unresolved_node() {
+    let owner_id = Uuid::now_v7();
+    let service = FlowService::for_tests();
+    let application = service
+        .seed_application_for_actor(owner_id, "Support Agent")
+        .await
+        .unwrap();
+    let mut template = service
+        .export_agent_flow_template(owner_id, application.id)
+        .await
+        .unwrap();
+    template.flow_document["graph"]["nodes"][1]["type"] = json!("future_llm");
 
     let preview = service
         .preview_agent_flow_template(PreviewAgentFlowTemplateCommand {
@@ -254,26 +324,13 @@ async fn preview_agent_flow_template_marks_missing_model_as_unresolved_node() {
         })
         .await
         .unwrap();
-    let llm_node = &preview.document["graph"]["nodes"][1];
+    let unresolved_node = &preview.document["graph"]["nodes"][1];
 
     assert_eq!(preview.unresolved_nodes.len(), 1);
-    assert_eq!(llm_node["type"], "unresolved_node");
+    assert_eq!(unresolved_node["type"], "unresolved_node");
     assert_eq!(
-        llm_node["config"]["unresolved"]["dependency_status"],
-        "missing_dependency"
-    );
-    assert_eq!(
-        llm_node["config"]["unresolved"]["reason"],
-        "missing_model_provider"
-    );
-    assert_eq!(
-        llm_node["config"]["unresolved"]["original_node"]["type"],
-        "llm"
-    );
-    assert_eq!(
-        llm_node["config"]["unresolved"]["original_node"]["config"]["model_provider"]
-            ["provider_code"],
-        "missing_provider"
+        unresolved_node["config"]["unresolved"]["reason"],
+        "unsupported_builtin_node"
     );
 }
 

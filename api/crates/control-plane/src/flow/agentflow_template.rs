@@ -425,10 +425,6 @@ fn resolve_node(node: &Value, resources: &AgentFlowTemplateResourceSnapshot) -> 
         return unresolved_resolution("unsupported_builtin_node");
     }
 
-    if node_type == "llm" {
-        return resolve_llm_node(node, resources);
-    }
-
     NodeResolution {
         status: READY_STATUS.to_string(),
         reason: None,
