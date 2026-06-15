@@ -936,7 +936,63 @@ test('getServicePrestartCommands skips api root reset in production mode', () =>
   assert.deepEqual(getServicePrestartCommands(apiService, {}), []);
 });
 
-test('runServicePrestartCommands rebuilds local postgres db after migration checksum mismatch', () => {
+test('runServicePrestartCommands blocks local postgres rebuild by default after migration checksum mismatch', () => {
+  const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-recover-'));
+  const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
+  const dockerDir = path.join(tempRepoRoot, 'docker');
+
+  fs.mkdirSync(apiServerDir, { recursive: true });
+  fs.mkdirSync(dockerDir, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(apiServerDir, '.env.example'),
+    [
+      'API_ENV=development',
+      'API_DATABASE_URL=postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase',
+      'BOOTSTRAP_WORKSPACE_NAME=1flowbase',
+      'BOOTSTRAP_ROOT_ACCOUNT=root',
+      'BOOTSTRAP_ROOT_EMAIL=root@example.com',
+      'BOOTSTRAP_ROOT_PASSWORD=change-me',
+    ].join('\n')
+  );
+  fs.writeFileSync(path.join(dockerDir, 'middleware.env'), 'POSTGRES_PORT=35432\n');
+
+  const services = getServiceDefinitions(tempRepoRoot);
+  const apiService = services['api-server'];
+  ensureServiceEnvFile(apiService);
+
+  const commandCalls = [];
+  const composeCalls = [];
+
+  assert.throws(
+    () =>
+      runServicePrestartCommands(apiService, {
+        runCommandImpl(command, args, options) {
+          commandCalls.push({ command, args, options });
+          return {
+            status: 1,
+            stdout: '',
+            stderr: 'Error: migration 20260412183000 was previously applied but has been modified\n',
+          };
+        },
+        runMiddlewareComposeImpl(repoRoot, args) {
+          composeCalls.push({ repoRoot, args });
+          return {
+            status: 0,
+            stdout: '',
+            stderr: '',
+          };
+        },
+      }),
+    /api-server 开发态重置 root 密码 失败，退出码 1/u
+  );
+
+  assert.equal(commandCalls.length, 1);
+  assert.equal(commandCalls[0].options.captureOutput, true);
+  assert.deepEqual(composeCalls, []);
+});
+
+test('runServicePrestartCommands rebuilds local postgres db only with explicit reset opt-in', () => {
   const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-dev-up-recover-'));
   const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
   const dockerDir = path.join(tempRepoRoot, 'docker');
@@ -966,6 +1022,7 @@ test('runServicePrestartCommands rebuilds local postgres db after migration chec
   let attempt = 0;
 
   runServicePrestartCommands(apiService, {
+    sourceEnv: { ONEFLOWBASE_DEV_UP_ALLOW_DB_RESET: '1' },
     runCommandImpl(command, args, options) {
       commandCalls.push({ command, args, options });
       attempt += 1;
@@ -1093,6 +1150,7 @@ test('runServicePrestartCommands rebuilds local postgres db after missing resolv
   let attempt = 0;
 
   runServicePrestartCommands(apiService, {
+    sourceEnv: { ONEFLOWBASE_DEV_UP_ALLOW_DB_RESET: '1' },
     runCommandImpl(command, args, options) {
       commandCalls.push({ command, args, options });
       attempt += 1;

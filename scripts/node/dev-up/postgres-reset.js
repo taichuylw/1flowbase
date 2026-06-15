@@ -13,6 +13,7 @@ const {
 } = require('./middleware.js');
 
 const LOCAL_POSTGRES_HOSTS = new Set(['127.0.0.1', 'localhost']);
+const ALLOW_DB_RESET_ENV = 'ONEFLOWBASE_DEV_UP_ALLOW_DB_RESET';
 
 function getCommandOutput(result) {
   return [result?.stdout, result?.stderr, result?.error?.message].filter(Boolean).join('\n');
@@ -23,6 +24,14 @@ function isRecoverableMigrationDrift(result) {
   return (
     output.includes('was previously applied but has been modified') ||
     output.includes('was previously applied but is missing in the resolved migrations')
+  );
+}
+
+function isExplicitResetOptInEnabled(env) {
+  return ['1', 'true', 'yes'].includes(
+    String(env?.[ALLOW_DB_RESET_ENV] || '')
+      .trim()
+      .toLowerCase()
   );
 }
 
@@ -127,6 +136,14 @@ function tryRecoverApiServerPrestartFailure(
   }
 
   if (!isRecoverableMigrationDrift(result)) {
+    return false;
+  }
+
+  if (!isExplicitResetOptInEnabled(prestartCommand.env)) {
+    logImpl(
+      `${service.label} 检测到本地开发数据库 migration 记录与当前仓库不一致；` +
+        `为避免误删数据，已停止自动重建。确认可清空本地库时设置 ${ALLOW_DB_RESET_ENV}=1 后重试`
+    );
     return false;
   }
 
