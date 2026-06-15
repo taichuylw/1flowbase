@@ -25,7 +25,7 @@ function usage(writeStdout = (text) => process.stdout.write(text)) {
   --apply             真正删除；不带该选项时只 dry-run
   --dry-run           显式 dry-run
   --older-than <age>  只清理早于该时间的对象，支持 d/h/m，test-schemas 默认 3d，backups 默认 7d
-  --keep <count>      保留最新对象数量，test-schemas 默认 20，backups 默认 2
+  --keep <count>      保留最新对象数量，test-schemas 默认 20，backups 默认 1
   --database-url <u>  指定开发数据库 URL；默认读取 API_DATABASE_URL / DATABASE_URL / api-server .env
   -h, --help          查看帮助
 `);
@@ -130,7 +130,7 @@ function parseCliArgs(argv = []) {
   }
 
   if (options.command === 'backups') {
-    options.keep ??= 2;
+    options.keep ??= 1;
     options.olderThanMs ??= 7 * 24 * 60 * 60 * 1000;
   } else {
     options.keep ??= 20;

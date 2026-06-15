@@ -6,8 +6,10 @@ const path = require('path');
 
 const {
   DEFAULT_STARTUP_TIMEOUT_MS,
+  buildDevDatabaseMaintenanceHintLines,
   parseCliArgs,
   shouldManageDocker,
+  shouldShowDevDatabaseMaintenanceHint,
   selectServiceKeys,
   getServiceDefinitions,
   listPortOccupantPids,
@@ -58,6 +60,20 @@ test('selectServiceKeys maps scopes to managed services', () => {
   assert.deepEqual(selectServiceKeys('all'), ['web', 'api-server', 'plugin-runner']);
   assert.deepEqual(selectServiceKeys('frontend'), ['web']);
   assert.deepEqual(selectServiceKeys('backend'), ['api-server', 'plugin-runner']);
+});
+
+test('dev-up suggests manual development database maintenance for backend starts only', () => {
+  assert.equal(shouldShowDevDatabaseMaintenanceHint(parseCliArgs([])), true);
+  assert.equal(shouldShowDevDatabaseMaintenanceHint(parseCliArgs(['restart', '--backend-only'])), true);
+  assert.equal(shouldShowDevDatabaseMaintenanceHint(parseCliArgs(['--frontend-only'])), false);
+  assert.equal(shouldShowDevDatabaseMaintenanceHint(parseCliArgs(['stop'])), false);
+  assert.equal(shouldShowDevDatabaseMaintenanceHint(parseCliArgs(['status'])), false);
+
+  const hint = buildDevDatabaseMaintenanceHintLines().join('\n');
+  assert.match(hint, /不会在 dev-up 时自动清理/u);
+  assert.match(hint, /test-schemas --dry-run --older-than 3d --keep 20/u);
+  assert.match(hint, /backups --dry-run --keep 1 --older-than 7d/u);
+  assert.match(hint, /postgres\.empty-\* \/ postgres\.backup-\*/u);
 });
 
 test('getServiceDefinitions uses repo default ports and explicit backend binaries', () => {

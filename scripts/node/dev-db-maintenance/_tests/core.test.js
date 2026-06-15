@@ -32,6 +32,17 @@ test('parseCliArgs defaults to test schema dry-run with conservative retention',
   });
 });
 
+test('parseCliArgs keeps one backup by default', () => {
+  assert.deepEqual(parseCliArgs(['backups']), {
+    apply: false,
+    command: 'backups',
+    databaseUrl: null,
+    help: false,
+    keep: 1,
+    olderThanMs: 7 * 24 * 60 * 60 * 1000,
+  });
+});
+
 test('buildTestSchemaPrunePlan keeps recent schemas and newest retained schemas', () => {
   const now = new Date('2026-06-15T12:00:00.000Z');
   const schemas = [
