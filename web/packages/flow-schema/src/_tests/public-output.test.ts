@@ -7,6 +7,7 @@ import {
   createDefaultAgentFlowDocument,
   getLlmNodeOutputs,
   validatePublicOutputKey,
+  type FlowLlmVisibleInternalToolDocument,
   type NodeRuntimeUiContract
 } from '../index';
 
@@ -27,12 +28,16 @@ describe('public output key validation', () => {
     });
   });
 
-  it.each(['text', 'structured_output', 'answer', 'record_id', 'usage', 'error'])(
-    'accepts public output key %s',
-    (key) => {
-      expect(validatePublicOutputKey(key)).toEqual({ ok: true });
-    }
-  );
+  it.each([
+    'text',
+    'structured_output',
+    'answer',
+    'record_id',
+    'usage',
+    'error'
+  ])('accepts public output key %s', (key) => {
+    expect(validatePublicOutputKey(key)).toEqual({ ok: true });
+  });
 });
 
 describe('LLM authoring outputs', () => {
@@ -51,6 +56,22 @@ describe('LLM authoring outputs', () => {
       { key: 'text', title: '模型输出', valueType: 'string' },
       { key: 'usage', title: '用量', valueType: 'json' }
     ]);
+  });
+
+  it('supports per-tool mounted LLM mode in the authoring contract', () => {
+    const tool = {
+      type: 'visible_internal_llm_tool',
+      tool_name: 'compare_panels',
+      connector_id: 'compare_panels',
+      target_node_id: 'node-panel-seed',
+      tool_mode: 'fusion',
+      internal_llm_node_policy: 'allowed',
+      external_tool_policy: 'forbidden',
+      input_schema: { type: 'object' },
+      preconditions: [{ kind: 'media_content_available' }]
+    } satisfies FlowLlmVisibleInternalToolDocument;
+
+    expect(tool.tool_mode).toBe('fusion');
   });
 
   it('adds structured_output only for explicitly structured response formats', () => {

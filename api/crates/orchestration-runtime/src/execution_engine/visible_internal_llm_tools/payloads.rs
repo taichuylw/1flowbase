@@ -202,6 +202,17 @@ fn visible_internal_llm_tool_expected_guidance(error_payload: &Value) -> Option<
         );
     }
 
+    if visible_internal_llm_tool_error_code(error_payload)
+        == Some("visible_internal_llm_tool_external_callback_forbidden")
+    {
+        return Some(
+            visible_internal_llm_tool_error_detail(error_payload, "message")
+                .or_else(|| error_payload.get("message").and_then(Value::as_str))
+                .unwrap_or("visible internal LLM tool external callback is forbidden by policy")
+                .to_string(),
+        );
+    }
+
     if visible_internal_llm_tool_error_mentions(error_payload, "model_multimodal_unsupported") {
         return Some("model_multimodal_unsupported: use a model that supports the requested media input, or read the file with a client file tool and retry after the media content is available.".to_string());
     }

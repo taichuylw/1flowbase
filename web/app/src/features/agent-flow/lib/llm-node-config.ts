@@ -40,6 +40,8 @@ export type LlmInternalLlmNodePolicy = 'forbidden' | 'allowed';
 
 export type LlmExternalToolPolicy = 'forbidden' | 'inherited';
 
+export type LlmToolMode = 'agent' | 'fusion';
+
 export interface LlmVisibleInternalTool {
   type: 'visible_internal_llm_tool';
   tool_name: string;
@@ -48,6 +50,7 @@ export interface LlmVisibleInternalTool {
   description?: string;
   input_schema?: Record<string, unknown>;
   preconditions?: Array<Record<string, unknown>>;
+  tool_mode?: LlmToolMode;
   internal_llm_node_policy?: LlmInternalLlmNodePolicy;
   external_tool_policy?: LlmExternalToolPolicy;
 }
@@ -77,6 +80,7 @@ export const DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY: LlmInternalLlmNodePolicy =
   'forbidden';
 export const DEFAULT_LLM_EXTERNAL_TOOL_POLICY: LlmExternalToolPolicy =
   'forbidden';
+export const DEFAULT_LLM_TOOL_MODE: LlmToolMode = 'agent';
 export const LLM_TOOL_IDENTIFIER_MAX_LENGTH = 64;
 const LLM_TOOL_SOURCE_HANDLE_PREFIX = 'visible_internal_llm_tool:';
 
@@ -310,6 +314,12 @@ export function getLlmToolExternalToolPolicy(
     : DEFAULT_LLM_EXTERNAL_TOOL_POLICY;
 }
 
+export function getLlmToolMode(
+  tool: Pick<LlmVisibleInternalTool, 'tool_mode'>
+): LlmToolMode {
+  return tool.tool_mode === 'fusion' ? 'fusion' : DEFAULT_LLM_TOOL_MODE;
+}
+
 export function getLlmVisibleInternalTools(
   config: Record<string, unknown>
 ): LlmVisibleInternalTool[] {
@@ -347,6 +357,11 @@ export function getLlmVisibleInternalTools(
     const preconditions = recordArray(tool.preconditions);
     if (preconditions.length > 0) {
       registration.preconditions = preconditions;
+    }
+    if (tool.tool_mode === 'fusion') {
+      registration.tool_mode = 'fusion';
+    } else if (tool.tool_mode === 'agent') {
+      registration.tool_mode = 'agent';
     }
     if (tool.internal_llm_node_policy === 'allowed') {
       registration.internal_llm_node_policy = 'allowed';

@@ -169,6 +169,56 @@ fn compile_visible_internal_llm_tool_entry_from_source_handle_edge() {
 }
 
 #[test]
+fn compile_materializes_visible_internal_llm_tool_mode_policies() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "agent_tool",
+            "connector_id": "agent_tool",
+            "tool_mode": "agent",
+            "external_tool_policy": "inherited",
+            "input_schema": { "type": "object" }
+        },
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "fusion_tool",
+            "connector_id": "fusion_tool",
+            "tool_mode": "fusion",
+            "external_tool_policy": "inherited",
+            "input_schema": { "type": "object" }
+        },
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "legacy_tool",
+            "connector_id": "legacy_tool",
+            "external_tool_policy": "inherited",
+            "input_schema": { "type": "object" }
+        }
+    ]);
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+    let tools = plan.nodes["node-llm"].config["visible_internal_llm_tools"]
+        .as_array()
+        .expect("visible tools should compile as an array");
+
+    assert_eq!(tools[0]["tool_mode"], json!("agent"));
+    assert_eq!(tools[0]["external_tool_policy"], json!("inherited"));
+    assert_eq!(tools[0]["external_callback_policy"], json!("inherited"));
+    assert_eq!(tools[0]["execution_mode"], json!("sequential_resume"));
+    assert_eq!(tools[1]["tool_mode"], json!("fusion"));
+    assert_eq!(tools[1]["external_tool_policy"], json!("forbidden"));
+    assert_eq!(tools[1]["external_callback_policy"], json!("forbidden"));
+    assert_eq!(tools[1]["execution_mode"], json!("bounded_parallel_panel"));
+    assert_eq!(tools[2]["tool_mode"], json!("agent"));
+    assert_eq!(tools[2]["external_tool_policy"], json!("inherited"));
+    assert_eq!(tools[2]["external_callback_policy"], json!("inherited"));
+    assert_eq!(tools[2]["execution_mode"], json!("sequential_resume"));
+}
+
+#[test]
 fn compile_flags_visible_internal_llm_tool_without_tool_result_node() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);
@@ -712,5 +762,29 @@ fn compile_flags_visible_internal_llm_tool_with_invalid_external_tool_policy() {
     assert!(!plan.compile_issues.iter().any(|issue| {
         issue.code == CompileIssueCode::InvalidVisibleInternalLlmTool
             && issue.message.contains("external_tool_policy")
+    }));
+}
+
+#[test]
+fn compile_flags_visible_internal_llm_tool_with_invalid_tool_mode() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "inspect_visible_context",
+            "connector_id": "inspect_visible_context",
+            "tool_mode": "router",
+            "input_schema": { "type": "object" }
+        }
+    ]);
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+
+    assert!(plan.compile_issues.iter().any(|issue| {
+        issue.code == CompileIssueCode::InvalidVisibleInternalLlmTool
+            && issue.node_id == "node-llm"
+            && issue.message.contains("tool_mode")
     }));
 }

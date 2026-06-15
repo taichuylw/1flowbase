@@ -25,7 +25,10 @@ export type BuiltinFlowNodeType =
   | 'loop'
   | 'human_input';
 
-export type FlowNodeType = BuiltinFlowNodeType | 'plugin_node' | 'unresolved_node';
+export type FlowNodeType =
+  | BuiltinFlowNodeType
+  | 'plugin_node'
+  | 'unresolved_node';
 
 export type FlowStartInputType =
   | 'text'
@@ -279,6 +282,10 @@ export interface FlowLlmVisibleInternalToolDocument {
   target_node_id: string;
   description?: string;
   input_schema?: Record<string, unknown>;
+  preconditions?: Array<Record<string, unknown>>;
+  tool_mode?: 'agent' | 'fusion';
+  internal_llm_node_policy?: 'forbidden' | 'allowed';
+  external_tool_policy?: 'forbidden' | 'inherited';
 }
 
 export type DataModelQueryOperator = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte';

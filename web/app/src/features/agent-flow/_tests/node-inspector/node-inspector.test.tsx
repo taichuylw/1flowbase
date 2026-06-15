@@ -253,10 +253,10 @@ describe('NodeInspector core', () => {
       name: '添加工具'
     });
     const mountToolsSwitch = within(mountToolsToolbar).getByRole('switch', {
-      name: '挂载工具'
+      name: '挂载 LLM'
     });
 
-    expect(within(mountToolsToolbar).getByText('挂载工具')).toBeInTheDocument();
+    expect(within(mountToolsToolbar).getByText('挂载 LLM')).toBeInTheDocument();
     expect(
       within(addToolButton).getByTestId(
         'agent-flow-llm-tool-registration-add-icon'
@@ -276,7 +276,7 @@ describe('NodeInspector core', () => {
     ).toMatch(
       /\.agent-flow-llm-tool-registrations__switch\.ant-switch\s*\{[^}]*margin-left:\s*auto;/s
     );
-    expect(within(mountToolsField).getAllByText('挂载工具')).toHaveLength(1);
+    expect(within(mountToolsField).getAllByText('挂载 LLM')).toHaveLength(1);
     expect(
       screen.queryByRole('columnheader', { name: '目标 LLM' })
     ).not.toBeInTheDocument();
@@ -288,8 +288,11 @@ describe('NodeInspector core', () => {
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
 
     expect(within(dialog).queryByLabelText('目标 LLM')).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('combobox', { name: '工具模式' })
+    ).toBeInTheDocument();
     const internalLlmSwitch = within(dialog).getByRole('switch', {
-      name: '智能路由'
+      name: '允许分支 LLM'
     });
     expect(internalLlmSwitch).not.toBeChecked();
     const saveToolButton = within(dialog).getByRole('button', {
@@ -324,6 +327,7 @@ describe('NodeInspector core', () => {
               connector_id: 'inspect_image',
               target_node_id: 'node-mounted-llm',
               description: 'Inspect uploaded image',
+              tool_mode: 'agent',
               internal_llm_node_policy: 'allowed'
             })
           ]
@@ -350,6 +354,79 @@ describe('NodeInspector core', () => {
       );
     });
     expect(screen.getByText('暂无工具注册')).toBeInTheDocument();
+  });
+
+  test('keeps Fusion mounted tools from saving inherited external tools', async () => {
+    const state = createInitialState();
+    let latestDocument = state.draft.document;
+    const mountedLlm = createNodeDocument('llm', 'node-panel-seed', 720, 240);
+    const llmNodeConfig = getLlmNodeConfig(state.draft.document);
+
+    state.draft.document.graph.nodes.push(mountedLlm);
+    llmNodeConfig.visible_internal_llm_tools_enabled = true;
+    llmNodeConfig.visible_internal_llm_tools = [
+      {
+        type: 'visible_internal_llm_tool',
+        tool_name: 'compare_panels',
+        connector_id: 'compare_panels',
+        target_node_id: 'node-panel-seed',
+        description: 'Compare panels',
+        tool_mode: 'fusion',
+        internal_llm_node_policy: 'allowed',
+        external_tool_policy: 'inherited',
+        input_schema: { type: 'object' }
+      }
+    ];
+    state.draft.document.graph.edges.push(
+      createEdgeDocument({
+        id: 'edge-llm-fusion-tool',
+        source: 'node-llm',
+        target: 'node-panel-seed',
+        sourceHandle: 'visible_internal_llm_tool:compare_panels'
+      })
+    );
+
+    renderWithProviders(
+      <AgentFlowEditorStoreProvider initialState={state}>
+        <SelectionSeed nodeId="node-llm" />
+        <DocumentObserver
+          onChange={(document) => {
+            latestDocument = document;
+          }}
+        />
+        <NodeConfigTab />
+      </AgentFlowEditorStoreProvider>
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '编辑 compare_panels' })
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
+
+    expect(
+      within(dialog).getByRole('combobox', { name: '工具模式' })
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('switch', { name: '开放外部工具' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存工具' }));
+
+    await waitFor(() => {
+      expect(getLlmNodeConfig(latestDocument)).toEqual(
+        expect.objectContaining({
+          visible_internal_llm_tools: [
+            expect.objectContaining({
+              tool_name: 'compare_panels',
+              tool_mode: 'fusion',
+              internal_llm_node_policy: 'allowed',
+              external_tool_policy: 'forbidden'
+            })
+          ]
+        })
+      );
+    });
   });
 
   test('edits routed LLM tool input parameters from a full protocol JSON', async () => {
@@ -424,7 +501,9 @@ describe('NodeInspector core', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '编辑 image_llm' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '编辑 image_llm' })
+    );
 
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
     const preconditionsEditor = within(dialog).getByTestId(
@@ -616,7 +695,9 @@ describe('NodeInspector core', () => {
       </AgentFlowEditorStoreProvider>
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: '编辑 image_llm' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '编辑 image_llm' })
+    );
 
     const dialog = await screen.findByRole('dialog', { name: '编辑 工具注册' });
     const preconditionsEditor = within(dialog).getByTestId(

@@ -9,8 +9,14 @@ const VISIBLE_INTERNAL_LLM_TOOL_TYPE: &str = "visible_internal_llm_tool";
 const VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX: &str = "visible_internal_llm_tool:";
 const TOOL_RESULT_NODE_TYPE: &str = "tool_result";
 const INTERNAL_LLM_NODE_POLICY_ALLOWED: &str = "allowed";
+const TOOL_MODE_AGENT: &str = "agent";
+const TOOL_MODE_FUSION: &str = "fusion";
 const EXTERNAL_TOOL_POLICY_FORBIDDEN: &str = "forbidden";
 const EXTERNAL_TOOL_POLICY_INHERITED: &str = "inherited";
+const EXTERNAL_CALLBACK_POLICY_FORBIDDEN: &str = "forbidden";
+const EXTERNAL_CALLBACK_POLICY_INHERITED: &str = "inherited";
+const EXECUTION_MODE_SEQUENTIAL_RESUME: &str = "sequential_resume";
+const EXECUTION_MODE_BOUNDED_PARALLEL_PANEL: &str = "bounded_parallel_panel";
 
 type NodeTopologyBuild = (
     BTreeMap<String, CompiledNode>,
@@ -490,6 +496,7 @@ fn materialize_visible_internal_llm_tool_targets(
             if tool.get("type").and_then(Value::as_str) != Some(VISIBLE_INTERNAL_LLM_TOOL_TYPE) {
                 continue;
             }
+            materialize_visible_internal_llm_tool_policy(tool);
             let connector_id = tool
                 .get("connector_id")
                 .or_else(|| tool.get("connectorId"))
@@ -567,6 +574,18 @@ fn validate_visible_internal_llm_tool_branches(
             let allow_internal_llm = visible_internal_llm_tool_allows_internal_llm_node(tool);
             let connector_id = visible_internal_llm_tool_connector_id(tool)
                 .unwrap_or_else(|| "unknown".to_string());
+            if let Some(mode) = visible_internal_llm_tool_mode_value(tool) {
+                if mode != TOOL_MODE_AGENT && mode != TOOL_MODE_FUSION {
+                    issues.push(CompileIssue {
+                        node_id: node.node_id.clone(),
+                        code: CompileIssueCode::InvalidVisibleInternalLlmTool,
+                        message: format!(
+                            "node {} visible_internal_llm_tool connector {connector_id} has invalid tool_mode {mode}; expected agent or fusion",
+                            node.node_id
+                        ),
+                    });
+                }
+            }
             if let Some(policy) = visible_internal_llm_tool_external_tool_policy_value(tool) {
                 if policy != EXTERNAL_TOOL_POLICY_FORBIDDEN
                     && policy != EXTERNAL_TOOL_POLICY_INHERITED
@@ -653,6 +672,55 @@ fn validate_visible_internal_llm_tool_branches(
     issues
 }
 
+fn materialize_visible_internal_llm_tool_policy(tool: &mut Value) {
+    let configured_mode = visible_internal_llm_tool_mode_value(tool);
+    let mode = configured_mode
+        .as_deref()
+        .filter(|mode| *mode == TOOL_MODE_AGENT || *mode == TOOL_MODE_FUSION)
+        .unwrap_or(TOOL_MODE_AGENT);
+    let existing_external_tool_policy = visible_internal_llm_tool_external_tool_policy_value(tool);
+    let Some(object) = tool.as_object_mut() else {
+        return;
+    };
+
+    if configured_mode.is_none() {
+        object.insert(
+            "tool_mode".to_string(),
+            Value::String(TOOL_MODE_AGENT.to_string()),
+        );
+    }
+    if mode == TOOL_MODE_FUSION {
+        object.insert(
+            "external_tool_policy".to_string(),
+            Value::String(EXTERNAL_TOOL_POLICY_FORBIDDEN.to_string()),
+        );
+        object.insert(
+            "external_callback_policy".to_string(),
+            Value::String(EXTERNAL_CALLBACK_POLICY_FORBIDDEN.to_string()),
+        );
+        object.insert(
+            "execution_mode".to_string(),
+            Value::String(EXECUTION_MODE_BOUNDED_PARALLEL_PANEL.to_string()),
+        );
+        return;
+    }
+
+    if existing_external_tool_policy.is_none() {
+        object.insert(
+            "external_tool_policy".to_string(),
+            Value::String(EXTERNAL_TOOL_POLICY_FORBIDDEN.to_string()),
+        );
+    }
+    object.insert(
+        "external_callback_policy".to_string(),
+        Value::String(EXTERNAL_CALLBACK_POLICY_INHERITED.to_string()),
+    );
+    object.insert(
+        "execution_mode".to_string(),
+        Value::String(EXECUTION_MODE_SEQUENTIAL_RESUME.to_string()),
+    );
+}
+
 fn visible_internal_llm_tool_entries(node: &CompiledNode) -> Vec<&Value> {
     node.config
         .get("visible_internal_llm_tools")
@@ -667,6 +735,15 @@ fn visible_internal_llm_tool_entries(node: &CompiledNode) -> Vec<&Value> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn visible_internal_llm_tool_mode_value(tool: &Value) -> Option<String> {
+    tool.get("tool_mode")
+        .or_else(|| tool.get("toolMode"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 fn visible_internal_llm_tool_connector_id(tool: &Value) -> Option<String> {
