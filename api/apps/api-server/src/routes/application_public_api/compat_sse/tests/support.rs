@@ -115,6 +115,7 @@ pub(super) fn native_run() -> NativeRunResult {
         node_input_payload: json!({}),
         metadata: json!({}),
         answer: None,
+        answer_segments: None,
         required_action: None,
         tool_calls: None,
         usage: None,

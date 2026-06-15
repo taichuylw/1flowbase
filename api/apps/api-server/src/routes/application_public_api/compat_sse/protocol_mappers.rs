@@ -317,6 +317,21 @@ pub(super) fn terminal_answer_deltas_from_run_or_payload(
     run: &NativeRunResult,
     payload: &Value,
 ) -> Vec<TerminalAnswerDelta> {
+    let payload_deltas = terminal_answer_deltas_from_payload(payload);
+    if !payload_deltas.is_empty() {
+        return payload_deltas;
+    }
+
+    if let Some(answer_segments) = run
+        .answer_segments
+        .as_ref()
+        .filter(|segments| !segments.is_empty())
+    {
+        return terminal_answer_deltas_from_payload(&json!({
+            "answer_segments": answer_segments
+        }));
+    }
+
     terminal_answer_text(run, payload)
         .map(|answer| terminal_answer_deltas_from_payload(&json!({ "answer": answer })))
         .unwrap_or_default()
@@ -908,12 +923,12 @@ pub(super) fn anthropic_completed_run_to_sse(
             return events;
         }
     }
-    if let Some(answer) = run.answer.as_ref().filter(|answer| !answer.is_empty()) {
-        let deltas = terminal_answer_deltas_from_payload(&json!({ "answer": answer }));
-        for (index, delta) in deltas.into_iter().enumerate() {
-            let event = terminal_answer_delta_to_runtime_event(run, index as i64 + 1, delta);
-            events.extend(mapper.runtime_event_to_sse(run, event));
-        }
+    for (index, delta) in terminal_answer_deltas_from_run_or_payload(run, &json!({}))
+        .into_iter()
+        .enumerate()
+    {
+        let event = terminal_answer_delta_to_runtime_event(run, index as i64 + 1, delta);
+        events.extend(mapper.runtime_event_to_sse(run, event));
     }
     events.extend(mapper.anthropic_stop_events(run.usage.as_ref()));
     events

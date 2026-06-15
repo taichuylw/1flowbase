@@ -14,9 +14,15 @@ pub(super) fn template_output_payload(
     variable_pool: &Map<String, Value>,
 ) -> Value {
     let mut payload = Map::new();
+    let answer_segments = output_value
+        .as_str()
+        .and_then(answer_segments_value_from_text);
     payload.insert(output_key, output_value);
 
     if node.node_type == "answer" {
+        if let Some(answer_segments) = answer_segments {
+            payload.insert(ANSWER_SEGMENTS_KEY.to_string(), answer_segments);
+        }
         if let Some(sys) = variable_pool.get("sys") {
             payload.insert("sys".to_string(), sys.clone());
         }
@@ -135,8 +141,12 @@ pub(super) fn build_successful_llm_execution(
 ) -> Result<LlmNodeExecution> {
     let raw_text = final_content.unwrap_or_default();
     let answer_text = strip_llm_think_tags(&raw_text);
+    let answer_segments = answer_segments_value_from_text(&raw_text);
     let mut executor_output = Map::new();
     executor_output.insert("text".to_string(), Value::String(raw_text));
+    if let Some(answer_segments) = answer_segments {
+        executor_output.insert(ANSWER_SEGMENTS_KEY.to_string(), answer_segments);
+    }
     executor_output.insert(
         "provider_route".to_string(),
         build_llm_provider_route_payload(runtime),

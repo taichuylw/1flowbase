@@ -14,6 +14,7 @@ fn openai_response_projects_native_tool_calls() {
         node_input_payload: json!({}),
         metadata: json!({}),
         answer: None,
+        answer_segments: None,
         required_action: None,
         tool_calls: Some(json!([
             {
@@ -58,6 +59,7 @@ fn openai_response_filters_internal_visible_llm_tool_calls() {
         node_input_payload: json!({}),
         metadata: json!({}),
         answer: Some("visible internal LLM output".to_string()),
+        answer_segments: None,
         required_action: Some(NativeRequiredAction {
             action_type: "submit_tool_outputs".to_string(),
             payload: json!({
@@ -121,6 +123,7 @@ fn openai_response_encodes_callback_task_id_into_tool_call_ids() {
         node_input_payload: json!({}),
         metadata: json!({}),
         answer: Some("need tool".to_string()),
+        answer_segments: None,
         required_action: Some(NativeRequiredAction {
             action_type: "submit_tool_outputs".to_string(),
             payload: json!({ "callback_task_id": callback_task_id }),
@@ -257,6 +260,7 @@ fn openai_responses_response_projects_native_tool_calls_with_encoded_call_id() {
         node_input_payload: json!({}),
         metadata: json!({}),
         answer: Some("".to_string()),
+        answer_segments: None,
         required_action: Some(NativeRequiredAction {
             action_type: "submit_tool_outputs".to_string(),
             payload: json!({ "callback_task_id": callback_task_id, "callback_kind": "llm_tool_calls" }),

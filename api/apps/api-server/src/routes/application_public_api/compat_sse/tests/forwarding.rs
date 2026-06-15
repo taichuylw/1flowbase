@@ -7,7 +7,7 @@ use super::super::protocol_mappers::{
 use super::super::*;
 use super::support::*;
 use control_plane::{
-    application_public_api::native::NativeRequiredAction,
+    application_public_api::native::{AnswerProjectionSegment, NativeRequiredAction},
     ports::{RuntimeEventDurability, RuntimeEventPayload, RuntimeEventSource},
 };
 use serde_json::json;
@@ -222,6 +222,43 @@ fn openai_delta_chunk_maps_reasoning_to_reasoning_content() {
     assert_eq!(payload["choices"][0]["delta"].get("content"), None);
 }
 
+#[tokio::test]
+async fn openai_terminal_fallback_projects_structured_answer_segments() {
+    let mut run = native_run();
+    run.answer = Some("<think>旧思考</think>旧回答".to_string());
+    run.answer_segments = Some(vec![
+        AnswerProjectionSegment::reasoning("结构化思考"),
+        AnswerProjectionSegment::message("结构化回答"),
+    ]);
+    let mut mapper = OpenAiChatStreamMapper::new(
+        "deepseek-v4-pro".to_string(),
+        "chatcmpl-test".to_string(),
+        true,
+    );
+
+    let events = mapper.runtime_event_to_sse(
+        &run,
+        RuntimeEventEnvelope::new(
+            run.id,
+            1,
+            debug_stream_events::flow_finished(run.id, json!({})),
+        ),
+    );
+    let response = completed_compatible_stream(events);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(
+        body.contains("\"reasoning_content\":\"结构化思考\""),
+        "{body}"
+    );
+    assert!(body.contains("\"content\":\"结构化回答\""), "{body}");
+    assert!(!body.contains("旧思考"), "{body}");
+    assert!(!body.contains("旧回答"), "{body}");
+}
+
 #[test]
 fn anthropic_delta_payload_ignores_reasoning_delta() {
     let payload = anthropic_delta_payload(0, "reasoning_delta", "先分析用户问题".to_string());
@@ -245,6 +282,28 @@ async fn anthropic_completed_stream_suppresses_thinking_and_streams_visible_text
     assert!(!body.contains("\"type\":\"thinking\""), "{body}");
     assert!(!body.contains("\"type\":\"thinking_delta\""), "{body}");
     assert!(!body.contains("<think>"), "{body}");
+}
+
+#[tokio::test]
+async fn anthropic_completed_stream_uses_structured_answer_segments_for_visible_text() {
+    let mut run = native_run();
+    run.status = NativeRunStatus::Succeeded;
+    run.answer = Some("<think>旧思考</think>旧回答".to_string());
+    run.answer_segments = Some(vec![
+        AnswerProjectionSegment::reasoning("结构化思考"),
+        AnswerProjectionSegment::message("结构化回答"),
+    ]);
+
+    let response = completed_compatible_stream(anthropic_completed_run_to_sse(&run, "claude"));
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("\"text\":\"结构化回答\""), "{body}");
+    assert!(!body.contains("结构化思考"), "{body}");
+    assert!(!body.contains("旧思考"), "{body}");
+    assert!(!body.contains("旧回答"), "{body}");
 }
 
 #[tokio::test]

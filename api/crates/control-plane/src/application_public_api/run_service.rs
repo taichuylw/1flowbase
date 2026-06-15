@@ -766,6 +766,36 @@ mod tests {
     }
 
     #[test]
+    fn native_result_from_run_detail_projects_structured_answer_segments() {
+        let detail = domain::ApplicationRunDetail {
+            flow_run: test_flow_run(json!({
+                "answer": "<think>旧思考</think>旧回答",
+                "answer_segments": [
+                    { "kind": "reasoning", "text": "结构化思考" },
+                    { "kind": "message", "text": "结构化回答" }
+                ]
+            })),
+            node_runs: Vec::new(),
+            checkpoints: Vec::new(),
+            callback_tasks: Vec::new(),
+            events: Vec::new(),
+            stitched_trace: Vec::new(),
+        };
+
+        let run = native_result_from_run_detail(&detail, json!({}));
+
+        assert_eq!(run.answer, Some("<think>旧思考</think>旧回答".to_string()));
+        assert_eq!(
+            serde_json::to_value(run.answer_segments.expect("segments should be projected"))
+                .expect("segments should serialize"),
+            json!([
+                { "kind": "reasoning", "text": "结构化思考" },
+                { "kind": "message", "text": "结构化回答" }
+            ])
+        );
+    }
+
+    #[test]
     fn conversation_history_rehydration_filters_internal_claude_code_payloads() {
         let messages = vec![
             conversation_message(

@@ -116,6 +116,13 @@ async fn llm_output_payload_keeps_think_tags_in_standard_text_content() {
         trace.output_payload["text"],
         json!("<think>先分析用户问题</think>正式回答")
     );
+    assert_eq!(
+        trace.output_payload["answer_segments"],
+        json!([
+            { "kind": "reasoning", "text": "先分析用户问题" },
+            { "kind": "message", "text": "正式回答" }
+        ])
+    );
     assert!(trace.output_payload.get("reasoning_content").is_none());
     assert!(trace.debug_payload.get("reasoning_content").is_none());
     assert!(trace.output_payload.get("message").is_none());
@@ -200,9 +207,48 @@ async fn llm_output_payload_merges_reasoning_deltas_into_dify_style_text() {
         trace.output_payload["text"],
         json!("<think>先分析</think>正式回答")
     );
+    assert_eq!(
+        trace.output_payload["answer_segments"],
+        json!([
+            { "kind": "reasoning", "text": "先分析" },
+            { "kind": "message", "text": "正式回答" }
+        ])
+    );
     assert!(trace.output_payload.get("reasoning_content").is_none());
     assert!(trace.debug_payload.get("reasoning_content").is_none());
     assert!(trace.output_payload.get("message").is_none());
+}
+
+#[tokio::test]
+async fn answer_node_output_payload_projects_segments_from_llm_text() {
+    let outcome = start_flow_debug_run(
+        &llm_answer_plan(),
+        &json!({
+            "node-start": {
+                "query": "hello"
+            }
+        }),
+        &ReasoningDeltaProviderInvoker,
+    )
+    .await
+    .unwrap();
+    let trace = outcome
+        .node_traces
+        .into_iter()
+        .find(|trace| trace.node_id == "node-answer")
+        .expect("answer trace should exist");
+
+    assert_eq!(
+        trace.output_payload["answer"],
+        json!("<think>先分析</think>正式回答")
+    );
+    assert_eq!(
+        trace.output_payload["answer_segments"],
+        json!([
+            { "kind": "reasoning", "text": "先分析" },
+            { "kind": "message", "text": "正式回答" }
+        ])
+    );
 }
 
 #[tokio::test]
