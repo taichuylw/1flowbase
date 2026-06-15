@@ -327,7 +327,7 @@ fn to_import_response(imported: ImportAgentFlowTemplateResult) -> ImportAgentFlo
             icon_background: imported.application.icon_background,
             created_by: imported.application.created_by.to_string(),
             updated_at: match imported.application.updated_at.format(&Rfc3339) {
-                Ok(value) => value,
+                Ok(updated_at) => updated_at,
                 Err(_) => imported.application.updated_at.to_string(),
             },
         },

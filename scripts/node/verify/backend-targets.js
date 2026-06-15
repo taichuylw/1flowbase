@@ -130,10 +130,36 @@ const BACKEND_CONSISTENCY_TARGETS = [
     filter: 'file_management_routes',
   },
 ];
+// Protects issue #916: image_llm routed media retry guidance, text-model fallback,
+// and multimodal media preservation. Do not weaken, remove, or rename this gate
+// without explicit user consent.
+const IMAGE_LLM_VISION_GATE_TARGETS = [
+  {
+    label: 'cargo-test-image-llm-vision-control-plane-user-media-fallback',
+    packageName: 'control-plane',
+    filter: 'orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal',
+  },
+  {
+    label: 'cargo-test-image-llm-vision-control-plane-multimodal-preserves-media',
+    packageName: 'control-plane',
+    filter: 'orchestration_runtime_keeps_user_media_when_configured_model_supports_multimodal',
+  },
+  {
+    label: 'cargo-test-image-llm-vision-control-plane-routed-media-guidance',
+    packageName: 'control-plane',
+    filter: 'orchestration_runtime_textualizes_routed_media_as_retry_guidance_for_text_models',
+  },
+  {
+    label: 'cargo-test-image-llm-vision-runtime-visible-media-tool',
+    packageName: 'orchestration-runtime',
+    filter: 'visible_internal_llm_tool_media',
+  },
+];
 
 module.exports = {
   BACKEND_CONSISTENCY_TARGETS,
   BACKEND_CI_TEST_SHARDS,
   BACKEND_SHARDS,
   BACKEND_TEST_SHARDS,
+  IMAGE_LLM_VISION_GATE_TARGETS,
 };

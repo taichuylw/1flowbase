@@ -23,11 +23,20 @@ const {
   BACKEND_CI_TEST_SHARDS,
   BACKEND_SHARDS,
   BACKEND_TEST_SHARDS,
+  IMAGE_LLM_VISION_GATE_TARGETS,
 } = require('./backend-targets.js');
 
 const VALID_COVERAGE_TARGETS = new Set(['frontend', 'backend', 'all']);
 const VALID_REPO_TARGETS = new Set(['tooling', 'frontend', 'frontend-pr', 'backend', 'all']);
-const VALID_BACKEND_TARGETS = new Set(['all', 'static', 'fmt', 'clippy', 'test', 'check']);
+const VALID_BACKEND_TARGETS = new Set([
+  'all',
+  'static',
+  'fmt',
+  'clippy',
+  'test',
+  'check',
+  'image-llm-vision',
+]);
 const VERIFY_COMMANDS = new Set(['backend', 'backend-consistency', 'ci', 'coverage', 'repo']);
 const FRONTEND_METRICS = ['lines', 'functions', 'statements', 'branches'];
 const COVERAGE_SCOPE_LABEL = '1flowbase-verify-coverage';
@@ -165,6 +174,25 @@ function buildBackendCargoCommand({
   throw new Error(`Unsupported backend cargo target: ${target}`);
 }
 
+function buildImageLlmVisionGateCommands({ cargoJobs, cargoTestThreads }) {
+  return IMAGE_LLM_VISION_GATE_TARGETS.map((target) => ({
+    label: target.label,
+    command: 'cargo',
+    args: [
+      'test',
+      '-p',
+      target.packageName,
+      '--jobs',
+      String(cargoJobs),
+      target.filter,
+      '--',
+      `--test-threads=${cargoTestThreads}`,
+    ],
+    cwd: 'api',
+    env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
+  }));
+}
+
 function buildBackendFmtCommand({ cargoJobs }) {
   return {
     label: 'cargo-fmt',
@@ -195,10 +223,15 @@ function buildBackendCommands({
     return [buildBackendCargoCommand({ target, cargoJobs, cargoTestThreads, shard })];
   }
 
+  if (target === 'image-llm-vision') {
+    return buildImageLlmVisionGateCommands({ cargoJobs, cargoTestThreads });
+  }
+
   return [
     buildRustBackendStaticGateCommand({ repoRoot, env }),
     buildBackendFmtCommand({ cargoJobs }),
     buildBackendCargoCommand({ target: 'clippy', cargoJobs, cargoTestThreads }),
+    ...buildImageLlmVisionGateCommands({ cargoJobs, cargoTestThreads }),
     buildBackendCargoCommand({ target: 'test', cargoJobs, cargoTestThreads }),
     buildBackendCargoCommand({ target: 'check', cargoJobs, cargoTestThreads }),
   ];
@@ -230,7 +263,7 @@ function parseBackendCliArgs(argv = []) {
 
 function usageBackend(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/verify-backend.js [all|static|fmt|clippy|test|check] [core-libs|runtime-storage|apps|control-plane|api-server|plugin-runner]\n'
+    'Usage: node scripts/node/verify-backend.js [all|static|fmt|clippy|test|check|image-llm-vision] [core-libs|runtime-storage|apps|control-plane|api-server|plugin-runner]\n'
       + 'Runs backend Rust gates, optionally restricted to a CI shard. Package-level app shards are supported for test.\n'
   );
 }
@@ -1098,6 +1131,7 @@ module.exports = {
   BACKEND_TEST_SHARDS,
   buildBackendCommands,
   buildBackendConsistencyCommands,
+  buildImageLlmVisionGateCommands,
   runBackendConsistencyCommandSequence,
   buildCiCommands,
   buildCoverageBackendCleanupCommands,
@@ -1108,6 +1142,7 @@ module.exports = {
   collectBackendCoverageFailures,
   collectFrontendCoverageFailures,
   ensureCargoLlvmCovInstalled,
+  IMAGE_LLM_VISION_GATE_TARGETS,
   main,
   parseBackendCliArgs,
   parseCoverageCliArgs,

@@ -42,6 +42,82 @@ test('verify-backend buildCommands uses independent cargo jobs and cargo test th
       },
     },
     {
+      label: 'cargo-test-image-llm-vision-control-plane-user-media-fallback',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'control-plane',
+        '--jobs',
+        '4',
+        'orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
+      label: 'cargo-test-image-llm-vision-control-plane-multimodal-preserves-media',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'control-plane',
+        '--jobs',
+        '4',
+        'orchestration_runtime_keeps_user_media_when_configured_model_supports_multimodal',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
+      label: 'cargo-test-image-llm-vision-control-plane-routed-media-guidance',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'control-plane',
+        '--jobs',
+        '4',
+        'orchestration_runtime_textualizes_routed_media_as_retry_guidance_for_text_models',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
+      label: 'cargo-test-image-llm-vision-runtime-visible-media-tool',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'orchestration-runtime',
+        '--jobs',
+        '4',
+        'visible_internal_llm_tool_media',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
       label: 'cargo-test',
       command: 'cargo',
       args: ['test', '--workspace', '--jobs', '4', '--', '--test-threads=2'],
@@ -136,6 +212,76 @@ test('verify-backend can build targeted shard commands for parallel CI', () => {
       },
     ]
   );
+
+  assert.deepEqual(parseBackendCliArgs(['image-llm-vision']), {
+    help: false,
+    target: 'image-llm-vision',
+    shard: null,
+  });
+
+  assert.deepEqual(
+    buildCommands({
+      cargoJobs: 4,
+      cargoTestThreads: 2,
+      repoRoot: '/repo-root',
+      env: {},
+      target: 'image-llm-vision',
+    }).map((command) => ({ label: command.label, args: command.args })),
+    [
+      {
+        label: 'cargo-test-image-llm-vision-control-plane-user-media-fallback',
+        args: [
+          'test',
+          '-p',
+          'control-plane',
+          '--jobs',
+          '4',
+          'orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal',
+          '--',
+          '--test-threads=2',
+        ],
+      },
+      {
+        label: 'cargo-test-image-llm-vision-control-plane-multimodal-preserves-media',
+        args: [
+          'test',
+          '-p',
+          'control-plane',
+          '--jobs',
+          '4',
+          'orchestration_runtime_keeps_user_media_when_configured_model_supports_multimodal',
+          '--',
+          '--test-threads=2',
+        ],
+      },
+      {
+        label: 'cargo-test-image-llm-vision-control-plane-routed-media-guidance',
+        args: [
+          'test',
+          '-p',
+          'control-plane',
+          '--jobs',
+          '4',
+          'orchestration_runtime_textualizes_routed_media_as_retry_guidance_for_text_models',
+          '--',
+          '--test-threads=2',
+        ],
+      },
+      {
+        label: 'cargo-test-image-llm-vision-runtime-visible-media-tool',
+        args: [
+          'test',
+          '-p',
+          'orchestration-runtime',
+          '--jobs',
+          '4',
+          'visible_internal_llm_tool_media',
+          '--',
+          '--test-threads=2',
+        ],
+      },
+    ]
+  );
 });
 
 test('main routes backend verification through the heavy managed gate', async () => {
@@ -216,10 +362,14 @@ test('verify-backend limits cargo jobs to half of available CPU and serializes t
     .trim()
     .split('\n');
 
-  assert.equal(invocations.length, 4);
+  assert.equal(invocations.length, 8);
   assert.match(invocations[1], new RegExp(`clippy --workspace --all-targets --jobs ${expectedParallelism} -- -D warnings`));
-  assert.match(invocations[2], new RegExp(`test --workspace --jobs ${expectedParallelism} -- --test-threads=1`));
-  assert.match(invocations[3], new RegExp(`check --workspace --jobs ${expectedParallelism}`));
+  assert.match(invocations[2], new RegExp(`test -p control-plane --jobs ${expectedParallelism} orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal -- --test-threads=1`));
+  assert.match(invocations[3], new RegExp(`test -p control-plane --jobs ${expectedParallelism} orchestration_runtime_keeps_user_media_when_configured_model_supports_multimodal -- --test-threads=1`));
+  assert.match(invocations[4], new RegExp(`test -p control-plane --jobs ${expectedParallelism} orchestration_runtime_textualizes_routed_media_as_retry_guidance_for_text_models -- --test-threads=1`));
+  assert.match(invocations[5], new RegExp(`test -p orchestration-runtime --jobs ${expectedParallelism} visible_internal_llm_tool_media -- --test-threads=1`));
+  assert.match(invocations[6], new RegExp(`test --workspace --jobs ${expectedParallelism} -- --test-threads=1`));
+  assert.match(invocations[7], new RegExp(`check --workspace --jobs ${expectedParallelism}`));
 
   const warningLogPath = path.join(warningOutputDir, 'verify-backend.warnings.log');
   assert.equal(fs.existsSync(warningLogPath), true);

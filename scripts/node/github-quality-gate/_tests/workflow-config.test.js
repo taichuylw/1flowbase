@@ -108,6 +108,7 @@ test("verify workflow runs lightweight merge gates before one aggregate report",
   assert.match(workflow, /fail-fast: false/u);
   assert.match(workflow, /- repo-backend-static/u);
   assert.match(workflow, /- repo-backend-fmt/u);
+  assert.match(workflow, /- repo-backend-image-llm-vision/u);
   assert.match(workflow, /- repo-backend-check-core-libs/u);
   assert.match(workflow, /- repo-backend-check-runtime-storage/u);
   assert.match(workflow, /- repo-backend-check-apps/u);
@@ -132,7 +133,7 @@ test("verify workflow runs lightweight merge gates before one aggregate report",
   assert.match(workflow, /name: test-governance-repo-tooling/u);
   assert.match(workflow, /name: test-governance-repo-frontend-pr/u);
   assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
-  assert.match(workflow, /INPUT_EXPECTED_SCOPES: repo-tooling,repo-frontend-pr,repo-backend-static,repo-backend-fmt,repo-backend-check-core-libs,repo-backend-check-runtime-storage,repo-backend-check-apps/u);
+  assert.match(workflow, /INPUT_EXPECTED_SCOPES: repo-tooling,repo-frontend-pr,repo-backend-static,repo-backend-fmt,repo-backend-image-llm-vision,repo-backend-check-core-libs,repo-backend-check-runtime-storage,repo-backend-check-apps/u);
   assert.match(
     workflow,
     /INPUT_PUBLISH_PR_COMMENT: \$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}/u,
@@ -376,6 +377,7 @@ test("quality gate workflow supports dispatch targets and nightly latest CI defa
     workflow,
     /environment: \$\{\{ github\.event_name == 'schedule' && env\.QUALITY_GATE_SCHEDULED_ENVIRONMENT \|\| inputs\.environment \}\}/u,
   );
+  assert.match(workflow, /- repo-backend-image-llm-vision/u);
 });
 
 test("quality gate workflow runs ci scope as parallel component gates before one published aggregate report", () => {
@@ -394,6 +396,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
     /repo-backend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u,
   );
   assert.match(workflow, /- repo-backend-static/u);
+  assert.match(workflow, /- repo-backend-image-llm-vision/u);
   assert.match(workflow, /- repo-backend-clippy-runtime-storage/u);
   assert.match(workflow, /- repo-backend-test-control-plane/u);
   assert.match(workflow, /- repo-backend-test-api-server/u);
@@ -442,6 +445,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /scope: container-images/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
+  assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*repo-backend-image-llm-vision/u);
   assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*container-images/u);
   assert.match(
     workflow,

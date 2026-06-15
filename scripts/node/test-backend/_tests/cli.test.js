@@ -15,6 +15,82 @@ test('test-backend buildCommands uses independent cargo jobs and cargo test thre
       cwd: '/repo-root',
     },
     {
+      label: 'cargo-test-image-llm-vision-control-plane-user-media-fallback',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'control-plane',
+        '--jobs',
+        '4',
+        'orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
+      label: 'cargo-test-image-llm-vision-control-plane-multimodal-preserves-media',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'control-plane',
+        '--jobs',
+        '4',
+        'orchestration_runtime_keeps_user_media_when_configured_model_supports_multimodal',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
+      label: 'cargo-test-image-llm-vision-control-plane-routed-media-guidance',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'control-plane',
+        '--jobs',
+        '4',
+        'orchestration_runtime_textualizes_routed_media_as_retry_guidance_for_text_models',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
+      label: 'cargo-test-image-llm-vision-runtime-visible-media-tool',
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        'orchestration-runtime',
+        '--jobs',
+        '4',
+        'visible_internal_llm_tool_media',
+        '--',
+        '--test-threads=2',
+      ],
+      cwd: 'api',
+      env: {
+        CARGO_BUILD_JOBS: '4',
+        CARGO_INCREMENTAL: '0',
+      },
+    },
+    {
       label: 'cargo-test',
       command: 'cargo',
       args: ['test', '--workspace', '--jobs', '4', '--', '--test-threads=2'],
@@ -115,8 +191,28 @@ test('test-backend main writes advisory warning output under tmp/test-governance
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 2);
-  assert.deepEqual(calls[1].args, ['test', '--workspace', '--jobs', '1', '--', '--test-threads=1']);
+  assert.equal(calls.length, 6);
+  assert.deepEqual(calls[1].args, [
+    'test',
+    '-p',
+    'control-plane',
+    '--jobs',
+    '1',
+    'orchestration_runtime_textualizes_user_media_when_selected_model_is_not_multimodal',
+    '--',
+    '--test-threads=1',
+  ]);
+  assert.deepEqual(calls[4].args, [
+    'test',
+    '-p',
+    'orchestration-runtime',
+    '--jobs',
+    '1',
+    'visible_internal_llm_tool_media',
+    '--',
+    '--test-threads=1',
+  ]);
+  assert.deepEqual(calls[5].args, ['test', '--workspace', '--jobs', '1', '--', '--test-threads=1']);
 
   const warningLogPath = path.join(repoRoot, 'tmp', 'test-governance', 'test-backend.warnings.log');
   assert.equal(fs.existsSync(warningLogPath), true);
