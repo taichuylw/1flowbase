@@ -389,9 +389,15 @@ node scripts/node/verify.js repo
 
 ---
 
-## 鸣谢
+## 友情链接
 
-感谢 [Linux.do](https://linux.do/) — 学 AI，上 L 站。
+[Linux.do](https://linux.do/) — 学 AI，上 L 站。
+[Aionui](https://github.com/iOfficeAI/AionUi) — 手机远程控制ai干活，token依赖患者福音
+[OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) -专为 AI 智能体设计的 Office 套件 
+[deepseek-pp](https://github.com/zhu1090093659/deepseek-pp) —  DeepSeek 网页对话浏览器扩展插件
+[MuseAI](https://github.com/yejiming/MuseAI) - 本地 AI 伴侣、文字冒险与穿书互动应用
+[FrontAgent](https://github.com/FrontAgent/FrontAgent) - 专为前端工程设计的 AI Agent 系统
+[RedBox](https://github.com/Jamailar/RedBox) - 面向小红书创作者的本地化 AI 创作工作台
 
 ---
 

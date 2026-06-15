@@ -389,9 +389,15 @@ Project guidelines:
 
 ---
 
-## Acknowledgements
+## Friend Links
 
-Thanks to [Linux.do](https://linux.do/) — Learn AI on L-Station.
+[Linux.do](https://linux.do/) — Learn AI, on L Station.  
+[Aionui](https://github.com/iOfficeAI/AionUi) — Remotely control AI to work via mobile phone, a lifesaver for token-dependent patients.  
+[OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) — Office suite designed for AI agents.  
+[deepseek-pp](https://github.com/zhu1090093659/deepseek-pp) — DeepSeek web chat browser extension.  
+[MuseAI](https://github.com/yejiming/MuseAI) — Local AI companion, text adventure, and story immersion app.  
+[FrontAgent](https://github.com/FrontAgent/FrontAgent) — AI Agent system designed specifically for front-end engineering.  
+[RedBox](https://github.com/Jamailar/RedBox) — Localized AI creative workbench for Xiaohongshu creators.
 
 ---
 
