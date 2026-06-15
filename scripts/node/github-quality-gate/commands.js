@@ -15,6 +15,7 @@ const REPO_BACKEND_SHARDS_BY_TARGET = {
 const REPO_BACKEND_COMPONENT_SCOPES = [
   'repo-backend-static',
   'repo-backend-fmt',
+  'repo-backend-image-llm-vision',
   ...REPO_BACKEND_SHARD_TARGETS.flatMap((target) =>
     REPO_BACKEND_SHARDS_BY_TARGET[target].map((shard) => `repo-backend-${target}-${shard.key}`)
   ),
@@ -140,6 +141,14 @@ function buildGateCommand({ repoRoot, scope }) {
     return {
       command,
       args: [resolveCliEntry(repoRoot, 'verify-backend'), 'fmt'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'repo-backend-image-llm-vision') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-backend'), 'image-llm-vision'],
       cwd: repoRoot,
     };
   }

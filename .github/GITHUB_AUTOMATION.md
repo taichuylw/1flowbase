@@ -143,6 +143,7 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `repo-backend` | `node scripts/node/verify-repo.js backend` |
 | `repo-backend-static` | `node scripts/node/verify-backend.js static` |
 | `repo-backend-fmt` | `node scripts/node/verify-backend.js fmt` |
+| `repo-backend-image-llm-vision` | `node scripts/node/verify-backend.js image-llm-vision` |
 | `repo-backend-clippy-core-libs` | `node scripts/node/verify-backend.js clippy core-libs` |
 | `repo-backend-clippy-runtime-storage` | `node scripts/node/verify-backend.js clippy runtime-storage` |
 | `repo-backend-clippy-apps` | `node scripts/node/verify-backend.js clippy apps` |

@@ -85,6 +85,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend-image-llm-vision' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js'), 'image-llm-vision'],
+    cwd: repoRoot,
+  });
+
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'repo-backend-test-api-server' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'verify-backend.js'), 'test', 'api-server'],

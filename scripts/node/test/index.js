@@ -11,6 +11,7 @@ const {
 } = require('../testing/warning-capture.js');
 const { loadVerifyRuntimeConfig } = require('../testing/verify-runtime.js');
 const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
+const { IMAGE_LLM_VISION_GATE_TARGETS } = require('../verify/backend-targets.js');
 
 const FRONTEND_LAYERS = new Set(['fast', 'pr', 'full', 'page-regression']);
 const TEST_COMMANDS = new Set(['backend', 'contracts', 'frontend', 'scripts']);
@@ -40,6 +41,22 @@ function buildRustBackendStaticGateCommand({ repoRoot, env = process.env }) {
 function buildBackendCommands({ cargoJobs, cargoTestThreads, repoRoot = getRepoRoot(), env = process.env }) {
   return [
     buildRustBackendStaticGateCommand({ repoRoot, env }),
+    ...IMAGE_LLM_VISION_GATE_TARGETS.map((target) => ({
+      label: target.label,
+      command: 'cargo',
+      args: [
+        'test',
+        '-p',
+        target.packageName,
+        '--jobs',
+        String(cargoJobs),
+        target.filter,
+        '--',
+        `--test-threads=${cargoTestThreads}`,
+      ],
+      cwd: 'api',
+      env: buildCargoCommandEnv({ cargoParallelism: cargoJobs, disableIncremental: true }),
+    })),
     {
       label: 'cargo-test',
       command: 'cargo',
