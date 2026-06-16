@@ -417,6 +417,10 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   );
   assert.match(
     workflow,
+    /state-protocols-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u,
+  );
+  assert.match(
+    workflow,
     /container-images-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && \(inputs\.scope == 'ci' \|\| inputs\.scope == 'container-images'\)\) \}\}/u,
   );
   assert.match(workflow, /- coverage-backend-control-plane/u);
@@ -432,6 +436,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
     workflow,
     /aggregate:\n(?:.*\n)*?\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate/u,
   );
+  assert.match(workflow, /- state-protocols-gate/u);
   assert.match(workflow, /- container-images-gate/u);
   assert.match(workflow, /scope: repo-tooling/u);
   assert.match(workflow, /scope: repo-frontend/u);
@@ -442,10 +447,12 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   );
   assert.match(workflow, /scope: backend-consistency/u);
   assert.match(workflow, /scope: coverage-frontend/u);
+  assert.match(workflow, /scope: state-protocols/u);
   assert.match(workflow, /scope: container-images/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
   assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*repo-backend-image-llm-vision/u);
+  assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*state-protocols/u);
   assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*container-images/u);
   assert.match(
     workflow,
@@ -456,6 +463,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
   assert.match(workflow, /name: test-governance-coverage-frontend/u);
+  assert.match(workflow, /name: test-governance-state-protocols/u);
   assert.match(workflow, /name: test-governance-container-images/u);
   assert.match(workflow, /name: test-governance-artifacts/u);
 });
