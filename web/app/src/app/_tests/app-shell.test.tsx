@@ -83,7 +83,7 @@ describe('App shell', () => {
         within(primaryNavigation).getByRole('link', { name: '子系统' })
       ).toBeInTheDocument();
       expect(
-        within(primaryNavigation).getByRole('link', { name: '工具' })
+        within(primaryNavigation).getByRole('link', { name: '模板' })
       ).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: '设置' })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: 'Captain Root' })).toBeInTheDocument();
