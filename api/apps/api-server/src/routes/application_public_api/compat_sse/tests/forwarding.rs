@@ -260,14 +260,17 @@ async fn openai_terminal_fallback_projects_structured_answer_segments() {
 }
 
 #[test]
-fn anthropic_delta_payload_ignores_reasoning_delta() {
+fn anthropic_delta_payload_maps_reasoning_to_thinking_delta() {
     let payload = anthropic_delta_payload(0, "reasoning_delta", "先分析用户问题".to_string());
 
-    assert_eq!(payload, None);
+    let (event_name, payload) = payload.expect("reasoning delta should map to Anthropic thinking");
+    assert_eq!(event_name, "content_block_delta");
+    assert_eq!(payload["delta"]["type"], json!("thinking_delta"));
+    assert_eq!(payload["delta"]["thinking"], json!("先分析用户问题"));
 }
 
 #[tokio::test]
-async fn anthropic_completed_stream_suppresses_thinking_and_streams_visible_text() {
+async fn anthropic_completed_stream_projects_thinking_and_visible_text() {
     let mut run = native_run();
     run.status = NativeRunStatus::Succeeded;
     run.answer = Some("<think>先分析</think>\n最终回答".to_string());
@@ -277,15 +280,16 @@ async fn anthropic_completed_stream_suppresses_thinking_and_streams_visible_text
         .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
+    assert!(body.contains("\"type\":\"thinking\""), "{body}");
+    assert!(body.contains("\"type\":\"thinking_delta\""), "{body}");
+    assert!(body.contains("\"thinking\":\"先分析\""), "{body}");
     assert!(body.contains("\"type\":\"text_delta\""), "{body}");
     assert!(body.contains("\"text\":\"\\n最终回答\""), "{body}");
-    assert!(!body.contains("\"type\":\"thinking\""), "{body}");
-    assert!(!body.contains("\"type\":\"thinking_delta\""), "{body}");
     assert!(!body.contains("<think>"), "{body}");
 }
 
 #[tokio::test]
-async fn anthropic_completed_stream_uses_structured_answer_segments_for_visible_text() {
+async fn anthropic_completed_stream_uses_structured_answer_segments_for_thinking_and_text() {
     let mut run = native_run();
     run.status = NativeRunStatus::Succeeded;
     run.answer = Some("<think>旧思考</think>旧回答".to_string());
@@ -300,14 +304,15 @@ async fn anthropic_completed_stream_uses_structured_answer_segments_for_visible_
         .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
+    assert!(body.contains("\"type\":\"thinking_delta\""), "{body}");
+    assert!(body.contains("\"thinking\":\"结构化思考\""), "{body}");
     assert!(body.contains("\"text\":\"结构化回答\""), "{body}");
-    assert!(!body.contains("结构化思考"), "{body}");
     assert!(!body.contains("旧思考"), "{body}");
     assert!(!body.contains("旧回答"), "{body}");
 }
 
 #[tokio::test]
-async fn anthropic_live_answer_reasoning_delta_is_not_projected() {
+async fn anthropic_live_answer_reasoning_delta_projects_thinking_delta() {
     let run = native_run();
     let mut mapper = AnthropicStreamMapper::new("1flowbase".to_string());
     let reasoning_events = mapper.runtime_event_to_sse(
@@ -347,9 +352,14 @@ async fn anthropic_live_answer_reasoning_delta_is_not_projected() {
         .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
+    assert!(body.contains("\"type\":\"thinking\""), "{body}");
+    assert!(body.contains("\"type\":\"thinking_delta\""), "{body}");
+    assert!(
+        body.contains("\"thinking\":\"private reasoning\""),
+        "{body}"
+    );
     assert!(body.contains("\"text\":\"visible answer\""), "{body}");
-    assert!(!body.contains("private reasoning"), "{body}");
-    assert_eq!(body.matches("event: content_block_start").count(), 1);
+    assert_eq!(body.matches("event: content_block_start").count(), 2);
 }
 
 #[test]

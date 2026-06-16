@@ -209,6 +209,17 @@ node scripts/node/cli/claude-skill-sync.js
 node scripts/node/cli/claude-skill-sync.js --source .agents/skills --target .claude/skills
 ```
 
+### `node scripts/node/cli/acp-claude-smoke.js [选项]`
+
+通过 ACP adapter 启动 Claude Code，发送一轮 prompt，并把 `session/update`、raw SDK message 和 stderr 证据写入 `tmp/test-governance/acp-claude-smoke/`。
+默认要求同时出现 `agent_thought_chunk` 和 `agent_message_chunk`，用于验证 Anthropic-compatible reasoning 是否能被 Claude Code ACP 投射为思考 chunk。
+
+```bash
+node scripts/node/cli/acp-claude-smoke.js --model 1flowbase
+node scripts/node/cli/acp-claude-smoke.js --model 1flowbase --out-dir tmp/test-governance/issue-922
+node scripts/node/cli/acp-claude-smoke.js --allow-missing-thought
+```
+
 ### `node scripts/node/tooling.js <command> [args]`
 
 工具聚合入口，支持：
