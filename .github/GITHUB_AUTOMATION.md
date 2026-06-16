@@ -42,14 +42,21 @@ directory-pressure findings. It also runs `security-risk`, which writes
 communication, CI, Docker, deploy, proxy, plugin, and runtime execution-path
 risks. Advisory findings remain warnings; focused tests still fail the repo gate.
 
-React Doctor is no longer an automatic PR merge blocker. React Doctor is not part of `quality-gate` `scope: ci`; run it manually when you need structural frontend debt evidence:
+React Doctor is no longer an automatic PR merge blocker. It is a nightly-only
+structural frontend debt gate in the scheduled quality gate, and it is excluded
+from `verify.yml` and manual `scope: ci` runs. Re-run it directly with
+`scope: repo-frontend-react-doctor` when you need focused structural frontend debt
+evidence:
 
 ```yaml
-run: npx react-doctor@0.2.16 web/app --diff origin/main --offline --fail-on warning --verbose
+scope: repo-frontend-react-doctor
+run: npm exec --yes --package react-doctor@0.2.16 -- react-doctor web/app --diff origin/main --no-score --fail-on warning --verbose --no-color
 ```
 
 Current React Doctor structural debt is kept in `web/app/doctor.config.json` as
-narrow per-file rule overrides for those stricter runs.
+narrow per-file rule overrides for those stricter runs. The gate writes
+`tmp/test-governance/react-doctor.*` alongside the standard quality gate report
+artifact.
 
 The final aggregate job downloads the component artifacts and publishes a single
 report with:
@@ -115,21 +122,23 @@ report_type: ci
 environment: leave empty
 ```
 
-For `scope: ci`, manual and scheduled runs use the full quality gate shape: repo tooling,
-full repo frontend, backend static/fmt/package shards, backend app test package shards, backend
-consistency, frontend coverage, backend coverage package shards, and container
-image security run as separate jobs.
+For manual `scope: ci`, runs use the full quality gate shape: repo tooling,
+full repo frontend, backend static/fmt/package shards, backend app test package shards,
+backend consistency, frontend coverage, backend coverage package shards, state protocols,
+and container image security run as separate jobs. Scheduled `scope: ci` runs add the
+nightly-only `repo-frontend-react-doctor` structural debt gate.
 An aggregate job downloads their artifacts, publishes one Issue report, and uploads
 `test-governance-artifacts`.
 This keeps wall time close to the slowest component gate instead of the sum of all gates.
 Each component job publishes `publish_issue: "false"`; only the aggregate job publishes the
 final report with `publish_issue: "true"`.
 
-For narrower dispatch scopes such as `repo-frontend-pr`, `repo-frontend`, `repo-backend`, `backend-consistency`,
+For narrower dispatch scopes such as `repo-frontend-pr`, `repo-frontend`, `repo-frontend-react-doctor`, `repo-backend`, `backend-consistency`,
 `coverage-backend`, or `container-images`,
 `quality-gate.yml` runs one targeted job and publishes that single-scope report directly.
 Manual runs share the same target-branch concurrency group as automatic quality gates.
-Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-latest`.
+Scheduled runs target `latest`, use `scope: ci`, add `repo-frontend-react-doctor`,
+and set `environment: nightly-latest`.
 
 ## Scope Options
 
@@ -140,6 +149,7 @@ Scheduled runs target `latest`, use `scope: ci`, and set `environment: nightly-l
 | `repo-tooling` | `node scripts/node/verify-repo.js tooling` |
 | `repo-frontend-pr` | `node scripts/node/verify-repo.js frontend-pr` |
 | `repo-frontend` | `node scripts/node/verify-repo.js frontend` |
+| `repo-frontend-react-doctor` | `node scripts/node/react-doctor-gate.js` |
 | `repo-backend` | `node scripts/node/verify-repo.js backend` |
 | `repo-backend-static` | `node scripts/node/verify-backend.js static` |
 | `repo-backend-fmt` | `node scripts/node/verify-backend.js fmt` |

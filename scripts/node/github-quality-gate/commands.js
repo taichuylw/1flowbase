@@ -35,6 +35,7 @@ const VALID_SCOPES = new Set([
   'repo-tooling',
   'repo-frontend',
   'repo-frontend-pr',
+  'repo-frontend-react-doctor',
   'repo-backend',
   'backend',
   'backend-consistency',
@@ -119,6 +120,14 @@ function buildGateCommand({ repoRoot, scope }) {
     return {
       command,
       args: [resolveCliEntry(repoRoot, 'verify-repo'), 'frontend-pr'],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'repo-frontend-react-doctor') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'react-doctor-gate')],
       cwd: repoRoot,
     };
   }

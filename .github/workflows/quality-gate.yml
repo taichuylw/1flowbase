@@ -20,6 +20,7 @@ on:
           - repo-tooling
           - repo-frontend
           - repo-frontend-pr
+          - repo-frontend-react-doctor
           - repo-backend
           - repo-backend-static
           - repo-backend-fmt
@@ -244,6 +245,42 @@ jobs:
         if: always()
         with:
           name: test-governance-repo-frontend
+          path: tmp/test-governance
+
+  repo-frontend-react-doctor-gate:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+          fetch-depth: 0
+      - name: Resolve quality gate target SHA
+        run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.5.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm --dir web install --frozen-lockfile
+      - uses: ./.github/actions/quality-gate
+        env:
+          GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
+          GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
+        with:
+          scope: repo-frontend-react-doctor
+          report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
+          environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
+          publish_issue: "false"
+          start_postgres: "false"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-repo-frontend-react-doctor
           path: tmp/test-governance
 
   repo-backend-gate:
@@ -765,6 +802,7 @@ jobs:
     needs:
       - repo-tooling-gate
       - repo-frontend-gate
+      - repo-frontend-react-doctor-gate
       - repo-backend-gate
       - backend-consistency-gate
       - coverage-frontend-gate
@@ -791,7 +829,7 @@ jobs:
           INPUT_ARTIFACT_ROOT: tmp/test-governance/parallel
           INPUT_REPORT_TYPE: ${{ env.QUALITY_GATE_REPORT_TYPE }}
           INPUT_ENVIRONMENT: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
-          INPUT_EXPECTED_SCOPES: repo-tooling,repo-frontend,repo-backend-static,repo-backend-fmt,repo-backend-image-llm-vision,repo-backend-clippy-core-libs,repo-backend-clippy-runtime-storage,repo-backend-clippy-apps,repo-backend-test-core-libs,repo-backend-test-runtime-storage,repo-backend-test-control-plane,repo-backend-test-api-server,repo-backend-test-plugin-runner,repo-backend-check-core-libs,repo-backend-check-runtime-storage,repo-backend-check-apps,backend-consistency,coverage-frontend,coverage-backend-control-plane,coverage-backend-orchestration-runtime,coverage-backend-plugin-runner,coverage-backend-storage-postgres,coverage-backend-api-server,state-protocols,container-images
+          INPUT_EXPECTED_SCOPES: ${{ github.event_name == 'schedule' && 'repo-tooling,repo-frontend,repo-frontend-react-doctor,repo-backend-static,repo-backend-fmt,repo-backend-image-llm-vision,repo-backend-clippy-core-libs,repo-backend-clippy-runtime-storage,repo-backend-clippy-apps,repo-backend-test-core-libs,repo-backend-test-runtime-storage,repo-backend-test-control-plane,repo-backend-test-api-server,repo-backend-test-plugin-runner,repo-backend-check-core-libs,repo-backend-check-runtime-storage,repo-backend-check-apps,backend-consistency,coverage-frontend,coverage-backend-control-plane,coverage-backend-orchestration-runtime,coverage-backend-plugin-runner,coverage-backend-storage-postgres,coverage-backend-api-server,state-protocols,container-images' || 'repo-tooling,repo-frontend,repo-backend-static,repo-backend-fmt,repo-backend-image-llm-vision,repo-backend-clippy-core-libs,repo-backend-clippy-runtime-storage,repo-backend-clippy-apps,repo-backend-test-core-libs,repo-backend-test-runtime-storage,repo-backend-test-control-plane,repo-backend-test-api-server,repo-backend-test-plugin-runner,repo-backend-check-core-libs,repo-backend-check-runtime-storage,repo-backend-check-apps,backend-consistency,coverage-frontend,coverage-backend-control-plane,coverage-backend-orchestration-runtime,coverage-backend-plugin-runner,coverage-backend-storage-postgres,coverage-backend-api-server,state-protocols,container-images' }}
           INPUT_PUBLISH_ISSUE: "true"
           INPUT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v6

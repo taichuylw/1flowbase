@@ -209,6 +209,43 @@ test("verify workflow keeps React Doctor out of automatic merge blockers", () =>
   assert.doesNotMatch(workflow, /--fail-on warning/u);
 });
 
+test("quality gate workflow runs React Doctor as a nightly-only component gate", () => {
+  const workflow = readQualityGateWorkflow();
+  const jobBlock = workflow.match(
+    /repo-frontend-react-doctor-gate:[\s\S]*?\n\n  repo-backend-gate:/u,
+  )?.[0] || "";
+
+  assert.match(workflow, /- repo-frontend-react-doctor/u);
+  assert.match(
+    jobBlock,
+    /repo-frontend-react-doctor-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \}\}/u,
+  );
+  assert.match(
+    jobBlock,
+    /repo-frontend-react-doctor-gate:[\s\S]*?fetch-depth: 0/u,
+  );
+  assert.match(
+    jobBlock,
+    /repo-frontend-react-doctor-gate:[\s\S]*?scope: repo-frontend-react-doctor/u,
+  );
+  assert.match(
+    jobBlock,
+    /repo-frontend-react-doctor-gate:[\s\S]*?name: test-governance-repo-frontend-react-doctor/u,
+  );
+  assert.match(
+    workflow,
+    /aggregate:\n(?:.*\n)*?\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-frontend-react-doctor-gate\n\s+- repo-backend-gate/u,
+  );
+  assert.match(
+    workflow,
+    /INPUT_EXPECTED_SCOPES: \$\{\{ github\.event_name == 'schedule' && '[^']*repo-frontend-react-doctor[^']*' \|\| '[^']*container-images[^']*' \}\}/u,
+  );
+  assert.doesNotMatch(
+    jobBlock,
+    /inputs\.scope == 'ci'/u,
+  );
+});
+
 test("React Doctor keeps current debt as a narrow baseline", () => {
   const config = readReactDoctorConfig();
 
@@ -368,16 +405,19 @@ test("GitHub automation docs describe latest-only issue publishing", () => {
   assert.doesNotMatch(readme, /refs\/heads\/main/u);
 });
 
-test("GitHub automation docs keep React Doctor outside workflow scopes", () => {
+test("GitHub automation docs describe React Doctor as nightly-only structural debt evidence", () => {
   const readme = readGitHubAutomationDocs();
 
   assert.match(readme, /React Doctor is no longer an automatic PR merge blocker/u);
+  assert.match(readme, /nightly-only/u);
   assert.match(
     readme,
-    /npx react-doctor@0\.2\.16 web\/app --diff origin\/main --offline --fail-on warning --verbose/u,
+    /npm exec --yes --package react-doctor@0\.2\.16 -- react-doctor web\/app --diff origin\/main --no-score --fail-on warning --verbose --no-color/u,
   );
+  assert.match(readme, /scope: repo-frontend-react-doctor/u);
+  assert.match(readme, /tmp\/test-governance\/react-doctor\.\*/u);
   assert.match(readme, /web\/app\/doctor\.config\.json/u);
-  assert.match(readme, /React Doctor is not part of `quality-gate` `scope: ci`/u);
+  assert.match(readme, /manual `scope: ci`/u);
   assert.doesNotMatch(readme, /React Doctor, and container/u);
 });
 
@@ -421,6 +461,7 @@ test("quality gate workflow supports dispatch targets and nightly latest CI defa
   );
   assert.match(workflow, /QUALITY_GATE_SCHEDULED_ENVIRONMENT: nightly-latest/u);
   assert.match(workflow, /- container-images/u);
+  assert.match(workflow, /- repo-frontend-react-doctor/u);
   assert.match(
     workflow,
     /GITHUB_REF_NAME: \$\{\{ env\.QUALITY_GATE_TARGET_BRANCH \}\}/u,
@@ -446,6 +487,10 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(
     workflow,
     /repo-frontend-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.scope == 'ci'\) \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /repo-frontend-react-doctor-gate:\n\s+if: \$\{\{ github\.event_name == 'schedule' \}\}/u,
   );
   assert.match(
     workflow,
@@ -490,7 +535,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   );
   assert.match(
     workflow,
-    /aggregate:\n(?:.*\n)*?\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate/u,
+    /aggregate:\n(?:.*\n)*?\s+needs:\n\s+- repo-tooling-gate\n\s+- repo-frontend-gate\n\s+- repo-frontend-react-doctor-gate\n\s+- repo-backend-gate\n\s+- backend-consistency-gate\n\s+- coverage-frontend-gate\n\s+- coverage-backend-gate/u,
   );
   assert.match(workflow, /- state-protocols-gate/u);
   assert.match(workflow, /- container-images-gate/u);
@@ -520,6 +565,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
   assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*repo-backend-image-llm-vision/u);
+  assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*repo-frontend-react-doctor/u);
   assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*state-protocols/u);
   assert.match(workflow, /INPUT_EXPECTED_SCOPES: .*container-images/u);
   assert.match(
@@ -528,6 +574,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   );
   assert.match(workflow, /name: test-governance-repo-tooling/u);
   assert.match(workflow, /name: test-governance-repo-frontend/u);
+  assert.match(workflow, /name: test-governance-repo-frontend-react-doctor/u);
   assert.match(workflow, /name: test-governance-\$\{\{ matrix\.scope \}\}/u);
   assert.match(workflow, /name: test-governance-backend-consistency/u);
   assert.match(workflow, /name: test-governance-coverage-frontend/u);

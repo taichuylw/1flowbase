@@ -3,7 +3,7 @@ description: Run repository quality gates and optionally publish one GitHub Issu
 
 inputs:
   scope:
-    description: "Quality gate scope: ci, repo slices, backend, backend-consistency, state-protocols, or coverage slices."
+    description: "Quality gate scope: ci, repo slices, React Doctor, backend, backend-consistency, state-protocols, or coverage slices."
     required: false
     default: ci
   report_type:
