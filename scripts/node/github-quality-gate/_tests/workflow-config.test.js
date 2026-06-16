@@ -448,6 +448,14 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /scope: backend-consistency/u);
   assert.match(workflow, /scope: coverage-frontend/u);
   assert.match(workflow, /scope: state-protocols/u);
+  assert.match(
+    workflow,
+    /state-protocols-gate:[\s\S]*?Install Claude Code[\s\S]*?curl -fsSL https:\/\/claude\.ai\/install\.sh \| bash -s stable[\s\S]*?claude --version/u,
+  );
+  assert.match(
+    workflow,
+    /state-protocols-gate:[\s\S]*?CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_AUTH_TOKEN: \$\{\{ secrets\.ANTHROPIC_AUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/u,
+  );
   assert.match(workflow, /scope: container-images/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
@@ -542,6 +550,14 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
     /start_postgres: \$\{\{ inputs\.scope == 'repo' \|\| inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'state-protocols' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u,
   );
   assert.match(workflow, /publish_issue: "true"/u);
+  assert.match(
+    workflow,
+    /Install Claude Code\n\s+if: \$\{\{ inputs\.scope == 'state-protocols' \}\}\n\s+shell: bash\n\s+run: \|\n\s+curl -fsSL https:\/\/claude\.ai\/install\.sh \| bash -s stable[\s\S]*?claude --version/u,
+  );
+  assert.match(
+    workflow,
+    /CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.CLAUDE_CODE_OAUTH_TOKEN \|\| '' \}\}[\s\S]*?ANTHROPIC_AUTH_TOKEN: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.ANTHROPIC_AUTH_TOKEN \|\| '' \}\}[\s\S]*?ANTHROPIC_API_KEY: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.ANTHROPIC_API_KEY \|\| '' \}\}/u,
+  );
 });
 
 test("quality gate action isolates middleware postgres per gate scope", () => {

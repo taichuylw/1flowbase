@@ -98,10 +98,22 @@ jobs:
       - run: pnpm --dir web install --frozen-lockfile
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install Claude Code
+        if: ${{ inputs.scope == 'state-protocols' }}
+        shell: bash
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s stable
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          claude --version
       - uses: ./.github/actions/quality-gate
         env:
           GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.scope == 'state-protocols' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          ANTHROPIC_AUTH_TOKEN: ${{ inputs.scope == 'state-protocols' && secrets.ANTHROPIC_AUTH_TOKEN || '' }}
+          ANTHROPIC_API_KEY: ${{ inputs.scope == 'state-protocols' && secrets.ANTHROPIC_API_KEY || '' }}
+          ANTHROPIC_BASE_URL: ${{ inputs.scope == 'state-protocols' && secrets.ANTHROPIC_BASE_URL || '' }}
         with:
           scope: ${{ env.QUALITY_GATE_SCOPE }}
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
@@ -343,10 +355,21 @@ jobs:
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Claude Code
+        shell: bash
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s stable
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          claude --version
       - uses: ./.github/actions/quality-gate
         env:
           GITHUB_REF_NAME: ${{ env.QUALITY_GATE_TARGET_BRANCH }}
           GITHUB_SHA: ${{ env.QUALITY_GATE_TARGET_SHA }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
         with:
           scope: state-protocols
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
