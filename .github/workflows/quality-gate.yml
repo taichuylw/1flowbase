@@ -127,9 +127,9 @@ jobs:
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-registry
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-git
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/target
-          key: rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          key: rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
           restore-keys: |
-            rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+            rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-
       - name: Import release-seeded api-server Rust cache
         if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
         shell: bash
@@ -304,9 +304,9 @@ jobs:
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-registry
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-git
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/target
-          key: rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          key: rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
           restore-keys: |
-            rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+            rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-
       - name: Import release-seeded api-server Rust cache
         if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
         shell: bash
@@ -389,9 +389,9 @@ jobs:
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-registry
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-git
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/target
-          key: rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          key: rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
           restore-keys: |
-            rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+            rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-
       - name: Import release-seeded api-server Rust cache
         if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
         shell: bash
@@ -516,9 +516,9 @@ jobs:
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-registry
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-git
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/target
-          key: rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          key: rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
           restore-keys: |
-            rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+            rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-
       - name: Import release-seeded api-server Rust cache
         if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
         shell: bash
@@ -602,9 +602,9 @@ jobs:
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-registry
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/cargo-git
             tmp/container-cache/api-server/${{ steps.release_seed_tag.outputs.cache_arch }}/target
-          key: rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          key: rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
           restore-keys: |
-            rust-release-seeded-api-server-${{ steps.release_seed_tag.outputs.cache_arch }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+            rust-release-seeded-api-server-${{ runner.os }}-${{ steps.release_seed_tag.outputs.cache_arch }}-rust-1-slim-bookworm-release-${{ steps.release_seed_tag.outputs.release_tag }}-
       - name: Import release-seeded api-server Rust cache
         if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
         shell: bash

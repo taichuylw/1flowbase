@@ -158,11 +158,11 @@ test("quality gate restores release-seeded Rust cache without writing it from CI
 
   assert.match(
     containerWorkflow,
-    /key: rust-release-seeded-api-server-\$\{\{ matrix\.arch \}\}-\$\{\{ needs\.select-api-server\.outputs\.image_tag \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+    /key: rust-release-seeded-api-server-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.arch \}\}-rust-1-slim-bookworm-release-\$\{\{ needs\.select-api-server\.outputs\.image_tag \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
   );
   assert.match(
     containerWorkflow,
-    /key: rust-release-seeded-plugin-runner-\$\{\{ matrix\.arch \}\}-\$\{\{ needs\.select-plugin-runner\.outputs\.image_tag \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+    /key: rust-release-seeded-plugin-runner-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.arch \}\}-rust-1-slim-bookworm-release-\$\{\{ needs\.select-plugin-runner\.outputs\.image_tag \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
   );
 
   assert.match(workflow, /name: Restore release-seeded api-server Rust cache/u);
@@ -173,11 +173,12 @@ test("quality gate restores release-seeded Rust cache without writing it from CI
   assert.match(workflow, /gh release list --limit 1 --json tagName --jq '\.\[0\]\.tagName \/\/ ""'/u);
   assert.match(workflow, /if: \$\{\{ steps\.release_seed_tag\.outputs\.release_tag != '' \}\}/u);
   assert.match(workflow, /uses: actions\/cache\/restore@v5/u);
-  assert.match(workflow, /key: rust-release-seeded-api-server-\$\{\{ steps\.release_seed_tag\.outputs\.cache_arch \}\}-\$\{\{ steps\.release_seed_tag\.outputs\.release_tag \}\}-quality-gate-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u);
-  assert.match(workflow, /restore-keys: \|\n\s+rust-release-seeded-api-server-\$\{\{ steps\.release_seed_tag\.outputs\.cache_arch \}\}-\$\{\{ steps\.release_seed_tag\.outputs\.release_tag \}\}-/u);
+  assert.match(workflow, /key: rust-release-seeded-api-server-\$\{\{ runner\.os \}\}-\$\{\{ steps\.release_seed_tag\.outputs\.cache_arch \}\}-rust-1-slim-bookworm-release-\$\{\{ steps\.release_seed_tag\.outputs\.release_tag \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u);
+  assert.match(workflow, /restore-keys: \|\n\s+rust-release-seeded-api-server-\$\{\{ runner\.os \}\}-\$\{\{ steps\.release_seed_tag\.outputs\.cache_arch \}\}-rust-1-slim-bookworm-release-\$\{\{ steps\.release_seed_tag\.outputs\.release_tag \}\}-/u);
   assert.match(workflow, /tmp\/container-cache\/api-server\/\$\{\{ steps\.release_seed_tag\.outputs\.cache_arch \}\}\/target/u);
   assert.match(workflow, /rsync -a "tmp\/container-cache\/api-server\/\$RUST_RELEASE_SEEDED_CACHE_ARCH\/target\/" "\$CARGO_TARGET_DIR\/"/u);
   assert.doesNotMatch(workflow, /env:\n\s+RUST_RELEASE_SEEDED_CACHE_ARCH: \$\{\{ runner\.arch/u);
+  assert.doesNotMatch(workflow, /rust-release-seeded-[^\n]+-quality-gate-/u);
   assert.doesNotMatch(workflow, /actions\/cache@v5[\s\S]{0,240}rust-release-seeded/u);
 });
 
