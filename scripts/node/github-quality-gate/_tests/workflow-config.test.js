@@ -456,6 +456,10 @@ test("quality gate workflow runs ci scope as parallel component gates before one
     workflow,
     /state-protocols-gate:[\s\S]*?CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_AUTH_TOKEN: \$\{\{ secrets\.ANTHROPIC_AUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}[\s\S]*?ANTHROPIC_CUSTOM_MODEL_OPTION: 1flowbase/u,
   );
+  assert.match(
+    workflow,
+    /state-protocols-gate:[\s\S]*?scope: state-protocols[\s\S]*?start_postgres: "true"/u,
+  );
   assert.match(workflow, /scope: container-images/u);
   assert.match(workflow, /publish_issue: "false"/u);
   assert.match(workflow, /INPUT_PUBLISH_ISSUE: "true"/u);
@@ -547,7 +551,7 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
   assert.match(workflow, /scope: \$\{\{ env\.QUALITY_GATE_SCOPE \}\}/u);
   assert.match(
     workflow,
-    /start_postgres: \$\{\{ inputs\.scope == 'repo' \|\| inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u,
+    /start_postgres: \$\{\{ inputs\.scope == 'repo' \|\| inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'state-protocols' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u,
   );
   assert.match(workflow, /publish_issue: "true"/u);
   assert.doesNotMatch(
