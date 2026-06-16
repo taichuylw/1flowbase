@@ -516,6 +516,41 @@ async fn fusion_visible_internal_llm_tool_executes_panel_llms_in_bounded_paralle
 }
 
 #[tokio::test]
+async fn fusion_visible_internal_llm_tool_executes_direct_panel_roots_in_bounded_parallel() {
+    let invoker = FusionPanelTimingInvoker::default();
+    let max_panel_inflight = invoker.max_panel_inflight.clone();
+    let plan = direct_fusion_panel_plan();
+
+    let outcome = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "compare panel answers",
+                "history": []
+            }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome.stop_reason, ExecutionStopReason::Completed),
+        "expected completed direct fusion panel run, got {:?}",
+        outcome.stop_reason
+    );
+    assert_eq!(
+        max_panel_inflight.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "direct fusion panel roots should overlap within the bounded parallel executor"
+    );
+    assert_eq!(
+        outcome.variable_pool["node-answer"]["answer"],
+        json!("main-before judge-result main-after")
+    );
+}
+
+#[tokio::test]
 async fn visible_internal_llm_tool_branch_canonicalizes_inherited_tool_name_case() {
     let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {
@@ -1886,6 +1921,91 @@ fn fusion_panel_plan() -> CompiledPlan {
             code_runtime: None,
         },
     );
+    plan
+}
+
+fn direct_fusion_panel_plan() -> CompiledPlan {
+    let mut plan = fusion_panel_plan();
+    plan.topological_order = vec![
+        "node-start".to_string(),
+        "node-llm".to_string(),
+        "node-panel-a".to_string(),
+        "node-panel-b".to_string(),
+        "node-judge".to_string(),
+        "node-tool-result".to_string(),
+        "node-answer".to_string(),
+    ];
+    plan.edges = vec![
+        CompiledEdge {
+            edge_id: "edge-start-llm".to_string(),
+            source: "node-start".to_string(),
+            target: "node-llm".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-answer".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-answer".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-panel-a".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-panel-a".to_string(),
+            source_handle: Some("visible_internal_llm_tool:inspect_visible_context".to_string()),
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-llm-panel-b".to_string(),
+            source: "node-llm".to_string(),
+            target: "node-panel-b".to_string(),
+            source_handle: Some("visible_internal_llm_tool:inspect_visible_context".to_string()),
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-panel-a-judge".to_string(),
+            source: "node-panel-a".to_string(),
+            target: "node-judge".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-panel-b-judge".to_string(),
+            source: "node-panel-b".to_string(),
+            target: "node-judge".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+        CompiledEdge {
+            edge_id: "edge-judge-tool-result".to_string(),
+            source: "node-judge".to_string(),
+            target: "node-tool-result".to_string(),
+            source_handle: None,
+            target_handle: None,
+        },
+    ];
+    plan.nodes.remove("node-panel-seed");
+    let main_llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("main llm node should exist");
+    main_llm.downstream_node_ids = vec![
+        "node-answer".to_string(),
+        "node-panel-a".to_string(),
+        "node-panel-b".to_string(),
+    ];
+    main_llm.config["visible_internal_llm_tools"][0]["target_node_id"] = json!("node-panel-a");
+    main_llm.config["visible_internal_llm_tools"][0]["target_node_ids"] =
+        json!(["node-panel-a", "node-panel-b"]);
+    for node_id in ["node-panel-a", "node-panel-b"] {
+        let panel_node = plan
+            .nodes
+            .get_mut(node_id)
+            .expect("panel node should exist");
+        panel_node.dependency_node_ids = vec!["node-llm".to_string()];
+    }
     plan
 }
 

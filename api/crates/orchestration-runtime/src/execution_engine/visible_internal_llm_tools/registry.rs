@@ -42,7 +42,7 @@ pub(in crate::execution_engine) fn visible_internal_llm_tool_target_node_ids(
         .values()
         .filter(|node| node.node_type == "llm")
         .flat_map(visible_internal_llm_tools)
-        .map(|tool| tool.target_node_id)
+        .flat_map(|tool| tool.start_node_ids())
         .collect()
 }
 
@@ -122,13 +122,20 @@ fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternal
         .map(str::trim)
         .filter(|name| !name.is_empty())?
         .to_string();
+    let target_node_ids = visible_internal_llm_tool_target_ids_from_object(object);
     let target_node_id = object
         .get("target_node_id")
         .or_else(|| object.get("targetNodeId"))
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|node_id| !node_id.is_empty())?
-        .to_string();
+        .filter(|node_id| !node_id.is_empty())
+        .map(str::to_string)
+        .or_else(|| target_node_ids.first().cloned())?;
+    let target_node_ids = if target_node_ids.is_empty() {
+        vec![target_node_id.clone()]
+    } else {
+        target_node_ids
+    };
 
     let input_schema = object
         .get("input_schema")
@@ -146,6 +153,7 @@ fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternal
             .filter(|description| !description.is_empty())
             .map(str::to_string),
         target_node_id,
+        target_node_ids,
         input_schema,
         tool_mode: visible_internal_llm_tool_mode_from_object(object),
         external_tool_policy: visible_internal_llm_tool_external_tool_policy_from_object(object),
@@ -155,6 +163,35 @@ fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternal
         execution_mode: visible_internal_llm_tool_execution_mode_from_object(object),
         preconditions,
     })
+}
+
+fn visible_internal_llm_tool_target_ids_from_object(object: &Map<String, Value>) -> Vec<String> {
+    let target_node_ids = object
+        .get("target_node_ids")
+        .or_else(|| object.get("targetNodeIds"))
+        .and_then(Value::as_array)
+        .map(|targets| {
+            targets
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|node_id| !node_id.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !target_node_ids.is_empty() {
+        return target_node_ids;
+    }
+
+    object
+        .get("target_node_id")
+        .or_else(|| object.get("targetNodeId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|node_id| !node_id.is_empty())
+        .map(|node_id| vec![node_id.to_string()])
+        .unwrap_or_default()
 }
 
 fn visible_internal_llm_tool_mode_from_object(

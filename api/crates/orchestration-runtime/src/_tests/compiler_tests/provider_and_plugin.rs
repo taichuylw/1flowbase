@@ -219,6 +219,165 @@ fn compile_materializes_visible_internal_llm_tool_mode_policies() {
 }
 
 #[test]
+fn compile_materializes_fusion_visible_internal_llm_tool_direct_panel_roots() {
+    let flow_id = Uuid::now_v7();
+    let mut document = sample_document(flow_id);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools_enabled"] = json!(true);
+    document["graph"]["nodes"][1]["config"]["visible_internal_llm_tools"] = json!([
+        {
+            "type": "visible_internal_llm_tool",
+            "tool_name": "problem_review",
+            "connector_id": "problem_review",
+            "tool_mode": "fusion",
+            "internal_llm_node_policy": "allowed",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "task": { "type": "string" },
+                    "background": { "type": "string" }
+                }
+            }
+        }
+    ]);
+
+    let nodes = document["graph"]["nodes"]
+        .as_array_mut()
+        .expect("sample graph nodes should be an array");
+    for (node_id, prompt) in [
+        ("node-panel-a", "Panel A"),
+        ("node-panel-b", "Panel B"),
+        ("node-panel-c", "Panel C"),
+    ] {
+        nodes.push(json!({
+            "id": node_id,
+            "type": "llm",
+            "alias": prompt,
+            "description": "",
+            "containerId": null,
+            "position": { "x": 480, "y": 0 },
+            "configVersion": 1,
+            "config": {
+                "model_provider": {
+                    "provider_code": "fixture_provider",
+                    "model_id": "gpt-5.4-mini"
+                }
+            },
+            "bindings": {
+                "prompt_messages": {
+                    "kind": "prompt_messages",
+                    "value": [
+                        {
+                            "id": format!("{node_id}-user"),
+                            "role": "user",
+                            "content": {
+                                "kind": "templated_text",
+                                "value": format!("{prompt}: {{{{ visible_internal_llm_tool.arguments.task }}}}")
+                            }
+                        }
+                    ]
+                }
+            },
+            "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+        }));
+    }
+    nodes.push(json!({
+        "id": "node-judge",
+        "type": "llm",
+        "alias": "Judge",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 720, "y": 0 },
+        "configVersion": 1,
+        "config": {
+            "model_provider": {
+                "provider_code": "fixture_provider",
+                "model_id": "gpt-5.4-mini"
+            }
+        },
+        "bindings": {
+            "prompt_messages": {
+                "kind": "prompt_messages",
+                "value": [
+                    {
+                        "id": "judge-user",
+                        "role": "user",
+                        "content": {
+                            "kind": "templated_text",
+                            "value": "Judge {{ node-panel-a.text }} / {{ node-panel-b.text }} / {{ node-panel-c.text }}"
+                        }
+                    }
+                ]
+            }
+        },
+        "outputs": [{ "key": "text", "title": "模型输出", "valueType": "string" }]
+    }));
+    nodes.push(json!({
+        "id": "node-tool-result",
+        "type": "tool_result",
+        "alias": "Tool Result",
+        "description": "",
+        "containerId": null,
+        "position": { "x": 960, "y": 0 },
+        "configVersion": 1,
+        "config": {},
+        "bindings": {
+            "result_template": {
+                "kind": "templated_text",
+                "value": "{{ node-judge.text }}"
+            }
+        },
+        "outputs": [{ "key": "result", "title": "Tool Result", "valueType": "string" }]
+    }));
+
+    let edges = document["graph"]["edges"]
+        .as_array_mut()
+        .expect("sample graph edges should be an array");
+    for target in ["node-panel-a", "node-panel-b", "node-panel-c"] {
+        edges.push(json!({
+            "id": format!("edge-llm-{target}"),
+            "source": "node-llm",
+            "target": target,
+            "sourceHandle": "visible_internal_llm_tool:problem_review",
+            "targetHandle": null,
+            "containerId": null
+        }));
+    }
+    for source in ["node-panel-a", "node-panel-b", "node-panel-c"] {
+        edges.push(json!({
+            "id": format!("edge-{source}-judge"),
+            "source": source,
+            "target": "node-judge",
+            "sourceHandle": null,
+            "targetHandle": null,
+            "containerId": null
+        }));
+    }
+    edges.push(json!({
+        "id": "edge-judge-tool-result",
+        "source": "node-judge",
+        "target": "node-tool-result",
+        "sourceHandle": null,
+        "targetHandle": null,
+        "containerId": null
+    }));
+
+    let plan = FlowCompiler::compile(flow_id, "draft-1", &document, &compile_context()).unwrap();
+    let tools = plan.nodes["node-llm"].config["visible_internal_llm_tools"]
+        .as_array()
+        .expect("visible tools should compile as an array");
+
+    assert!(plan.compile_issues.is_empty(), "{:?}", plan.compile_issues);
+    assert_eq!(tools[0]["target_node_id"], json!("node-panel-a"));
+    assert_eq!(
+        tools[0]["target_node_ids"],
+        json!(["node-panel-a", "node-panel-b", "node-panel-c"])
+    );
+    assert_eq!(tools[0]["external_tool_policy"], json!("forbidden"));
+    assert_eq!(tools[0]["external_callback_policy"], json!("forbidden"));
+    assert_eq!(tools[0]["execution_mode"], json!("bounded_parallel_panel"));
+}
+
+#[test]
 fn compile_flags_visible_internal_llm_tool_without_tool_result_node() {
     let flow_id = Uuid::now_v7();
     let mut document = sample_document(flow_id);

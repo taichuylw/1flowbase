@@ -535,7 +535,9 @@ fn materialize_visible_internal_llm_tool_targets(
                 });
                 continue;
             };
-            if matching_edges.len() > 1 {
+            let tool_mode = visible_internal_llm_tool_mode_value(tool)
+                .unwrap_or_else(|| TOOL_MODE_AGENT.to_string());
+            if matching_edges.len() > 1 && tool_mode != TOOL_MODE_FUSION {
                 issues.push(CompileIssue {
                     node_id: node_id.clone(),
                     code: CompileIssueCode::InvalidVisibleInternalLlmTool,
@@ -552,6 +554,17 @@ fn materialize_visible_internal_llm_tool_targets(
                     "target_node_id".to_string(),
                     Value::String(matching_edges[0].target.clone()),
                 );
+                if tool_mode == TOOL_MODE_FUSION {
+                    tool_object.insert(
+                        "target_node_ids".to_string(),
+                        Value::Array(
+                            matching_edges
+                                .iter()
+                                .map(|edge| Value::String(edge.target.clone()))
+                                .collect(),
+                        ),
+                    );
+                }
             }
         }
     }
@@ -600,18 +613,17 @@ fn validate_visible_internal_llm_tool_branches(
                     });
                 }
             }
-            let Some(target_node_id) = tool
-                .get("target_node_id")
-                .or_else(|| tool.get("targetNodeId"))
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            else {
+            let target_node_ids = visible_internal_llm_tool_target_node_ids(tool);
+            if target_node_ids.is_empty() {
                 continue;
-            };
+            }
 
-            let reachable_node_ids =
-                visible_internal_llm_tool_branch_node_ids(target_node_id, nodes, edges);
+            let reachable_node_ids = target_node_ids
+                .iter()
+                .flat_map(|target_node_id| {
+                    visible_internal_llm_tool_branch_node_ids(target_node_id, nodes, edges)
+                })
+                .collect::<BTreeSet<_>>();
             let tool_result_node_ids = reachable_node_ids
                 .iter()
                 .filter(|node_id| {
@@ -755,6 +767,37 @@ fn visible_internal_llm_tool_connector_id(tool: &Value) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+fn visible_internal_llm_tool_target_node_ids(tool: &Value) -> Vec<String> {
+    let mut target_node_ids = tool
+        .get("target_node_ids")
+        .or_else(|| tool.get("targetNodeIds"))
+        .and_then(Value::as_array)
+        .map(|targets| {
+            targets
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !target_node_ids.is_empty() {
+        return target_node_ids;
+    }
+
+    if let Some(target_node_id) = tool
+        .get("target_node_id")
+        .or_else(|| tool.get("targetNodeId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        target_node_ids.push(target_node_id.to_string());
+    }
+    target_node_ids
 }
 
 fn visible_internal_llm_tool_branch_node_ids(

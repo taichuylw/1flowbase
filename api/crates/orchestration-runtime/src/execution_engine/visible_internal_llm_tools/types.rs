@@ -69,12 +69,24 @@ pub(super) struct VisibleInternalLlmTool {
     pub(super) name: String,
     pub(super) description: Option<String>,
     pub(super) target_node_id: String,
+    pub(super) target_node_ids: Vec<String>,
     pub(super) input_schema: Option<Value>,
     pub(super) tool_mode: VisibleInternalLlmToolMode,
     pub(super) external_tool_policy: VisibleInternalLlmToolExternalToolPolicy,
     pub(super) external_callback_policy: VisibleInternalLlmToolExternalCallbackPolicy,
     pub(super) execution_mode: VisibleInternalLlmToolExecutionMode,
     pub(super) preconditions: Vec<VisibleInternalLlmToolPrecondition>,
+}
+
+impl VisibleInternalLlmTool {
+    pub(super) fn start_node_ids(&self) -> std::collections::BTreeSet<String> {
+        let target_node_ids = if self.target_node_ids.is_empty() {
+            vec![self.target_node_id.clone()]
+        } else {
+            self.target_node_ids.clone()
+        };
+        target_node_ids.into_iter().collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

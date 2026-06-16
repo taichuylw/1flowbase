@@ -160,6 +160,17 @@ fn visible_internal_llm_tool_pending_call_value(
         Value::String(pending_call.tool.target_node_id.clone()),
     );
     tool.insert(
+        "target_node_ids".to_string(),
+        Value::Array(
+            pending_call
+                .tool
+                .start_node_ids()
+                .into_iter()
+                .map(Value::String)
+                .collect(),
+        ),
+    );
+    tool.insert(
         "tool_mode".to_string(),
         Value::String(pending_call.tool.tool_mode.as_str().to_string()),
     );
@@ -226,8 +237,21 @@ fn visible_internal_llm_tool_pending_call_from_value(
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|node_id| !node_id.is_empty())
-        .ok_or_else(|| anyhow!("visible internal llm tool pending call is missing target_node_id"))?
-        .to_string();
+        .map(str::to_string)
+        .or_else(|| {
+            visible_internal_llm_tool_pending_target_node_ids(tool)
+                .into_iter()
+                .next()
+        })
+        .ok_or_else(|| {
+            anyhow!("visible internal llm tool pending call is missing target_node_id")
+        })?;
+    let target_node_ids = visible_internal_llm_tool_pending_target_node_ids(tool);
+    let target_node_ids = if target_node_ids.is_empty() {
+        vec![target_node_id.clone()]
+    } else {
+        target_node_ids
+    };
 
     let tool_mode = match tool.get("tool_mode").and_then(Value::as_str).map(str::trim) {
         Some(TOOL_MODE_FUSION) => VisibleInternalLlmToolMode::Fusion,
@@ -272,6 +296,7 @@ fn visible_internal_llm_tool_pending_call_from_value(
                 .filter(|description| !description.is_empty())
                 .map(str::to_string),
             target_node_id,
+            target_node_ids,
             input_schema: tool.get("input_schema").cloned(),
             tool_mode,
             external_tool_policy: if tool_mode == VisibleInternalLlmToolMode::Fusion {
@@ -295,4 +320,20 @@ fn visible_internal_llm_tool_pending_call_from_value(
             ),
         },
     })
+}
+
+fn visible_internal_llm_tool_pending_target_node_ids(tool: &Map<String, Value>) -> Vec<String> {
+    tool.get("target_node_ids")
+        .or_else(|| tool.get("targetNodeIds"))
+        .and_then(Value::as_array)
+        .map(|targets| {
+            targets
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|node_id| !node_id.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }

@@ -541,7 +541,7 @@ where
         });
     }
 
-    let active_node_ids = BTreeSet::from([tool.target_node_id.clone()]);
+    let active_node_ids = tool.start_node_ids();
 
     continue_visible_internal_llm_tool_branch(
         VisibleInternalLlmToolBranchContext {
@@ -1044,6 +1044,7 @@ where
                     name: state.tool_name.clone(),
                     description: None,
                     target_node_id: state.target_node_id.clone(),
+                    target_node_ids: vec![state.target_node_id.clone()],
                     input_schema: None,
                     tool_mode: visible_internal_llm_tool_mode(&variable_pool),
                     external_tool_policy: visible_internal_llm_tool_external_tool_policy(
@@ -1089,6 +1090,7 @@ where
                 name: state.tool_name.clone(),
                 description: None,
                 target_node_id: state.target_node_id.clone(),
+                target_node_ids: vec![state.target_node_id.clone()],
                 input_schema: None,
                 tool_mode: visible_internal_llm_tool_mode(&variable_pool),
                 external_tool_policy: visible_internal_llm_tool_external_tool_policy(
@@ -1359,6 +1361,7 @@ where
                 name: state.tool_name.clone(),
                 description: None,
                 target_node_id: state.target_node_id.clone(),
+                target_node_ids: vec![state.target_node_id.clone()],
                 input_schema: None,
                 tool_mode: visible_internal_llm_tool_mode(&variable_pool),
                 external_tool_policy: visible_internal_llm_tool_external_tool_policy(
