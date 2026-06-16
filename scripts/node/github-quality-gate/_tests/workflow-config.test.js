@@ -454,7 +454,7 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   );
   assert.match(
     workflow,
-    /state-protocols-gate:[\s\S]*?CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_AUTH_TOKEN: \$\{\{ secrets\.ANTHROPIC_AUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/u,
+    /state-protocols-gate:[\s\S]*?CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_AUTH_TOKEN: \$\{\{ secrets\.ANTHROPIC_AUTH_TOKEN \}\}[\s\S]*?ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}[\s\S]*?ANTHROPIC_CUSTOM_MODEL_OPTION: 1flowbase/u,
   );
   assert.match(workflow, /scope: container-images/u);
   assert.match(workflow, /publish_issue: "false"/u);
@@ -556,7 +556,7 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
   );
   assert.match(
     workflow,
-    /CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.CLAUDE_CODE_OAUTH_TOKEN \|\| '' \}\}[\s\S]*?ANTHROPIC_AUTH_TOKEN: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.ANTHROPIC_AUTH_TOKEN \|\| '' \}\}[\s\S]*?ANTHROPIC_API_KEY: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.ANTHROPIC_API_KEY \|\| '' \}\}/u,
+    /CLAUDE_CODE_OAUTH_TOKEN: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.CLAUDE_CODE_OAUTH_TOKEN \|\| '' \}\}[\s\S]*?ANTHROPIC_AUTH_TOKEN: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.ANTHROPIC_AUTH_TOKEN \|\| '' \}\}[\s\S]*?ANTHROPIC_API_KEY: \$\{\{ inputs\.scope == 'state-protocols' && secrets\.ANTHROPIC_API_KEY \|\| '' \}\}[\s\S]*?ANTHROPIC_CUSTOM_MODEL_OPTION: \$\{\{ inputs\.scope == 'state-protocols' && '1flowbase' \|\| '' \}\}/u,
   );
 });
 
