@@ -220,6 +220,16 @@ node scripts/node/cli/acp-claude-smoke.js --model 1flowbase --out-dir tmp/test-g
 node scripts/node/cli/acp-claude-smoke.js --allow-missing-thought
 ```
 
+### `node scripts/node/verify-state-protocols.js [选项]`
+
+固定状态协议回归门禁。按顺序运行 ACP smoke 脚本单测、`api-server anthropic_` 协议投影测试、后端 `dev-up ensure`，最后用真实 Claude Code ACP smoke 验证 `agent_thought_chunk` 与 `agent_message_chunk`。
+
+```bash
+node scripts/node/verify-state-protocols.js
+node scripts/node/verify-state-protocols.js --model 1flowbase --out-dir tmp/test-governance/state-protocols/acp-claude
+node scripts/node/verify-state-protocols.js --skip-live-acp
+```
+
 ### `node scripts/node/tooling.js <command> [args]`
 
 工具聚合入口，支持：

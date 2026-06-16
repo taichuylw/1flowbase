@@ -531,7 +531,7 @@ test("quality gate workflow keeps non-ci dispatch scopes on a single targeted jo
   assert.match(workflow, /scope: \$\{\{ env\.QUALITY_GATE_SCOPE \}\}/u);
   assert.match(
     workflow,
-    /start_postgres: \$\{\{ inputs\.scope == 'repo' \|\| inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u,
+    /start_postgres: \$\{\{ inputs\.scope == 'repo' \|\| inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'state-protocols' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-test-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}/u,
   );
   assert.match(workflow, /publish_issue: "true"/u);
 });

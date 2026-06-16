@@ -54,6 +54,20 @@ test('routeChangedFiles does not route frontend state names to backend consisten
   ]);
 });
 
+test('routeChangedFiles recommends state protocol gates for Anthropic ACP projection changes', () => {
+  const routes = routeChangedFiles([
+    'api/apps/api-server/src/routes/application_public_api/compat_sse/protocol_mappers/anthropic_stream.rs',
+    'scripts/node/acp-claude-smoke/core.js',
+  ]);
+
+  assert(routes.some((route) => route.scope === 'state-protocols'));
+  assert(
+    routes.some((route) =>
+      route.command === 'node scripts/node/verify-state-protocols.js'
+    )
+  );
+});
+
 test('main reads staged changes from env override and never blocks the commit', async () => {
   let stdout = '';
 

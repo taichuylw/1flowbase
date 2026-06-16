@@ -38,6 +38,7 @@ const VALID_SCOPES = new Set([
   'repo-backend',
   'backend',
   'backend-consistency',
+  'state-protocols',
   'coverage',
   'coverage-frontend',
   'coverage-backend',
@@ -157,6 +158,14 @@ function buildGateCommand({ repoRoot, scope }) {
     return {
       command,
       args: [resolveCliEntry(repoRoot, 'container-image-security')],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'state-protocols') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'verify-state-protocols')],
       cwd: repoRoot,
     };
   }

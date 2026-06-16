@@ -45,6 +45,20 @@ test('verify index dispatches backend consistency subcommand', async () => {
   assert.deepEqual(capturedArgv, []);
 });
 
+test('verify index dispatches state protocol subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['state-protocols', '--model', '1flowbase'], {
+    runStateProtocolsImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--model', '1flowbase']);
+});
+
 test('verify index rejects unknown subcommands', async () => {
   await assert.rejects(
     () => main(['unknown']),

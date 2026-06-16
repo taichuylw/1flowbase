@@ -37,6 +37,7 @@ on:
           - repo-backend-check-apps
           - backend
           - backend-consistency
+          - state-protocols
           - coverage
           - coverage-frontend
           - coverage-backend
@@ -106,7 +107,7 @@ jobs:
           report_type: ${{ env.QUALITY_GATE_REPORT_TYPE }}
           environment: ${{ github.event_name == 'schedule' && env.QUALITY_GATE_SCHEDULED_ENVIRONMENT || inputs.environment }}
           publish_issue: "true"
-          start_postgres: ${{ inputs.scope == 'repo' || inputs.scope == 'backend' || inputs.scope == 'backend-consistency' || inputs.scope == 'repo-backend' || startsWith(inputs.scope, 'repo-backend-test-') || inputs.scope == 'coverage' || inputs.scope == 'coverage-backend' || startsWith(inputs.scope, 'coverage-backend-') }}
+          start_postgres: ${{ inputs.scope == 'repo' || inputs.scope == 'backend' || inputs.scope == 'backend-consistency' || inputs.scope == 'state-protocols' || inputs.scope == 'repo-backend' || startsWith(inputs.scope, 'repo-backend-test-') || inputs.scope == 'coverage' || inputs.scope == 'coverage-backend' || startsWith(inputs.scope, 'coverage-backend-') }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v6
         if: always()
