@@ -105,7 +105,7 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
 
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'state-protocols' }), {
     command: process.execPath,
-    args: [path.join(repoRoot, 'scripts', 'node', 'verify-state-protocols.js')],
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-state-protocols.js'), '--skip-live-acp'],
     cwd: repoRoot,
   });
 

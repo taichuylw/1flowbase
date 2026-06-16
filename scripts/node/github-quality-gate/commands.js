@@ -165,7 +165,7 @@ function buildGateCommand({ repoRoot, scope }) {
   if (scope === 'state-protocols') {
     return {
       command,
-      args: [resolveCliEntry(repoRoot, 'verify-state-protocols')],
+      args: [resolveCliEntry(repoRoot, 'verify-state-protocols'), '--skip-live-acp'],
       cwd: repoRoot,
     };
   }
