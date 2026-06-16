@@ -326,16 +326,19 @@ async function runAcpClaudeSmoke(options, deps = {}) {
     return summary;
   }
 
-  const timer = setTimeout(() => {
-    const summary = finish({ timedOut: true });
-    child.kill('SIGTERM');
-    if (options.requireThought && !summary.ok) {
-      process.exitCode = 2;
-    }
-  }, options.timeoutMs);
+  let timer = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(Object.assign(new Error('ACP Claude smoke timed out'), { timedOut: true }));
+    }, options.timeoutMs);
+  });
+  function awaitWithTimeout(promise) {
+    return Promise.race([promise, timeoutPromise]);
+  }
 
   try {
-    const initialize = await request('initialize', {
+    const initialize = await awaitWithTimeout(request('initialize', {
       protocolVersion: 1,
       clientCapabilities: {
         fs: {
@@ -349,12 +352,12 @@ async function runAcpClaudeSmoke(options, deps = {}) {
           terminal_output: false,
         },
       },
-    });
+    }));
 
     const sessionOptions = options.useDefaultSettings
       ? { tools: [] }
       : { tools: [], settingSources: [] };
-    const session = await request('session/new', {
+    const session = await awaitWithTimeout(request('session/new', {
       cwd,
       mcpServers: [],
       _meta: {
@@ -364,30 +367,30 @@ async function runAcpClaudeSmoke(options, deps = {}) {
           options: sessionOptions,
         },
       },
-    });
+    }));
 
     let modelResult = null;
     if (options.model) {
-      modelResult = await request('session/set_config_option', {
+      modelResult = await awaitWithTimeout(request('session/set_config_option', {
         sessionId: session.sessionId,
         configId: 'model',
         value: options.model,
-      });
+      }));
     }
 
     let effortResult = null;
     if (options.effort) {
-      effortResult = await request('session/set_config_option', {
+      effortResult = await awaitWithTimeout(request('session/set_config_option', {
         sessionId: session.sessionId,
         configId: 'effort',
         value: options.effort,
-      });
+      }));
     }
 
-    const promptResult = await request('session/prompt', {
+    const promptResult = await awaitWithTimeout(request('session/prompt', {
       sessionId: session.sessionId,
       prompt: [{ type: 'text', text: options.prompt }],
-    });
+    }));
 
     clearTimeout(timer);
     child.stdin.end();
@@ -396,6 +399,9 @@ async function runAcpClaudeSmoke(options, deps = {}) {
   } catch (error) {
     clearTimeout(timer);
     child.kill('SIGTERM');
+    if (error?.timedOut) {
+      return finish({ timedOut: true });
+    }
     return finish({
       failed: true,
       failureMessage: error instanceof Error ? error.message : String(error),

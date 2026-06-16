@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { EventEmitter } = require('node:events');
+const { PassThrough } = require('node:stream');
 
 const {
   DEFAULT_ADAPTER_PACKAGE,
@@ -9,6 +13,7 @@ const {
   DEFAULT_OUT_DIR,
   DEFAULT_PROMPT,
   parseCliArgs,
+  runAcpClaudeSmoke,
   summarizeAcpEvidence,
 } = require('../core.js');
 
@@ -109,4 +114,32 @@ test('summarizeAcpEvidence requires both thought and message chunks', () => {
   assert.equal(summary.thoughtChars, '先分析'.length);
   assert.equal(summary.messageChars, '最终回答'.length);
   assert.equal(summary.rawThinkingDeltas, 1);
+});
+
+test('runAcpClaudeSmoke returns timeout evidence when the ACP adapter stops responding', { timeout: 500 }, async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'acp-claude-timeout-'));
+  const child = new EventEmitter();
+  child.stdin = {
+    write() {},
+    end() {},
+  };
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  let killCount = 0;
+  child.kill = () => {
+    killCount += 1;
+  };
+
+  const summary = await runAcpClaudeSmoke(
+    parseCliArgs(['--out-dir', 'out', '--timeout-ms', '20']),
+    {
+      repoRoot,
+      spawnImpl: () => child,
+    }
+  );
+
+  assert.equal(summary.ok, false);
+  assert.equal(summary.timedOut, true);
+  assert.ok(killCount > 0);
+  assert.ok(fs.existsSync(path.join(repoRoot, 'out', 'acp-claude-summary.json')));
 });
