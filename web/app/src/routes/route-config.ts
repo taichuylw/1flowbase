@@ -52,11 +52,13 @@ export const APP_ROUTES: AppRouteDefinition[] = [
     guard: 'session-required'
   },
   {
-    id: 'tools',
-    path: '/tools',
-    navLabelKey: "auto.tools",
+    id: 'templates',
+    path: '/templates',
+    navLabelKey: "auto.templates",
     chromeSlot: 'primary',
-    selectedMatchers: [(pathname) => pathname.startsWith('/tools')],
+    selectedMatchers: [
+      (pathname) => pathname === '/templates' || pathname.startsWith('/templates/')
+    ],
     permissionKey: 'route_page.view.all',
     guard: 'session-required'
   },

@@ -345,6 +345,89 @@ export function createStyleBoundaryOrchestrationState() {
   };
 }
 
+function createStyleBoundaryOfficialTemplatePackage() {
+  return {
+    schema_version: '1flowbase.application-template/v1',
+    application: {
+      application_type: 'agent_flow',
+      name: 'Boundary Template',
+      description: 'Style boundary AgentFlow template',
+      icon: 'RobotOutlined',
+      icon_type: 'iconfont',
+      icon_background: '#E6F7F2'
+    },
+    flow_document: createStyleBoundaryAgentFlowDocument(),
+    dependencies: []
+  };
+}
+
+export function seedStyleBoundaryTemplateFetch() {
+  if (typeof globalThis.fetch !== 'function') {
+    return;
+  }
+
+  styleBoundaryOriginalFetch ??= globalThis.fetch.bind(globalThis);
+  const originalFetch = styleBoundaryOriginalFetch;
+
+  globalThis.fetch = async (input, init) => {
+    const url = getStyleBoundaryRequestUrl(input);
+    const method = getStyleBoundaryMethod(input, init);
+    const requestUrl = parseStyleBoundaryRequestUrl(url);
+    const commonResponse = getStyleBoundaryCommonResponse(requestUrl, method);
+
+    if (commonResponse) {
+      return commonResponse;
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      requestUrl.pathname ===
+        '/api/console/applications/orchestration/templates/official-catalog'
+    ) {
+      return createStyleBoundaryJsonResponse({
+        data: {
+          source: {
+            source_kind: 'official_registry',
+            source_label: i18nText('appShell', 'auto.official_source'),
+            index_url:
+              'https://github.com/taichuy/1flowbase-official-plugins/raw/main/agent-flow/catalog/v1/index.json'
+          },
+          page: {
+            page: 1,
+            page_size: 100,
+            next_cursor: null
+          },
+          entries: [
+            {
+              workflow_id: 'boundary-template',
+              schema_version: '1flowbase.application-template/v1',
+              application: createStyleBoundaryOfficialTemplatePackage().application,
+              template_url:
+                'https://example.com/agent-flow/workflows/boundary-template/template.json',
+              template_sha256: 'sha256:boundary-template',
+              updated_at: '2026-06-16T00:00:00.000Z'
+            }
+          ]
+        },
+        meta: null
+      });
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      requestUrl.pathname ===
+        '/api/console/applications/orchestration/templates/official/boundary-template'
+    ) {
+      return createStyleBoundaryJsonResponse({
+        data: createStyleBoundaryOfficialTemplatePackage(),
+        meta: null
+      });
+    }
+
+    return originalFetch(input as RequestInfo, init);
+  };
+}
+
 export function seedStyleBoundarySettingsFetch() {
   if (typeof globalThis.fetch !== 'function') {
     return;

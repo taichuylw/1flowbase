@@ -73,6 +73,37 @@ export interface ConsoleAgentFlowTemplatePackage {
   dependencies: ConsoleAgentFlowTemplateDependency[];
 }
 
+export interface ConsoleOfficialAgentFlowTemplateCatalogSource {
+  source_kind: string;
+  source_label: string;
+  index_url: string;
+}
+
+export interface ConsoleOfficialAgentFlowTemplateCatalogPage {
+  page: number;
+  page_size: number;
+  next_cursor: string | null;
+}
+
+export interface ConsoleOfficialAgentFlowTemplateCatalogEntry {
+  workflow_id: string;
+  schema_version: string;
+  application: ConsoleAgentFlowTemplateApplication;
+  template_url: string;
+  template_sha256: string;
+  updated_at: string;
+}
+
+export interface ConsoleOfficialAgentFlowTemplateCatalog {
+  source: ConsoleOfficialAgentFlowTemplateCatalogSource;
+  page: ConsoleOfficialAgentFlowTemplateCatalogPage;
+  entries: ConsoleOfficialAgentFlowTemplateCatalogEntry[];
+}
+
+export interface ListConsoleOfficialAgentFlowTemplateCatalogRequest {
+  cursor?: string | null;
+}
+
 export interface ConsoleAgentFlowTemplateDependencyStatus {
   dependency: ConsoleAgentFlowTemplateDependency;
   status: string;
@@ -181,6 +212,36 @@ export function importConsoleAgentFlowTemplate(
     method: 'POST',
     body: input,
     csrfToken,
+    baseUrl
+  });
+}
+
+export function listConsoleOfficialAgentFlowTemplateCatalog(
+  request: ListConsoleOfficialAgentFlowTemplateCatalogRequest = {},
+  baseUrl?: string
+): Promise<ConsoleOfficialAgentFlowTemplateCatalog> {
+  const params = new URLSearchParams();
+
+  if (request.cursor) {
+    params.set('cursor', request.cursor);
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+
+  return apiFetch<ConsoleOfficialAgentFlowTemplateCatalog>({
+    path: `/api/console/applications/orchestration/templates/official-catalog${query}`,
+    baseUrl
+  });
+}
+
+export function downloadConsoleOfficialAgentFlowTemplate(
+  workflowId: string,
+  baseUrl?: string
+): Promise<ConsoleAgentFlowTemplatePackage> {
+  return apiFetch<ConsoleAgentFlowTemplatePackage>({
+    path: `/api/console/applications/orchestration/templates/official/${encodeURIComponent(
+      workflowId
+    )}`,
     baseUrl
   });
 }

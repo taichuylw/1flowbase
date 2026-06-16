@@ -31,7 +31,7 @@ import { FrontStagePage } from '../features/frontstage/pages/FrontStagePage';
 import type { MeSectionKey } from '../features/me/lib/me-sections';
 import { MePage } from '../features/me/pages/MePage';
 import type { SettingsSectionKey } from '../features/settings/lib/settings-sections';
-import { ToolsPage } from '../features/tools/pages/ToolsPage';
+import { TemplatesPage } from '../features/templates/pages/TemplatesPage';
 import { RouteGuard } from '../routes/route-guards';
 import { LoadingState } from '../shared/ui/loading-state/LoadingState';
 import { useAuthStore } from '../state/auth-store';
@@ -201,13 +201,13 @@ const embeddedAppsRoute = createRoute({
   )
 });
 
-const toolsRoute = createRoute({
+const templatesRoute = createRoute({
   getParentRoute: () => shellRoute,
-  path: '/tools',
+  path: '/templates',
   notFoundComponent: NotFoundPage,
   component: () => (
-    <RouteGuard routeId="tools">
-      <ToolsPage />
+    <RouteGuard routeId="templates">
+      <TemplatesPage />
     </RouteGuard>
   )
 });
@@ -453,7 +453,7 @@ const routeTree = rootRoute.addChildren([
     applicationLogsRoute,
     applicationMonitoringRoute,
     embeddedAppsRoute,
-    toolsRoute,
+    templatesRoute,
     settingsIndexRoute,
     settingsDocsRoute,
     settingsSystemRuntimeRoute,

@@ -44,6 +44,8 @@ use utoipa::OpenApi;
         crate::routes::application_orchestration::export_agent_flow_template,
         crate::routes::application_orchestration::preview_agent_flow_template,
         crate::routes::application_orchestration::import_agent_flow_template,
+        crate::routes::application_orchestration::list_official_agent_flow_template_catalog,
+        crate::routes::application_orchestration::download_official_agent_flow_template,
         crate::routes::application_orchestration::restore_version,
         crate::routes::application_orchestration::update_version,
         crate::routes::application_runtime::start_flow_debug_run,

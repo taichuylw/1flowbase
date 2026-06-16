@@ -8,6 +8,7 @@ use time::OffsetDateTime;
 use crate::host_infrastructure::HostInfrastructureRegistry;
 use crate::openapi_docs::ApiDocsRegistry;
 use crate::{
+    official_agent_flow_templates::OfficialAgentFlowTemplateSourcePort,
     provider_runtime::ApiRuntimeServices,
     runtime_activity::ApplicationRuntimeActivityTracker,
     runtime_profile_client::{ApiRuntimeProfilePort, PluginRunnerSystemPort},
@@ -25,6 +26,7 @@ pub struct ApiState {
     pub api_runtime_profile: Arc<dyn ApiRuntimeProfilePort>,
     pub plugin_runner_system: Arc<dyn PluginRunnerSystemPort>,
     pub official_plugin_source: Arc<dyn OfficialPluginSourcePort>,
+    pub official_agent_flow_template_source: Arc<dyn OfficialAgentFlowTemplateSourcePort>,
     pub provider_install_root: String,
     pub provider_secret_master_key: String,
     pub host_extension_dropin_root: String,

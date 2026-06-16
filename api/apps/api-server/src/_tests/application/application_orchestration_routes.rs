@@ -334,3 +334,60 @@ async fn application_orchestration_template_routes_export_preview_and_import() {
         json!(source_node_id)
     );
 }
+
+#[tokio::test]
+async fn application_orchestration_official_template_routes_list_and_download_catalog_entry() {
+    let app = test_app().await;
+    let (cookie, _) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let catalog = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/applications/orchestration/templates/official-catalog")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(catalog.status(), StatusCode::OK);
+    let catalog_body: Value =
+        serde_json::from_slice(&to_bytes(catalog.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let entry = &catalog_body["data"]["entries"][0];
+
+    assert_eq!(entry["workflow_id"], json!("multimodal-mount-test"));
+    assert_eq!(
+        entry["schema_version"],
+        json!("1flowbase.application-template/v1")
+    );
+    assert_eq!(entry["application"]["name"], json!("多模态挂载测试"));
+    assert!(entry.get("dependency_summary").is_none());
+    assert!(entry.get("tags").is_none());
+    assert!(entry.get("author").is_none());
+    assert!(entry.get("status").is_none());
+
+    let template = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/console/applications/orchestration/templates/official/multimodal-mount-test")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(template.status(), StatusCode::OK);
+    let template_body: Value =
+        serde_json::from_slice(&to_bytes(template.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        template_body["data"]["schema_version"],
+        json!("1flowbase.application-template/v1")
+    );
+    assert_eq!(
+        template_body["data"]["application"]["name"],
+        json!("多模态挂载测试")
+    );
+    assert_eq!(template_body["data"]["dependencies"], json!([]));
+}

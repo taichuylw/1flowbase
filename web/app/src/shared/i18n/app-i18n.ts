@@ -35,8 +35,8 @@ import sharedZhHans from './resources/zh_Hans.json';
 import sharedEnUS from './resources/en_US.json';
 import sharedUiZhHans from '../../shared/ui/i18n/zh_Hans.json';
 import sharedUiEnUS from '../../shared/ui/i18n/en_US.json';
-import toolsZhHans from '../../features/tools/i18n/zh_Hans.json';
-import toolsEnUS from '../../features/tools/i18n/en_US.json';
+import templatesZhHans from '../../features/templates/i18n/zh_Hans.json';
+import templatesEnUS from '../../features/templates/i18n/en_US.json';
 
 const appTranslationResources = {
   zh_Hans: {
@@ -52,7 +52,7 @@ const appTranslationResources = {
     settings: settingsZhHans,
     shared: sharedZhHans,
     sharedUi: sharedUiZhHans,
-    tools: toolsZhHans
+    templates: templatesZhHans
   },
   en_US: {
     agentFlow: agentFlowEnUS,
@@ -67,7 +67,7 @@ const appTranslationResources = {
     settings: settingsEnUS,
     shared: sharedEnUS,
     sharedUi: sharedUiEnUS,
-    tools: toolsEnUS
+    templates: templatesEnUS
   }
 } as const;
 

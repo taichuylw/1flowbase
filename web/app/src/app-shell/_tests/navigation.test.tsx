@@ -57,7 +57,10 @@ describe('Navigation', () => {
     expect(within(nav).getByRole('link', { name: '工作台' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: '前台' })).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: '子系统' })).toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: '工具' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: '模板' })).toHaveAttribute(
+      'href',
+      '/templates'
+    );
     expect(within(nav).queryByRole('link', { name: '设置' })).not.toBeInTheDocument();
     expect(await screen.findByRole('link', { name: '子系统', current: 'page' })).toBeInTheDocument();
   });

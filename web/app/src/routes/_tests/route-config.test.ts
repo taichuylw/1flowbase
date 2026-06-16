@@ -9,11 +9,15 @@ describe('route truth layer', () => {
       'frontstage',
       'application-detail',
       'embedded-apps',
-      'tools',
+      'templates',
       'settings',
       'me',
       'sign-in'
     ]);
+    expect(APP_ROUTES.find((route) => route.id === 'templates')).toMatchObject({
+      path: '/templates',
+      navLabelKey: 'auto.templates'
+    });
     expect(getSelectedRouteId('/settings')).toBe('settings');
     expect(getSelectedRouteId('/settings/docs')).toBe('settings');
     expect(getSelectedRouteId('/settings/roles')).toBe('settings');
@@ -24,6 +28,9 @@ describe('route truth layer', () => {
     expect(getSelectedRouteId('/frontstage/pages/page-1')).toBe('frontstage');
     expect(getSelectedRouteId('/frontstage/workspace-1')).toBe('home');
     expect(getSelectedRouteId('/frontstage/workspace-1/page-1')).toBe('home');
+    expect(getSelectedRouteId('/templates')).toBe('templates');
+    expect(getSelectedRouteId('/templates/agent-flow')).toBe('templates');
+    expect(getSelectedRouteId('/templates-foo')).toBe('home');
     expect(getSelectedRouteId('/applications/app-1')).toBe('home');
     expect(getSelectedRouteId('/applications/app-1/orchestration')).toBe('home');
     expect(getSelectedRouteId('/applications/app-1/api')).toBe('home');

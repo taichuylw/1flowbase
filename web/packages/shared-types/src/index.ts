@@ -9,7 +9,7 @@ export type AppRouteId =
   | 'application-detail'
   | 'frontstage'
   | 'embedded-apps'
-  | 'tools'
+  | 'templates'
   | 'settings'
   | 'me'
   | 'sign-in';
