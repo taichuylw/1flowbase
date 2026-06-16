@@ -16,13 +16,64 @@ impl VisibleInternalLlmToolExternalToolPolicy {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum VisibleInternalLlmToolMode {
+    #[default]
+    Agent,
+    Fusion,
+}
+
+impl VisibleInternalLlmToolMode {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Agent => TOOL_MODE_AGENT,
+            Self::Fusion => TOOL_MODE_FUSION,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum VisibleInternalLlmToolExternalCallbackPolicy {
+    Forbidden,
+    #[default]
+    Inherited,
+}
+
+impl VisibleInternalLlmToolExternalCallbackPolicy {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Forbidden => EXTERNAL_CALLBACK_POLICY_FORBIDDEN,
+            Self::Inherited => EXTERNAL_CALLBACK_POLICY_INHERITED,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum VisibleInternalLlmToolExecutionMode {
+    #[default]
+    SequentialResume,
+    BoundedParallelPanel,
+}
+
+impl VisibleInternalLlmToolExecutionMode {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::SequentialResume => EXECUTION_MODE_SEQUENTIAL_RESUME,
+            Self::BoundedParallelPanel => EXECUTION_MODE_BOUNDED_PARALLEL_PANEL,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct VisibleInternalLlmTool {
     pub(super) name: String,
     pub(super) description: Option<String>,
     pub(super) target_node_id: String,
     pub(super) input_schema: Option<Value>,
+    pub(super) tool_mode: VisibleInternalLlmToolMode,
     pub(super) external_tool_policy: VisibleInternalLlmToolExternalToolPolicy,
+    pub(super) external_callback_policy: VisibleInternalLlmToolExternalCallbackPolicy,
+    pub(super) execution_mode: VisibleInternalLlmToolExecutionMode,
     pub(super) preconditions: Vec<VisibleInternalLlmToolPrecondition>,
 }
 

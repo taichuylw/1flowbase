@@ -1,3 +1,6 @@
+use orchestration_runtime::answer_projection::{
+    answer_segments_from_value, AnswerProjectionSegment, ANSWER_SEGMENTS_KEY,
+};
 use serde_json::{json, Value};
 
 use crate::application_public_api::native::{self, NativeRunResult, NativeRunStatus};
@@ -32,6 +35,7 @@ pub fn native_result_from_flow_run(
         node_input_payload: flow_run.input_payload.clone(),
         metadata,
         answer: extract_answer(&flow_run.output_payload),
+        answer_segments: extract_answer_segments(&flow_run.output_payload),
         required_action: None,
         tool_calls: extract_tool_calls(&flow_run.output_payload),
         usage: extract_usage(&flow_run.output_payload),
@@ -102,6 +106,20 @@ fn extract_answer(output_payload: &Value) -> Option<String> {
         .or_else(|| output_payload.get("output"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
+}
+
+fn extract_answer_segments(output_payload: &Value) -> Option<Vec<AnswerProjectionSegment>> {
+    let segments = output_payload
+        .get(ANSWER_SEGMENTS_KEY)
+        .or_else(|| {
+            output_payload
+                .get("output")
+                .and_then(|output| output.get(ANSWER_SEGMENTS_KEY))
+        })
+        .map(answer_segments_from_value)
+        .unwrap_or_default();
+
+    (!segments.is_empty()).then_some(segments)
 }
 
 fn extract_tool_calls(output_payload: &Value) -> Option<Value> {

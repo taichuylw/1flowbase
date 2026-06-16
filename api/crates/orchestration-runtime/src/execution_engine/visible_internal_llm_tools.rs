@@ -2,6 +2,7 @@ use super::*;
 
 mod callback_state;
 mod media_context;
+mod panel_execution;
 mod payloads;
 mod registry;
 mod types;
@@ -16,8 +17,14 @@ pub(super) use self::media_context::{
     visible_internal_llm_tool_blocks_external_tools,
 };
 use self::media_context::{
+    visible_internal_llm_tool_blocks_external_callback, visible_internal_llm_tool_execution_mode,
+    visible_internal_llm_tool_external_callback_policy,
     visible_internal_llm_tool_external_tool_policy, visible_internal_llm_tool_inherited_context,
-    visible_internal_llm_tool_llm_resolved_inputs, visible_internal_llm_tool_precondition_error,
+    visible_internal_llm_tool_llm_resolved_inputs, visible_internal_llm_tool_mode,
+    visible_internal_llm_tool_precondition_error,
+};
+use self::panel_execution::{
+    execute_bounded_parallel_panel, BoundedParallelPanelContext, BoundedParallelPanelExecution,
 };
 use self::payloads::*;
 use self::registry::visible_internal_llm_tools;
@@ -34,8 +41,14 @@ const VISIBLE_INTERNAL_LLM_TOOL_SOURCE_HANDLE_PREFIX: &str = "visible_internal_l
 const VISIBLE_INTERNAL_LLM_TOOL_CALLBACK_STATE_KEY: &str = "__visible_internal_llm_tool_callback";
 const MAX_VISIBLE_INTERNAL_LLM_TOOL_ROUNDS: usize = 8;
 const TOOL_RESULT_NODE_TYPE: &str = "tool_result";
+const TOOL_MODE_AGENT: &str = "agent";
+const TOOL_MODE_FUSION: &str = "fusion";
 const EXTERNAL_TOOL_POLICY_FORBIDDEN: &str = "forbidden";
 const EXTERNAL_TOOL_POLICY_INHERITED: &str = "inherited";
+const EXTERNAL_CALLBACK_POLICY_FORBIDDEN: &str = "forbidden";
+const EXTERNAL_CALLBACK_POLICY_INHERITED: &str = "inherited";
+const EXECUTION_MODE_SEQUENTIAL_RESUME: &str = "sequential_resume";
+const EXECUTION_MODE_BOUNDED_PARALLEL_PANEL: &str = "bounded_parallel_panel";
 const VISIBLE_INTERNAL_LLM_TOOL_PRECONDITION_MEDIA_CONTENT_AVAILABLE: &str =
     "media_content_available";
 
@@ -466,7 +479,10 @@ where
                 .get("arguments")
                 .cloned()
                 .unwrap_or_else(|| json!({})),
+            "tool_mode": tool.tool_mode.as_str(),
             "external_tool_policy": tool.external_tool_policy.as_str(),
+            "external_callback_policy": tool.external_callback_policy.as_str(),
+            "execution_mode": tool.execution_mode.as_str(),
             "preconditions": visible_internal_llm_tool_preconditions_value(&tool.preconditions),
             "context": inherited_context,
         }),
@@ -570,6 +586,50 @@ where
         let Some(node) = plan.nodes.get(node_id) else {
             continue;
         };
+        if let Some(panel_execution) = execute_bounded_parallel_panel(
+            BoundedParallelPanelContext {
+                plan,
+                runtime_context,
+                invoker,
+                main_node_id,
+                tool_call,
+                tool,
+            },
+            node_id,
+            &mut variable_pool,
+            &mut active_node_ids,
+        )
+        .await?
+        {
+            match panel_execution {
+                BoundedParallelPanelExecution::Completed(output) => {
+                    branch_text = output.branch_text;
+                    provider_events.extend(output.provider_events);
+                    route_events.extend(output.route_events);
+                    continue;
+                }
+                BoundedParallelPanelExecution::Waiting {
+                    wait,
+                    branch_text,
+                    route_events,
+                } => {
+                    return Ok(VisibleInternalLlmToolBranchExecution::Waiting {
+                        wait,
+                        branch_text,
+                        route_events,
+                    });
+                }
+                BoundedParallelPanelExecution::Failed {
+                    error_payload,
+                    route_events,
+                } => {
+                    return Ok(VisibleInternalLlmToolBranchExecution::Failed {
+                        error_payload,
+                        route_events,
+                    });
+                }
+            }
+        }
         let resolved_inputs = match resolve_node_inputs(node, &variable_pool) {
             Ok(inputs) => inputs,
             Err(error) => {
@@ -744,6 +804,14 @@ where
                 variable_pool,
                 &execution.output_payload,
             ) {
+                if visible_internal_llm_tool_blocks_external_callback(variable_pool) {
+                    return Ok(VisibleInternalLlmToolNodeExecution::Failed(json!({
+                        "error_code": "visible_internal_llm_tool_external_callback_forbidden",
+                        "message": "visible internal LLM tool external callback is forbidden by the mounted tool policy",
+                        "node_id": node.node_id,
+                        "request_payload": wait.request_payload,
+                    })));
+                }
                 wait.node_trace = Some(NodeExecutionTrace {
                     node_id: node.node_id.clone(),
                     node_type: node.node_type.clone(),
@@ -977,9 +1045,14 @@ where
                     description: None,
                     target_node_id: state.target_node_id.clone(),
                     input_schema: None,
+                    tool_mode: visible_internal_llm_tool_mode(&variable_pool),
                     external_tool_policy: visible_internal_llm_tool_external_tool_policy(
                         &variable_pool,
                     ),
+                    external_callback_policy: visible_internal_llm_tool_external_callback_policy(
+                        &variable_pool,
+                    ),
+                    execution_mode: visible_internal_llm_tool_execution_mode(&variable_pool),
                     preconditions: visible_internal_llm_tool_preconditions_from_variable_pool(
                         &variable_pool,
                     ),
@@ -1017,9 +1090,14 @@ where
                 description: None,
                 target_node_id: state.target_node_id.clone(),
                 input_schema: None,
+                tool_mode: visible_internal_llm_tool_mode(&variable_pool),
                 external_tool_policy: visible_internal_llm_tool_external_tool_policy(
                     &variable_pool,
                 ),
+                external_callback_policy: visible_internal_llm_tool_external_callback_policy(
+                    &variable_pool,
+                ),
+                execution_mode: visible_internal_llm_tool_execution_mode(&variable_pool),
                 preconditions: visible_internal_llm_tool_preconditions_from_variable_pool(
                     &variable_pool,
                 ),
@@ -1282,9 +1360,14 @@ where
                 description: None,
                 target_node_id: state.target_node_id.clone(),
                 input_schema: None,
+                tool_mode: visible_internal_llm_tool_mode(&variable_pool),
                 external_tool_policy: visible_internal_llm_tool_external_tool_policy(
                     &variable_pool,
                 ),
+                external_callback_policy: visible_internal_llm_tool_external_callback_policy(
+                    &variable_pool,
+                ),
+                execution_mode: visible_internal_llm_tool_execution_mode(&variable_pool),
                 preconditions: visible_internal_llm_tool_preconditions_from_variable_pool(
                     &variable_pool,
                 ),

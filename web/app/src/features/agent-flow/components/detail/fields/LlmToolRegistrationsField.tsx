@@ -1,17 +1,28 @@
 import type { FlowNodeDocument } from '@1flowbase/flow-schema';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Input, List, Switch, Typography } from 'antd';
+import {
+  Button,
+  Checkbox,
+  Input,
+  List,
+  Select,
+  Switch,
+  Typography
+} from 'antd';
 import { useRef, useState } from 'react';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
   DEFAULT_LLM_EXTERNAL_TOOL_POLICY,
   DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
+  DEFAULT_LLM_TOOL_MODE,
+  getLlmToolMode,
   getLlmVisibleInternalTools,
   getLlmVisibleInternalToolsEnabled,
   isLlmToolIdentifier,
   type LlmExternalToolPolicy,
   type LlmInternalLlmNodePolicy,
+  type LlmToolMode,
   type LlmVisibleInternalTool
 } from '../../../lib/llm-node-config';
 import { parseJsonSchemaInput } from '../../../lib/output-contract/schema';
@@ -85,6 +96,7 @@ function buildNextTool(
     tool_name: toolName,
     connector_id: toolName,
     target_node_id: '',
+    tool_mode: DEFAULT_LLM_TOOL_MODE,
     internal_llm_node_policy: DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
     external_tool_policy: DEFAULT_LLM_EXTERNAL_TOOL_POLICY,
     input_schema: { type: 'object' }
@@ -97,6 +109,7 @@ interface LlmToolRegistrationDraft {
   input_schema: Record<string, unknown>;
   preconditions: Array<Record<string, unknown>>;
   connector_id: string;
+  tool_mode: LlmToolMode;
   internal_llm_node_policy: LlmInternalLlmNodePolicy;
   external_tool_policy: LlmExternalToolPolicy;
 }
@@ -169,9 +182,7 @@ function argumentPathFromValue(value: unknown): string[] {
 }
 
 function preconditionArgumentPath(value: Record<string, unknown>) {
-  const path = argumentPathFromValue(
-    value.argument_path ?? value.argumentPath
-  );
+  const path = argumentPathFromValue(value.argument_path ?? value.argumentPath);
 
   return path.length > 0 ? path : ['media'];
 }
@@ -228,12 +239,12 @@ function mediaSchemaPreconditions(value: Record<string, unknown>) {
   return [createDefaultToolPrecondition()];
 }
 
-function parseToolPreconditionsInput(
-  value: string
-): { ok: true; preconditions: Array<Record<string, unknown>> } | {
-  ok: false;
-  message: string;
-} {
+function parseToolPreconditionsInput(value: string):
+  | { ok: true; preconditions: Array<Record<string, unknown>> }
+  | {
+      ok: false;
+      message: string;
+    } {
   const trimmedValue = value.trim();
 
   if (!trimmedValue) {
@@ -295,12 +306,10 @@ function parseToolPreconditionsProtocolInput(
     : { ok: false, message: parsed.message };
 }
 
-function splitToolRegistrationSchema(value: Record<string, unknown>):
-  | {
-      input_schema: Record<string, unknown>;
-      preconditions: Array<Record<string, unknown>> | null;
-    }
-  | null {
+function splitToolRegistrationSchema(value: Record<string, unknown>): {
+  input_schema: Record<string, unknown>;
+  preconditions: Array<Record<string, unknown>> | null;
+} | null {
   const inputSchema = isRecord(value.input_schema)
     ? value.input_schema
     : isRecord(value.inputSchema)
@@ -350,6 +359,7 @@ function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
     ? tool.input_schema
     : createDefaultJsonSchema();
   const embeddedToolConfig = splitToolRegistrationSchema(inputSchema);
+  const toolMode = getLlmToolMode(tool);
 
   return {
     tool_name: tool.tool_name,
@@ -360,10 +370,16 @@ function draftFromTool(tool: LlmVisibleInternalTool): LlmToolRegistrationDraft {
         ? recordArray(tool.preconditions)
         : (embeddedToolConfig?.preconditions ?? []),
     connector_id: tool.connector_id ?? tool.tool_name,
+    tool_mode: toolMode,
     internal_llm_node_policy:
-      tool.internal_llm_node_policy ?? DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY,
+      toolMode === 'fusion'
+        ? 'allowed'
+        : (tool.internal_llm_node_policy ??
+          DEFAULT_LLM_INTERNAL_LLM_NODE_POLICY),
     external_tool_policy:
-      tool.external_tool_policy ?? DEFAULT_LLM_EXTERNAL_TOOL_POLICY
+      toolMode === 'fusion'
+        ? 'forbidden'
+        : (tool.external_tool_policy ?? DEFAULT_LLM_EXTERNAL_TOOL_POLICY)
   };
 }
 
@@ -381,8 +397,11 @@ function toolFromDraft(draft: LlmToolRegistrationDraft, targetNodeId: string) {
     connector_id: connectorId,
     target_node_id: targetNodeId,
     description: draft.description.trim() || undefined,
-    internal_llm_node_policy: draft.internal_llm_node_policy,
-    external_tool_policy: draft.external_tool_policy,
+    tool_mode: draft.tool_mode,
+    internal_llm_node_policy:
+      draft.tool_mode === 'fusion' ? 'allowed' : draft.internal_llm_node_policy,
+    external_tool_policy:
+      draft.tool_mode === 'fusion' ? 'forbidden' : draft.external_tool_policy,
     input_schema: draft.input_schema,
     preconditions:
       draft.preconditions.length > 0
@@ -483,7 +502,13 @@ export function LlmToolRegistrationsField({
       currentDraft
         ? {
             ...currentDraft,
-            ...patch
+            ...patch,
+            ...(patch.tool_mode === 'fusion'
+              ? {
+                  internal_llm_node_policy: 'allowed' as const,
+                  external_tool_policy: 'forbidden' as const
+                }
+              : {})
           }
         : currentDraft
     );
@@ -534,7 +559,9 @@ export function LlmToolRegistrationsField({
     updateDraft({ input_schema: schema });
   }
 
-  function updatePreconditions(nextPreconditions: Array<Record<string, unknown>>) {
+  function updatePreconditions(
+    nextPreconditions: Array<Record<string, unknown>>
+  ) {
     updateDraft({ preconditions: nextPreconditions });
     setPreconditionsEditorValid(true);
   }
@@ -563,8 +590,8 @@ export function LlmToolRegistrationsField({
     onChange: (nextPreconditions: Array<Record<string, unknown>>) => void
   ) {
     onChange(
-      preconditions.filter((_, preconditionIndex) =>
-        preconditionIndex !== index
+      preconditions.filter(
+        (_, preconditionIndex) => preconditionIndex !== index
       )
     );
   }
@@ -895,25 +922,56 @@ export function LlmToolRegistrationsField({
                   'auto.internal_llm_node_policy'
                 )}
                 checked={draft.internal_llm_node_policy === 'allowed'}
+                disabled={draft.tool_mode === 'fusion'}
                 onChange={(checked) =>
                   updateDraft({
-                    internal_llm_node_policy: checked ? 'allowed' : 'forbidden'
+                    internal_llm_node_policy: checked ? 'allowed' : 'forbidden',
+                    ...(checked ? {} : { tool_mode: 'agent' as const })
                   })
                 }
               />
             </div>
-            <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.external_tool_policy')}</span>
-              <Switch
-                aria-label={i18nText('agentFlow', 'auto.external_tool_policy')}
-                checked={draft.external_tool_policy === 'inherited'}
-                onChange={(checked) =>
-                  updateDraft({
-                    external_tool_policy: checked ? 'inherited' : 'forbidden'
-                  })
-                }
-              />
-            </div>
+            {draft.internal_llm_node_policy === 'allowed' ? (
+              <label style={TOOL_FORM_ROW_STYLE}>
+                <span>{i18nText('agentFlow', 'auto.tool_mode')}</span>
+                <Select
+                  aria-label={i18nText('agentFlow', 'auto.tool_mode')}
+                  options={[
+                    {
+                      label: i18nText('agentFlow', 'auto.tool_mode_agent'),
+                      value: 'agent'
+                    },
+                    {
+                      label: i18nText('agentFlow', 'auto.tool_mode_fusion'),
+                      value: 'fusion'
+                    }
+                  ]}
+                  value={draft.tool_mode}
+                  onChange={(nextMode: LlmToolMode) =>
+                    updateDraft({ tool_mode: nextMode })
+                  }
+                />
+              </label>
+            ) : null}
+            {draft.tool_mode === 'agent' ? (
+              <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
+                <span>
+                  {i18nText('agentFlow', 'auto.external_tool_policy')}
+                </span>
+                <Switch
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.external_tool_policy'
+                  )}
+                  checked={draft.external_tool_policy === 'inherited'}
+                  onChange={(checked) =>
+                    updateDraft({
+                      external_tool_policy: checked ? 'inherited' : 'forbidden'
+                    })
+                  }
+                />
+              </div>
+            ) : null}
             <div style={TOOL_FORM_ROW_STYLE}>
               <span>{i18nText('agentFlow', 'auto.tool_preconditions')}</span>
               <JsonProtocolInlineEditor

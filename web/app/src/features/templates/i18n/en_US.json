@@ -1,0 +1,21 @@
+{
+  "auto": {
+    "actions": "Actions",
+    "catalog_load_failed": "Template catalog failed to load",
+    "catalog_page_summary": "Page {{value1}} / {{value2}} per page",
+    "description": "Description",
+    "description_empty": "No description",
+    "empty_catalog": "No official templates",
+    "import_template": "Import template",
+    "official_agent_flow_templates_description": "Import AgentFlow applications from the official template catalog.",
+    "refresh_catalog": "Refresh catalog",
+    "retry": "Retry",
+    "template_import_failed": "Template import failed",
+    "template_imported": "Template imported",
+    "template_info": "Template",
+    "template_prepare_failed": "Template preparation failed",
+    "template_hash": "Template hash",
+    "templates": "Templates",
+    "updated_at": "Updated at"
+  }
+}

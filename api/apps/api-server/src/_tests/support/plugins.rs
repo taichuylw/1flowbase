@@ -4,6 +4,9 @@ use super::*;
 #[derive(Clone, Default)]
 pub(super) struct InMemoryOfficialPluginSource;
 
+#[derive(Clone, Default)]
+pub(super) struct InMemoryOfficialAgentFlowTemplateSource;
+
 #[async_trait]
 impl OfficialPluginSourcePort for InMemoryOfficialPluginSource {
     async fn list_official_catalog(&self) -> anyhow::Result<OfficialPluginCatalogSnapshot> {
@@ -89,5 +92,96 @@ impl OfficialPluginSourcePort for InMemoryOfficialPluginSource {
 
     fn trusted_public_keys(&self) -> Vec<plugin_framework::TrustedPublicKey> {
         vec![official_upload_public_key()]
+    }
+}
+
+#[async_trait]
+impl OfficialAgentFlowTemplateSourcePort for InMemoryOfficialAgentFlowTemplateSource {
+    async fn list_catalog_page(
+        &self,
+        _cursor: Option<String>,
+    ) -> anyhow::Result<OfficialAgentFlowTemplateCatalogSnapshot> {
+        let template = build_agent_flow_template_package();
+        let template_bytes = serde_json::to_vec(&template)?;
+
+        Ok(OfficialAgentFlowTemplateCatalogSnapshot {
+            source: OfficialAgentFlowTemplateCatalogSource {
+                source_kind: "official_registry".to_string(),
+                source_label: "官方源".to_string(),
+                index_url:
+                    "https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/agent-flow/catalog/v1/index.json"
+                        .to_string(),
+            },
+            page: OfficialAgentFlowTemplateCatalogPage {
+                page: 1,
+                page_size: 100,
+                next_cursor: None,
+            },
+            entries: vec![OfficialAgentFlowTemplateCatalogEntry {
+                workflow_id: "multimodal-mount-test".to_string(),
+                schema_version: "1flowbase.application-template/v1".to_string(),
+                application: template.application.clone(),
+                template_url:
+                    "https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/agent-flow/workflows/multimodal-mount-test/template.json"
+                        .to_string(),
+                template_sha256: format!("sha256:{:x}", Sha256::digest(&template_bytes)),
+                updated_at: "2026-06-16T00:00:00.000Z".to_string(),
+            }],
+        })
+    }
+
+    async fn download_template(
+        &self,
+        workflow_id: &str,
+    ) -> anyhow::Result<control_plane::flow::AgentFlowTemplatePackage> {
+        if workflow_id != "multimodal-mount-test" {
+            return Err(control_plane::errors::ControlPlaneError::NotFound(
+                "official_agent_flow_template",
+            )
+            .into());
+        }
+
+        Ok(build_agent_flow_template_package())
+    }
+}
+
+fn build_agent_flow_template_package() -> control_plane::flow::AgentFlowTemplatePackage {
+    control_plane::flow::AgentFlowTemplatePackage {
+        schema_version: "1flowbase.application-template/v1".to_string(),
+        application: control_plane::flow::AgentFlowTemplateApplication {
+            application_type: "agent_flow".to_string(),
+            name: "多模态挂载测试".to_string(),
+            description: "".to_string(),
+            icon: Some("RobotOutlined".to_string()),
+            icon_type: Some("iconfont".to_string()),
+            icon_background: Some("#E6F7F2".to_string()),
+        },
+        flow_document: json!({
+            "schemaVersion": domain::FLOW_SCHEMA_VERSION,
+            "meta": {
+                "flowId": "019eb647-bee3-7ae2-a89d-5c6bca7921ad",
+                "name": "多模态挂载测试",
+                "description": "",
+                "tags": []
+            },
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "node-start",
+                        "type": "start",
+                        "alias": "Start",
+                        "config": { "input_fields": [] },
+                        "outputs": [],
+                        "bindings": {},
+                        "position": { "x": 0, "y": 0 },
+                        "containerId": null,
+                        "description": "",
+                        "configVersion": 1
+                    }
+                ],
+                "edges": []
+            }
+        }),
+        dependencies: Vec::new(),
     }
 }

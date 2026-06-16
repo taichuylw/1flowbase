@@ -76,6 +76,8 @@ pub struct NativeRunResponse {
     pub node_input_payload: Value,
     pub metadata: Value,
     pub answer: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answer_segments: Option<Value>,
     pub required_action: Option<Value>,
     pub tool_calls: Option<Value>,
     pub usage: Option<Value>,
@@ -442,6 +444,9 @@ pub(crate) fn to_native_run_response(run: NativeRunResult) -> NativeRunResponse 
         node_input_payload: run.node_input_payload,
         metadata: run.metadata,
         answer: run.answer,
+        answer_segments: run
+            .answer_segments
+            .and_then(|segments| serde_json::to_value(segments).ok()),
         required_action: run
             .required_action
             .and_then(|value| serde_json::to_value(value).ok()),

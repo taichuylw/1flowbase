@@ -79,6 +79,11 @@ const ROUTE_DEFINITIONS = [
     reason: 'state, runtime, route, repository, or storage consistency paths changed',
   },
   {
+    scope: 'state-protocols',
+    command: 'node scripts/node/verify-state-protocols.js',
+    reason: 'ACP, Anthropic-compatible SSE, or public agent protocol state projection changed',
+  },
+  {
     scope: 'container-images',
     command: 'GitHub Actions quality-gate scope=container-images',
     reason: 'container or deployment files changed',
@@ -272,6 +277,11 @@ function isBackendConsistencyFile(filePath) {
     || /(?:state|transition|repository|workspace|runtime|model_definition|orchestration|permission|acl|access-control)/iu.test(filePath));
 }
 
+function isStateProtocolFile(filePath) {
+  return /^scripts\/node\/(?:acp-claude-smoke\/|cli\/acp-claude-smoke\.js$|verify-state-protocols(?:\.js|\/))/u.test(filePath)
+    || /^api\/apps\/api-server\/src\/routes\/application_public_api\/(?:anthropic\.rs$|compat_sse(?:\/|\.rs$))/u.test(filePath);
+}
+
 function isContainerFile(filePath) {
   return /^docker\//u.test(filePath)
     || /^\.github\/workflows\/container-images\.yml$/u.test(filePath)
@@ -298,6 +308,10 @@ function routeChangedFiles(changedFiles) {
 
     if (isBackendConsistencyFile(filePath)) {
       addRoute(routes, 'backend-consistency');
+    }
+
+    if (isStateProtocolFile(filePath)) {
+      addRoute(routes, 'state-protocols');
     }
 
     if (isContainerFile(filePath)) {

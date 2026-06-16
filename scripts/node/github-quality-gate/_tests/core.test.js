@@ -103,6 +103,12 @@ test('buildGateCommand maps supported scopes to repository verify scripts', () =
     cwd: repoRoot,
   });
 
+  assert.deepEqual(buildGateCommand({ repoRoot, scope: 'state-protocols' }), {
+    command: process.execPath,
+    args: [path.join(repoRoot, 'scripts', 'node', 'verify-state-protocols.js')],
+    cwd: repoRoot,
+  });
+
   assert.deepEqual(buildGateCommand({ repoRoot, scope: 'container-images' }), {
     command: process.execPath,
     args: [path.join(repoRoot, 'scripts', 'node', 'cli', 'container-image-security.js')],

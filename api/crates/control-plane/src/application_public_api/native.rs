@@ -2,6 +2,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+pub use orchestration_runtime::answer_projection::{
+    answer_segments_from_text, answer_segments_from_value, answer_segments_value,
+    AnswerProjectionSegment, AnswerProjectionSegmentKind, ANSWER_SEGMENTS_KEY,
+};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::{json, Map, Value};
 use time::OffsetDateTime;
@@ -147,6 +151,8 @@ pub struct NativeRunResult {
     pub metadata: Value,
     #[serde(default)]
     pub answer: Option<String>,
+    #[serde(default)]
+    pub answer_segments: Option<Vec<AnswerProjectionSegment>>,
     #[serde(default)]
     pub required_action: Option<NativeRequiredAction>,
     #[serde(default)]

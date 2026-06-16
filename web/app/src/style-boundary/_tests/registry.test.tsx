@@ -59,7 +59,7 @@ describe('style boundary registry', () => {
       'page.application-detail',
       'page.application-api',
       'page.embedded-apps',
-      'page.tools',
+      'page.templates',
       'page.settings',
       'page.settings-docs',
       'page.me'

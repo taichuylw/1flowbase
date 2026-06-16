@@ -64,12 +64,68 @@ pub(super) fn visible_internal_llm_tool_external_tool_policy(
     }
 }
 
+pub(super) fn visible_internal_llm_tool_mode(
+    variable_pool: &Map<String, Value>,
+) -> VisibleInternalLlmToolMode {
+    let fusion = variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|value| value.get("tool_mode"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        == Some(TOOL_MODE_FUSION);
+    if fusion {
+        VisibleInternalLlmToolMode::Fusion
+    } else {
+        VisibleInternalLlmToolMode::Agent
+    }
+}
+
+pub(super) fn visible_internal_llm_tool_external_callback_policy(
+    variable_pool: &Map<String, Value>,
+) -> VisibleInternalLlmToolExternalCallbackPolicy {
+    let inherited = variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|value| value.get("external_callback_policy"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        == Some(EXTERNAL_CALLBACK_POLICY_INHERITED);
+    if inherited {
+        VisibleInternalLlmToolExternalCallbackPolicy::Inherited
+    } else {
+        VisibleInternalLlmToolExternalCallbackPolicy::Forbidden
+    }
+}
+
+pub(super) fn visible_internal_llm_tool_execution_mode(
+    variable_pool: &Map<String, Value>,
+) -> VisibleInternalLlmToolExecutionMode {
+    let bounded_parallel = variable_pool
+        .get(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        .and_then(|value| value.get("execution_mode"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        == Some(EXECUTION_MODE_BOUNDED_PARALLEL_PANEL);
+    if bounded_parallel {
+        VisibleInternalLlmToolExecutionMode::BoundedParallelPanel
+    } else {
+        VisibleInternalLlmToolExecutionMode::SequentialResume
+    }
+}
+
 pub(in crate::execution_engine) fn visible_internal_llm_tool_blocks_external_tools(
     variable_pool: &Map<String, Value>,
 ) -> bool {
     variable_pool.contains_key(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
         && visible_internal_llm_tool_external_tool_policy(variable_pool)
             == VisibleInternalLlmToolExternalToolPolicy::Forbidden
+}
+
+pub(super) fn visible_internal_llm_tool_blocks_external_callback(
+    variable_pool: &Map<String, Value>,
+) -> bool {
+    variable_pool.contains_key(VISIBLE_INTERNAL_LLM_TOOL_VARIABLE)
+        && visible_internal_llm_tool_external_callback_policy(variable_pool)
+            == VisibleInternalLlmToolExternalCallbackPolicy::Forbidden
 }
 
 pub(in crate::execution_engine) async fn inject_visible_internal_llm_tool_media_content_blocks(

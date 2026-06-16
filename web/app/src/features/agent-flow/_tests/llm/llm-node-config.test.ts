@@ -14,7 +14,9 @@ import {
   getLlmVisibleInternalToolsEnabled,
   getLlmVisibleInternalTools,
   getLlmToolExternalToolPolicy,
-  DEFAULT_LLM_EXTERNAL_TOOL_POLICY
+  DEFAULT_LLM_EXTERNAL_TOOL_POLICY,
+  DEFAULT_LLM_TOOL_MODE,
+  getLlmToolMode
 } from '../../lib/llm-node-config';
 
 describe('llm-node-config', () => {
@@ -213,6 +215,40 @@ describe('llm-node-config', () => {
       DEFAULT_LLM_EXTERNAL_TOOL_POLICY
     );
     expect(getLlmToolExternalToolPolicy(invalidTool)).toBe('forbidden');
+  });
+
+  test('getLlmVisibleInternalTools normalizes mounted LLM tool_mode without treating old configs as fusion', () => {
+    const [fusionTool, defaultTool, invalidTool] = getLlmVisibleInternalTools({
+      visible_internal_llm_tools: [
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'fusion_llm',
+          connector_id: 'fusion_llm',
+          target_node_id: 'node-panel-seed',
+          tool_mode: 'fusion'
+        },
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'legacy_llm',
+          connector_id: 'legacy_llm',
+          target_node_id: 'node-mounted-llm'
+        },
+        {
+          type: 'visible_internal_llm_tool',
+          tool_name: 'broken_llm',
+          connector_id: 'broken_llm',
+          target_node_id: 'node-mounted-llm',
+          tool_mode: 'router'
+        }
+      ]
+    });
+
+    expect(fusionTool.tool_mode).toBe('fusion');
+    expect(defaultTool.tool_mode).toBeUndefined();
+    expect(invalidTool.tool_mode).toBeUndefined();
+    expect(getLlmToolMode(fusionTool)).toBe('fusion');
+    expect(getLlmToolMode(defaultTool)).toBe(DEFAULT_LLM_TOOL_MODE);
+    expect(getLlmToolMode(invalidTool)).toBe('agent');
   });
 
   test('getLlmParameterDefaultValue derives stable defaults when schema omits them', () => {

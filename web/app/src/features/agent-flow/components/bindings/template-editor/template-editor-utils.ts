@@ -42,7 +42,12 @@ export function textToEditorState(text: string) {
 }
 
 export function editorStateToText(editorState: EditorState) {
-  return editorState.read(() => $getRoot().getTextContent());
+  return editorState.read(() =>
+    $getRoot()
+      .getChildren()
+      .map((child) => child.getTextContent())
+      .join('\n')
+  );
 }
 
 export function getCollapsedTextSelection() {

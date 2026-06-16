@@ -48,6 +48,8 @@ pub struct ApiConfig {
     pub official_plugin_mirror_registry_url: Option<String>,
     pub official_plugin_github_proxy_url: Option<String>,
     pub official_plugin_trusted_public_keys_json: String,
+    pub official_agent_flow_template_default_index_url: String,
+    pub official_agent_flow_template_mirror_index_url: Option<String>,
     pub bootstrap_workspace_name: String,
     pub bootstrap_root_account: String,
     pub bootstrap_root_email: String,
@@ -61,6 +63,14 @@ pub struct ResolvedOfficialPluginSourceConfig {
     pub source_kind: String,
     pub source_label: String,
     pub registry_url: String,
+    pub github_proxy_url: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedOfficialAgentFlowTemplateSourceConfig {
+    pub source_kind: String,
+    pub source_label: String,
+    pub index_url: String,
     pub github_proxy_url: Option<String>,
 }
 
@@ -144,6 +154,19 @@ impl ApiConfig {
             .get("API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON")
             .cloned()
             .unwrap_or_else(|| "[]".to_string());
+        let official_agent_flow_template_default_index_url = map
+            .get("API_OFFICIAL_AGENT_FLOW_TEMPLATE_DEFAULT_INDEX_URL")
+            .cloned()
+            .or_else(|| map.get("API_OFFICIAL_AGENT_FLOW_TEMPLATE_INDEX_URL").cloned())
+            .unwrap_or_else(|| {
+                format!(
+                    "https://raw.githubusercontent.com/{official_plugin_repository}/main/agent-flow/catalog/v1/index.json"
+                )
+            });
+        let official_agent_flow_template_mirror_index_url = map
+            .get("API_OFFICIAL_AGENT_FLOW_TEMPLATE_MIRROR_INDEX_URL")
+            .cloned()
+            .filter(|value| !value.trim().is_empty());
 
         if env == ApiEnvironment::Production && cors_allowed_origins.is_none() {
             return Err(anyhow!(
@@ -197,6 +220,8 @@ impl ApiConfig {
             official_plugin_mirror_registry_url,
             official_plugin_github_proxy_url,
             official_plugin_trusted_public_keys_json,
+            official_agent_flow_template_default_index_url,
+            official_agent_flow_template_mirror_index_url,
             bootstrap_workspace_name: get("BOOTSTRAP_WORKSPACE_NAME")?,
             bootstrap_root_account: get("BOOTSTRAP_ROOT_ACCOUNT")?,
             bootstrap_root_email: get("BOOTSTRAP_ROOT_EMAIL")?,
@@ -230,6 +255,30 @@ impl ApiConfig {
             source_kind: "official_registry".into(),
             source_label: "官方源".into(),
             registry_url: self.official_plugin_default_registry_url.clone(),
+            github_proxy_url: self.official_plugin_github_proxy_url.clone(),
+        }
+    }
+
+    pub fn resolve_official_agent_flow_template_source(
+        &self,
+    ) -> ResolvedOfficialAgentFlowTemplateSourceConfig {
+        if let Some(mirror_url) = self
+            .official_agent_flow_template_mirror_index_url
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+        {
+            return ResolvedOfficialAgentFlowTemplateSourceConfig {
+                source_kind: "mirror_registry".into(),
+                source_label: "镜像源".into(),
+                index_url: mirror_url,
+                github_proxy_url: self.official_plugin_github_proxy_url.clone(),
+            };
+        }
+
+        ResolvedOfficialAgentFlowTemplateSourceConfig {
+            source_kind: "official_registry".into(),
+            source_label: "官方源".into(),
+            index_url: self.official_agent_flow_template_default_index_url.clone(),
             github_proxy_url: self.official_plugin_github_proxy_url.clone(),
         }
     }

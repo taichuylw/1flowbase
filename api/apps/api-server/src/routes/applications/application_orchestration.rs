@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     routing::{get, patch, post, put},
     Json, Router,
@@ -17,7 +17,7 @@ use control_plane::{
 };
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -53,6 +53,11 @@ pub struct ImportAgentFlowTemplateBody {
     pub template: serde_json::Value,
     pub name: Option<String>,
     pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
+pub struct OfficialAgentFlowTemplateCatalogQuery {
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -169,6 +174,37 @@ pub struct ImportAgentFlowTemplateResponse {
     pub preview: AgentFlowTemplatePreviewResponse,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OfficialAgentFlowTemplateCatalogSourceResponse {
+    pub source_kind: String,
+    pub source_label: String,
+    pub index_url: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OfficialAgentFlowTemplateCatalogPageResponse {
+    pub page: u32,
+    pub page_size: usize,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OfficialAgentFlowTemplateCatalogEntryResponse {
+    pub workflow_id: String,
+    pub schema_version: String,
+    pub application: AgentFlowTemplateApplicationResponse,
+    pub template_url: String,
+    pub template_sha256: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OfficialAgentFlowTemplateCatalogResponse {
+    pub source: OfficialAgentFlowTemplateCatalogSourceResponse,
+    pub page: OfficialAgentFlowTemplateCatalogPageResponse,
+    pub entries: Vec<OfficialAgentFlowTemplateCatalogEntryResponse>,
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/applications/:id/orchestration", get(get_orchestration))
@@ -186,6 +222,14 @@ pub fn router() -> Router<Arc<ApiState>> {
             post(import_agent_flow_template),
         )
         .route(
+            "/applications/orchestration/templates/official-catalog",
+            get(list_official_agent_flow_template_catalog),
+        )
+        .route(
+            "/applications/orchestration/templates/official/:workflow_id",
+            get(download_official_agent_flow_template),
+        )
+        .route(
             "/applications/:id/orchestration/versions/:version_id/restore",
             post(restore_version),
         )
@@ -193,6 +237,35 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/applications/:id/orchestration/versions/:version_id",
             patch(update_version),
         )
+}
+
+fn to_official_agent_flow_template_catalog_response(
+    catalog: crate::official_agent_flow_templates::OfficialAgentFlowTemplateCatalogSnapshot,
+) -> OfficialAgentFlowTemplateCatalogResponse {
+    OfficialAgentFlowTemplateCatalogResponse {
+        source: OfficialAgentFlowTemplateCatalogSourceResponse {
+            source_kind: catalog.source.source_kind,
+            source_label: catalog.source.source_label,
+            index_url: catalog.source.index_url,
+        },
+        page: OfficialAgentFlowTemplateCatalogPageResponse {
+            page: catalog.page.page,
+            page_size: catalog.page.page_size,
+            next_cursor: catalog.page.next_cursor,
+        },
+        entries: catalog
+            .entries
+            .into_iter()
+            .map(|entry| OfficialAgentFlowTemplateCatalogEntryResponse {
+                workflow_id: entry.workflow_id,
+                schema_version: entry.schema_version,
+                application: to_template_application_response(entry.application),
+                template_url: entry.template_url,
+                template_sha256: entry.template_sha256,
+                updated_at: entry.updated_at,
+            })
+            .collect(),
+    }
 }
 
 fn to_response(state: domain::FlowEditorState) -> OrchestrationStateResponse {
@@ -514,6 +587,59 @@ pub async fn import_agent_flow_template(
         StatusCode::CREATED,
         Json(ApiSuccess::new(to_import_response(imported))),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/orchestration/templates/official-catalog",
+    params(OfficialAgentFlowTemplateCatalogQuery),
+    responses(
+        (status = 200, body = OfficialAgentFlowTemplateCatalogResponse),
+        (status = 401, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn list_official_agent_flow_template_catalog(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Query(query): Query<OfficialAgentFlowTemplateCatalogQuery>,
+) -> Result<Json<ApiSuccess<OfficialAgentFlowTemplateCatalogResponse>>, ApiError> {
+    require_session(&state, &headers).await?;
+    let catalog = state
+        .official_agent_flow_template_source
+        .list_catalog_page(query.cursor)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(
+        to_official_agent_flow_template_catalog_response(catalog),
+    )))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/orchestration/templates/official/{workflow_id}",
+    params(
+        ("workflow_id" = String, Path, description = "Official AgentFlow template workflow id")
+    ),
+    responses(
+        (status = 200, body = AgentFlowTemplatePackageResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn download_official_agent_flow_template(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(workflow_id): Path<String>,
+) -> Result<Json<ApiSuccess<AgentFlowTemplatePackageResponse>>, ApiError> {
+    require_session(&state, &headers).await?;
+    let template = state
+        .official_agent_flow_template_source
+        .download_template(&workflow_id)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_template_package_response(
+        template,
+    ))))
 }
 
 #[utoipa::path(

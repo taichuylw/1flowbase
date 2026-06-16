@@ -11,6 +11,7 @@ pub mod host_infrastructure;
 pub mod host_route_registry;
 pub mod host_worker_registry;
 pub mod middleware;
+pub mod official_agent_flow_templates;
 pub mod official_plugin_registry;
 pub mod openapi;
 pub mod openapi_docs;
@@ -287,6 +288,9 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         openapi_docs::build_default_api_docs_registry_with_cookie_name(&config.cookie_name)?,
     );
     let resolved_official_source = config.resolve_official_plugin_source();
+    let resolved_official_agent_flow_template_source =
+        config.resolve_official_agent_flow_template_source();
+    let official_agent_flow_template_cache = infrastructure.cache_store();
     let trusted_public_keys = config.official_plugin_trusted_public_keys()?;
     let process_started_at = OffsetDateTime::now_utc();
     let runtime_activity = Arc::new(runtime_activity::ApplicationRuntimeActivityTracker::default());
@@ -307,6 +311,12 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             resolved_official_source,
             trusted_public_keys,
         )),
+        official_agent_flow_template_source: Arc::new(
+            official_agent_flow_templates::ApiOfficialAgentFlowTemplateRegistry::new(
+                resolved_official_agent_flow_template_source,
+                official_agent_flow_template_cache,
+            ),
+        ),
         provider_install_root: config.provider_install_root.clone(),
         provider_secret_master_key: config.provider_secret_master_key.clone(),
         host_extension_dropin_root: config.host_extension_dropin_root.clone(),

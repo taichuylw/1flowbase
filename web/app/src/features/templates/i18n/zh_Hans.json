@@ -1,0 +1,21 @@
+{
+  "auto": {
+    "actions": "操作",
+    "catalog_load_failed": "模板目录加载失败",
+    "catalog_page_summary": "第 {{value1}} 页 / 每页 {{value2}} 个",
+    "description": "描述",
+    "description_empty": "暂无描述",
+    "empty_catalog": "暂无官方模板",
+    "import_template": "导入模板",
+    "official_agent_flow_templates_description": "从官方模板目录导入 AgentFlow 应用。",
+    "refresh_catalog": "刷新目录",
+    "retry": "重试",
+    "template_import_failed": "模板导入失败",
+    "template_imported": "模板已导入",
+    "template_info": "模板信息",
+    "template_prepare_failed": "模板准备失败",
+    "template_hash": "模板哈希",
+    "templates": "模板",
+    "updated_at": "更新时间"
+  }
+}

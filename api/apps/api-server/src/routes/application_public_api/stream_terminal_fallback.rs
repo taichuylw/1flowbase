@@ -1,6 +1,10 @@
 use control_plane::{
     application_public_api::{
-        native::{NativeRunResult, NativeRunStatus},
+        native::{
+            answer_segments_from_text, answer_segments_from_value, answer_segments_value,
+            AnswerProjectionSegment, AnswerProjectionSegmentKind, NativeRunResult, NativeRunStatus,
+            ANSWER_SEGMENTS_KEY,
+        },
         run_service::{native_result_from_run_detail, ApplicationPublishedRunControlRepository},
     },
     orchestration_runtime::{
@@ -175,11 +179,20 @@ fn terminal_answer_deltas_from_runtime_records(
 }
 
 fn terminal_output_payload(run: &NativeRunResult) -> Value {
-    json!({
+    let mut payload = json!({
         "answer": run.answer,
         "tool_calls": run.tool_calls,
         "usage": run.usage,
-    })
+    });
+    if let (Some(output), Some(answer_segments)) = (
+        payload.as_object_mut(),
+        run.answer_segments
+            .as_deref()
+            .and_then(answer_segments_value),
+    ) {
+        output.insert(ANSWER_SEGMENTS_KEY.to_string(), answer_segments);
+    }
+    payload
 }
 
 fn terminal_error_payload(run: &NativeRunResult) -> Value {
@@ -236,10 +249,43 @@ fn waiting_callback_payload(run: &NativeRunResult) -> Option<RuntimeEventPayload
 }
 
 pub(crate) fn terminal_answer_deltas_from_payload(payload: &Value) -> Vec<TerminalAnswerDelta> {
+    let structured_deltas = terminal_answer_segments_from_payload(payload)
+        .into_iter()
+        .map(terminal_answer_delta_from_segment)
+        .collect::<Vec<_>>();
+    if !structured_deltas.is_empty() {
+        return structured_deltas;
+    }
+
     terminal_answer_text_from_payload(payload)
         .as_deref()
         .map(split_terminal_answer_deltas)
         .unwrap_or_default()
+}
+
+fn terminal_answer_segments_from_payload(payload: &Value) -> Vec<AnswerProjectionSegment> {
+    payload
+        .get("output")
+        .and_then(|output| output.get(ANSWER_SEGMENTS_KEY))
+        .map(answer_segments_from_value)
+        .filter(|segments| !segments.is_empty())
+        .or_else(|| {
+            payload
+                .get(ANSWER_SEGMENTS_KEY)
+                .map(answer_segments_from_value)
+                .filter(|segments| !segments.is_empty())
+        })
+        .unwrap_or_default()
+}
+
+fn terminal_answer_delta_from_segment(segment: AnswerProjectionSegment) -> TerminalAnswerDelta {
+    TerminalAnswerDelta {
+        kind: match segment.kind {
+            AnswerProjectionSegmentKind::Reasoning => TerminalAnswerDeltaKind::Reasoning,
+            AnswerProjectionSegmentKind::Message => TerminalAnswerDeltaKind::Text,
+        },
+        text: segment.text,
+    }
 }
 
 pub(crate) fn terminal_answer_text_from_payload(payload: &Value) -> Option<String> {
@@ -308,6 +354,10 @@ async fn terminal_answer_deltas_from_payload_resolving_artifacts(
         else {
             continue;
         };
+        let deltas = terminal_answer_deltas_from_payload(&value);
+        if !deltas.is_empty() {
+            return deltas;
+        }
         let Some(answer) = terminal_answer_text_from_value(&value, 0) else {
             continue;
         };
@@ -554,6 +604,7 @@ fn terminal_answer_deltas_to_answer_text(deltas: &[TerminalAnswerDelta]) -> Stri
 }
 
 fn put_terminal_answer_in_payload(event_type: &str, payload: &mut Value, answer: String) {
+    let answer_segments = answer_segments_value(&answer_segments_from_text(&answer));
     let Some(object) = payload.as_object_mut() else {
         return;
     };
@@ -564,9 +615,15 @@ fn put_terminal_answer_in_payload(event_type: &str, payload: &mut Value, answer:
         }
         if let Some(output) = output.as_object_mut() {
             output.insert("answer".to_string(), Value::String(answer));
+            if let Some(answer_segments) = answer_segments {
+                output.insert(ANSWER_SEGMENTS_KEY.to_string(), answer_segments);
+            }
         }
     } else {
         object.insert("answer".to_string(), Value::String(answer));
+        if let Some(answer_segments) = answer_segments {
+            object.insert(ANSWER_SEGMENTS_KEY.to_string(), answer_segments);
+        }
     }
 }
 
@@ -594,6 +651,7 @@ mod tests {
             node_input_payload: json!({}),
             metadata: json!({}),
             answer: Some("done".to_string()),
+            answer_segments: None,
             required_action: None,
             tool_calls: None,
             usage: None,
@@ -685,5 +743,24 @@ mod tests {
         assert_eq!(deltas.len(), 1);
         assert_eq!(deltas[0].kind, TerminalAnswerDeltaKind::Text);
         assert_eq!(deltas[0].text, "最终回答");
+    }
+
+    #[test]
+    fn terminal_answer_deltas_prefer_structured_answer_segments() {
+        let deltas = terminal_answer_deltas_from_payload(&json!({
+            "output": {
+                "answer": "<think>旧思考</think>旧回答",
+                "answer_segments": [
+                    { "kind": "reasoning", "text": "结构化思考" },
+                    { "kind": "message", "text": "结构化回答" }
+                ]
+            }
+        }));
+
+        assert_eq!(deltas.len(), 2);
+        assert_eq!(deltas[0].kind, TerminalAnswerDeltaKind::Reasoning);
+        assert_eq!(deltas[0].text, "结构化思考");
+        assert_eq!(deltas[1].kind, TerminalAnswerDeltaKind::Text);
+        assert_eq!(deltas[1].text, "结构化回答");
     }
 }

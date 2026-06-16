@@ -7,7 +7,7 @@ import { createAccountMenuItems } from '../app-shell/account-menu-items';
 import { AgentFlowEditorShell } from '../features/agent-flow/components/editor/AgentFlowEditorShell';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { FrontStagePage } from '../features/frontstage/pages/FrontStagePage';
-import { ToolsPage } from '../features/tools/pages/ToolsPage';
+import { TemplatesPage } from '../features/templates/pages/TemplatesPage';
 import {
   createStyleBoundaryFrontstagePageContent,
   createStyleBoundaryOrchestrationState,
@@ -16,6 +16,7 @@ import {
   seedStyleBoundaryCommonFetch,
   seedStyleBoundaryFrontstageFetch,
   seedStyleBoundarySettingsFetch,
+  seedStyleBoundaryTemplateFetch,
   styleBoundaryNodeContributions
 } from './scene-fixtures';
 import { useAuthStore } from '../state/auth-store';
@@ -121,7 +122,10 @@ export const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   },
   'page.embedded-apps': () =>
     renderShellScene('/embedded-apps', <EmbeddedAppsPage />),
-  'page.tools': () => renderShellScene('/tools', <ToolsPage />),
+  'page.templates': () => {
+    seedStyleBoundaryTemplateFetch();
+    return renderShellScene('/templates', <TemplatesPage />);
+  },
   'page.settings': () => {
     seedStyleBoundarySettingsFetch();
     return renderRouterScene('/settings/model-providers');

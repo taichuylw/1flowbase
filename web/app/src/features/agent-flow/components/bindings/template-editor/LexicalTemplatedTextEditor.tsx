@@ -112,9 +112,7 @@ function ControlledValuePlugin({
   const [editor] = useLexicalComposerContext();
 
   useLayoutEffect(() => {
-    const currentText = editor
-      .getEditorState()
-      .read(() => $getRoot().getTextContent());
+    const currentText = editorStateToText(editor.getEditorState());
 
     if (currentText === value) {
       return;

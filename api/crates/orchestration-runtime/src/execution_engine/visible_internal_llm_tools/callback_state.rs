@@ -160,8 +160,26 @@ fn visible_internal_llm_tool_pending_call_value(
         Value::String(pending_call.tool.target_node_id.clone()),
     );
     tool.insert(
+        "tool_mode".to_string(),
+        Value::String(pending_call.tool.tool_mode.as_str().to_string()),
+    );
+    tool.insert(
         "external_tool_policy".to_string(),
         Value::String(pending_call.tool.external_tool_policy.as_str().to_string()),
+    );
+    tool.insert(
+        "external_callback_policy".to_string(),
+        Value::String(
+            pending_call
+                .tool
+                .external_callback_policy
+                .as_str()
+                .to_string(),
+        ),
+    );
+    tool.insert(
+        "execution_mode".to_string(),
+        Value::String(pending_call.tool.execution_mode.as_str().to_string()),
     );
     if let Some(description) = pending_call.tool.description.clone() {
         tool.insert("description".to_string(), Value::String(description));
@@ -211,6 +229,38 @@ fn visible_internal_llm_tool_pending_call_from_value(
         .ok_or_else(|| anyhow!("visible internal llm tool pending call is missing target_node_id"))?
         .to_string();
 
+    let tool_mode = match tool.get("tool_mode").and_then(Value::as_str).map(str::trim) {
+        Some(TOOL_MODE_FUSION) => VisibleInternalLlmToolMode::Fusion,
+        _ => VisibleInternalLlmToolMode::Agent,
+    };
+    let external_callback_policy = if tool_mode == VisibleInternalLlmToolMode::Fusion {
+        VisibleInternalLlmToolExternalCallbackPolicy::Forbidden
+    } else {
+        match tool
+            .get("external_callback_policy")
+            .and_then(Value::as_str)
+            .map(str::trim)
+        {
+            Some(EXTERNAL_CALLBACK_POLICY_FORBIDDEN) => {
+                VisibleInternalLlmToolExternalCallbackPolicy::Forbidden
+            }
+            _ => VisibleInternalLlmToolExternalCallbackPolicy::Inherited,
+        }
+    };
+    let execution_mode = match tool
+        .get("execution_mode")
+        .and_then(Value::as_str)
+        .map(str::trim)
+    {
+        Some(EXECUTION_MODE_BOUNDED_PARALLEL_PANEL) => {
+            VisibleInternalLlmToolExecutionMode::BoundedParallelPanel
+        }
+        _ if tool_mode == VisibleInternalLlmToolMode::Fusion => {
+            VisibleInternalLlmToolExecutionMode::BoundedParallelPanel
+        }
+        _ => VisibleInternalLlmToolExecutionMode::SequentialResume,
+    };
+
     Ok(VisibleInternalLlmToolPendingCall {
         tool_call,
         tool: VisibleInternalLlmTool {
@@ -223,16 +273,23 @@ fn visible_internal_llm_tool_pending_call_from_value(
                 .map(str::to_string),
             target_node_id,
             input_schema: tool.get("input_schema").cloned(),
-            external_tool_policy: match tool
-                .get("external_tool_policy")
-                .and_then(Value::as_str)
-                .map(str::trim)
-            {
-                Some(EXTERNAL_TOOL_POLICY_INHERITED) => {
-                    VisibleInternalLlmToolExternalToolPolicy::Inherited
+            tool_mode,
+            external_tool_policy: if tool_mode == VisibleInternalLlmToolMode::Fusion {
+                VisibleInternalLlmToolExternalToolPolicy::Forbidden
+            } else {
+                match tool
+                    .get("external_tool_policy")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                {
+                    Some(EXTERNAL_TOOL_POLICY_INHERITED) => {
+                        VisibleInternalLlmToolExternalToolPolicy::Inherited
+                    }
+                    _ => VisibleInternalLlmToolExternalToolPolicy::Forbidden,
                 }
-                _ => VisibleInternalLlmToolExternalToolPolicy::Forbidden,
             },
+            external_callback_policy,
+            execution_mode,
             preconditions: visible_internal_llm_tool_preconditions_from_value(
                 tool.get("preconditions"),
             ),

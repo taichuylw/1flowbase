@@ -4,6 +4,9 @@ use api_server::{
     app_with_state_and_config,
     config::{ApiConfig, ApiEnvironment},
     host_infrastructure::build_local_host_infrastructure,
+    official_agent_flow_templates::{
+        OfficialAgentFlowTemplateCatalogSnapshot, OfficialAgentFlowTemplateSourcePort,
+    },
     provider_runtime::{ApiDataSourceRuntimeRecordBackend, ApiProviderRuntime, ApiRuntimeServices},
     runtime_profile_client::{HostApiRuntimeProfileCollector, PluginRunnerSystemPort},
 };
@@ -42,6 +45,9 @@ impl PluginRunnerSystemPort for UnreachablePluginRunnerSystemClient {
 #[derive(Clone, Default)]
 struct NoopOfficialPluginSource;
 
+#[derive(Clone, Default)]
+struct NoopOfficialAgentFlowTemplateSource;
+
 #[async_trait]
 impl OfficialPluginSourcePort for NoopOfficialPluginSource {
     async fn list_official_catalog(&self) -> anyhow::Result<OfficialPluginCatalogSnapshot> {
@@ -64,6 +70,23 @@ impl OfficialPluginSourcePort for NoopOfficialPluginSource {
 
     fn trusted_public_keys(&self) -> Vec<plugin_framework::TrustedPublicKey> {
         Vec::new()
+    }
+}
+
+#[async_trait]
+impl OfficialAgentFlowTemplateSourcePort for NoopOfficialAgentFlowTemplateSource {
+    async fn list_catalog_page(
+        &self,
+        _cursor: Option<String>,
+    ) -> anyhow::Result<OfficialAgentFlowTemplateCatalogSnapshot> {
+        anyhow::bail!("official AgentFlow template source not configured for health route tests")
+    }
+
+    async fn download_template(
+        &self,
+        _workflow_id: &str,
+    ) -> anyhow::Result<control_plane::flow::AgentFlowTemplatePackage> {
+        anyhow::bail!("official AgentFlow template source not configured for health route tests")
     }
 }
 
@@ -178,6 +201,9 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             api_runtime_profile: std::sync::Arc::new(HostApiRuntimeProfileCollector),
             plugin_runner_system: std::sync::Arc::new(UnreachablePluginRunnerSystemClient),
             official_plugin_source: std::sync::Arc::new(NoopOfficialPluginSource),
+            official_agent_flow_template_source: std::sync::Arc::new(
+                NoopOfficialAgentFlowTemplateSource,
+            ),
             provider_install_root: config.provider_install_root.clone(),
             provider_secret_master_key: config.provider_secret_master_key.clone(),
             host_extension_dropin_root: config.host_extension_dropin_root.clone(),

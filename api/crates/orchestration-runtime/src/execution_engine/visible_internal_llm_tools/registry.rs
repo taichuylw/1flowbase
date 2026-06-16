@@ -147,14 +147,37 @@ fn visible_internal_llm_tool_from_value(value: &Value) -> Option<VisibleInternal
             .map(str::to_string),
         target_node_id,
         input_schema,
+        tool_mode: visible_internal_llm_tool_mode_from_object(object),
         external_tool_policy: visible_internal_llm_tool_external_tool_policy_from_object(object),
+        external_callback_policy: visible_internal_llm_tool_external_callback_policy_from_object(
+            object,
+        ),
+        execution_mode: visible_internal_llm_tool_execution_mode_from_object(object),
         preconditions,
     })
+}
+
+fn visible_internal_llm_tool_mode_from_object(
+    object: &Map<String, Value>,
+) -> VisibleInternalLlmToolMode {
+    match object
+        .get("tool_mode")
+        .or_else(|| object.get("toolMode"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+    {
+        Some(TOOL_MODE_FUSION) => VisibleInternalLlmToolMode::Fusion,
+        _ => VisibleInternalLlmToolMode::Agent,
+    }
 }
 
 fn visible_internal_llm_tool_external_tool_policy_from_object(
     object: &Map<String, Value>,
 ) -> VisibleInternalLlmToolExternalToolPolicy {
+    if visible_internal_llm_tool_mode_from_object(object) == VisibleInternalLlmToolMode::Fusion {
+        return VisibleInternalLlmToolExternalToolPolicy::Forbidden;
+    }
+
     match object
         .get("external_tool_policy")
         .or_else(|| object.get("externalToolPolicy"))
@@ -163,6 +186,46 @@ fn visible_internal_llm_tool_external_tool_policy_from_object(
     {
         Some(EXTERNAL_TOOL_POLICY_INHERITED) => VisibleInternalLlmToolExternalToolPolicy::Inherited,
         _ => VisibleInternalLlmToolExternalToolPolicy::Forbidden,
+    }
+}
+
+fn visible_internal_llm_tool_external_callback_policy_from_object(
+    object: &Map<String, Value>,
+) -> VisibleInternalLlmToolExternalCallbackPolicy {
+    if visible_internal_llm_tool_mode_from_object(object) == VisibleInternalLlmToolMode::Fusion {
+        return VisibleInternalLlmToolExternalCallbackPolicy::Forbidden;
+    }
+
+    match object
+        .get("external_callback_policy")
+        .or_else(|| object.get("externalCallbackPolicy"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+    {
+        Some(EXTERNAL_CALLBACK_POLICY_FORBIDDEN) => {
+            VisibleInternalLlmToolExternalCallbackPolicy::Forbidden
+        }
+        _ => VisibleInternalLlmToolExternalCallbackPolicy::Inherited,
+    }
+}
+
+fn visible_internal_llm_tool_execution_mode_from_object(
+    object: &Map<String, Value>,
+) -> VisibleInternalLlmToolExecutionMode {
+    if object
+        .get("execution_mode")
+        .or_else(|| object.get("executionMode"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        == Some(EXECUTION_MODE_BOUNDED_PARALLEL_PANEL)
+    {
+        return VisibleInternalLlmToolExecutionMode::BoundedParallelPanel;
+    }
+
+    if visible_internal_llm_tool_mode_from_object(object) == VisibleInternalLlmToolMode::Fusion {
+        VisibleInternalLlmToolExecutionMode::BoundedParallelPanel
+    } else {
+        VisibleInternalLlmToolExecutionMode::SequentialResume
     }
 }
 

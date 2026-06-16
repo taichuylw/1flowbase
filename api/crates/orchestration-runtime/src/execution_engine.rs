@@ -14,6 +14,7 @@ use serde_json::{json, Map, Value};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::{
+    answer_projection::{answer_segments_value_from_text, ANSWER_SEGMENTS_KEY},
     binding_runtime::{
         render_templated_bindings, resolve_answer_node_inputs, resolve_node_inputs,
         BindingResolutionIssue,
