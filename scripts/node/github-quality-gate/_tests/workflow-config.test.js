@@ -480,6 +480,41 @@ test("quality gate workflow runs ci scope as parallel component gates before one
   assert.match(workflow, /name: test-governance-artifacts/u);
 });
 
+test("quality gate workflow caches Rust profiles without adding warm build jobs", () => {
+  const workflow = readQualityGateWorkflow();
+
+  assert.match(
+    workflow,
+    /repo-backend-gate:[\s\S]*?name: Restore Rust backend quality gate cache[\s\S]*?uses: actions\/cache@v5[\s\S]*?tmp\/quality-gate-cache\/rust-backend\/\$\{\{ matrix\.scope \}\}\/target[\s\S]*?key: rust-quality-gate-backend-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.scope \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /repo-backend-gate:[\s\S]*?CARGO_TARGET_DIR: \.\.\/tmp\/quality-gate-cache\/rust-backend\/\$\{\{ matrix\.scope \}\}\/target[\s\S]*?scope: \$\{\{ matrix\.scope \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /backend-consistency-gate:[\s\S]*?name: Restore Rust backend consistency quality gate cache[\s\S]*?uses: actions\/cache@v5[\s\S]*?tmp\/quality-gate-cache\/rust-backend-consistency\/target[\s\S]*?key: rust-quality-gate-backend-consistency-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /coverage-backend-gate:[\s\S]*?name: Restore Rust coverage quality gate cache[\s\S]*?uses: actions\/cache@v5[\s\S]*?tmp\/quality-gate-cache\/rust-coverage\/\$\{\{ matrix\.scope \}\}\/target[\s\S]*?key: rust-quality-gate-coverage-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.scope \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /coverage-backend-gate:[\s\S]*?CARGO_TARGET_DIR: \.\.\/tmp\/quality-gate-cache\/rust-coverage\/\$\{\{ matrix\.scope \}\}\/target[\s\S]*?scope: \$\{\{ matrix\.scope \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /state-protocols-gate:[\s\S]*?name: Restore Rust state protocol quality gate cache[\s\S]*?uses: actions\/cache@v5[\s\S]*?tmp\/quality-gate-cache\/rust-state-protocols\/target[\s\S]*?key: rust-quality-gate-state-protocols-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+  );
+  assert.match(
+    workflow,
+    /single-scope-gate:[\s\S]*?name: Restore Rust single-scope quality gate cache[\s\S]*?if: \$\{\{ inputs\.scope == 'repo' \|\| inputs\.scope == 'backend' \|\| inputs\.scope == 'backend-consistency' \|\| inputs\.scope == 'state-protocols' \|\| inputs\.scope == 'repo-backend' \|\| startsWith\(inputs\.scope, 'repo-backend-'\) \|\| inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\) \}\}[\s\S]*?key: rust-quality-gate-\$\{\{ \(inputs\.scope == 'coverage' \|\| inputs\.scope == 'coverage-backend' \|\| startsWith\(inputs\.scope, 'coverage-backend-'\)\) && 'coverage' \|\| 'backend' \}\}-\$\{\{ runner\.os \}\}-\$\{\{ inputs\.scope \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+  );
+  assert.doesNotMatch(workflow, /cargo test --no-run/u);
+  assert.doesNotMatch(workflow, /test-binar(?:y|ies)/u);
+});
+
 test("container image workflows keep vulnerability findings as warnings", () => {
   const publishWorkflow = readContainerImagesWorkflow();
   const qualityGateWorkflow = readQualityGateWorkflow();
