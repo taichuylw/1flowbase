@@ -1,0 +1,79 @@
+name: release rollback gate
+
+on:
+  schedule:
+    # Daily 03:00 Asia/Shanghai.
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Target branch
+        type: string
+        default: latest
+      previous_image_tag:
+        description: Previous release image tag, or auto.
+        type: string
+        default: auto
+      candidate_image_tag:
+        description: Candidate image tag.
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: release-rollback-gate-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'latest' }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_ROLLBACK_TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || 'latest' }}
+  RELEASE_ROLLBACK_PREVIOUS_IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.previous_image_tag || 'auto' }}
+  RELEASE_ROLLBACK_CANDIDATE_IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_image_tag || 'latest' }}
+
+jobs:
+  release-rollback-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_ROLLBACK_TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Resolve release rollback target SHA
+        run: echo "RELEASE_ROLLBACK_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/quality-gate
+        env:
+          GITHUB_REF_NAME: ${{ env.RELEASE_ROLLBACK_TARGET_BRANCH }}
+          GITHUB_SHA: ${{ env.RELEASE_ROLLBACK_TARGET_SHA }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIOUS_IMAGE_TAG: ${{ env.RELEASE_ROLLBACK_PREVIOUS_IMAGE_TAG }}
+          CANDIDATE_IMAGE_TAG: ${{ env.RELEASE_ROLLBACK_CANDIDATE_IMAGE_TAG }}
+          COMPOSE_PROJECT_NAME: release-rollback-${{ github.run_id }}-${{ github.run_attempt }}
+        with:
+          scope: release-rollback
+          report_type: cd
+          environment: release-rollback
+          publish_issue: "false"
+          start_postgres: "false"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-governance-release-rollback
+          path: tmp/test-governance

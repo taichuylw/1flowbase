@@ -43,6 +43,7 @@ const VALID_SCOPES = new Set([
   'coverage-frontend',
   'coverage-backend',
   'container-images',
+  'release-rollback',
   ...REPO_BACKEND_COMPONENT_SCOPES,
   ...COVERAGE_BACKEND_COMPONENT_SCOPES,
 ]);
@@ -158,6 +159,14 @@ function buildGateCommand({ repoRoot, scope }) {
     return {
       command,
       args: [resolveCliEntry(repoRoot, 'container-image-security')],
+      cwd: repoRoot,
+    };
+  }
+
+  if (scope === 'release-rollback') {
+    return {
+      command,
+      args: [resolveCliEntry(repoRoot, 'release-rollback-gate')],
       cwd: repoRoot,
     };
   }

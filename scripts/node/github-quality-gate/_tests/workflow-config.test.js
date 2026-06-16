@@ -26,6 +26,13 @@ function readContainerImagesWorkflow() {
   );
 }
 
+function readReleaseRollbackGateWorkflow() {
+  return fs.readFileSync(
+    path.join(repoRoot, ".github", "workflows", "release-rollback-gate.yml"),
+    "utf8",
+  );
+}
+
 function readApiServerDockerfile() {
   return fs.readFileSync(
     path.join(repoRoot, "docker", "api-server.Dockerfile"),
@@ -143,6 +150,51 @@ test("verify workflow runs lightweight merge gates before one aggregate report",
     workflow,
     /node scripts\/node\/cli\/github-quality-gate-aggregate\.js/u,
   );
+});
+
+test("quality gate restores release-seeded Rust cache without writing it from CI", () => {
+  const workflow = readQualityGateWorkflow();
+  const containerWorkflow = readContainerImagesWorkflow();
+
+  assert.match(
+    containerWorkflow,
+    /key: rust-release-seeded-api-server-\$\{\{ matrix\.arch \}\}-\$\{\{ needs\.select-api-server\.outputs\.image_tag \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+  );
+  assert.match(
+    containerWorkflow,
+    /key: rust-release-seeded-plugin-runner-\$\{\{ matrix\.arch \}\}-\$\{\{ needs\.select-plugin-runner\.outputs\.image_tag \}\}-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u,
+  );
+
+  assert.match(workflow, /name: Restore release-seeded api-server Rust cache/u);
+  assert.match(workflow, /name: Import release-seeded api-server Rust cache/u);
+  assert.match(workflow, /name: Resolve release-seeded Rust cache tag/u);
+  assert.match(workflow, /gh release list --limit 1 --json tagName --jq '\.\[0\]\.tagName \/\/ ""'/u);
+  assert.match(workflow, /if: \$\{\{ steps\.release_seed_tag\.outputs\.release_tag != '' \}\}/u);
+  assert.match(workflow, /uses: actions\/cache\/restore@v5/u);
+  assert.match(workflow, /key: rust-release-seeded-api-server-\$\{\{ env\.RUST_RELEASE_SEEDED_CACHE_ARCH \}\}-\$\{\{ steps\.release_seed_tag\.outputs\.release_tag \}\}-quality-gate-\$\{\{ hashFiles\('api\/Cargo\.lock', 'api\/\*\*\/\*\.rs', 'api\/\*\*\/Cargo\.toml'\) \}\}/u);
+  assert.match(workflow, /restore-keys: \|\n\s+rust-release-seeded-api-server-\$\{\{ env\.RUST_RELEASE_SEEDED_CACHE_ARCH \}\}-\$\{\{ steps\.release_seed_tag\.outputs\.release_tag \}\}-/u);
+  assert.match(workflow, /tmp\/container-cache\/api-server\/\$\{\{ env\.RUST_RELEASE_SEEDED_CACHE_ARCH \}\}\/target/u);
+  assert.match(workflow, /rsync -a "tmp\/container-cache\/api-server\/\$RUST_RELEASE_SEEDED_CACHE_ARCH\/target\/" "\$CARGO_TARGET_DIR\/"/u);
+  assert.doesNotMatch(workflow, /actions\/cache@v5[\s\S]{0,240}rust-release-seeded/u);
+});
+
+test("release rollback gate is nightly/manual only and stays out of daily ci aggregate", () => {
+  const workflow = readReleaseRollbackGateWorkflow();
+  const qualityGateWorkflow = readQualityGateWorkflow();
+
+  assert.match(workflow, /^name: release rollback gate/mu);
+  assert.match(workflow, /schedule:\n\s+# Daily 03:00 Asia\/Shanghai\.\n\s+- cron: "0 19 \* \* \*"/u);
+  assert.match(workflow, /workflow_dispatch:/u);
+  assert.match(workflow, /previous_image_tag:/u);
+  assert.match(workflow, /candidate_image_tag:/u);
+  assert.match(workflow, /scope: release-rollback/u);
+  assert.match(workflow, /report_type: cd/u);
+  assert.match(workflow, /start_postgres: "false"/u);
+  assert.match(workflow, /name: test-governance-release-rollback/u);
+
+  assert.doesNotMatch(qualityGateWorkflow, /release-rollback-gate:/u);
+  assert.doesNotMatch(qualityGateWorkflow, /release-rollback/u);
+  assert.doesNotMatch(qualityGateWorkflow, /INPUT_EXPECTED_SCOPES: [^\n]*release-rollback/u);
 });
 
 test("verify workflow keeps React Doctor out of automatic merge blockers", () => {

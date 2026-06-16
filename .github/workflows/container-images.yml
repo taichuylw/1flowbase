@@ -426,10 +426,11 @@ jobs:
             tmp/container-cache/api-server/${{ matrix.arch }}/cargo-registry
             tmp/container-cache/api-server/${{ matrix.arch }}/cargo-git
             tmp/container-cache/api-server/${{ matrix.arch }}/target
-          key: api-server-release-${{ matrix.arch }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          key: rust-release-seeded-api-server-${{ matrix.arch }}-${{ needs.select-api-server.outputs.image_tag }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
           restore-keys: |
-            api-server-release-${{ matrix.arch }}-${{ hashFiles('api/Cargo.lock') }}-
-            api-server-release-${{ matrix.arch }}-
+            rust-release-seeded-api-server-${{ matrix.arch }}-${{ needs.select-api-server.outputs.image_tag }}-${{ hashFiles('api/Cargo.lock') }}-
+            rust-release-seeded-api-server-${{ matrix.arch }}-${{ needs.select-api-server.outputs.image_tag }}-
+            rust-release-seeded-api-server-${{ matrix.arch }}-
 
       - name: Build api-server binary on native ${{ matrix.arch }}
         shell: bash
@@ -627,10 +628,11 @@ jobs:
             tmp/container-cache/plugin-runner/${{ matrix.arch }}/cargo-registry
             tmp/container-cache/plugin-runner/${{ matrix.arch }}/cargo-git
             tmp/container-cache/plugin-runner/${{ matrix.arch }}/target
-          key: plugin-runner-release-${{ matrix.arch }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          key: rust-release-seeded-plugin-runner-${{ matrix.arch }}-${{ needs.select-plugin-runner.outputs.image_tag }}-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
           restore-keys: |
-            plugin-runner-release-${{ matrix.arch }}-${{ hashFiles('api/Cargo.lock') }}-
-            plugin-runner-release-${{ matrix.arch }}-
+            rust-release-seeded-plugin-runner-${{ matrix.arch }}-${{ needs.select-plugin-runner.outputs.image_tag }}-${{ hashFiles('api/Cargo.lock') }}-
+            rust-release-seeded-plugin-runner-${{ matrix.arch }}-${{ needs.select-plugin-runner.outputs.image_tag }}-
+            rust-release-seeded-plugin-runner-${{ matrix.arch }}-
 
       - name: Build plugin-runner binary on native ${{ matrix.arch }}
         shell: bash

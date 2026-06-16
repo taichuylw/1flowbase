@@ -80,6 +80,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.scope != 'ci' && inputs.scope != 'container-images' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      RUST_RELEASE_SEEDED_CACHE_ARCH: ${{ runner.arch == 'ARM64' && 'arm64' || 'amd64' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -98,6 +100,45 @@ jobs:
       - run: pnpm --dir web install --frozen-lockfile
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Resolve release-seeded Rust cache tag
+        id: release_seed_tag
+        if: ${{ inputs.scope == 'repo' || inputs.scope == 'backend' || inputs.scope == 'backend-consistency' || inputs.scope == 'state-protocols' || inputs.scope == 'repo-backend' || startsWith(inputs.scope, 'repo-backend-') || inputs.scope == 'coverage' || inputs.scope == 'coverage-backend' || startsWith(inputs.scope, 'coverage-backend-') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""' 2>/dev/null || true)"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
+            echo "Resolved release-seeded Rust cache tag: $tag"
+          else
+            echo "No published release tag found; skipping release-seeded Rust cache restore."
+          fi
+      - name: Restore release-seeded api-server Rust cache
+        id: release_seed_api
+        if: ${{ steps.release_seed_tag.outputs.release_tag != '' }}
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-registry
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-git
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/target
+          key: rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          restore-keys: |
+            rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+      - name: Import release-seeded api-server Rust cache
+        if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: tmp/quality-gate-cache/rust-single-${{ (inputs.scope == 'coverage' || inputs.scope == 'coverage-backend' || startsWith(inputs.scope, 'coverage-backend-')) && 'coverage' || 'backend' }}/${{ inputs.scope }}/target
+        run: |
+          set -euo pipefail
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          mkdir -p "$cargo_home/registry" "$cargo_home/git" "$CARGO_TARGET_DIR"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-registry/" "$cargo_home/registry/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-git/" "$cargo_home/git/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/target/" "$CARGO_TARGET_DIR/"
       - name: Restore Rust single-scope quality gate cache
         if: ${{ inputs.scope == 'repo' || inputs.scope == 'backend' || inputs.scope == 'backend-consistency' || inputs.scope == 'state-protocols' || inputs.scope == 'repo-backend' || startsWith(inputs.scope, 'repo-backend-') || inputs.scope == 'coverage' || inputs.scope == 'coverage-backend' || startsWith(inputs.scope, 'coverage-backend-') }}
         uses: actions/cache@v5
@@ -205,6 +246,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      RUST_RELEASE_SEEDED_CACHE_ARCH: ${{ runner.arch == 'ARM64' && 'arm64' || 'amd64' }}
     strategy:
       fail-fast: false
       matrix:
@@ -230,6 +273,45 @@ jobs:
       - name: Resolve quality gate target SHA
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve release-seeded Rust cache tag
+        id: release_seed_tag
+        if: ${{ matrix.scope != 'repo-backend-static' && matrix.scope != 'repo-backend-fmt' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""' 2>/dev/null || true)"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
+            echo "Resolved release-seeded Rust cache tag: $tag"
+          else
+            echo "No published release tag found; skipping release-seeded Rust cache restore."
+          fi
+      - name: Restore release-seeded api-server Rust cache
+        id: release_seed_api
+        if: ${{ steps.release_seed_tag.outputs.release_tag != '' }}
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-registry
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-git
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/target
+          key: rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          restore-keys: |
+            rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+      - name: Import release-seeded api-server Rust cache
+        if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: tmp/quality-gate-cache/rust-backend/${{ matrix.scope }}/target
+        run: |
+          set -euo pipefail
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          mkdir -p "$cargo_home/registry" "$cargo_home/git" "$CARGO_TARGET_DIR"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-registry/" "$cargo_home/registry/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-git/" "$cargo_home/git/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/target/" "$CARGO_TARGET_DIR/"
       - name: Restore Rust backend quality gate cache
         if: ${{ matrix.scope != 'repo-backend-static' && matrix.scope != 'repo-backend-fmt' }}
         uses: actions/cache@v5
@@ -264,6 +346,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      RUST_RELEASE_SEEDED_CACHE_ARCH: ${{ runner.arch == 'ARM64' && 'arm64' || 'amd64' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -271,6 +355,44 @@ jobs:
       - name: Resolve quality gate target SHA
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve release-seeded Rust cache tag
+        id: release_seed_tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""' 2>/dev/null || true)"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
+            echo "Resolved release-seeded Rust cache tag: $tag"
+          else
+            echo "No published release tag found; skipping release-seeded Rust cache restore."
+          fi
+      - name: Restore release-seeded api-server Rust cache
+        id: release_seed_api
+        if: ${{ steps.release_seed_tag.outputs.release_tag != '' }}
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-registry
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-git
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/target
+          key: rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          restore-keys: |
+            rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+      - name: Import release-seeded api-server Rust cache
+        if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: tmp/quality-gate-cache/rust-backend-consistency/target
+        run: |
+          set -euo pipefail
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          mkdir -p "$cargo_home/registry" "$cargo_home/git" "$CARGO_TARGET_DIR"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-registry/" "$cargo_home/registry/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-git/" "$cargo_home/git/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/target/" "$CARGO_TARGET_DIR/"
       - name: Restore Rust backend consistency quality gate cache
         uses: actions/cache@v5
         with:
@@ -337,6 +459,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      RUST_RELEASE_SEEDED_CACHE_ARCH: ${{ runner.arch == 'ARM64' && 'arm64' || 'amd64' }}
     strategy:
       fail-fast: false
       matrix:
@@ -354,6 +478,44 @@ jobs:
         run: echo "QUALITY_GATE_TARGET_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Resolve release-seeded Rust cache tag
+        id: release_seed_tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""' 2>/dev/null || true)"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
+            echo "Resolved release-seeded Rust cache tag: $tag"
+          else
+            echo "No published release tag found; skipping release-seeded Rust cache restore."
+          fi
+      - name: Restore release-seeded api-server Rust cache
+        id: release_seed_api
+        if: ${{ steps.release_seed_tag.outputs.release_tag != '' }}
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-registry
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-git
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/target
+          key: rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          restore-keys: |
+            rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+      - name: Import release-seeded api-server Rust cache
+        if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: tmp/quality-gate-cache/rust-coverage/${{ matrix.scope }}/target
+        run: |
+          set -euo pipefail
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          mkdir -p "$cargo_home/registry" "$cargo_home/git" "$CARGO_TARGET_DIR"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-registry/" "$cargo_home/registry/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-git/" "$cargo_home/git/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/target/" "$CARGO_TARGET_DIR/"
       - name: Restore Rust coverage quality gate cache
         uses: actions/cache@v5
         with:
@@ -386,6 +548,8 @@ jobs:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.scope == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      RUST_RELEASE_SEEDED_CACHE_ARCH: ${{ runner.arch == 'ARM64' && 'arm64' || 'amd64' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -396,6 +560,44 @@ jobs:
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve release-seeded Rust cache tag
+        id: release_seed_tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""' 2>/dev/null || true)"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
+            echo "Resolved release-seeded Rust cache tag: $tag"
+          else
+            echo "No published release tag found; skipping release-seeded Rust cache restore."
+          fi
+      - name: Restore release-seeded api-server Rust cache
+        id: release_seed_api
+        if: ${{ steps.release_seed_tag.outputs.release_tag != '' }}
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-registry
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/cargo-git
+            tmp/container-cache/api-server/${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}/target
+          key: rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-quality-gate-${{ hashFiles('api/Cargo.lock', 'api/**/*.rs', 'api/**/Cargo.toml') }}
+          restore-keys: |
+            rust-release-seeded-api-server-${{ env.RUST_RELEASE_SEEDED_CACHE_ARCH }}-${{ steps.release_seed_tag.outputs.release_tag }}-
+      - name: Import release-seeded api-server Rust cache
+        if: ${{ steps.release_seed_api.outputs.cache-hit != '' }}
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: tmp/quality-gate-cache/rust-state-protocols/target
+        run: |
+          set -euo pipefail
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          mkdir -p "$cargo_home/registry" "$cargo_home/git" "$CARGO_TARGET_DIR"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-registry/" "$cargo_home/registry/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/cargo-git/" "$cargo_home/git/"
+          rsync -a "tmp/container-cache/api-server/$RUST_RELEASE_SEEDED_CACHE_ARCH/target/" "$CARGO_TARGET_DIR/"
       - name: Restore Rust state protocol quality gate cache
         uses: actions/cache@v5
         with:
