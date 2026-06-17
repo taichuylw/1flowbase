@@ -186,6 +186,7 @@ async fn api_official_plugin_registry_uses_proxy_for_catalog_urls_and_package_do
             source_label: "官方源".to_string(),
             registry_url: RAW_REGISTRY_URL.to_string(),
             github_proxy_url: Some(proxy_url.clone()),
+            trust_mode: "allow_unsigned".to_string(),
         },
         Vec::new(),
     );
@@ -199,6 +200,7 @@ async fn api_official_plugin_registry_uses_proxy_for_catalog_urls_and_package_do
     assert_eq!(catalog.source.registry_url, proxied_registry_url);
     assert_eq!(entry.icon.as_deref(), Some(proxied_icon_url.as_str()));
     assert_eq!(entry.selected_artifact.download_url, proxied_package_url);
+    assert_eq!(entry.trust_mode, "allow_unsigned");
 
     let downloaded = registry.download_plugin(entry).await.unwrap();
     assert_eq!(downloaded.package_bytes, b"package-via-proxy");

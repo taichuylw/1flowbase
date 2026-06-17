@@ -400,6 +400,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 - `API_PROVIDER_SECRET_MASTER_KEY`
 - `WEB_PORT`
 - 官方插件 GitHub raw 下载加速：提示 `Use CN GitHub plugin download accelerator? [y/N]` 时默认不启用；输入 `y` 后继续填写 `API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL`，地址提示中直接回车会使用默认 `https://gh-proxy.com/`。
+- 官方插件签名强制校验：默认 `API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true`；只有在明确接受第三方 / 未签名插件风险的自托管环境中才设置为 `false`。关闭后仍保留插件包 `sha256` checksum 校验，未验证包会标记为 `unverified`。
 
 如果 `API_PROVIDER_SECRET_MASTER_KEY` 仍是默认占位值，脚本会自动生成随机 key 写入 `docker/.env`，不需要首次部署时手动填写。
 

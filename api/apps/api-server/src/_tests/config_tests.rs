@@ -460,6 +460,39 @@ fn api_config_prefers_mirror_registry_when_present() {
 }
 
 #[test]
+fn api_config_defaults_official_plugin_signature_required() {
+    let config = ApiConfig::from_env_map(&base_env_without_ephemeral_backend()).unwrap();
+
+    assert!(config.official_plugin_signature_required);
+
+    let resolved = config.resolve_official_plugin_source();
+    assert_eq!(resolved.trust_mode, "signature_required");
+}
+
+#[test]
+fn api_config_reads_official_plugin_signature_required_override() {
+    let mut env = base_env_without_ephemeral_backend();
+    env.push(("API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED", "false"));
+    let config = ApiConfig::from_env_map(&env).unwrap();
+
+    assert!(!config.official_plugin_signature_required);
+
+    let resolved = config.resolve_official_plugin_source();
+    assert_eq!(resolved.trust_mode, "allow_unsigned");
+}
+
+#[test]
+fn api_config_rejects_invalid_official_plugin_signature_required_override() {
+    let mut env = base_env_without_ephemeral_backend();
+    env.push(("API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED", "sometimes"));
+    let error = ApiConfig::from_env_map(&env).unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED"));
+}
+
+#[test]
 fn api_config_reads_official_plugin_github_proxy_url() {
     let config = ApiConfig::from_env_map(&[
         (

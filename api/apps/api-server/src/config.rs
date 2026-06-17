@@ -47,6 +47,7 @@ pub struct ApiConfig {
     pub official_plugin_default_registry_url: String,
     pub official_plugin_mirror_registry_url: Option<String>,
     pub official_plugin_github_proxy_url: Option<String>,
+    pub official_plugin_signature_required: bool,
     pub official_plugin_trusted_public_keys_json: String,
     pub official_agent_flow_template_default_index_url: String,
     pub official_agent_flow_template_mirror_index_url: Option<String>,
@@ -64,6 +65,7 @@ pub struct ResolvedOfficialPluginSourceConfig {
     pub source_label: String,
     pub registry_url: String,
     pub github_proxy_url: Option<String>,
+    pub trust_mode: String,
 }
 
 #[derive(Debug, Clone)]
@@ -124,11 +126,15 @@ impl ApiConfig {
                     .to_string()
             });
         let allow_unverified_filesystem_dropins = parse_bool_flag(
+            "API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS",
             map.get("API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS"),
             true,
         )?;
-        let allow_uploaded_host_extensions =
-            parse_bool_flag(map.get("API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS"), false)?;
+        let allow_uploaded_host_extensions = parse_bool_flag(
+            "API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS",
+            map.get("API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS"),
+            false,
+        )?;
         let official_plugin_repository = map
             .get("API_OFFICIAL_PLUGIN_REPOSITORY")
             .cloned()
@@ -150,6 +156,11 @@ impl ApiConfig {
             .get("API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL")
             .cloned()
             .filter(|value| !value.trim().is_empty());
+        let official_plugin_signature_required = parse_bool_flag(
+            "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED",
+            map.get("API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED"),
+            true,
+        )?;
         let official_plugin_trusted_public_keys_json = map
             .get("API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON")
             .cloned()
@@ -219,6 +230,7 @@ impl ApiConfig {
             official_plugin_default_registry_url,
             official_plugin_mirror_registry_url,
             official_plugin_github_proxy_url,
+            official_plugin_signature_required,
             official_plugin_trusted_public_keys_json,
             official_agent_flow_template_default_index_url,
             official_agent_flow_template_mirror_index_url,
@@ -248,6 +260,7 @@ impl ApiConfig {
                 source_label: "镜像源".into(),
                 registry_url: mirror_url,
                 github_proxy_url: self.official_plugin_github_proxy_url.clone(),
+                trust_mode: self.official_plugin_trust_mode(),
             };
         }
 
@@ -256,6 +269,15 @@ impl ApiConfig {
             source_label: "官方源".into(),
             registry_url: self.official_plugin_default_registry_url.clone(),
             github_proxy_url: self.official_plugin_github_proxy_url.clone(),
+            trust_mode: self.official_plugin_trust_mode(),
+        }
+    }
+
+    fn official_plugin_trust_mode(&self) -> String {
+        if self.official_plugin_signature_required {
+            "signature_required".to_string()
+        } else {
+            "allow_unsigned".to_string()
         }
     }
 
@@ -374,7 +396,7 @@ fn find_workspace_root(start: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-fn parse_bool_flag(value: Option<&String>, default: bool) -> Result<bool> {
+fn parse_bool_flag(key: &str, value: Option<&String>, default: bool) -> Result<bool> {
     let Some(value) = value else {
         return Ok(default);
     };
@@ -382,6 +404,8 @@ fn parse_bool_flag(value: Option<&String>, default: bool) -> Result<bool> {
     match value.trim().to_ascii_lowercase().as_str() {
         "1" | "true" | "yes" | "on" => Ok(true),
         "0" | "false" | "no" | "off" => Ok(false),
-        _ => Err(anyhow!("invalid boolean flag `{value}`")),
+        _ => Err(anyhow!(
+            "invalid env {key}: expected boolean flag, got `{value}`"
+        )),
     }
 }

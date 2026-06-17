@@ -169,6 +169,71 @@ async fn package_intake_rejects_unsigned_signature_required_mirror_archive() {
 }
 
 #[tokio::test]
+async fn package_intake_marks_unsigned_official_allow_unsigned_archive_as_unverified() {
+    let fixture = create_signed_package_fixture(SignedFixtureInput {
+        provider_code: "openai_compatible",
+        version: "0.2.0",
+        source_kind: "official_registry",
+        trust_level: "verified_official",
+        include_signature: false,
+        tamper_signature: false,
+        archive_format: ArchiveFormat::TarGz,
+        release_plugin_id: None,
+        release_provider_code: None,
+        release_version: None,
+    });
+
+    let result = intake_package_bytes(
+        &fixture.package_bytes,
+        &PackageIntakePolicy {
+            source_kind: "official_registry".to_string(),
+            trust_mode: "allow_unsigned".to_string(),
+            expected_artifact_sha256: Some(fixture.artifact_sha256.clone()),
+            trusted_public_keys: vec![fixture.public_key.clone()],
+            original_filename: Some("openai_compatible-0.2.0.1flowbasepkg".into()),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(result.source_kind, "official_registry");
+    assert_eq!(result.trust_level, "unverified");
+    assert_eq!(result.signature_status, "unsigned");
+    assert_eq!(result.checksum, Some(fixture.artifact_sha256));
+}
+
+#[tokio::test]
+async fn package_intake_rejects_checksum_mismatch_when_signature_is_not_required() {
+    let fixture = create_signed_package_fixture(SignedFixtureInput {
+        provider_code: "openai_compatible",
+        version: "0.2.0",
+        source_kind: "official_registry",
+        trust_level: "verified_official",
+        include_signature: false,
+        tamper_signature: false,
+        archive_format: ArchiveFormat::TarGz,
+        release_plugin_id: None,
+        release_provider_code: None,
+        release_version: None,
+    });
+
+    let error = intake_package_bytes(
+        &fixture.package_bytes,
+        &PackageIntakePolicy {
+            source_kind: "official_registry".to_string(),
+            trust_mode: "allow_unsigned".to_string(),
+            expected_artifact_sha256: Some(format!("sha256:{}", "0".repeat(64))),
+            trusted_public_keys: vec![fixture.public_key.clone()],
+            original_filename: Some("openai_compatible-0.2.0.1flowbasepkg".into()),
+        },
+    )
+    .await
+    .expect_err("checksum mismatch must fail even when signature is optional");
+
+    assert!(error.to_string().contains("package checksum mismatch"));
+}
+
+#[tokio::test]
 async fn package_intake_marks_uploaded_unsigned_archive_as_unverified() {
     let fixture = create_signed_package_fixture(SignedFixtureInput {
         provider_code: "fixture_provider",
@@ -282,6 +347,51 @@ async fn package_intake_rejects_signed_archive_with_release_identity_mismatch() 
     assert!(error
         .to_string()
         .contains("official release metadata must match package manifest identity"));
+}
+
+#[tokio::test]
+async fn package_intake_verifies_signed_archive_with_matching_key_from_keyring() {
+    let fixture = create_signed_package_fixture(SignedFixtureInput {
+        provider_code: "openai_compatible",
+        version: "0.2.0",
+        source_kind: "official_registry",
+        trust_level: "verified_official",
+        include_signature: true,
+        tamper_signature: false,
+        archive_format: ArchiveFormat::TarGz,
+        release_plugin_id: None,
+        release_provider_code: None,
+        release_version: None,
+    });
+    let unrelated_signing_key = SigningKey::from_bytes(&[9u8; 32]);
+    let unrelated_public_key = TrustedPublicKey {
+        key_id: "unrelated-key".to_string(),
+        algorithm: "ed25519".to_string(),
+        public_key_pem: unrelated_signing_key
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap(),
+    };
+
+    let result = intake_package_bytes(
+        &fixture.package_bytes,
+        &PackageIntakePolicy {
+            source_kind: "official_registry".to_string(),
+            trust_mode: "signature_required".to_string(),
+            expected_artifact_sha256: Some(fixture.artifact_sha256.clone()),
+            trusted_public_keys: vec![unrelated_public_key, fixture.public_key.clone()],
+            original_filename: Some("openai_compatible-0.2.0.1flowbasepkg".into()),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(result.signature_status, "verified");
+    assert_eq!(result.trust_level, "verified_official");
+    assert_eq!(
+        result.signing_key_id.as_deref(),
+        Some("official-key-2026-04")
+    );
 }
 
 #[test]

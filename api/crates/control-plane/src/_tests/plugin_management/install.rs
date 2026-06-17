@@ -108,6 +108,7 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
         install.installation.signature_status.as_deref(),
         Some("unsigned")
     );
+    assert_eq!(install.installation.trust_level, "unverified");
     assert_eq!(install.task.status, PluginTaskStatus::Succeeded);
 }
 

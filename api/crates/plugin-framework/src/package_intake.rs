@@ -553,7 +553,9 @@ fn derive_trust_level(
 ) -> String {
     match signature.status.as_str() {
         "verified" => "verified_official".to_string(),
-        _ if policy.source_kind == "uploaded" => "unverified".to_string(),
+        _ if policy.source_kind == "uploaded" || policy.trust_mode == "allow_unsigned" => {
+            "unverified".to_string()
+        }
         _ => "checksum_only".to_string(),
     }
 }

@@ -28,6 +28,7 @@ pub struct ApiOfficialPluginRegistry {
     source_label: String,
     registry_url: String,
     github_proxy_url: Option<String>,
+    trust_mode: String,
     trusted_public_keys: Vec<plugin_framework::TrustedPublicKey>,
     client: Client,
     registry_cache: Arc<RwLock<Option<CachedOfficialRegistryDocument>>>,
@@ -51,6 +52,7 @@ impl ApiOfficialPluginRegistry {
             source_label: source.source_label,
             registry_url,
             github_proxy_url: source.github_proxy_url,
+            trust_mode: source.trust_mode,
             trusted_public_keys,
             client: Client::new(),
             registry_cache: Arc::new(RwLock::new(None)),
@@ -151,7 +153,7 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
                             signing_key_id: selected.signing_key_id,
                         },
                         i18n_summary,
-                        trust_mode: default_trust_mode(),
+                        trust_mode: self.trust_mode.clone(),
                         help_url: entry.help_url,
                         model_discovery_mode: entry.model_discovery_mode,
                     })
@@ -264,10 +266,6 @@ pub(crate) fn rewrite_github_raw_url(url: &str, github_proxy_url: Option<&str>) 
     }
 
     format!("{github_proxy_url}/{url}")
-}
-
-fn default_trust_mode() -> String {
-    "signature_required".to_string()
 }
 
 fn default_plugin_type() -> String {

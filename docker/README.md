@@ -55,6 +55,8 @@ docker compose up -d
 
 镜像版本、端口、数据库、API、插件运行器和初始化 root 账号配置都集中在 `docker/.env.example`。不再需要复制 `api/api.env`、`plugin-runner/plugin-runner.env` 或 `postgres/postgres.env`。
 
+官方插件默认要求官方签名校验，`API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true` 会拒绝未签名或无法用 trusted key 验证的官方 / 镜像源插件。自托管环境明确接受风险时可设为 `false`；此时仍校验 registry 中的 `sha256` checksum，未验证包会标记为 `unverified`。
+
 默认服务：
 
 - `web`: `http://127.0.0.1:3100`
