@@ -9,7 +9,7 @@ import {
   Switch,
   Typography
 } from 'antd';
-import { useRef, useState } from 'react';
+import { useReducer, useRef } from 'react';
 
 import type { SchemaFieldRendererProps } from '../../../../../shared/schema-ui/registry/create-renderer-registry';
 import {
@@ -119,7 +119,15 @@ function recordArray(value: unknown): Array<Record<string, unknown>> {
     return [];
   }
 
-  return value.filter(isRecord).map((item) => ({ ...item }));
+  const records: Array<Record<string, unknown>> = [];
+
+  for (const item of value) {
+    if (isRecord(item)) {
+      records.push({ ...item });
+    }
+  }
+
+  return records;
 }
 
 function stringifyToolPreconditions(
@@ -175,10 +183,20 @@ function argumentPathFromValue(value: unknown): string[] {
     return [];
   }
 
-  return value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  const path: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      continue;
+    }
+
+    const segment = entry.trim();
+    if (segment) {
+      path.push(segment);
+    }
+  }
+
+  return path;
 }
 
 function preconditionArgumentPath(value: Record<string, unknown>) {
@@ -206,10 +224,16 @@ function parseArgumentPathInput(value: string) {
     }
   }
 
-  return trimmedValue
-    .split('.')
-    .map((segment) => segment.trim())
-    .filter(Boolean);
+  const path: string[] = [];
+
+  for (const segment of trimmedValue.split('.')) {
+    const trimmedSegment = segment.trim();
+    if (trimmedSegment) {
+      path.push(trimmedSegment);
+    }
+  }
+
+  return path;
 }
 
 function embeddedPreconditions(value: Record<string, unknown>) {
@@ -427,16 +451,477 @@ function identifierError(
   return null;
 }
 
+interface LlmToolRegistrationsEditorState {
+  editingIndex: number | null;
+  draft: LlmToolRegistrationDraft | null;
+  schemaEditorValid: boolean;
+  schemaEditorRevision: number;
+  preconditionsEditorValid: boolean;
+}
+
+const CLOSED_LLM_TOOL_REGISTRATION_EDITOR_STATE: LlmToolRegistrationsEditorState =
+  {
+    editingIndex: null,
+    draft: null,
+    schemaEditorValid: true,
+    schemaEditorRevision: 0,
+    preconditionsEditorValid: true
+  };
+
+type LlmToolRegistrationsEditorAction =
+  | {
+      type: 'open';
+      editingIndex: number | null;
+      draft: LlmToolRegistrationDraft;
+    }
+  | { type: 'close' }
+  | { type: 'update-draft'; patch: Partial<LlmToolRegistrationDraft> }
+  | {
+      type: 'apply-input-schema';
+      inputSchema: Record<string, unknown>;
+      preconditions: Array<Record<string, unknown>> | null;
+      bumpSchemaRevision: boolean;
+    }
+  | {
+      type: 'update-preconditions';
+      preconditions: Array<Record<string, unknown>>;
+    }
+  | { type: 'set-schema-valid'; valid: boolean }
+  | { type: 'set-preconditions-valid'; valid: boolean };
+
+function llmToolRegistrationsEditorReducer(
+  state: LlmToolRegistrationsEditorState,
+  action: LlmToolRegistrationsEditorAction
+): LlmToolRegistrationsEditorState {
+  switch (action.type) {
+    case 'open':
+      return {
+        editingIndex: action.editingIndex,
+        draft: action.draft,
+        schemaEditorValid: true,
+        schemaEditorRevision: 0,
+        preconditionsEditorValid: true
+      };
+    case 'close':
+      return CLOSED_LLM_TOOL_REGISTRATION_EDITOR_STATE;
+    case 'update-draft':
+      return state.draft
+        ? {
+            ...state,
+            draft: {
+              ...state.draft,
+              ...action.patch,
+              ...(action.patch.tool_mode === 'fusion'
+                ? {
+                    internal_llm_node_policy: 'allowed' as const,
+                    external_tool_policy: 'forbidden' as const
+                  }
+                : {})
+            }
+          }
+        : state;
+    case 'apply-input-schema':
+      return state.draft
+        ? {
+            ...state,
+            schemaEditorRevision: action.bumpSchemaRevision
+              ? state.schemaEditorRevision + 1
+              : state.schemaEditorRevision,
+            preconditionsEditorValid:
+              action.preconditions === null
+                ? state.preconditionsEditorValid
+                : true,
+            draft: {
+              ...state.draft,
+              input_schema: action.inputSchema,
+              preconditions:
+                action.preconditions === null
+                  ? state.draft.preconditions
+                  : action.preconditions
+            }
+          }
+        : state;
+    case 'update-preconditions':
+      return state.draft
+        ? {
+            ...state,
+            preconditionsEditorValid: true,
+            draft: {
+              ...state.draft,
+              preconditions: action.preconditions
+            }
+          }
+        : state;
+    case 'set-schema-valid':
+      return {
+        ...state,
+        schemaEditorValid: action.valid
+      };
+    case 'set-preconditions-valid':
+      return {
+        ...state,
+        preconditionsEditorValid: action.valid
+      };
+    default:
+      return state;
+  }
+}
+
+function patchPrecondition(
+  preconditions: Array<Record<string, unknown>>,
+  index: number,
+  onChange: (nextPreconditions: Array<Record<string, unknown>>) => void,
+  patch: Partial<Record<string, unknown>>
+) {
+  onChange(
+    preconditions.map((precondition, preconditionIndex) =>
+      preconditionIndex === index
+        ? {
+            ...precondition,
+            ...patch
+          }
+        : precondition
+    )
+  );
+}
+
+function removePrecondition(
+  preconditions: Array<Record<string, unknown>>,
+  index: number,
+  onChange: (nextPreconditions: Array<Record<string, unknown>>) => void
+) {
+  onChange(
+    preconditions.filter((_, preconditionIndex) => preconditionIndex !== index)
+  );
+}
+
+function addPrecondition(
+  preconditions: Array<Record<string, unknown>>,
+  onChange: (nextPreconditions: Array<Record<string, unknown>>) => void
+) {
+  onChange([...preconditions, createDefaultToolPrecondition()]);
+}
+
+const preconditionRowKeys = new WeakMap<Record<string, unknown>, string>();
+let preconditionRowKeySequence = 0;
+
+function preconditionRowKey(precondition: Record<string, unknown>) {
+  const existingKey = preconditionRowKeys.get(precondition);
+  if (existingKey) {
+    return existingKey;
+  }
+
+  preconditionRowKeySequence += 1;
+  const key = `precondition:${preconditionRowKeySequence}`;
+  preconditionRowKeys.set(precondition, key);
+  return key;
+}
+
+function renderPreconditionRows({
+  value,
+  onChange
+}: {
+  value: Array<Record<string, unknown>>;
+  onChange: (nextPreconditions: Array<Record<string, unknown>>) => void;
+}) {
+  return (
+    <div className="agent-flow-json-schema-settings__fields">
+      <div className="agent-flow-json-schema-settings__field-head">
+        <span>{i18nText('agentFlow', 'auto.field_name')}</span>
+        <span>{i18nText('agentFlow', 'auto.schema_value_or_description')}</span>
+        <span>{i18nText('agentFlow', 'auto.type')}</span>
+        <span>{i18nText('agentFlow', 'auto.required')}</span>
+        <span>{i18nText('agentFlow', 'auto.operation')}</span>
+      </div>
+      <div className="agent-flow-json-schema-settings__field-rows">
+        {value.map((precondition, index) => {
+          const indexLabel = String(index + 1);
+
+          return (
+            <div
+              className="agent-flow-json-schema-settings__field-node"
+              key={preconditionRowKey(precondition)}
+            >
+              <div className="agent-flow-json-schema-settings__field-row">
+                <Input
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.precondition_field_name',
+                    { value1: indexLabel, value2: 'kind' }
+                  )}
+                  disabled
+                  value="kind"
+                />
+                <Input
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.precondition_field_value',
+                    { value1: indexLabel, value2: 'kind' }
+                  )}
+                  value={preconditionKind(precondition)}
+                  onChange={(event) =>
+                    patchPrecondition(value, index, onChange, {
+                      kind: event.target.value
+                    })
+                  }
+                />
+                <Input disabled value="String" />
+                <Checkbox disabled checked />
+                <Button
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.delete_tool_precondition',
+                    { value1: indexLabel }
+                  )}
+                  danger
+                  icon={<DeleteOutlined />}
+                  size="small"
+                  type="text"
+                  onClick={() => removePrecondition(value, index, onChange)}
+                />
+              </div>
+              <div
+                className="agent-flow-json-schema-settings__field-row"
+                style={{ paddingLeft: 18 }}
+              >
+                <Input
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.precondition_field_name',
+                    { value1: indexLabel, value2: 'argument_path' }
+                  )}
+                  disabled
+                  value="argument_path"
+                />
+                <Input
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.precondition_field_value',
+                    { value1: indexLabel, value2: 'argument_path' }
+                  )}
+                  value={stringifyArgumentPath(precondition)}
+                  onChange={(event) =>
+                    patchPrecondition(value, index, onChange, {
+                      argument_path: parseArgumentPathInput(event.target.value)
+                    })
+                  }
+                />
+                <Input disabled value="Array<String>" />
+                <Checkbox disabled checked />
+                <div className="agent-flow-json-schema-settings__field-actions" />
+              </div>
+              <div
+                className="agent-flow-json-schema-settings__field-row"
+                style={{ paddingLeft: 18 }}
+              >
+                <Input
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.precondition_field_name',
+                    { value1: indexLabel, value2: 'media_kind' }
+                  )}
+                  disabled
+                  value="media_kind"
+                />
+                <Input
+                  aria-label={i18nText(
+                    'agentFlow',
+                    'auto.precondition_field_value',
+                    { value1: indexLabel, value2: 'media_kind' }
+                  )}
+                  value={preconditionMediaKind(precondition)}
+                  onChange={(event) =>
+                    patchPrecondition(value, index, onChange, {
+                      media_kind: event.target.value || undefined
+                    })
+                  }
+                />
+                <Input disabled value="String" />
+                <Checkbox disabled checked={false} />
+                <div className="agent-flow-json-schema-settings__field-actions" />
+              </div>
+            </div>
+          );
+        })}
+        <Button
+          icon={<PlusOutlined />}
+          type="dashed"
+          onClick={() => addPrecondition(value, onChange)}
+        >
+          {i18nText('agentFlow', 'auto.add_tool_precondition')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LlmToolRegistrationForm({
+  connectorIdError,
+  draft,
+  editingIndex,
+  schemaEditorRevision,
+  toolNameError,
+  onPreconditionsChange,
+  onPreconditionsValidityChange,
+  onSchemaChange,
+  onSchemaValidityChange,
+  onUpdateDraft
+}: {
+  connectorIdError: string | null;
+  draft: LlmToolRegistrationDraft;
+  editingIndex: number | null;
+  schemaEditorRevision: number;
+  toolNameError: string | null;
+  onPreconditionsChange: (
+    nextPreconditions: Array<Record<string, unknown>>
+  ) => void;
+  onPreconditionsValidityChange: (valid: boolean) => void;
+  onSchemaChange: (schema: Record<string, unknown>) => void;
+  onSchemaValidityChange: (valid: boolean) => void;
+  onUpdateDraft: (patch: Partial<LlmToolRegistrationDraft>) => void;
+}) {
+  return (
+    <form className="agent-flow-llm-tool-registration-form">
+      <label style={TOOL_FORM_ROW_STYLE}>
+        <span>{i18nText('agentFlow', 'auto.tool_name')}</span>
+        <Input
+          aria-label={i18nText('agentFlow', 'auto.tool_name')}
+          status={toolNameError ? 'error' : undefined}
+          value={draft.tool_name}
+          onChange={(event) =>
+            onUpdateDraft({
+              tool_name: event.target.value,
+              connector_id: draft.connector_id || event.target.value
+            })
+          }
+        />
+        {toolNameError ? (
+          <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>
+            {toolNameError}
+          </Typography.Text>
+        ) : null}
+      </label>
+      <label style={TOOL_FORM_ROW_STYLE}>
+        <span>{i18nText('agentFlow', 'auto.tool_identifier')}</span>
+        <Input
+          aria-label={i18nText('agentFlow', 'auto.tool_identifier')}
+          status={connectorIdError ? 'error' : undefined}
+          value={draft.connector_id}
+          onChange={(event) =>
+            onUpdateDraft({ connector_id: event.target.value })
+          }
+        />
+        {connectorIdError ? (
+          <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>
+            {connectorIdError}
+          </Typography.Text>
+        ) : null}
+      </label>
+      <label style={TOOL_FORM_ROW_STYLE}>
+        <span>{i18nText('agentFlow', 'auto.description')}</span>
+        <Input
+          aria-label={i18nText('agentFlow', 'auto.description')}
+          value={draft.description}
+          onChange={(event) =>
+            onUpdateDraft({ description: event.target.value })
+          }
+        />
+      </label>
+      <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
+        <span>{i18nText('agentFlow', 'auto.internal_llm_node_policy')}</span>
+        <Switch
+          aria-label={i18nText('agentFlow', 'auto.internal_llm_node_policy')}
+          checked={draft.internal_llm_node_policy === 'allowed'}
+          disabled={draft.tool_mode === 'fusion'}
+          onChange={(checked) =>
+            onUpdateDraft({
+              internal_llm_node_policy: checked ? 'allowed' : 'forbidden',
+              ...(checked ? {} : { tool_mode: 'agent' as const })
+            })
+          }
+        />
+      </div>
+      {draft.internal_llm_node_policy === 'allowed' ? (
+        <label style={TOOL_FORM_ROW_STYLE}>
+          <span>{i18nText('agentFlow', 'auto.tool_mode')}</span>
+          <Select
+            aria-label={i18nText('agentFlow', 'auto.tool_mode')}
+            options={[
+              {
+                label: i18nText('agentFlow', 'auto.tool_mode_agent'),
+                value: 'agent'
+              },
+              {
+                label: i18nText('agentFlow', 'auto.tool_mode_fusion'),
+                value: 'fusion'
+              }
+            ]}
+            value={draft.tool_mode}
+            onChange={(nextMode: LlmToolMode) =>
+              onUpdateDraft({ tool_mode: nextMode })
+            }
+          />
+        </label>
+      ) : null}
+      {draft.tool_mode === 'agent' ? (
+        <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
+          <span>{i18nText('agentFlow', 'auto.external_tool_policy')}</span>
+          <Switch
+            aria-label={i18nText('agentFlow', 'auto.external_tool_policy')}
+            checked={draft.external_tool_policy === 'inherited'}
+            onChange={(checked) =>
+              onUpdateDraft({
+                external_tool_policy: checked ? 'inherited' : 'forbidden'
+              })
+            }
+          />
+        </div>
+      ) : null}
+      <div style={TOOL_FORM_ROW_STYLE}>
+        <span>{i18nText('agentFlow', 'auto.tool_preconditions')}</span>
+        <JsonProtocolInlineEditor
+          ariaLabel={i18nText('agentFlow', 'auto.tool_preconditions_json')}
+          className="agent-flow-llm-tool-registration-preconditions"
+          testId="agent-flow-llm-tool-preconditions-json-editor"
+          parseValue={parseToolPreconditionsProtocolInput}
+          renderFields={renderPreconditionRows}
+          stringifyValue={stringifyToolPreconditions}
+          value={draft.preconditions}
+          onChange={onPreconditionsChange}
+          onValidityChange={onPreconditionsValidityChange}
+        />
+      </div>
+      <div style={TOOL_FORM_ROW_STYLE}>
+        <span>{i18nText('agentFlow', 'auto.input_parameters')}</span>
+        <div className="agent-flow-llm-tool-registration-schema">
+          <JsonSchemaInlineEditor
+            parseSchemaInput={parseToolRegistrationSchemaInput}
+            resetKey={`${editingIndex ?? 'new'}:${schemaEditorRevision}`}
+            schema={draft.input_schema}
+            onChange={onSchemaChange}
+            onValidityChange={onSchemaValidityChange}
+          />
+        </div>
+      </div>
+    </form>
+  );
+}
+
 export function LlmToolRegistrationsField({
   adapter,
   block
 }: SchemaFieldRendererProps) {
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [draft, setDraft] = useState<LlmToolRegistrationDraft | null>(null);
-  const [schemaEditorValid, setSchemaEditorValid] = useState(true);
-  const [schemaEditorRevision, setSchemaEditorRevision] = useState(0);
-  const [preconditionsEditorValid, setPreconditionsEditorValid] =
-    useState(true);
+  const [editorState, dispatchEditor] = useReducer(
+    llmToolRegistrationsEditorReducer,
+    CLOSED_LLM_TOOL_REGISTRATION_EDITOR_STATE
+  );
+  const {
+    draft,
+    editingIndex,
+    preconditionsEditorValid,
+    schemaEditorRevision,
+    schemaEditorValid
+  } = editorState;
   const toolEditorTriggerRef = useRef<HTMLElement | null>(null);
   const currentNode = getCurrentNode(adapter);
 
@@ -482,36 +967,19 @@ export function LlmToolRegistrationsField({
     const nextDraft = draftFromTool(tool);
 
     toolEditorTriggerRef.current = trigger;
-    setEditingIndex(index);
-    setDraft(nextDraft);
-    setSchemaEditorValid(true);
-    setSchemaEditorRevision(0);
-    setPreconditionsEditorValid(true);
+    dispatchEditor({
+      type: 'open',
+      editingIndex: index,
+      draft: nextDraft
+    });
   }
 
   function closeToolEditor() {
-    setEditingIndex(null);
-    setDraft(null);
-    setSchemaEditorValid(true);
-    setSchemaEditorRevision(0);
-    setPreconditionsEditorValid(true);
+    dispatchEditor({ type: 'close' });
   }
 
   function updateDraft(patch: Partial<LlmToolRegistrationDraft>) {
-    setDraft((currentDraft) =>
-      currentDraft
-        ? {
-            ...currentDraft,
-            ...patch,
-            ...(patch.tool_mode === 'fusion'
-              ? {
-                  internal_llm_node_policy: 'allowed' as const,
-                  external_tool_policy: 'forbidden' as const
-                }
-              : {})
-          }
-        : currentDraft
-    );
+    dispatchEditor({ type: 'update-draft', patch });
   }
 
   function saveDraft() {
@@ -542,207 +1010,30 @@ export function LlmToolRegistrationsField({
     const embeddedToolConfig = splitToolRegistrationSchema(schema);
 
     if (embeddedToolConfig) {
-      updateDraft({
-        input_schema: embeddedToolConfig.input_schema,
-        preconditions:
-          embeddedToolConfig.preconditions !== null
-            ? embeddedToolConfig.preconditions
-            : (draft?.preconditions ?? [])
+      dispatchEditor({
+        type: 'apply-input-schema',
+        inputSchema: embeddedToolConfig.input_schema,
+        preconditions: embeddedToolConfig.preconditions,
+        bumpSchemaRevision: true
       });
-      if (embeddedToolConfig.preconditions !== null) {
-        setPreconditionsEditorValid(true);
-      }
-      setSchemaEditorRevision((revision) => revision + 1);
       return;
     }
 
-    updateDraft({ input_schema: schema });
+    dispatchEditor({
+      type: 'apply-input-schema',
+      inputSchema: schema,
+      preconditions: null,
+      bumpSchemaRevision: false
+    });
   }
 
   function updatePreconditions(
     nextPreconditions: Array<Record<string, unknown>>
   ) {
-    updateDraft({ preconditions: nextPreconditions });
-    setPreconditionsEditorValid(true);
-  }
-
-  function patchPrecondition(
-    preconditions: Array<Record<string, unknown>>,
-    index: number,
-    onChange: (nextPreconditions: Array<Record<string, unknown>>) => void,
-    patch: Partial<Record<string, unknown>>
-  ) {
-    onChange(
-      preconditions.map((precondition, preconditionIndex) =>
-        preconditionIndex === index
-          ? {
-              ...precondition,
-              ...patch
-            }
-          : precondition
-      )
-    );
-  }
-
-  function removePrecondition(
-    preconditions: Array<Record<string, unknown>>,
-    index: number,
-    onChange: (nextPreconditions: Array<Record<string, unknown>>) => void
-  ) {
-    onChange(
-      preconditions.filter(
-        (_, preconditionIndex) => preconditionIndex !== index
-      )
-    );
-  }
-
-  function addPrecondition(
-    preconditions: Array<Record<string, unknown>>,
-    onChange: (nextPreconditions: Array<Record<string, unknown>>) => void
-  ) {
-    onChange([...preconditions, createDefaultToolPrecondition()]);
-  }
-
-  function renderPreconditionRows({
-    value,
-    onChange
-  }: {
-    value: Array<Record<string, unknown>>;
-    onChange: (nextPreconditions: Array<Record<string, unknown>>) => void;
-  }) {
-    return (
-      <div className="agent-flow-json-schema-settings__fields">
-        <div className="agent-flow-json-schema-settings__field-head">
-          <span>{i18nText('agentFlow', 'auto.field_name')}</span>
-          <span>
-            {i18nText('agentFlow', 'auto.schema_value_or_description')}
-          </span>
-          <span>{i18nText('agentFlow', 'auto.type')}</span>
-          <span>{i18nText('agentFlow', 'auto.required')}</span>
-          <span>{i18nText('agentFlow', 'auto.operation')}</span>
-        </div>
-        <div className="agent-flow-json-schema-settings__field-rows">
-          {value.map((precondition, index) => {
-            const indexLabel = String(index + 1);
-
-            return (
-              <div
-                className="agent-flow-json-schema-settings__field-node"
-                key={`precondition-${index}`}
-              >
-                <div className="agent-flow-json-schema-settings__field-row">
-                  <Input
-                    aria-label={i18nText(
-                      'agentFlow',
-                      'auto.precondition_field_name',
-                      { value1: indexLabel, value2: 'kind' }
-                    )}
-                    disabled
-                    value="kind"
-                  />
-                  <Input
-                    aria-label={i18nText(
-                      'agentFlow',
-                      'auto.precondition_field_value',
-                      { value1: indexLabel, value2: 'kind' }
-                    )}
-                    value={preconditionKind(precondition)}
-                    onChange={(event) =>
-                      patchPrecondition(value, index, onChange, {
-                        kind: event.target.value
-                      })
-                    }
-                  />
-                  <Input disabled value="String" />
-                  <Checkbox disabled checked />
-                  <Button
-                    aria-label={i18nText(
-                      'agentFlow',
-                      'auto.delete_tool_precondition',
-                      { value1: indexLabel }
-                    )}
-                    danger
-                    icon={<DeleteOutlined />}
-                    size="small"
-                    type="text"
-                    onClick={() => removePrecondition(value, index, onChange)}
-                  />
-                </div>
-                <div
-                  className="agent-flow-json-schema-settings__field-row"
-                  style={{ paddingLeft: 18 }}
-                >
-                  <Input
-                    aria-label={i18nText(
-                      'agentFlow',
-                      'auto.precondition_field_name',
-                      { value1: indexLabel, value2: 'argument_path' }
-                    )}
-                    disabled
-                    value="argument_path"
-                  />
-                  <Input
-                    aria-label={i18nText(
-                      'agentFlow',
-                      'auto.precondition_field_value',
-                      { value1: indexLabel, value2: 'argument_path' }
-                    )}
-                    value={stringifyArgumentPath(precondition)}
-                    onChange={(event) =>
-                      patchPrecondition(value, index, onChange, {
-                        argument_path: parseArgumentPathInput(
-                          event.target.value
-                        )
-                      })
-                    }
-                  />
-                  <Input disabled value="Array<String>" />
-                  <Checkbox disabled checked />
-                  <div className="agent-flow-json-schema-settings__field-actions" />
-                </div>
-                <div
-                  className="agent-flow-json-schema-settings__field-row"
-                  style={{ paddingLeft: 18 }}
-                >
-                  <Input
-                    aria-label={i18nText(
-                      'agentFlow',
-                      'auto.precondition_field_name',
-                      { value1: indexLabel, value2: 'media_kind' }
-                    )}
-                    disabled
-                    value="media_kind"
-                  />
-                  <Input
-                    aria-label={i18nText(
-                      'agentFlow',
-                      'auto.precondition_field_value',
-                      { value1: indexLabel, value2: 'media_kind' }
-                    )}
-                    value={preconditionMediaKind(precondition)}
-                    onChange={(event) =>
-                      patchPrecondition(value, index, onChange, {
-                        media_kind: event.target.value || undefined
-                      })
-                    }
-                  />
-                  <Input disabled value="String" />
-                  <Checkbox disabled checked={false} />
-                  <div className="agent-flow-json-schema-settings__field-actions" />
-                </div>
-              </div>
-            );
-          })}
-          <Button
-            icon={<PlusOutlined />}
-            type="dashed"
-            onClick={() => addPrecondition(value, onChange)}
-          >
-            {i18nText('agentFlow', 'auto.add_tool_precondition')}
-          </Button>
-        </div>
-      </div>
-    );
+    dispatchEditor({
+      type: 'update-preconditions',
+      preconditions: nextPreconditions
+    });
   }
 
   const modalTitle = i18nText('agentFlow', 'auto.edit', {
@@ -866,142 +1157,22 @@ export function LlmToolRegistrationsField({
         onClose={closeToolEditor}
       >
         {draft ? (
-          <form className="agent-flow-llm-tool-registration-form">
-            <label style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.tool_name')}</span>
-              <Input
-                aria-label={i18nText('agentFlow', 'auto.tool_name')}
-                status={toolNameError ? 'error' : undefined}
-                value={draft.tool_name}
-                onChange={(event) =>
-                  updateDraft({
-                    tool_name: event.target.value,
-                    connector_id: draft.connector_id || event.target.value
-                  })
-                }
-              />
-              {toolNameError ? (
-                <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>
-                  {toolNameError}
-                </Typography.Text>
-              ) : null}
-            </label>
-            <label style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.tool_identifier')}</span>
-              <Input
-                aria-label={i18nText('agentFlow', 'auto.tool_identifier')}
-                status={connectorIdError ? 'error' : undefined}
-                value={draft.connector_id}
-                onChange={(event) =>
-                  updateDraft({ connector_id: event.target.value })
-                }
-              />
-              {connectorIdError ? (
-                <Typography.Text type="danger" style={TOOL_FORM_ERROR_STYLE}>
-                  {connectorIdError}
-                </Typography.Text>
-              ) : null}
-            </label>
-            <label style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.description')}</span>
-              <Input
-                aria-label={i18nText('agentFlow', 'auto.description')}
-                value={draft.description}
-                onChange={(event) =>
-                  updateDraft({ description: event.target.value })
-                }
-              />
-            </label>
-            <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
-              <span>
-                {i18nText('agentFlow', 'auto.internal_llm_node_policy')}
-              </span>
-              <Switch
-                aria-label={i18nText(
-                  'agentFlow',
-                  'auto.internal_llm_node_policy'
-                )}
-                checked={draft.internal_llm_node_policy === 'allowed'}
-                disabled={draft.tool_mode === 'fusion'}
-                onChange={(checked) =>
-                  updateDraft({
-                    internal_llm_node_policy: checked ? 'allowed' : 'forbidden',
-                    ...(checked ? {} : { tool_mode: 'agent' as const })
-                  })
-                }
-              />
-            </div>
-            {draft.internal_llm_node_policy === 'allowed' ? (
-              <label style={TOOL_FORM_ROW_STYLE}>
-                <span>{i18nText('agentFlow', 'auto.tool_mode')}</span>
-                <Select
-                  aria-label={i18nText('agentFlow', 'auto.tool_mode')}
-                  options={[
-                    {
-                      label: i18nText('agentFlow', 'auto.tool_mode_agent'),
-                      value: 'agent'
-                    },
-                    {
-                      label: i18nText('agentFlow', 'auto.tool_mode_fusion'),
-                      value: 'fusion'
-                    }
-                  ]}
-                  value={draft.tool_mode}
-                  onChange={(nextMode: LlmToolMode) =>
-                    updateDraft({ tool_mode: nextMode })
-                  }
-                />
-              </label>
-            ) : null}
-            {draft.tool_mode === 'agent' ? (
-              <div style={TOOL_FORM_SWITCH_ROW_STYLE}>
-                <span>
-                  {i18nText('agentFlow', 'auto.external_tool_policy')}
-                </span>
-                <Switch
-                  aria-label={i18nText(
-                    'agentFlow',
-                    'auto.external_tool_policy'
-                  )}
-                  checked={draft.external_tool_policy === 'inherited'}
-                  onChange={(checked) =>
-                    updateDraft({
-                      external_tool_policy: checked ? 'inherited' : 'forbidden'
-                    })
-                  }
-                />
-              </div>
-            ) : null}
-            <div style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.tool_preconditions')}</span>
-              <JsonProtocolInlineEditor
-                ariaLabel={i18nText(
-                  'agentFlow',
-                  'auto.tool_preconditions_json'
-                )}
-                className="agent-flow-llm-tool-registration-preconditions"
-                testId="agent-flow-llm-tool-preconditions-json-editor"
-                parseValue={parseToolPreconditionsProtocolInput}
-                renderFields={renderPreconditionRows}
-                stringifyValue={stringifyToolPreconditions}
-                value={draft.preconditions}
-                onChange={updatePreconditions}
-                onValidityChange={setPreconditionsEditorValid}
-              />
-            </div>
-            <div style={TOOL_FORM_ROW_STYLE}>
-              <span>{i18nText('agentFlow', 'auto.input_parameters')}</span>
-              <div className="agent-flow-llm-tool-registration-schema">
-                <JsonSchemaInlineEditor
-                  parseSchemaInput={parseToolRegistrationSchemaInput}
-                  resetKey={`${editingIndex ?? 'new'}:${schemaEditorRevision}`}
-                  schema={draft.input_schema}
-                  onChange={updateInputSchema}
-                  onValidityChange={setSchemaEditorValid}
-                />
-              </div>
-            </div>
-          </form>
+          <LlmToolRegistrationForm
+            connectorIdError={connectorIdError}
+            draft={draft}
+            editingIndex={editingIndex}
+            schemaEditorRevision={schemaEditorRevision}
+            toolNameError={toolNameError}
+            onPreconditionsChange={updatePreconditions}
+            onPreconditionsValidityChange={(valid) =>
+              dispatchEditor({ type: 'set-preconditions-valid', valid })
+            }
+            onSchemaChange={updateInputSchema}
+            onSchemaValidityChange={(valid) =>
+              dispatchEditor({ type: 'set-schema-valid', valid })
+            }
+            onUpdateDraft={updateDraft}
+          />
         ) : null}
       </FloatingSettingsPanel>
     </div>

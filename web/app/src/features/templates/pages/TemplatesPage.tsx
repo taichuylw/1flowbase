@@ -49,7 +49,11 @@ function renderTemplateIdentity(entry: OfficialAgentFlowTemplateCatalogEntry) {
       >
         {entry.application.name.slice(0, 1).toUpperCase()}
       </span>
-      <Space direction="vertical" size={0} className="templates-page__identity-text">
+      <Space
+        direction="vertical"
+        size={0}
+        className="templates-page__identity-text"
+      >
         <Typography.Text strong>{entry.application.name}</Typography.Text>
         <Typography.Text type="secondary" copyable>
           {entry.workflow_id}
@@ -69,6 +73,9 @@ export function TemplatesPage() {
   const [importPreview, setImportPreview] =
     useState<AgentFlowTemplatePreview | null>(null);
   const [importName, setImportName] = useState('');
+  const [preparingWorkflowId, setPreparingWorkflowId] = useState<string | null>(
+    null
+  );
 
   const catalogQuery = useQuery({
     queryKey: officialAgentFlowTemplateCatalogQueryKey,
@@ -77,26 +84,31 @@ export function TemplatesPage() {
     gcTime: officialAgentFlowTemplateCatalogStaleTimeMs
   });
 
-  const prepareImportMutation = useMutation({
-    mutationFn: async (
-      entry: OfficialAgentFlowTemplateCatalogEntry
-    ): Promise<PreparedOfficialTemplate> => {
-      const template = await downloadOfficialAgentFlowTemplate(entry.workflow_id);
-      const preview = await previewAgentFlowTemplate(template);
+  async function prepareImportTemplate(
+    entry: OfficialAgentFlowTemplateCatalogEntry
+  ) {
+    setPreparingWorkflowId(entry.workflow_id);
 
-      return { template, preview };
-    },
-    onSuccess: ({ template, preview }) => {
-      setImportTemplate(template);
-      setImportPreview(preview);
-      setImportName(preview.application.name);
-    },
-    onError: () => {
+    try {
+      const template = await downloadOfficialAgentFlowTemplate(
+        entry.workflow_id
+      );
+      const preview = await previewAgentFlowTemplate(template);
+      const preparedTemplate: PreparedOfficialTemplate = { template, preview };
+
+      setImportTemplate(preparedTemplate.template);
+      setImportPreview(preparedTemplate.preview);
+      setImportName(preparedTemplate.preview.application.name);
+    } catch {
       setImportTemplate(null);
       setImportPreview(null);
       messageApi.error(t('auto.template_prepare_failed'));
+    } finally {
+      setPreparingWorkflowId((currentWorkflowId) =>
+        currentWorkflowId === entry.workflow_id ? null : currentWorkflowId
+      );
     }
-  });
+  }
 
   const importTemplateMutation = useMutation({
     mutationFn: () => {
@@ -129,66 +141,64 @@ export function TemplatesPage() {
     }
   });
 
-  const columns: TableProps<OfficialAgentFlowTemplateCatalogEntry>['columns'] = [
-    {
-      title: t('auto.template_info'),
-      key: 'template',
-      width: 300,
-      render: (_, entry) => renderTemplateIdentity(entry)
-    },
-    {
-      title: t('auto.description'),
-      dataIndex: ['application', 'description'],
-      key: 'description',
-      width: 320,
-      render: (description: string) => (
-        <Typography.Text type={description ? undefined : 'secondary'}>
-          {description || t('auto.description_empty')}
-        </Typography.Text>
-      )
-    },
-    {
-      title: t('auto.updated_at'),
-      dataIndex: 'updated_at',
-      key: 'updated_at',
-      width: 180,
-      render: (updatedAt: string) =>
-        formatDateTime(updatedAt, {
-          hour12: false
-        })
-    },
-    {
-      title: t('auto.template_hash'),
-      dataIndex: 'template_sha256',
-      key: 'template_sha256',
-      width: 220,
-      render: (value: string) => (
-        <Typography.Text code copyable className="templates-page__hash">
-          {value}
-        </Typography.Text>
-      )
-    },
-    {
-      title: t('auto.actions'),
-      key: 'actions',
-      width: 140,
-      fixed: 'right',
-      render: (_, entry) => (
-        <Button
-          type="primary"
-          icon={<DownloadOutlined />}
-          loading={
-            prepareImportMutation.isPending &&
-            prepareImportMutation.variables?.workflow_id === entry.workflow_id
-          }
-          aria-label={`${t('auto.import_template')}-${entry.application.name}`}
-          onClick={() => prepareImportMutation.mutate(entry)}
-        >
-          {t('auto.import_template')}
-        </Button>
-      )
-    }
-  ];
+  const columns: TableProps<OfficialAgentFlowTemplateCatalogEntry>['columns'] =
+    [
+      {
+        title: t('auto.template_info'),
+        key: 'template',
+        width: 300,
+        render: (_, entry) => renderTemplateIdentity(entry)
+      },
+      {
+        title: t('auto.description'),
+        dataIndex: ['application', 'description'],
+        key: 'description',
+        width: 320,
+        render: (description: string) => (
+          <Typography.Text type={description ? undefined : 'secondary'}>
+            {description || t('auto.description_empty')}
+          </Typography.Text>
+        )
+      },
+      {
+        title: t('auto.updated_at'),
+        dataIndex: 'updated_at',
+        key: 'updated_at',
+        width: 180,
+        render: (updatedAt: string) =>
+          formatDateTime(updatedAt, {
+            hour12: false
+          })
+      },
+      {
+        title: t('auto.template_hash'),
+        dataIndex: 'template_sha256',
+        key: 'template_sha256',
+        width: 220,
+        render: (value: string) => (
+          <Typography.Text code copyable className="templates-page__hash">
+            {value}
+          </Typography.Text>
+        )
+      },
+      {
+        title: t('auto.actions'),
+        key: 'actions',
+        width: 140,
+        fixed: 'right',
+        render: (_, entry) => (
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            loading={preparingWorkflowId === entry.workflow_id}
+            aria-label={`${t('auto.import_template')}-${entry.application.name}`}
+            onClick={() => void prepareImportTemplate(entry)}
+          >
+            {t('auto.import_template')}
+          </Button>
+        )
+      }
+    ];
 
   const catalog = catalogQuery.data;
 
