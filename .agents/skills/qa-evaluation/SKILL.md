@@ -1,6 +1,6 @@
 ---
 name: qa-evaluation
-description: Evidence-driven QA evaluation for 1flowbase dev acceptance, PR merge gates, project health gates, regression, delivery, full-project audits, quality gate routing, i18n/multilingual key-value hygiene, frontend/backend contract, status, boundary and runtime checks, hotspot/churn prevention reviews, and maintainability/dead-abstraction warnings. Use when Codex must report verifiable findings and risks instead of directly implementing or fixing.
+description: Evidence-driven QA evaluation for 1flowbase dev acceptance, PR merge gates, project health gates, regression, delivery, full-project audits, quality gate routing, i18n/multilingual key-value hygiene, frontend/backend contract, status, boundary and runtime checks, scope/error-handling acceptance, hotspot/churn prevention reviews, and maintainability/dead-abstraction warnings. Use when Codex must report verifiable findings and risks instead of directly implementing or fixing.
 ---
 
 # QA Evaluation
@@ -36,6 +36,14 @@ Project Health Gate 的顺序固定为：先确认 lane 和范围，再建立质
 
 用户可见文案是开发者已调好的产品内容，不是 QA 修复素材。除非用户在当前任务中明确要求改文案，否则 QA / i18n hygiene 不得修改任何展示给用户的字符串值；只能报告问题、复用既有 key、调整 key 引用、合并重复 key、删除确认失效 key，且必须保留原文案值。
 
+## Code Acceptance Checks
+
+Dev Acceptance Gate 和 Project Health Gate 都必须把代码体检问题绑定到证据：文件 / 函数 / 调用点 / 运行路径 / 测试 / 日志 / 截图 / artifact。只凭“看起来复杂”不能下 finding；证据不足时写 `未验证，不下确定结论`。
+
+- `Maintainability`: 检查是否为了拆分而拆分、把完整业务流程拆成多个只调用一次的微型私有方法、引入无领域责任的 helper / utils / manager / adapter，或让主业务路径需要频繁跳转才读懂。单个方法超过约 80 行只是调查信号，不是自动 blocker；业务流程连贯且可读时不要强行要求拆分。
+- `Error handling`: 检查静默 fallback、默认值兜底、吞错、泛化错误、绕过逻辑和无业务语义防御代码。只有错误路径真实存在且符合当前边界时才建议错误处理；不应该发生的状态优先暴露问题、收敛状态来源或修正数据流。
+- `Scope and boundary`: 检查实现是否只覆盖已确认范围，是否顺手重构无关逻辑，是否为了局部方便破坏领域模型、状态模型、权限模型、contract 或前后端职责边界，是否把复杂度扩散到多个调用点或隐式约定里。
+
 ## Quick Reference
 
 - 开发阶段默认不加载完整质量门禁；功能完成后再主动进入 `qa-evaluation`
@@ -58,6 +66,7 @@ Project Health Gate 的顺序固定为：先确认 lane 和范围，再建立质
 - i18n hygiene 修复边界：不得为了消除重复 value、未引用 key 或 common 抽取 warning 改文案值；只能复用既有 key、调整 key 引用、合并重复 key、删除确认失效 key，或保留相同文案值并说明原因
 - 临时兼容旧字段必须标记 `@field-contract-compat source=... alias=... remove_by=yyyy-mm-dd`，带废弃计划和测试；QA 报告和 `repo-hygiene` 必须把它作为 warning 暴露
 - 命中过度抽象、无用代码、空转封装、死代码或无意义 helper / manager / utils 时，加载 `references/maintainability-dead-abstraction.md`；只能基于调用方、边界、运行路径或历史证据输出 finding / warning
+- 命中碎片化拆分、微型私有方法、业务流程连贯性下降、静默 fallback、默认值兜底、吞错、绕过逻辑或无语义防御代码时，必须使用本文件 `Code Acceptance Checks` 和 `references/anti-patterns.md` 归类；未经用户确认不得直接修复
 - 热点修改复盘必查：高频文件、提交意图、反复修改原因、缺失的前置判断规则，以及应更新的 `skills / AGENTS / scripts/node` 门禁；报告重点是预防下一次 AI 返工，不是只列业务代码修复建议
 - 评估范围命中前端页面、导航、样式、共享壳层或第三方组件覆写时，必须加载 `references/frontend-quality-gates.md`
 - 评估范围命中前端页面运行态、受保护页面、路由跳转、浏览器截图或控制台证据时，优先运行 `node scripts/node/page-debug.js`
@@ -108,4 +117,7 @@ Project Health Gate 的顺序固定为：先确认 lane 和范围，再建立质
 - 只看当前改动点，不看被影响的其他消费者
 - 为了通过 QA、i18n hygiene 或视觉一致性检查而改用户可见文案值
 - 把 maintainability warning 当成已授权清理，未经用户同意就删除或重构
+- 把静默 fallback、默认值兜底、吞错或无语义防御代码当成稳定性改进
+- 把完整业务流程拆成多个只调用一次的小函数，导致 QA 只能靠跳转拼回主路径
+- 只检查功能是否跑通，不检查变更是否越过已确认范围或破坏整体边界
 - 后端评估仍沿用旧术语，忽略 `workspace/system`、`SYSTEM_SCOPE_ID`、runtime `scope_id`、`HostExtension / RuntimeExtension / CapabilityPlugin`、`Resource Action Kernel` 和新质量门禁
