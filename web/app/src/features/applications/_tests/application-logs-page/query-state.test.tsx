@@ -27,18 +27,6 @@ const runtimeApi = vi.hoisted(() => ({
     ] as const,
   applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
     ['applications', applicationId, 'runtime', 'runs', runId] as const,
-  applicationRunConversationLogDetailQueryKey: (
-    applicationId: string,
-    runId: string
-  ) =>
-    [
-      'applications',
-      applicationId,
-      'runtime',
-      'runs',
-      runId,
-      'conversation-log'
-    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     input: {
@@ -71,7 +59,6 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunConversationLogDetail: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
@@ -93,7 +80,6 @@ describe('ApplicationLogsPage - query states', () => {
     window.localStorage.setItem('1flowbase.ui.locale_preference', 'zh_Hans');
     await appI18n.changeLanguage('zh_Hans');
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();

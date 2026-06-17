@@ -455,15 +455,6 @@ export interface ConsoleApplicationRunDetail {
   stitched_trace?: ConsoleApplicationRunStitchedTrace[];
 }
 
-export interface ConsoleApplicationConversationLogDetail {
-  run: ConsoleApplicationRunLog;
-  statistics: ConsoleApplicationRunStatistics;
-  flow_run: ConsoleFlowRunDetail;
-  answer_snapshot?: ConsoleAnswerSnapshot | null;
-  node_runs: ConsoleNodeRunDetail[];
-  stitched_trace: ConsoleApplicationRunStitchedTrace[];
-}
-
 export interface ConsoleApplicationConversationMessage {
   run_id: string;
   detail_run_id?: string | null;

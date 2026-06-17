@@ -44,18 +44,6 @@ const runtimeApi = vi.hoisted(() => ({
     ] as const,
   applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
     ['applications', applicationId, 'runtime', 'runs', runId] as const,
-  applicationRunConversationLogDetailQueryKey: (
-    applicationId: string,
-    runId: string
-  ) =>
-    [
-      'applications',
-      applicationId,
-      'runtime',
-      'runs',
-      runId,
-      'conversation-log'
-    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -83,7 +71,6 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunConversationLogDetail: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn().mockImplementation(
@@ -335,7 +322,6 @@ describe('ApplicationLogsPage - floating windows', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
@@ -395,9 +381,6 @@ describe('ApplicationLogsPage - floating windows', () => {
         }
         return sampleRunDetail();
       }
-    );
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(
-      sampleRunDetail()
     );
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
@@ -607,9 +590,7 @@ describe('ApplicationLogsPage - floating windows', () => {
       name: '对话日志'
     });
     expect(logPanel).toBeInTheDocument();
-    expect(
-      runtimeApi.fetchApplicationRunConversationLogDetail
-    ).toHaveBeenCalledWith(
+    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
       'app-1',
       'run-1'
     );

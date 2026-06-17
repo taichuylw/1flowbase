@@ -227,16 +227,6 @@ pub struct ApplicationRunDetailResponse {
     pub stitched_trace: Vec<ApplicationRunStitchedTraceResponse>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
-pub struct ApplicationConversationLogDetailResponse {
-    pub run: application_logs::ApplicationRunLogResponse,
-    pub statistics: application_logs::ApplicationRunStatisticsResponse,
-    pub flow_run: FlowRunResponse,
-    pub answer_snapshot: Option<AnswerSnapshotResponse>,
-    pub node_runs: Vec<NodeRunResponse>,
-    pub stitched_trace: Vec<ApplicationRunStitchedTraceResponse>,
-}
-
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RuntimeDebugStreamResponse {
     pub parts: Vec<RuntimeDebugStreamPartResponse>,

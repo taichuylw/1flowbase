@@ -268,49 +268,6 @@ pub async fn get_application_run_detail(
 
 #[utoipa::path(
     get,
-    path = "/api/console/applications/{id}/logs/runs/{run_id}/conversation-log",
-    params(
-        ("id" = String, Path, description = "Application id"),
-        ("run_id" = String, Path, description = "Flow run id")
-    ),
-    responses(
-        (status = 200, body = ApplicationConversationLogDetailResponse),
-        (status = 401, body = crate::error_response::ErrorBody),
-        (status = 403, body = crate::error_response::ErrorBody),
-        (status = 404, body = crate::error_response::ErrorBody)
-    )
-)]
-pub async fn get_application_run_conversation_log_detail(
-    State(state): State<Arc<ApiState>>,
-    headers: HeaderMap,
-    Path((id, run_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ApiSuccess<ApplicationConversationLogDetailResponse>>, ApiError> {
-    let context = require_session(&state, &headers).await?;
-    let application = ensure_application_visible(&state, context.user.id, id).await?;
-    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
-        &state.store,
-        id,
-        run_id,
-    )
-    .await?
-    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
-    let runtime_events = <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
-        &state.store,
-        run_id,
-        0,
-    )
-    .await?;
-    let detail = enrich_application_run_detail_visible_internal_llm_route_trace_summaries(
-        detail,
-        &runtime_events,
-    );
-    let response = to_application_run_conversation_log_detail_response(&application, detail);
-
-    Ok(Json(ApiSuccess::new(response)))
-}
-
-#[utoipa::path(
-    get,
     path = "/api/console/applications/{id}/logs/runs/{run_id}/nodes/{node_id}",
     params(
         ("id" = String, Path, description = "Application id"),

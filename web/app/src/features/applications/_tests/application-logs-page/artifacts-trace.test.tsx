@@ -32,18 +32,6 @@ const runtimeApi = vi.hoisted(() => ({
     ] as const,
   applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
     ['applications', applicationId, 'runtime', 'runs', runId] as const,
-  applicationRunConversationLogDetailQueryKey: (
-    applicationId: string,
-    runId: string
-  ) =>
-    [
-      'applications',
-      applicationId,
-      'runtime',
-      'runs',
-      runId,
-      'conversation-log'
-    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -71,7 +59,6 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunConversationLogDetail: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
@@ -283,7 +270,6 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
@@ -306,9 +292,6 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
           updated_at: '2026-04-17T09:00:01Z'
         }
       ])
-    );
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(
-      sampleRunDetail()
     );
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
@@ -385,7 +368,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       },
       rendered_templates: {}
     };
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(detail);
+    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
     runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
       async (_applicationId: string, artifactRef: string) => {
         if (artifactRef === 'artifact-detail-answer') {
@@ -418,13 +401,6 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       'expected conversation log button'
     );
     fireEvent.click(openLogButton);
-
-    await waitFor(() =>
-      expect(
-        runtimeApi.fetchApplicationRunConversationLogDetail
-      ).toHaveBeenCalledWith('app-1', 'run-1')
-    );
-    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
 
     const logPanel = await screen.findByRole('complementary', {
       name: '对话日志'
@@ -532,7 +508,6 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         finished_at: null
       }
     ];
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(detail);
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
 
     render(
@@ -707,7 +682,6 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         events: []
       }
     ];
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(detail);
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
 
     render(
@@ -876,7 +850,6 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         events: []
       }
     ];
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(detail);
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
     runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
       async (_applicationId: string, artifactRef: string) => {
@@ -1149,7 +1122,6 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         finished_at: '2026-04-17T09:00:02Z'
       }
     ];
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(detail);
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
     runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
       async (_applicationId: string, artifactRef: string) => {

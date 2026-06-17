@@ -16,11 +16,11 @@ import {
 import type { AgentFlowDebugSessionStatus } from '../../../agent-flow/hooks/runtime/useAgentFlowDebugSession';
 import { useClipboardCopy } from '../../../../shared/ui/clipboard/use-clipboard-copy';
 import {
-  applicationRunConversationLogDetailQueryKey,
+  applicationRunDetailQueryKey,
   applicationRunConversationMessagesQueryKey,
-  fetchApplicationRunConversationLogDetail,
+  fetchApplicationRunDetail,
   fetchApplicationRunConversationMessages,
-  type ApplicationRunConversationLogDetail,
+  type ApplicationRunDetail,
   type ApplicationRunConversationMessage,
   type ApplicationRunConversationMessagesPage
 } from '../../api/runtime';
@@ -123,7 +123,7 @@ function RunIdSubtitle({ runId }: { runId: string }) {
   );
 }
 
-function runDetailCompatibilityMode(detail: ApplicationRunConversationLogDetail) {
+function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
   return (
     detail.run?.compatibility_mode ??
     detail.run?.correlation?.compatibility_mode ??
@@ -132,7 +132,7 @@ function runDetailCompatibilityMode(detail: ApplicationRunConversationLogDetail)
 }
 
 function buildConversationLogMessage(
-  detail: ApplicationRunConversationLogDetail
+  detail: ApplicationRunDetail
 ): AgentFlowDebugMessage {
   const assistantContent =
     extractAssistantOutputText(detail) ||
@@ -382,12 +382,8 @@ function RunConversation({
     }
 
     const detail = await queryClient.fetchQuery({
-      queryKey: applicationRunConversationLogDetailQueryKey(
-        applicationId,
-        detailRunId
-      ),
-      queryFn: () =>
-        fetchApplicationRunConversationLogDetail(applicationId, detailRunId)
+      queryKey: applicationRunDetailQueryKey(applicationId, detailRunId),
+      queryFn: () => fetchApplicationRunDetail(applicationId, detailRunId)
     });
 
     onOpenMessageLog?.(buildConversationLogMessage(detail));

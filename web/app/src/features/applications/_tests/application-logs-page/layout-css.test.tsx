@@ -27,18 +27,6 @@ const runtimeApi = vi.hoisted(() => ({
     ] as const,
   applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
     ['applications', applicationId, 'runtime', 'runs', runId] as const,
-  applicationRunConversationLogDetailQueryKey: (
-    applicationId: string,
-    runId: string
-  ) =>
-    [
-      'applications',
-      applicationId,
-      'runtime',
-      'runs',
-      runId,
-      'conversation-log'
-    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -66,7 +54,6 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunConversationLogDetail: vi.fn(),
   fetchApplicationRunDetail: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
@@ -229,7 +216,6 @@ describe('ApplicationLogsPage - layout CSS', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockReset();
     runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
@@ -252,9 +238,6 @@ describe('ApplicationLogsPage - layout CSS', () => {
           updated_at: '2026-04-17T09:00:01Z'
         }
       ])
-    );
-    runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(
-      sampleRunDetail()
     );
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue({

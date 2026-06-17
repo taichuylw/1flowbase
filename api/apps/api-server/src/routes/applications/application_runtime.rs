@@ -55,7 +55,6 @@ pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnap
 use runtime_debug_artifacts::{
     application_run_model, application_run_query,
     enrich_application_run_detail_visible_internal_llm_route_traces,
-    enrich_application_run_detail_visible_internal_llm_route_trace_summaries,
     enrich_node_last_run_visible_internal_llm_route_traces, load_runtime_debug_artifact_json_value,
     load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
 };
@@ -127,10 +126,6 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/logs/runs/:run_id/conversation/messages",
             get(list_application_run_conversation_messages),
-        )
-        .route(
-            "/applications/:id/logs/runs/:run_id/conversation-log",
-            get(get_application_run_conversation_log_detail),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/nodes/:node_id",

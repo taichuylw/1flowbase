@@ -237,54 +237,6 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         detail_payload["data"]["node_runs"][0]["node_alias"].as_str(),
         Some("LLM")
     );
-    let conversation_log_detail = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/conversation-log"
-                ))
-                .header("cookie", &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(conversation_log_detail.status(), StatusCode::OK);
-    let conversation_log_body = to_bytes(conversation_log_detail.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let conversation_log_payload: Value =
-        serde_json::from_slice(&conversation_log_body).unwrap();
-    assert_eq!(
-        conversation_log_payload["data"]["flow_run"]["id"].as_str(),
-        Some(flow_run_id.as_str())
-    );
-    assert_eq!(
-        conversation_log_payload["data"]["run"]["id"].as_str(),
-        Some(flow_run_id.as_str())
-    );
-    assert_eq!(
-        conversation_log_payload["data"]["statistics"]["tool_callback_count"].as_i64(),
-        Some(0)
-    );
-    assert!(
-        conversation_log_payload["data"].get("detail").is_none(),
-        "conversation-log detail should not duplicate run detail envelope"
-    );
-    assert!(
-        conversation_log_payload["data"].get("checkpoints").is_none(),
-        "conversation-log detail should not include checkpoints"
-    );
-    assert!(
-        conversation_log_payload["data"].get("callback_tasks").is_none(),
-        "conversation-log detail should not include callback tasks"
-    );
-    assert!(
-        conversation_log_payload["data"].get("events").is_none(),
-        "conversation-log detail should not include raw events"
-    );
     let cache_entries = state
         .infrastructure
         .cache_store()

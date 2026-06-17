@@ -376,22 +376,6 @@ fn to_application_run_detail_response(
     }
 }
 
-fn to_application_run_conversation_log_detail_response(
-    application: &domain::ApplicationRecord,
-    detail: domain::ApplicationRunDetail,
-) -> ApplicationConversationLogDetailResponse {
-    let detail_response = to_application_run_detail_response(application, detail);
-
-    ApplicationConversationLogDetailResponse {
-        run: detail_response.run,
-        statistics: detail_response.statistics,
-        flow_run: detail_response.flow_run,
-        answer_snapshot: detail_response.answer_snapshot,
-        node_runs: detail_response.node_runs,
-        stitched_trace: detail_response.stitched_trace,
-    }
-}
-
 fn to_node_last_run_response(last_run: domain::NodeLastRun) -> NodeLastRunResponse {
     NodeLastRunResponse {
         flow_run: to_flow_run_response(last_run.flow_run),
