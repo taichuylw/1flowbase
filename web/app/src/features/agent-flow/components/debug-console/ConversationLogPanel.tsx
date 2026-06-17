@@ -4,14 +4,12 @@ import { Descriptions, Empty, Tabs, Typography } from 'antd';
 import type { AgentFlowDebugMessage } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
 import { NodeRunPayloadSections } from '../detail/last-run/NodeRunIOCard';
-import { AnswerSnapshotTrace } from './conversation/AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem } from './conversation/DebugWorkflowNodeRow';
-import { LlmToolTraceTree } from './conversation/LlmToolTraceTree';
+import { DebugWorkflowNodeDetailContent } from './conversation/LlmToolTraceTree';
 import {
   groupTraceItemsForDisplay,
   nodeDisplayName
 } from './conversation/debug-workflow-trace-utils';
-import { stripLlmRoundsFromDebugPayload } from './conversation/llm-tool-callbacks';
 import './conversation-log-panel.css';
 import { formatDateTime, formatNumber } from '../../../../shared/i18n/format';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -86,55 +84,57 @@ function ConversationLogDetail({
         />
       </div>
       <section
-        aria-label={i18nText("agentFlow", "auto.metadata")}
+        aria-label={i18nText('agentFlow', 'auto.metadata')}
         className="agent-flow-editor__conversation-log-metadata"
       >
-        <Typography.Text strong>{i18nText("agentFlow", "auto.metadata")}</Typography.Text>
+        <Typography.Text strong>
+          {i18nText('agentFlow', 'auto.metadata')}
+        </Typography.Text>
         <Descriptions
           column={1}
           items={[
             {
               key: 'runId',
-              label: i18nText("agentFlow", "auto.run_id"),
+              label: i18nText('agentFlow', 'auto.run_id'),
               children: message.runId ?? '—'
             },
             {
               key: 'status',
-              label: i18nText("agentFlow", "auto.status"),
+              label: i18nText('agentFlow', 'auto.status'),
               children: message.status
             },
             {
               key: 'compatibilityMode',
-              label: i18nText("agentFlow", "auto.agreement"),
+              label: i18nText('agentFlow', 'auto.agreement'),
               children: messageCompatibilityModeLabel(message)
             },
             {
               key: 'totalTokens',
-              label: i18nText("agentFlow", "auto.total_tokens"),
+              label: i18nText('agentFlow', 'auto.total_tokens'),
               children: formatNullableNumber(message.statistics?.total_tokens)
             },
             {
               key: 'uniqueNodeCount',
-              label: i18nText("agentFlow", "auto.real_number_nodes"),
+              label: i18nText('agentFlow', 'auto.real_number_nodes'),
               children: formatNullableNumber(
                 message.statistics?.unique_node_count
               )
             },
             {
               key: 'toolCallbackCount',
-              label: i18nText("agentFlow", "auto.number_tool_callbacks"),
+              label: i18nText('agentFlow', 'auto.number_tool_callbacks'),
               children: formatNullableNumber(
                 message.statistics?.tool_callback_count
               )
             },
             {
               key: 'startedAt',
-              label: i18nText("agentFlow", "auto.start_time"),
+              label: i18nText('agentFlow', 'auto.start_time'),
               children: formatTimestamp(firstTraceItem?.startedAt)
             },
             {
               key: 'finishedAt',
-              label: i18nText("agentFlow", "auto.end_time"),
+              label: i18nText('agentFlow', 'auto.end_time'),
               children: formatTimestamp(lastTraceItem?.finishedAt)
             }
           ]}
@@ -166,7 +166,7 @@ function ConversationTrace({
     return (
       <div className="agent-flow-editor__conversation-log-empty">
         <Empty
-          description={i18nText("agentFlow", "auto.tracking_record_yet")}
+          description={i18nText('agentFlow', 'auto.tracking_record_yet')}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       </div>
@@ -176,7 +176,7 @@ function ConversationTrace({
   return (
     <div className="agent-flow-editor__conversation-log-trace">
       <div
-        aria-label={i18nText("agentFlow", "auto.tracking_nodes")}
+        aria-label={i18nText('agentFlow', 'auto.tracking_nodes')}
         className="agent-flow-editor__conversation-log-node-list"
       >
         {traceGroups.map((group) => {
@@ -195,29 +195,14 @@ function ConversationTrace({
               }
             >
               <section
-                aria-label={i18nText("agentFlow", "auto.node_details_alt", { value1: nodeDisplayName(item) })}
+                aria-label={i18nText('agentFlow', 'auto.node_details_alt', {
+                  value1: nodeDisplayName(item)
+                })}
                 className="agent-flow-editor__conversation-log-node-detail"
               >
                 <div className="agent-flow-editor__conversation-log-json-list">
-                  <LlmToolTraceTree
-                    debugPayload={item.debugPayload}
-                    debugPayloads={group.items.map(
-                      (traceItem) => traceItem.debugPayload
-                    )}
-                    onLoadArtifact={onLoadArtifact}
-                  />
-                  {item.answerSnapshot ? (
-                    <AnswerSnapshotTrace
-                      snapshot={item.answerSnapshot}
-                      onLoadArtifact={onLoadArtifact}
-                    />
-                  ) : null}
-                  <NodeRunPayloadSections
-                    debugPayload={stripLlmRoundsFromDebugPayload(
-                      item.debugPayload ?? {}
-                    )}
-                    inputPayload={item.inputPayload}
-                    outputPayload={item.outputPayload}
+                  <DebugWorkflowNodeDetailContent
+                    item={item}
                     onLoadArtifact={onLoadArtifact}
                   />
                 </div>
@@ -246,31 +231,28 @@ function useConversationLogArtifactLoader(
     artifactRequestsRef.current.clear();
   }, [messageId]);
 
-  const loadCachedArtifact = useCallback(
-    async (artifactRef: string) => {
-      const existingRequest = artifactRequestsRef.current.get(artifactRef);
+  const loadCachedArtifact = useCallback(async (artifactRef: string) => {
+    const existingRequest = artifactRequestsRef.current.get(artifactRef);
 
-      if (existingRequest) {
-        return existingRequest;
+    if (existingRequest) {
+      return existingRequest;
+    }
+
+    const loadArtifact = loadArtifactRef.current;
+    if (!loadArtifact) {
+      throw new Error('missing_conversation_log_artifact_loader');
+    }
+
+    const request = loadArtifact(artifactRef).catch((error: unknown) => {
+      if (artifactRequestsRef.current.get(artifactRef) === request) {
+        artifactRequestsRef.current.delete(artifactRef);
       }
+      throw error;
+    });
 
-      const loadArtifact = loadArtifactRef.current;
-      if (!loadArtifact) {
-        throw new Error('missing_conversation_log_artifact_loader');
-      }
-
-      const request = loadArtifact(artifactRef).catch((error: unknown) => {
-        if (artifactRequestsRef.current.get(artifactRef) === request) {
-          artifactRequestsRef.current.delete(artifactRef);
-        }
-        throw error;
-      });
-
-      artifactRequestsRef.current.set(artifactRef, request);
-      return request;
-    },
-    []
-  );
+    artifactRequestsRef.current.set(artifactRef, request);
+    return request;
+  }, []);
 
   return hasArtifactLoader ? loadCachedArtifact : undefined;
 }
@@ -293,8 +275,8 @@ export function ConversationLogPanel({
     <AgentFlowDockPanel
       bodyClassName="agent-flow-editor__conversation-log-body"
       className="agent-flow-editor__conversation-log-panel"
-      closeLabel={i18nText("agentFlow", "auto.turn_off_conversation_log")}
-      title={i18nText("agentFlow", "auto.conversation_log")}
+      closeLabel={i18nText('agentFlow', 'auto.turn_off_conversation_log')}
+      title={i18nText('agentFlow', 'auto.conversation_log')}
       onClose={onClose}
     >
       <Tabs
@@ -302,7 +284,7 @@ export function ConversationLogPanel({
         items={[
           {
             key: 'detail',
-            label: i18nText("agentFlow", "auto.details"),
+            label: i18nText('agentFlow', 'auto.details'),
             children: (
               <ConversationLogDetail
                 message={message}
@@ -312,7 +294,7 @@ export function ConversationLogPanel({
           },
           {
             key: 'trace',
-            label: i18nText("agentFlow", "auto.track"),
+            label: i18nText('agentFlow', 'auto.track'),
             children: (
               <ConversationTrace
                 message={message}

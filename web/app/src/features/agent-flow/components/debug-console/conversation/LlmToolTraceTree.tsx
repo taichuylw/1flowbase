@@ -7,6 +7,7 @@ import {
   NodeRunPayloadSections,
   RuntimeDebugPayloadBlock
 } from '../../detail/last-run/NodeRunIOCard';
+import { AnswerSnapshotTrace } from './AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem } from './DebugWorkflowNodeRow';
 import {
   collectLlmToolCallbacksFromDebugPayloads,
@@ -15,7 +16,8 @@ import {
   type LlmToolCallback,
   type LlmToolRouteBranchTrace,
   type LlmToolRouteBranchSummary,
-  type LlmToolRouteTraceSummary
+  type LlmToolRouteTraceSummary,
+  stripLlmRoundsFromDebugPayload
 } from './llm-tool-callbacks';
 import { i18nText } from '../../../../../shared/i18n/text';
 import { formatTokens, formatDurationScaled } from './metrics-formatter';
@@ -232,14 +234,11 @@ function buildRouteBranchTraceItem(
   index: number
 ): AgentFlowTraceItem {
   const fallbackId = `${callback.id}:branch:${index + 1}`;
-  const inputPayload = isRouteBranchTrace(branch) ? branch.inputPayload : {};
-  const outputPayload = isRouteBranchTrace(branch) ? branch.outputPayload : {};
-  const metricsPayload = isRouteBranchTrace(branch)
-    ? branch.metricsPayload
-    : {};
-  const debugPayload = isRouteBranchTrace(branch)
-    ? branch.debugPayload
-    : branch.rawPayload;
+  const loadedBranchTrace = isRouteBranchTrace(branch);
+  const inputPayload = loadedBranchTrace ? branch.inputPayload : {};
+  const outputPayload = loadedBranchTrace ? branch.outputPayload : {};
+  const metricsPayload = loadedBranchTrace ? branch.metricsPayload : {};
+  const debugPayload = loadedBranchTrace ? branch.debugPayload : {};
 
   return {
     nodeId: branch.nodeId ?? fallbackId,
@@ -258,18 +257,39 @@ function buildRouteBranchTraceItem(
   };
 }
 
-function summaryPreviewText(summary: Record<string, unknown> | null) {
-  const preview = summary?.preview;
-
-  return typeof preview === 'string' && preview.trim().length > 0
-    ? preview
-    : null;
-}
-
 function isRouteBranchTrace(
   branch: LlmToolRouteBranchSummary | LlmToolRouteBranchTrace
 ): branch is LlmToolRouteBranchTrace {
   return Object.prototype.hasOwnProperty.call(branch, 'inputPayload');
+}
+
+export function DebugWorkflowNodeDetailContent({
+  item,
+  onLoadArtifact
+}: {
+  item: AgentFlowTraceItem;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+}) {
+  return (
+    <>
+      <LlmToolTraceTree
+        debugPayload={item.debugPayload}
+        onLoadArtifact={onLoadArtifact}
+      />
+      {item.answerSnapshot ? (
+        <AnswerSnapshotTrace
+          snapshot={item.answerSnapshot}
+          onLoadArtifact={onLoadArtifact}
+        />
+      ) : null}
+      <NodeRunPayloadSections
+        debugPayload={stripLlmRoundsFromDebugPayload(item.debugPayload ?? {})}
+        inputPayload={item.inputPayload}
+        outputPayload={item.outputPayload}
+        onLoadArtifact={onLoadArtifact}
+      />
+    </>
+  );
 }
 
 function LlmToolRouteBranchNode({
@@ -285,9 +305,6 @@ function LlmToolRouteBranchNode({
 }) {
   const [expanded, setExpanded] = useState(false);
   const branchTraceItem = buildRouteBranchTraceItem(callback, branch, index);
-  const outputPreview = summaryPreviewText(branch.outputSummary);
-  const branchDetailTitle =
-    branch.nodeAlias ?? branch.nodeId ?? `Panel ${index + 1}`;
 
   return (
     <div
@@ -300,31 +317,10 @@ function LlmToolRouteBranchNode({
         onToggle={() => setExpanded((current) => !current)}
       >
         <div className="agent-flow-editor__debug-workflow-node-detail agent-flow-editor__debug-llm-route-branch-detail">
-          {branch.routeModel || outputPreview ? (
-            <div className="agent-flow-editor__debug-llm-route-branch-meta">
-              {branch.routeModel ? <Tag>{branch.routeModel}</Tag> : null}
-              {outputPreview ? (
-                <Typography.Text ellipsis type="secondary">
-                  {outputPreview}
-                </Typography.Text>
-              ) : null}
-            </div>
-          ) : null}
-          {isRouteBranchTrace(branch) ? (
-            <NodeRunPayloadSections
-              debugPayload={branch.debugPayload}
-              inputPayload={branch.inputPayload}
-              outputPayload={branch.outputPayload}
-              onLoadArtifact={onLoadArtifact}
-            />
-          ) : (
-            <RuntimeDebugPayloadBlock
-              height="8rem"
-              payload={branch.rawPayload}
-              title={branchDetailTitle}
-              onLoadArtifact={onLoadArtifact}
-            />
-          )}
+          <DebugWorkflowNodeDetailContent
+            item={branchTraceItem}
+            onLoadArtifact={onLoadArtifact}
+          />
         </div>
       </DebugWorkflowNodeItem>
     </div>

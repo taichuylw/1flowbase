@@ -3,12 +3,9 @@ import { DownOutlined, RightOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
-import { NodeRunPayloadSections } from '../../detail/last-run/NodeRunIOCard';
-import { AnswerSnapshotTrace } from './AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem, StatusIcon } from './DebugWorkflowNodeRow';
-import { LlmToolTraceTree } from './LlmToolTraceTree';
+import { DebugWorkflowNodeDetailContent } from './LlmToolTraceTree';
 import { groupTraceItemsForDisplay } from './debug-workflow-trace-utils';
-import { stripLlmRoundsFromDebugPayload } from './llm-tool-callbacks';
 import { i18nText } from '../../../../../shared/i18n/text';
 
 function workflowStatus(items: AgentFlowTraceItem[]) {
@@ -56,7 +53,7 @@ export function DebugWorkflowProcess({
 
   return (
     <div
-      aria-label={i18nText("agentFlow", "auto.workflow")}
+      aria-label={i18nText('agentFlow', 'auto.workflow')}
       className="agent-flow-editor__debug-workflow-process"
       role="group"
     >
@@ -68,7 +65,9 @@ export function DebugWorkflowProcess({
       >
         <span className="agent-flow-editor__debug-workflow-title">
           <StatusIcon status={status} />
-          <Typography.Text>{i18nText("agentFlow", "auto.workflow")}</Typography.Text>
+          <Typography.Text>
+            {i18nText('agentFlow', 'auto.workflow')}
+          </Typography.Text>
         </span>
         {expanded ? (
           <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
@@ -102,25 +101,8 @@ export function DebugWorkflowProcess({
                 }}
               >
                 <div className="agent-flow-editor__debug-workflow-node-detail">
-                  <LlmToolTraceTree
-                    debugPayload={item.debugPayload}
-                    debugPayloads={group.items.map(
-                      (traceItem) => traceItem.debugPayload
-                    )}
-                    onLoadArtifact={onLoadArtifact}
-                  />
-                  {item.answerSnapshot ? (
-                    <AnswerSnapshotTrace
-                      snapshot={item.answerSnapshot}
-                      onLoadArtifact={onLoadArtifact}
-                    />
-                  ) : null}
-                  <NodeRunPayloadSections
-                    inputPayload={item.inputPayload}
-                    debugPayload={stripLlmRoundsFromDebugPayload(
-                      item.debugPayload
-                    )}
-                    outputPayload={item.outputPayload}
+                  <DebugWorkflowNodeDetailContent
+                    item={item}
                     onLoadArtifact={onLoadArtifact}
                   />
                 </div>

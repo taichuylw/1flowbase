@@ -873,9 +873,32 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
                   model: 'risk-v1'
                 },
                 debug_payload: {
+                  provider_debug: 'risk panel debug metadata',
                   llm_rounds: [
                     {
                       round_index: 0,
+                      assistant: {
+                        content: 'risk needs branch lookup',
+                        tool_calls: [
+                          {
+                            id: 'call_branch_policy',
+                            name: 'branch_policy_lookup'
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      round_index: 1,
+                      tool_results: [
+                        {
+                          tool_call_id: 'call_branch_policy',
+                          name: 'branch_policy_lookup',
+                          content: 'branch policy lookup result'
+                        }
+                      ]
+                    },
+                    {
+                      round_index: 2,
                       assistant: {
                         content: 'risk result'
                       }
@@ -1009,15 +1032,31 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     fireEvent.click(firstBranchTrigger);
     expect(firstBranchTrigger).toHaveAttribute('aria-expanded', 'true');
     expect(branchNodes[0]).toHaveTextContent('risk-v1');
+    const firstBranchToolsNode = within(branchNodes[0]).getByRole('button', {
+      name: /工具 1 次工具回调/
+    });
+    expect(firstBranchToolsNode).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(firstBranchToolsNode);
+    expect(
+      within(branchNodes[0]).getByRole('button', {
+        name: /branch_policy_lookup/
+      })
+    ).toBeInTheDocument();
     expect(
       within(branchNodes[0]).getByLabelText('输入 JSON')
     ).toHaveTextContent('review refund policy risk');
     expect(
       within(branchNodes[0]).getByLabelText('数据处理 JSON')
-    ).toHaveTextContent('risk result');
+    ).toHaveTextContent('risk panel debug metadata');
+    expect(
+      within(branchNodes[0]).getByLabelText('数据处理 JSON')
+    ).not.toHaveTextContent('branch_policy_lookup');
     expect(
       within(branchNodes[0]).getByLabelText('输出 JSON')
     ).toHaveTextContent('panel A says strict');
+    expect(
+      within(branchNodes[0]).queryByText('visible_internal_llm_tool_completed')
+    ).not.toBeInTheDocument();
     fireEvent.click(firstBranchTrigger);
     expect(firstBranchTrigger).toHaveAttribute('aria-expanded', 'false');
     expect(
