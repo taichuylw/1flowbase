@@ -30,27 +30,37 @@ function statusTone(status: string) {
   }
 }
 
-function readOutputTotalTokens(outputPayload: unknown) {
-  if (
-    !outputPayload ||
-    typeof outputPayload !== 'object' ||
-    Array.isArray(outputPayload)
-  ) {
+function readRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
 
-  const usage = (outputPayload as Record<string, unknown>).usage;
+  return value as Record<string, unknown>;
+}
 
-  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) {
+function readTotalTokens(payload: unknown) {
+  const record = readRecord(payload);
+  if (!record) {
     return null;
   }
 
-  const totalTokens = (usage as Record<string, unknown>).total_tokens;
+  const directTotalTokens = record.total_tokens;
+  if (typeof directTotalTokens === 'number') {
+    return directTotalTokens;
+  }
+
+  const usage = readRecord(record.usage);
+  if (!usage) {
+    return null;
+  }
+
+  const totalTokens = usage.total_tokens;
   return typeof totalTokens === 'number' ? totalTokens : null;
 }
 
 function metricText(item: AgentFlowTraceItem) {
-  const tokens = readOutputTotalTokens(item.outputPayload);
+  const tokens =
+    readTotalTokens(item.metricsPayload) ?? readTotalTokens(item.outputPayload);
   const durationMs = item.durationMs;
   const toolCount =
     item.nodeType === 'llm'

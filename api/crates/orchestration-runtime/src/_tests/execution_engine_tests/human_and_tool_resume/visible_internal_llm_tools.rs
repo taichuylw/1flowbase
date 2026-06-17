@@ -524,6 +524,26 @@ async fn fusion_visible_internal_llm_tool_executes_panel_llms_in_bounded_paralle
             "panel LLM event should preserve node-run-like output payload"
         );
     }
+    let judge_event = route_events
+        .iter()
+        .find(|event| {
+            event["event_type"] == json!("visible_internal_llm_tool_completed")
+                && event["node_id"] == json!("node-judge")
+        })
+        .expect("fusion summary LLM completed event should exist");
+    assert_eq!(judge_event["node_type"], json!("llm"));
+    assert!(
+        judge_event["input_payload"]["prompt_messages"].is_array(),
+        "fusion summary LLM event should preserve node-run-like input payload"
+    );
+    assert_eq!(
+        judge_event["output_payload"]["text"],
+        json!("judge-result ")
+    );
+    assert_eq!(
+        judge_event["metrics_payload"]["usage"]["total_tokens"],
+        json!(24)
+    );
 
     let captured = invoker
         .captured_inputs

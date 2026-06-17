@@ -434,6 +434,88 @@ const fusionSummaryOnlyAssistantMessage: AgentFlowDebugMessage = {
   ]
 };
 
+const fusionHistoricalBranchDetailAssistantMessage: AgentFlowDebugMessage = {
+  ...assistantMessage,
+  traceSummary: [
+    {
+      ...assistantMessage.traceSummary[1],
+      nodeId: 'node-main-llm',
+      nodeRunId: 'node-run-main-llm',
+      nodeAlias: 'LLM',
+      debugPayload: {
+        llm_rounds: [
+          {
+            round_index: 0,
+            assistant: {
+              role: 'assistant',
+              tool_calls: [
+                {
+                  id: 'call_fusion',
+                  name: 'fusion_review'
+                }
+              ]
+            }
+          }
+        ],
+        visible_internal_llm_tool_trace: [
+          {
+            kind: 'visible_internal_llm_tool_trace',
+            preview_kind: 'visible_internal_llm_tool_trace',
+            route_kind: 'fusion',
+            tool_call_id: 'call_fusion',
+            tool_name: 'fusion_review',
+            status: 'succeeded',
+            branch_count: 1,
+            branch_traces: [
+              {
+                node_id: 'node-judge',
+                node_alias: 'LLM5',
+                node_type: 'llm',
+                status: 'succeeded',
+                route_model: 'gpt-5.4-mini',
+                input_payload: {
+                  prompt_messages: [
+                    {
+                      role: 'system',
+                      content: 'You are the fusion judge.'
+                    },
+                    {
+                      role: 'user',
+                      content: 'Merge panel answers.'
+                    }
+                  ]
+                },
+                output_payload: {
+                  text: 'judge merged answer'
+                },
+                metrics_payload: {
+                  usage: {
+                    input_tokens: 5513,
+                    output_tokens: 2455,
+                    total_tokens: 7968
+                  }
+                },
+                debug_payload: {
+                  assistant_message: {
+                    role: 'assistant',
+                    content: 'judge merged answer'
+                  }
+                },
+                output_summary: {
+                  kind: 'text',
+                  preview: 'judge merged answer',
+                  char_count: 19,
+                  truncated: false
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+};
+
 const answerSnapshotAssistantMessage: AgentFlowDebugMessage = {
   ...assistantMessage,
   status: 'waiting_callback',
@@ -714,6 +796,53 @@ describe('debug conversation log panel', () => {
     expect(
       within(branchNode).queryByLabelText('输出 JSON')
     ).not.toBeInTheDocument();
+  }, 10_000);
+
+  test('shows fusion branch LLM tokens from metrics payload and reuses node detail sections', () => {
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '做 fusion 评审',
+          rawOutput: null,
+          traceSummary: []
+        },
+        fusionHistoricalBranchDetailAssistantMessage
+      ]
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+    fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
+    fireEvent.click(
+      within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
+    );
+    fireEvent.click(
+      within(panel).getByRole('button', { name: /fusion_review/ })
+    );
+
+    const branchNode = within(panel).getByTestId('debug-llm-route-branch-node');
+    const branchButton = within(branchNode).getByRole('button', {
+      name: /LLM5/
+    });
+    expect(branchButton).toHaveTextContent('7.96 K tokens');
+    expect(branchButton).not.toHaveTextContent('执行成功');
+
+    fireEvent.click(branchButton);
+
+    expect(within(branchNode).getByLabelText('输入 JSON')).toHaveTextContent(
+      'Merge panel answers.'
+    );
+    expect(
+      within(branchNode).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('assistant_message');
+    expect(within(branchNode).getByLabelText('输出 JSON')).toHaveTextContent(
+      'judge merged answer'
+    );
   }, 10_000);
 
   test('collapses repeated LLM node runs into one trace row', () => {

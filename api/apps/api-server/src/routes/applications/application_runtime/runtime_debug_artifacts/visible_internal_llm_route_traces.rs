@@ -397,7 +397,7 @@ fn branch_trace_from_event(
         status: status.to_string(),
         route_model,
         provider_route,
-        input_payload: value_field(event_object, &["input_payload"]),
+        input_payload: branch_input_payload(event_object),
         output_payload,
         output,
         output_summary,
@@ -410,6 +410,66 @@ fn branch_trace_from_event(
     }
 
     Some(branch_trace)
+}
+
+fn branch_input_payload(event_object: &Map<String, Value>) -> Option<Value> {
+    value_field(event_object, &["input_payload"])
+        .or_else(|| historical_llm_input_payload_from_debug_context(event_object))
+}
+
+fn historical_llm_input_payload_from_debug_context(
+    event_object: &Map<String, Value>,
+) -> Option<Value> {
+    if string_field(event_object, &["node_type"]).as_deref() != Some("llm") {
+        return None;
+    }
+
+    let llm_context = event_object
+        .get("debug_payload")?
+        .get("llm_context")?
+        .as_object()?;
+    let mut prompt_messages = Vec::new();
+
+    prompt_messages.extend(
+        llm_context
+            .get("provider_messages")?
+            .as_array()?
+            .iter()
+            .filter_map(|message| {
+                message
+                    .as_object()
+                    .map(|object| Value::Object(object.clone()))
+            }),
+    );
+
+    if let Some(effective_system) = llm_context
+        .get("effective_system")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|_| {
+            !prompt_messages
+                .iter()
+                .filter_map(Value::as_object)
+                .any(|message| string_field(message, &["role"]).as_deref() == Some("system"))
+        })
+    {
+        prompt_messages.insert(
+            0,
+            json!({
+                "role": "system",
+                "content": effective_system,
+            }),
+        );
+    }
+
+    if prompt_messages.is_empty() {
+        return None;
+    }
+
+    Some(json!({
+        "prompt_messages": prompt_messages,
+    }))
 }
 
 fn apply_branch_node_run_payload(
@@ -1345,6 +1405,89 @@ mod tests {
         assert_eq!(
             detail["branch_traces"][1]["debug_payload_ref"],
             json!("artifact-panel-b")
+        );
+    }
+
+    #[test]
+    fn fusion_trace_projects_historical_summary_llm_detail_from_debug_context() {
+        let debug_payload = json!({
+            "visible_internal_llm_tool_events": [
+                {
+                    "event_type": "visible_internal_llm_tool_started",
+                    "main_node_id": "node-main-llm",
+                    "target_node_id": "node-panel-a",
+                    "tool_name": "fusion_review",
+                    "tool_call_id": "call_fusion",
+                    "tool_mode": "fusion",
+                    "execution_mode": "bounded_parallel_panel"
+                },
+                {
+                    "event_type": "visible_internal_llm_tool_completed",
+                    "main_node_id": "node-main-llm",
+                    "target_node_id": "node-panel-a",
+                    "tool_name": "fusion_review",
+                    "tool_call_id": "call_fusion",
+                    "tool_mode": "fusion",
+                    "execution_mode": "bounded_parallel_panel",
+                    "node_id": "node-judge",
+                    "node_alias": "LLM5",
+                    "node_type": "llm",
+                    "provider_route": {
+                        "model": "gpt-5.4-mini",
+                        "provider_code": "fixture_provider"
+                    },
+                    "metrics_payload": {
+                        "usage": {
+                            "input_tokens": 5513,
+                            "output_tokens": 2455,
+                            "total_tokens": 7968
+                        }
+                    },
+                    "debug_payload": {
+                        "llm_context": {
+                            "effective_system": "You are the fusion judge.",
+                            "provider_messages": [
+                                {
+                                    "role": "user",
+                                    "content": "Merge panel answers."
+                                }
+                            ]
+                        },
+                        "assistant_message": {
+                            "role": "assistant",
+                            "content": "judge merged answer"
+                        }
+                    },
+                    "content": "judge merged answer"
+                }
+            ]
+        });
+
+        let traces = collect_visible_internal_llm_tool_route_traces(&debug_payload);
+
+        assert_eq!(traces.len(), 1);
+        let detail = traces[0].detail_payload();
+        let branch_trace = &detail["branch_traces"][0];
+        assert_eq!(branch_trace["node_alias"], json!("LLM5"));
+        assert_eq!(
+            branch_trace["input_payload"]["prompt_messages"][0]["role"],
+            json!("system")
+        );
+        assert_eq!(
+            branch_trace["input_payload"]["prompt_messages"][0]["content"],
+            json!("You are the fusion judge.")
+        );
+        assert_eq!(
+            branch_trace["input_payload"]["prompt_messages"][1]["content"],
+            json!("Merge panel answers.")
+        );
+        assert_eq!(
+            branch_trace["output_payload"]["text"],
+            json!("judge merged answer")
+        );
+        assert_eq!(
+            branch_trace["metrics_payload"]["usage"]["total_tokens"],
+            json!(7968)
         );
     }
 }

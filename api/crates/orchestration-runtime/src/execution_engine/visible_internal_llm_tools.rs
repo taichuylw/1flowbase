@@ -740,6 +740,8 @@ where
                     "node_id": node.node_id,
                     "node_alias": node.alias,
                     "node_type": node.node_type,
+                    "input_payload": node_output.input_payload.clone(),
+                    "output_payload": node_output.output_payload.clone(),
                     "provider_route": node_output.output_payload
                         .get("provider_route")
                         .cloned()
