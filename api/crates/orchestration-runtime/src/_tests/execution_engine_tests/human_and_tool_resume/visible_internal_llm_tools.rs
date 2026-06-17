@@ -494,6 +494,36 @@ async fn fusion_visible_internal_llm_tool_executes_panel_llms_in_bounded_paralle
         outcome.variable_pool["node-answer"]["answer"],
         json!("main-before judge-result main-after")
     );
+    let main_trace = outcome
+        .node_traces
+        .iter()
+        .find(|trace| trace.node_id == "node-llm")
+        .expect("main llm trace should exist");
+    let route_events = main_trace.debug_payload["visible_internal_llm_tool_events"]
+        .as_array()
+        .expect("main debug payload should include route events");
+    for node_id in ["node-panel-a", "node-panel-b"] {
+        let panel_event = route_events
+            .iter()
+            .find(|event| {
+                event["event_type"] == json!("visible_internal_llm_tool_completed")
+                    && event["node_id"] == json!(node_id)
+            })
+            .expect("panel LLM completed event should exist");
+        assert_eq!(panel_event["node_type"], json!("llm"));
+        assert!(
+            panel_event["input_payload"]["prompt_messages"].is_array(),
+            "panel LLM event should preserve node-run-like input payload"
+        );
+        assert!(
+            panel_event["debug_payload"].is_object(),
+            "panel LLM event should preserve node-run-like debug payload"
+        );
+        assert!(
+            panel_event["output_payload"]["text"].is_string(),
+            "panel LLM event should preserve node-run-like output payload"
+        );
+    }
 
     let captured = invoker
         .captured_inputs

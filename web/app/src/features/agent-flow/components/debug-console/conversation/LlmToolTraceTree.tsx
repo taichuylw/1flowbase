@@ -3,12 +3,17 @@ import { Tag, Tooltip, Typography } from 'antd';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
-import { RuntimeDebugPayloadBlock } from '../../detail/last-run/NodeRunIOCard';
+import {
+  NodeRunPayloadSections,
+  RuntimeDebugPayloadBlock
+} from '../../detail/last-run/NodeRunIOCard';
 import { DebugWorkflowNodeItem } from './DebugWorkflowNodeRow';
 import {
   collectLlmToolCallbacksFromDebugPayloads,
+  readLlmToolRouteTraceDetail,
   readLlmToolCallbackDetail,
   type LlmToolCallback,
+  type LlmToolRouteBranchTrace,
   type LlmToolRouteBranchSummary,
   type LlmToolRouteTraceSummary
 } from './llm-tool-callbacks';
@@ -223,10 +228,18 @@ function branchNodeStatus(branch: LlmToolRouteBranchSummary) {
 
 function buildRouteBranchTraceItem(
   callback: LlmToolCallback,
-  branch: LlmToolRouteBranchSummary,
+  branch: LlmToolRouteBranchSummary | LlmToolRouteBranchTrace,
   index: number
 ): AgentFlowTraceItem {
   const fallbackId = `${callback.id}:branch:${index + 1}`;
+  const inputPayload = isRouteBranchTrace(branch) ? branch.inputPayload : {};
+  const outputPayload = isRouteBranchTrace(branch) ? branch.outputPayload : {};
+  const metricsPayload = isRouteBranchTrace(branch)
+    ? branch.metricsPayload
+    : {};
+  const debugPayload = isRouteBranchTrace(branch)
+    ? branch.debugPayload
+    : branch.rawPayload;
 
   return {
     nodeId: branch.nodeId ?? fallbackId,
@@ -237,11 +250,11 @@ function buildRouteBranchTraceItem(
     startedAt: '',
     finishedAt: callback.callbackStatus === 'returned' ? '' : null,
     durationMs: null,
-    inputPayload: {},
-    outputPayload: {},
+    inputPayload,
+    outputPayload,
     errorPayload: null,
-    metricsPayload: {},
-    debugPayload: branch.rawPayload
+    metricsPayload,
+    debugPayload
   };
 }
 
@@ -253,13 +266,19 @@ function summaryPreviewText(summary: Record<string, unknown> | null) {
     : null;
 }
 
+function isRouteBranchTrace(
+  branch: LlmToolRouteBranchSummary | LlmToolRouteBranchTrace
+): branch is LlmToolRouteBranchTrace {
+  return Object.prototype.hasOwnProperty.call(branch, 'inputPayload');
+}
+
 function LlmToolRouteBranchNode({
   branch,
   callback,
   index,
   onLoadArtifact
 }: {
-  branch: LlmToolRouteBranchSummary;
+  branch: LlmToolRouteBranchSummary | LlmToolRouteBranchTrace;
   callback: LlmToolCallback;
   index: number;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
@@ -291,15 +310,30 @@ function LlmToolRouteBranchNode({
               ) : null}
             </div>
           ) : null}
-          <RuntimeDebugPayloadBlock
-            height="8rem"
-            payload={branch.rawPayload}
-            title={branchDetailTitle}
-            onLoadArtifact={onLoadArtifact}
-          />
+          {isRouteBranchTrace(branch) ? (
+            <NodeRunPayloadSections
+              debugPayload={branch.debugPayload}
+              inputPayload={branch.inputPayload}
+              outputPayload={branch.outputPayload}
+              onLoadArtifact={onLoadArtifact}
+            />
+          ) : (
+            <RuntimeDebugPayloadBlock
+              height="8rem"
+              payload={branch.rawPayload}
+              title={branchDetailTitle}
+              onLoadArtifact={onLoadArtifact}
+            />
+          )}
         </div>
       </DebugWorkflowNodeItem>
     </div>
+  );
+}
+
+function routeTraceStatusText(callback: LlmToolCallback) {
+  return executionStatusLabel(
+    routeNodeStatus(callback) === 'failed' ? 'failed' : 'succeeded'
   );
 }
 
@@ -311,14 +345,138 @@ function LlmToolRouteNode({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [loadedRouteTrace, setLoadedRouteTrace] =
+    useState<LlmToolRouteTraceSummary | null>(null);
+  const [loadingRouteTrace, setLoadingRouteTrace] = useState(false);
+  const [routeTraceLoadFailed, setRouteTraceLoadFailed] = useState(false);
+  const sourceRouteTrace = callback.routeTrace;
+  const routeKind = sourceRouteTrace?.routeKind ?? null;
+  const detailArtifactRef = sourceRouteTrace?.detailArtifactRef ?? null;
 
-  if (!callback.routeTrace) {
+  useEffect(() => {
+    setLoadedRouteTrace(null);
+    setLoadingRouteTrace(false);
+    setRouteTraceLoadFailed(false);
+  }, [callback.id, detailArtifactRef, routeKind]);
+
+  useEffect(() => {
+    if (
+      !expanded ||
+      routeKind !== 'fusion' ||
+      !detailArtifactRef ||
+      !onLoadArtifact ||
+      loadedRouteTrace ||
+      routeTraceLoadFailed
+    ) {
+      return;
+    }
+
+    let active = true;
+    setLoadingRouteTrace(true);
+    setRouteTraceLoadFailed(false);
+    void onLoadArtifact(detailArtifactRef)
+      .then((payload) => {
+        if (!active) {
+          return;
+        }
+        const detail = readLlmToolRouteTraceDetail(payload);
+        if (!detail) {
+          throw new Error('invalid_route_trace_detail');
+        }
+        setLoadedRouteTrace(detail);
+      })
+      .catch(() => {
+        if (active) {
+          setRouteTraceLoadFailed(true);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingRouteTrace(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    detailArtifactRef,
+    expanded,
+    loadedRouteTrace,
+    onLoadArtifact,
+    routeKind,
+    routeTraceLoadFailed
+  ]);
+
+  if (!sourceRouteTrace) {
     return null;
   }
 
+  const routeTrace = loadedRouteTrace ?? sourceRouteTrace;
+  const branchTraces = routeTrace.branchTraces;
+  const branchNodes =
+    branchTraces.length > 0 ? branchTraces : routeTrace.branchSummaries;
+  const routeTraceTitle = routeTraceLabel(routeTrace);
+
+  if (routeTrace.routeKind === 'fusion') {
+    return (
+      <div
+        className="agent-flow-editor__debug-llm-route-node"
+        data-testid="debug-llm-route-node"
+      >
+        <button
+          aria-expanded={expanded}
+          className="agent-flow-editor__debug-llm-route-group-trigger"
+          onClick={() => setExpanded((current) => !current)}
+          type="button"
+        >
+          <span className="agent-flow-editor__debug-llm-route-group-main">
+            <Typography.Text strong>{routeTraceTitle}</Typography.Text>
+            <Typography.Text type="secondary">
+              {routeTraceStatusText(callback)}
+            </Typography.Text>
+          </span>
+          <Tag className="agent-flow-editor__debug-llm-tool-route-tag">
+            {routeTraceTitle}
+          </Tag>
+          {expanded ? (
+            <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
+          ) : (
+            <RightOutlined className="agent-flow-editor__debug-workflow-collapse" />
+          )}
+        </button>
+        {expanded ? (
+          <div className="agent-flow-editor__debug-llm-route-node-detail">
+            {loadingRouteTrace ? (
+              <Tag color="processing">
+                {i18nText('agentFlow', 'auto.loading')}
+              </Tag>
+            ) : null}
+            {routeTraceLoadFailed ? (
+              <Tag color="error">
+                {i18nText('agentFlow', 'auto.loading_failed')}
+              </Tag>
+            ) : null}
+            {branchNodes.length > 0 ? (
+              <div className="agent-flow-editor__debug-llm-route-branch-list">
+                {branchNodes.map((branch, index) => (
+                  <LlmToolRouteBranchNode
+                    key={`${branch.nodeId ?? callback.id}-${index}`}
+                    branch={branch}
+                    callback={callback}
+                    index={index}
+                    onLoadArtifact={onLoadArtifact}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   const routeTraceItem = buildRouteTraceItem(callback);
-  const branchSummaries = callback.routeTrace.branchSummaries;
-  const routeTraceTitle = routeTraceLabel(callback.routeTrace);
 
   return (
     <div
@@ -331,9 +489,9 @@ function LlmToolRouteNode({
         onToggle={() => setExpanded((current) => !current)}
       >
         <div className="agent-flow-editor__debug-workflow-node-detail agent-flow-editor__debug-llm-route-node-detail">
-          {branchSummaries.length > 0 ? (
+          {branchNodes.length > 0 ? (
             <div className="agent-flow-editor__debug-llm-route-branch-list">
-              {branchSummaries.map((branch, index) => (
+              {branchNodes.map((branch, index) => (
                 <LlmToolRouteBranchNode
                   key={`${branch.nodeId ?? callback.id}-${index}`}
                   branch={branch}
@@ -346,7 +504,7 @@ function LlmToolRouteNode({
           ) : null}
           <RuntimeDebugPayloadBlock
             height="11rem"
-            payload={callback.routeTrace.rawPayload}
+            payload={sourceRouteTrace.rawPayload}
             title={routeTraceTitle}
             onLoadArtifact={onLoadArtifact}
           />

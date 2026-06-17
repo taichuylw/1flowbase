@@ -80,6 +80,8 @@ struct VisibleInternalLlmToolBranchTraceFacts {
     status: String,
     route_model: Option<String>,
     provider_route: Option<Value>,
+    input_payload: Option<Value>,
+    output_payload: Value,
     output: Option<Value>,
     output_summary: Value,
     metrics_payload: Option<Value>,
@@ -303,6 +305,8 @@ fn branch_trace_from_event(
         .as_ref()
         .map(summarize_runtime_value)
         .unwrap_or_else(|| summarize_runtime_value(&Value::Null));
+    let output_payload =
+        branch_output_payload(event_object, output.as_ref(), provider_route.as_ref());
 
     Some(VisibleInternalLlmToolBranchTraceFacts {
         event_type: event_type.to_string(),
@@ -312,6 +316,8 @@ fn branch_trace_from_event(
         status: status.to_string(),
         route_model,
         provider_route,
+        input_payload: value_field(event_object, &["input_payload"]),
+        output_payload,
         output,
         output_summary,
         metrics_payload: event_object.get("metrics_payload").cloned(),
@@ -567,7 +573,9 @@ fn branch_detail_payloads(
                 "node_type": branch.node_type,
                 "status": branch.status,
                 "route_model": branch.route_model,
+                "input_payload": branch.input_payload,
                 "provider_route": branch.provider_route,
+                "output_payload": branch.output_payload,
                 "output": branch.output,
                 "output_summary": branch.output_summary,
                 "metrics_payload": branch.metrics_payload,
@@ -576,6 +584,24 @@ fn branch_detail_payloads(
             })
         })
         .collect()
+}
+
+fn branch_output_payload(
+    event_object: &Map<String, Value>,
+    output: Option<&Value>,
+    provider_route: Option<&Value>,
+) -> Value {
+    if let Some(output_payload) = value_field(event_object, &["output_payload"]) {
+        return output_payload;
+    }
+
+    let mut payload = Map::new();
+    payload.insert("text".to_string(), output.cloned().unwrap_or(Value::Null));
+    payload.insert(
+        "provider_route".to_string(),
+        provider_route.cloned().unwrap_or(Value::Null),
+    );
+    Value::Object(payload)
 }
 
 fn main_resume_output_from_node_output(output_payload: &Value) -> Option<Value> {
@@ -1103,6 +1129,10 @@ mod tests {
                     "provider_route": {
                         "model": "risk-v1"
                     },
+                    "input_payload": {
+                        "user_prompt": "review refund policy risk",
+                        "model": "risk-v1"
+                    },
                     "content": "panel A says strict",
                     "debug_payload": {
                         "llm_rounds": [
@@ -1166,8 +1196,20 @@ mod tests {
         assert_eq!(detail["fan_in"]["returned_to_main"], json!(true));
         assert_eq!(detail["fan_in"]["main_resume"], json!(true));
         assert_eq!(
+            detail["branch_traces"][0]["input_payload"]["user_prompt"],
+            json!("review refund policy risk")
+        );
+        assert_eq!(
             detail["branch_traces"][0]["debug_payload"]["llm_rounds"][0]["assistant"]["content"],
             json!("risk result")
+        );
+        assert_eq!(
+            detail["branch_traces"][0]["output_payload"]["text"],
+            json!("panel A says strict")
+        );
+        assert_eq!(
+            detail["branch_traces"][0]["output_payload"]["provider_route"]["model"],
+            json!("risk-v1")
         );
         assert_eq!(
             detail["branch_traces"][1]["debug_payload_ref"],

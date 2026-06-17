@@ -790,8 +790,10 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
               ],
               visible_internal_llm_tool_trace: [
                 {
+                  __runtime_debug_artifact: true,
                   kind: 'visible_internal_llm_tool_trace',
                   preview_kind: 'visible_internal_llm_tool_trace',
+                  artifact_ref: 'artifact-fusion-route',
                   route_kind: 'fusion',
                   tool_call_id: 'call_fusion',
                   tool_name: 'fusion_review',
@@ -849,6 +851,90 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       }
     ];
     runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
+      async (_applicationId: string, artifactRef: string) => {
+        if (artifactRef === 'artifact-fusion-route') {
+          return {
+            kind: 'visible_internal_llm_tool_trace',
+            route_kind: 'fusion',
+            tool_call_id: 'call_fusion',
+            tool_name: 'fusion_review',
+            status: 'succeeded',
+            branch_traces: [
+              {
+                event_type: 'visible_internal_llm_tool_completed',
+                node_id: 'node-panel-a',
+                node_alias: 'Risk Panel',
+                node_type: 'llm',
+                status: 'succeeded',
+                route_model: 'risk-v1',
+                input_payload: {
+                  user_prompt: 'review refund policy risk',
+                  model: 'risk-v1'
+                },
+                debug_payload: {
+                  llm_rounds: [
+                    {
+                      round_index: 0,
+                      assistant: {
+                        content: 'risk result'
+                      }
+                    }
+                  ]
+                },
+                output_payload: {
+                  text: 'panel A says strict',
+                  provider_route: {
+                    model: 'risk-v1'
+                  }
+                },
+                output_summary: {
+                  kind: 'text',
+                  preview: 'panel A says strict',
+                  char_count: 19,
+                  truncated: false
+                }
+              },
+              {
+                event_type: 'visible_internal_llm_tool_completed',
+                node_id: 'node-panel-b',
+                node_alias: 'Support Panel',
+                node_type: 'llm',
+                status: 'succeeded',
+                route_model: 'support-v1',
+                input_payload: {
+                  user_prompt: 'review refund policy support',
+                  model: 'support-v1'
+                },
+                debug_payload: {
+                  llm_rounds: []
+                },
+                output_payload: {
+                  text: 'panel B says flexible',
+                  provider_route: {
+                    model: 'support-v1'
+                  }
+                },
+                output_summary: {
+                  kind: 'text',
+                  preview: 'panel B says flexible',
+                  char_count: 21,
+                  truncated: false
+                }
+              }
+            ],
+            fan_in: {
+              mode: 'bounded_parallel_panel',
+              branch_count: 2,
+              returned_to_main: true,
+              main_resume: true
+            }
+          };
+        }
+
+        throw new Error(`unexpected artifact: ${artifactRef}`);
+      }
+    );
 
     render(
       <AppProviders>
@@ -890,15 +976,25 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     fireEvent.click(toolCallbackNode);
 
     const routeNode = within(logPanel).getByTestId('debug-llm-route-node');
-    expect(routeNode).toHaveTextContent('Fusion fan-in');
+    expect(routeNode).toHaveTextContent('fusion');
+    expect(routeNode).not.toHaveTextContent('Fusion fan-in');
     expect(routeNode).toHaveTextContent('执行成功');
     const routeTrigger = within(routeNode).getByRole('button', {
-      name: /Fusion fan-in/
+      name: /fusion/
     });
     expect(routeTrigger).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() =>
+      expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+        'app-1',
+        'artifact-fusion-route'
+      )
+    );
+    await waitFor(() =>
+      expect(within(routeNode).queryByText('加载中')).not.toBeInTheDocument()
+    );
     expect(
       within(routeNode).getAllByTestId('debug-workflow-node-item')
-    ).toHaveLength(3);
+    ).toHaveLength(2);
     const branchNodes = within(routeNode).getAllByTestId(
       'debug-llm-route-branch-node'
     );
@@ -913,13 +1009,23 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     fireEvent.click(firstBranchTrigger);
     expect(firstBranchTrigger).toHaveAttribute('aria-expanded', 'true');
     expect(branchNodes[0]).toHaveTextContent('risk-v1');
-    expect(branchNodes[0]).toHaveTextContent('panel A says strict');
+    expect(
+      within(branchNodes[0]).getByLabelText('输入 JSON')
+    ).toHaveTextContent('review refund policy risk');
+    expect(
+      within(branchNodes[0]).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('risk result');
+    expect(
+      within(branchNodes[0]).getByLabelText('输出 JSON')
+    ).toHaveTextContent('panel A says strict');
     fireEvent.click(firstBranchTrigger);
     expect(firstBranchTrigger).toHaveAttribute('aria-expanded', 'false');
-    expect(branchNodes[0]).not.toHaveTextContent('risk-v1');
-    expect(within(routeNode).getByLabelText('fusion JSON')).toHaveTextContent(
-      'branch_summaries'
-    );
+    expect(
+      within(branchNodes[0]).queryByLabelText('输入 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      within(routeNode).queryByLabelText('fusion JSON')
+    ).not.toBeInTheDocument();
     fireEvent.click(routeTrigger);
     expect(routeTrigger).toHaveAttribute('aria-expanded', 'false');
     expect(

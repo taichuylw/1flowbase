@@ -396,6 +396,30 @@
 
 .agent-flow-editor__debug-llm-route-node {
   display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.agent-flow-editor__debug-llm-route-group-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  padding: 0.4rem 0.5rem;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-flow-editor__debug-llm-route-group-main {
+  display: inline-flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 0.375rem;
   min-width: 0;
 }
 
@@ -420,6 +444,7 @@
 
 .agent-flow-editor__debug-llm-route-node-detail,
 .agent-flow-editor__debug-llm-route-branch-detail {
+  display: grid;
   gap: 0.5rem;
 }
 

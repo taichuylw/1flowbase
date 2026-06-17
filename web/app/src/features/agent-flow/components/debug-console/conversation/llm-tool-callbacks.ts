@@ -36,6 +36,7 @@ export interface LlmToolRouteTraceSummary {
   finalOutputSummary: Record<string, unknown> | null;
   branchCount: number | null;
   branchSummaries: LlmToolRouteBranchSummary[];
+  branchTraces: LlmToolRouteBranchTrace[];
   fanIn: Record<string, unknown> | null;
 }
 
@@ -47,6 +48,14 @@ export interface LlmToolRouteBranchSummary {
   routeModel: string | null;
   outputSummary: Record<string, unknown> | null;
   rawPayload: Record<string, unknown>;
+}
+
+export interface LlmToolRouteBranchTrace extends LlmToolRouteBranchSummary {
+  inputPayload: Record<string, unknown>;
+  debugPayload: Record<string, unknown>;
+  outputPayload: Record<string, unknown>;
+  metricsPayload: Record<string, unknown>;
+  debugPayloadRef: string | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -172,6 +181,7 @@ function readRouteTraceSummary(value: unknown): {
       branchSummaries: recordArray(value.branch_summaries).map(
         readRouteBranchSummary
       ),
+      branchTraces: recordArray(value.branch_traces).map(readRouteBranchTrace),
       fanIn: optionalRecordField(value, ['fan_in'])
     }
   };
@@ -189,6 +199,25 @@ function readRouteBranchSummary(
     outputSummary: optionalRecordField(value, ['output_summary']),
     rawPayload: value
   };
+}
+
+function readRouteBranchTrace(
+  value: Record<string, unknown>
+): LlmToolRouteBranchTrace {
+  return {
+    ...readRouteBranchSummary(value),
+    inputPayload: firstRecordField(value, ['input_payload']),
+    debugPayload: firstRecordField(value, ['debug_payload']),
+    outputPayload: firstRecordField(value, ['output_payload']),
+    metricsPayload: firstRecordField(value, ['metrics_payload']),
+    debugPayloadRef: firstStringField(value, ['debug_payload_ref'])
+  };
+}
+
+export function readLlmToolRouteTraceDetail(
+  loadedPayload: unknown
+): LlmToolRouteTraceSummary | null {
+  return readRouteTraceSummary(loadedPayload)?.trace ?? null;
 }
 
 function readVisibleInternalRouteTraces(

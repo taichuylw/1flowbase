@@ -839,6 +839,7 @@ where
 
             Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
                 VisibleInternalLlmToolNodeOutput {
+                    input_payload: Value::Object(resolved_inputs.clone()),
                     output_payload: execution.output_payload,
                     metrics_payload: Some(execution.metrics_payload),
                     debug_payload: Some(execution.debug_payload),
@@ -875,6 +876,7 @@ where
 
             Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
                 VisibleInternalLlmToolNodeOutput {
+                    input_payload: Value::Object(resolved_inputs.clone()),
                     output_payload: execution.output_payload,
                     metrics_payload: None,
                     debug_payload: Some(execution.debug_payload),
@@ -902,6 +904,7 @@ where
 
             Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
                 VisibleInternalLlmToolNodeOutput {
+                    input_payload: Value::Object(resolved_inputs.clone()),
                     output_payload: execution.output_payload,
                     metrics_payload: Some(execution.metrics_payload),
                     debug_payload: Some(execution.debug_payload),
