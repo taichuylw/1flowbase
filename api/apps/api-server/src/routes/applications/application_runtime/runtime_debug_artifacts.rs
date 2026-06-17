@@ -38,7 +38,8 @@ use payloads::{
 };
 use visible_internal_llm_route_traces::{
     collect_visible_internal_llm_tool_route_traces,
-    collect_visible_internal_llm_tool_route_traces_with_main_output,
+    collect_visible_internal_llm_tool_route_traces_with_branch_node_runs,
+    VisibleInternalLlmToolBranchNodeRunPayload,
 };
 
 struct RuntimeDebugArtifactScope {
@@ -1217,6 +1218,7 @@ fn enrich_node_runs_visible_internal_llm_route_traces(
 ) {
     let runtime_events_by_node_run_id =
         visible_internal_llm_tool_runtime_events_by_node_run_id(node_runs, runtime_events);
+    let branch_node_run_payloads = visible_internal_llm_tool_branch_node_run_payloads(node_runs);
 
     for node_run in node_runs {
         let debug_payload = runtime_events_by_node_run_id
@@ -1228,11 +1230,31 @@ fn enrich_node_runs_visible_internal_llm_route_traces(
                 )
             })
             .unwrap_or_else(|| node_run.debug_payload.clone());
-        node_run.debug_payload = with_inline_visible_internal_llm_tool_trace_index_with_main_output(
-            debug_payload,
-            Some(&node_run.output_payload),
-        );
+        node_run.debug_payload =
+            with_inline_visible_internal_llm_tool_trace_index_with_branch_node_runs(
+                debug_payload,
+                Some(&node_run.output_payload),
+                &branch_node_run_payloads,
+            );
     }
+}
+
+fn visible_internal_llm_tool_branch_node_run_payloads(
+    node_runs: &[domain::NodeRunRecord],
+) -> Vec<VisibleInternalLlmToolBranchNodeRunPayload> {
+    node_runs
+        .iter()
+        .map(|node_run| VisibleInternalLlmToolBranchNodeRunPayload {
+            node_run_id: node_run.id.to_string(),
+            node_id: node_run.node_id.clone(),
+            node_alias: node_run.node_alias.clone(),
+            node_type: node_run.node_type.clone(),
+            input_payload: node_run.input_payload.clone(),
+            output_payload: node_run.output_payload.clone(),
+            metrics_payload: node_run.metrics_payload.clone(),
+            debug_payload: node_run.debug_payload.clone(),
+        })
+        .collect()
 }
 
 fn visible_internal_llm_tool_runtime_events_by_node_run_id(
@@ -1467,8 +1489,20 @@ fn synthetic_visible_internal_llm_tool_result(
 }
 
 fn with_inline_visible_internal_llm_tool_trace_index_with_main_output(
+    payload: Value,
+    main_resume_output_fallback: Option<&Value>,
+) -> Value {
+    with_inline_visible_internal_llm_tool_trace_index_with_branch_node_runs(
+        payload,
+        main_resume_output_fallback,
+        &[],
+    )
+}
+
+fn with_inline_visible_internal_llm_tool_trace_index_with_branch_node_runs(
     mut payload: Value,
     main_resume_output_fallback: Option<&Value>,
+    branch_node_run_payloads: &[VisibleInternalLlmToolBranchNodeRunPayload],
 ) -> Value {
     let Some(object) = payload.as_object() else {
         return payload;
@@ -1483,9 +1517,10 @@ fn with_inline_visible_internal_llm_tool_trace_index_with_main_output(
         .unwrap_or_default();
     payload = with_synthetic_visible_internal_llm_tool_rounds(payload, &runtime_events);
 
-    let traces = collect_visible_internal_llm_tool_route_traces_with_main_output(
+    let traces = collect_visible_internal_llm_tool_route_traces_with_branch_node_runs(
         &payload,
         main_resume_output_fallback,
+        branch_node_run_payloads,
     );
     if traces.is_empty() {
         return payload;
@@ -1493,7 +1528,13 @@ fn with_inline_visible_internal_llm_tool_trace_index_with_main_output(
 
     let summaries = traces
         .into_iter()
-        .map(|trace| trace.inline_summary_payload())
+        .map(|trace| {
+            if branch_node_run_payloads.is_empty() {
+                trace.inline_summary_payload()
+            } else {
+                trace.inline_summary_with_branch_traces_payload()
+            }
+        })
         .collect::<Vec<_>>();
     if let Some(object) = payload.as_object_mut() {
         object.insert(

@@ -382,6 +382,58 @@ const multiLlmRunAssistantMessage: AgentFlowDebugMessage = {
   ]
 };
 
+const fusionSummaryOnlyAssistantMessage: AgentFlowDebugMessage = {
+  ...assistantMessage,
+  traceSummary: [
+    {
+      ...assistantMessage.traceSummary[1],
+      nodeId: 'node-main-llm',
+      nodeRunId: 'node-run-main-llm',
+      nodeAlias: 'LLM',
+      debugPayload: {
+        llm_rounds: [
+          {
+            round_index: 0,
+            assistant: {
+              role: 'assistant',
+              tool_calls: [
+                {
+                  id: 'call_fusion',
+                  name: 'fusion_review'
+                }
+              ]
+            }
+          }
+        ],
+        visible_internal_llm_tool_trace: [
+          {
+            kind: 'visible_internal_llm_tool_trace',
+            preview_kind: 'visible_internal_llm_tool_trace',
+            route_kind: 'fusion',
+            tool_call_id: 'call_fusion',
+            tool_name: 'fusion_review',
+            status: 'succeeded',
+            branch_summaries: [
+              {
+                node_id: 'node-panel-a',
+                node_alias: 'LLM2',
+                node_type: 'llm',
+                status: 'succeeded',
+                output_summary: {
+                  kind: 'text',
+                  preview: 'summary only',
+                  char_count: 12,
+                  truncated: false
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+};
+
 const answerSnapshotAssistantMessage: AgentFlowDebugMessage = {
   ...assistantMessage,
   status: 'waiting_callback',
@@ -620,6 +672,48 @@ describe('debug conversation log panel', () => {
       .forEach((block) => {
         expect(block).not.toHaveTextContent('llm_rounds');
       });
+  }, 10_000);
+
+  test('shows a summary-only state instead of empty JSON for route branch nodes without detail', () => {
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '做 fusion 评审',
+          rawOutput: null,
+          traceSummary: []
+        },
+        fusionSummaryOnlyAssistantMessage
+      ]
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+    fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
+    fireEvent.click(
+      within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
+    );
+    fireEvent.click(
+      within(panel).getByRole('button', { name: /fusion_review/ })
+    );
+
+    const branchNode = within(panel).getByTestId('debug-llm-route-branch-node');
+    fireEvent.click(within(branchNode).getByRole('button', { name: /LLM2/ }));
+
+    expect(branchNode).toHaveTextContent('仅有摘要，节点详情未生成');
+    expect(
+      within(branchNode).queryByLabelText('输入 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      within(branchNode).queryByLabelText('数据处理 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      within(branchNode).queryByLabelText('输出 JSON')
+    ).not.toBeInTheDocument();
   }, 10_000);
 
   test('collapses repeated LLM node runs into one trace row', () => {

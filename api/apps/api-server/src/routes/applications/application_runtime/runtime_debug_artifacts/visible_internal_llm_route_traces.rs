@@ -21,6 +21,17 @@ impl VisibleInternalLlmToolRouteTrace {
         self.summary_payload.clone()
     }
 
+    pub(super) fn inline_summary_with_branch_traces_payload(&self) -> Value {
+        let mut summary = self.summary_payload.clone();
+        if let (Some(summary_object), Some(branch_traces)) = (
+            summary.as_object_mut(),
+            self.detail_payload.get("branch_traces").cloned(),
+        ) {
+            summary_object.insert("branch_traces".to_string(), branch_traces);
+        }
+        summary
+    }
+
     pub(super) fn summary_payload(&self, artifact_id: Uuid) -> Value {
         let mut summary = self.summary_payload.clone();
         let original_size_bytes = serde_json::to_vec(&self.detail_payload)
@@ -43,6 +54,61 @@ impl VisibleInternalLlmToolRouteTrace {
         }
 
         summary
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct VisibleInternalLlmToolBranchNodeRunPayload {
+    pub(super) node_run_id: String,
+    pub(super) node_id: String,
+    pub(super) node_alias: String,
+    pub(super) node_type: String,
+    pub(super) input_payload: Value,
+    pub(super) output_payload: Value,
+    pub(super) metrics_payload: Value,
+    pub(super) debug_payload: Value,
+}
+
+struct VisibleInternalLlmToolBranchNodeRunIndex<'a> {
+    by_node_run_id: BTreeMap<String, &'a VisibleInternalLlmToolBranchNodeRunPayload>,
+    latest_by_node_id: BTreeMap<String, &'a VisibleInternalLlmToolBranchNodeRunPayload>,
+}
+
+impl<'a> VisibleInternalLlmToolBranchNodeRunIndex<'a> {
+    fn new(branch_node_runs: &'a [VisibleInternalLlmToolBranchNodeRunPayload]) -> Self {
+        let mut by_node_run_id = BTreeMap::new();
+        let mut latest_by_node_id = BTreeMap::new();
+
+        for node_run in branch_node_runs {
+            by_node_run_id.insert(node_run.node_run_id.clone(), node_run);
+            latest_by_node_id.insert(node_run.node_id.clone(), node_run);
+        }
+
+        Self {
+            by_node_run_id,
+            latest_by_node_id,
+        }
+    }
+
+    fn find(
+        &self,
+        event_object: &Map<String, Value>,
+        branch_node_id: Option<&str>,
+    ) -> Option<&'a VisibleInternalLlmToolBranchNodeRunPayload> {
+        if let Some(node_run_id) = string_field(
+            event_object,
+            &[
+                "branch_node_run_id",
+                "route_node_run_id",
+                "target_node_run_id",
+            ],
+        ) {
+            if let Some(node_run) = self.by_node_run_id.get(&node_run_id) {
+                return Some(node_run);
+            }
+        }
+
+        branch_node_id.and_then(|node_id| self.latest_by_node_id.get(node_id).copied())
     }
 }
 
@@ -99,6 +165,18 @@ pub(super) fn collect_visible_internal_llm_tool_route_traces_with_main_output(
     debug_payload: &Value,
     main_resume_output_fallback: Option<&Value>,
 ) -> Vec<VisibleInternalLlmToolRouteTrace> {
+    collect_visible_internal_llm_tool_route_traces_with_branch_node_runs(
+        debug_payload,
+        main_resume_output_fallback,
+        &[],
+    )
+}
+
+pub(super) fn collect_visible_internal_llm_tool_route_traces_with_branch_node_runs(
+    debug_payload: &Value,
+    main_resume_output_fallback: Option<&Value>,
+    branch_node_runs: &[VisibleInternalLlmToolBranchNodeRunPayload],
+) -> Vec<VisibleInternalLlmToolRouteTrace> {
     let Some(events) = debug_payload
         .get("visible_internal_llm_tool_events")
         .and_then(Value::as_array)
@@ -109,7 +187,8 @@ pub(super) fn collect_visible_internal_llm_tool_route_traces_with_main_output(
         return Vec::new();
     }
 
-    let mut facts_by_tool_call_id = collect_trace_event_facts(events);
+    let branch_node_run_index = VisibleInternalLlmToolBranchNodeRunIndex::new(branch_node_runs);
+    let mut facts_by_tool_call_id = collect_trace_event_facts(events, &branch_node_run_index);
     collect_trace_round_facts(
         debug_payload
             .get("llm_rounds")
@@ -132,6 +211,7 @@ pub(super) fn collect_visible_internal_llm_tool_route_traces_with_main_output(
 
 fn collect_trace_event_facts(
     events: &[Value],
+    branch_node_run_index: &VisibleInternalLlmToolBranchNodeRunIndex<'_>,
 ) -> BTreeMap<String, VisibleInternalLlmToolTraceFacts> {
     let mut facts_by_tool_call_id = BTreeMap::new();
 
@@ -185,7 +265,7 @@ fn collect_trace_event_facts(
         if entry.arguments.is_none() {
             entry.arguments = event_object.get("arguments").cloned();
         }
-        if let Some(branch_trace) = branch_trace_from_event(event_object) {
+        if let Some(branch_trace) = branch_trace_from_event(event_object, branch_node_run_index) {
             entry.branch_traces.push(branch_trace);
         }
 
@@ -251,6 +331,7 @@ fn route_kind_from_event(event_object: &Map<String, Value>) -> Option<String> {
 
 fn branch_trace_from_event(
     event_object: &Map<String, Value>,
+    branch_node_run_index: &VisibleInternalLlmToolBranchNodeRunIndex<'_>,
 ) -> Option<VisibleInternalLlmToolBranchTraceFacts> {
     let event_type = event_object.get("event_type").and_then(Value::as_str)?;
     let (status, node_id, node_alias) = match event_type {
@@ -308,9 +389,9 @@ fn branch_trace_from_event(
     let output_payload =
         branch_output_payload(event_object, output.as_ref(), provider_route.as_ref());
 
-    Some(VisibleInternalLlmToolBranchTraceFacts {
+    let mut branch_trace = VisibleInternalLlmToolBranchTraceFacts {
         event_type: event_type.to_string(),
-        node_id,
+        node_id: node_id.clone(),
         node_alias,
         node_type: string_field(event_object, &["node_type"]),
         status: status.to_string(),
@@ -323,7 +404,57 @@ fn branch_trace_from_event(
         metrics_payload: event_object.get("metrics_payload").cloned(),
         debug_payload: event_object.get("debug_payload").cloned(),
         debug_payload_ref: event_object.get("debug_payload_ref").cloned(),
-    })
+    };
+    if let Some(node_run) = branch_node_run_index.find(event_object, node_id.as_deref()) {
+        apply_branch_node_run_payload(&mut branch_trace, node_run);
+    }
+
+    Some(branch_trace)
+}
+
+fn apply_branch_node_run_payload(
+    branch_trace: &mut VisibleInternalLlmToolBranchTraceFacts,
+    node_run: &VisibleInternalLlmToolBranchNodeRunPayload,
+) {
+    if branch_trace.node_alias.is_none() {
+        branch_trace.node_alias = Some(node_run.node_alias.clone());
+    }
+    if branch_trace.node_type.is_none() {
+        branch_trace.node_type = Some(node_run.node_type.clone());
+    }
+    if runtime_payload_has_detail(&node_run.input_payload) {
+        branch_trace.input_payload = Some(node_run.input_payload.clone());
+    }
+    if runtime_payload_has_detail(&node_run.output_payload) {
+        branch_trace.output_payload = node_run.output_payload.clone();
+        branch_trace.output = branch_output_text(&node_run.output_payload);
+        branch_trace.output_summary = branch_trace
+            .output
+            .as_ref()
+            .map(summarize_runtime_value)
+            .unwrap_or_else(|| summarize_runtime_value(&node_run.output_payload));
+    }
+    if runtime_payload_has_detail(&node_run.metrics_payload) {
+        branch_trace.metrics_payload = Some(node_run.metrics_payload.clone());
+    }
+    if runtime_payload_has_detail(&node_run.debug_payload) {
+        branch_trace.debug_payload = Some(node_run.debug_payload.clone());
+    }
+}
+
+fn runtime_payload_has_detail(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Object(object) => !object.is_empty(),
+        _ => true,
+    }
+}
+
+fn branch_output_text(output_payload: &Value) -> Option<Value> {
+    output_payload
+        .as_object()
+        .and_then(|object| string_field(object, &["text", "answer", "content"]))
+        .map(Value::String)
 }
 
 fn collect_trace_round_facts(

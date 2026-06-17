@@ -681,6 +681,148 @@ fn visible_internal_llm_route_trace_uses_precise_node_run_id_before_reused_node_
 }
 
 #[test]
+fn visible_internal_llm_fusion_branch_trace_uses_branch_node_run_payloads() {
+    let application = test_application_record();
+    let flow_run_id = Uuid::now_v7();
+    let main_node_run_id = Uuid::now_v7();
+    let branch_node_run_id = Uuid::now_v7();
+    let detail = domain::ApplicationRunDetail {
+        flow_run: test_flow_run_record(
+            application.id,
+            flow_run_id,
+            domain::FlowRunStatus::Succeeded,
+            serde_json::json!({ "answer": "done" }),
+        ),
+        node_runs: vec![
+            domain::NodeRunRecord {
+                id: main_node_run_id,
+                flow_run_id,
+                node_id: "node-main-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: serde_json::json!({}),
+                output_payload: serde_json::json!({}),
+                error_payload: None,
+                metrics_payload: serde_json::json!({}),
+                debug_payload: serde_json::json!({
+                    "llm_rounds": [
+                        {
+                            "round_index": 0,
+                            "assistant": {
+                                "role": "assistant",
+                                "tool_calls": [
+                                    {
+                                        "id": "call_fusion",
+                                        "name": "fusion_review"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }),
+                started_at: OffsetDateTime::UNIX_EPOCH,
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            },
+            domain::NodeRunRecord {
+                id: branch_node_run_id,
+                flow_run_id,
+                node_id: "node-panel-a".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "LLM2".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: serde_json::json!({
+                    "prompt_messages": [
+                        {
+                            "role": "user",
+                            "content": "review refund policy"
+                        }
+                    ],
+                    "model": "risk-v1"
+                }),
+                output_payload: serde_json::json!({
+                    "text": "panel A says strict",
+                    "provider_route": {
+                        "model": "risk-v1"
+                    }
+                }),
+                error_payload: None,
+                metrics_payload: serde_json::json!({
+                    "usage": {
+                        "total_tokens": 42
+                    }
+                }),
+                debug_payload: serde_json::json!({
+                    "llm_rounds": [
+                        {
+                            "round_index": 0,
+                            "assistant": {
+                                "content": "risk result"
+                            }
+                        }
+                    ],
+                    "provider_debug": "branch debug detail"
+                }),
+                started_at: OffsetDateTime::UNIX_EPOCH,
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            },
+        ],
+        checkpoints: Vec::new(),
+        callback_tasks: Vec::new(),
+        events: Vec::new(),
+        stitched_trace: Vec::new(),
+    };
+    let runtime_events = vec![test_runtime_event_record(
+        flow_run_id,
+        Some(main_node_run_id),
+        "visible_internal_llm_tool_completed",
+        serde_json::json!({
+            "event_type": "visible_internal_llm_tool_completed",
+            "main_node_id": "node-main-llm",
+            "target_node_id": "node-panel-a",
+            "tool_name": "fusion_review",
+            "tool_call_id": "call_fusion",
+            "tool_mode": "fusion",
+            "execution_mode": "bounded_parallel_panel",
+            "node_id": "node-panel-a",
+            "node_alias": "LLM2",
+            "node_type": "llm",
+            "provider_route": {
+                "model": "risk-v1"
+            },
+            "content": "panel A says strict"
+        }),
+    )];
+
+    let detail =
+        enrich_application_run_detail_visible_internal_llm_route_traces(detail, &runtime_events);
+
+    let main_node = detail
+        .node_runs
+        .iter()
+        .find(|node_run| node_run.id == main_node_run_id)
+        .expect("main node run should stay visible");
+    let branch_trace =
+        &main_node.debug_payload["visible_internal_llm_tool_trace"][0]["branch_traces"][0];
+    assert_eq!(
+        branch_trace["input_payload"]["prompt_messages"][0]["content"],
+        serde_json::json!("review refund policy")
+    );
+    assert_eq!(
+        branch_trace["debug_payload"]["provider_debug"],
+        serde_json::json!("branch debug detail")
+    );
+    assert_eq!(
+        branch_trace["output_payload"]["text"],
+        serde_json::json!("panel A says strict")
+    );
+    assert_eq!(
+        branch_trace["metrics_payload"]["usage"]["total_tokens"],
+        serde_json::json!(42)
+    );
+}
+
+#[test]
 fn run_detail_response_hides_historical_waiting_prefix_after_run_finishes() {
     let application = test_application_record();
     let flow_run_id = Uuid::now_v7();

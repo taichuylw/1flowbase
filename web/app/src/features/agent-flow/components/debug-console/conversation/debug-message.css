@@ -265,6 +265,11 @@
   background: #ffffff;
 }
 
+.agent-flow-editor__debug-workflow-node-missing-detail {
+  display: block;
+  padding: 0.125rem 0;
+}
+
 .agent-flow-editor__debug-answer-snapshot {
   display: grid;
   gap: 0.5rem;
