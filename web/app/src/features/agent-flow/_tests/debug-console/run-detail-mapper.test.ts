@@ -155,6 +155,17 @@ describe('run detail mapper', () => {
     expect(extractAssistantOutputText(detail)).toBe('退款政策摘要');
   });
 
+  test('falls back to flow output when compact conversation-log detail omits top-level events', () => {
+    const detail = baseDetail();
+    detail.flow_run.status = 'succeeded';
+    detail.flow_run.output_payload = {
+      answer: '退款政策摘要'
+    };
+    delete (detail as { events?: unknown }).events;
+
+    expect(extractAssistantOutputText(detail)).toBe('退款政策摘要');
+  });
+
   test('restores persisted reasoning and answer deltas as one ordered Dify-style content field', () => {
     const detail = baseDetail();
     detail.flow_run.status = 'running';
