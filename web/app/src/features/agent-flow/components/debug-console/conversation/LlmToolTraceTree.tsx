@@ -9,6 +9,7 @@ import {
   collectLlmToolCallbacksFromDebugPayloads,
   readLlmToolCallbackDetail,
   type LlmToolCallback,
+  type LlmToolRouteBranchSummary,
   type LlmToolRouteTraceSummary
 } from './llm-tool-callbacks';
 import { i18nText } from '../../../../../shared/i18n/text';
@@ -160,6 +161,12 @@ function routeNodeAlias(routeTrace: LlmToolRouteTraceSummary) {
   return routeTrace.routeNodeAlias ?? 'LLM';
 }
 
+function routeTraceLabel(routeTrace: LlmToolRouteTraceSummary) {
+  return routeTrace.routeKind === 'fusion'
+    ? 'fusion'
+    : i18nText('agentFlow', 'auto.route_trace');
+}
+
 function routeNodeOutputPayload(callback: LlmToolCallback) {
   if (callback.call_usage) {
     return {
@@ -196,6 +203,88 @@ function buildRouteTraceItem(callback: LlmToolCallback): AgentFlowTraceItem {
   };
 }
 
+function branchNodeStatus(branch: LlmToolRouteBranchSummary) {
+  switch (branch.status) {
+    case 'succeeded':
+    case 'returned_to_main':
+    case 'route_completed':
+      return 'succeeded';
+    case 'failed':
+      return 'failed';
+    case 'cancelled':
+    case 'canceled':
+      return 'cancelled';
+    case 'waiting_callback':
+      return 'waiting_callback';
+    default:
+      return branch.status ?? 'succeeded';
+  }
+}
+
+function buildRouteBranchTraceItem(
+  callback: LlmToolCallback,
+  branch: LlmToolRouteBranchSummary,
+  index: number
+): AgentFlowTraceItem {
+  const fallbackId = `${callback.id}:branch:${index + 1}`;
+
+  return {
+    nodeId: branch.nodeId ?? fallbackId,
+    nodeRunId: `${fallbackId}:summary`,
+    nodeAlias: branch.nodeAlias ?? branch.nodeId ?? `Panel ${index + 1}`,
+    nodeType: branch.nodeType ?? 'llm',
+    status: branchNodeStatus(branch),
+    startedAt: '',
+    finishedAt: callback.callbackStatus === 'returned' ? '' : null,
+    durationMs: null,
+    inputPayload: {},
+    outputPayload: {},
+    errorPayload: null,
+    metricsPayload: {},
+    debugPayload: branch.rawPayload
+  };
+}
+
+function summaryPreviewText(summary: Record<string, unknown> | null) {
+  const preview = summary?.preview;
+
+  return typeof preview === 'string' && preview.trim().length > 0
+    ? preview
+    : null;
+}
+
+function LlmToolRouteBranchNode({
+  branch,
+  callback,
+  index
+}: {
+  branch: LlmToolRouteBranchSummary;
+  callback: LlmToolCallback;
+  index: number;
+}) {
+  const branchTraceItem = buildRouteBranchTraceItem(callback, branch, index);
+  const outputPreview = summaryPreviewText(branch.outputSummary);
+
+  return (
+    <div
+      className="agent-flow-editor__debug-llm-route-branch-node"
+      data-testid="debug-llm-route-branch-node"
+    >
+      <DebugWorkflowNodeRow item={branchTraceItem} />
+      {branch.routeModel || outputPreview ? (
+        <div className="agent-flow-editor__debug-llm-route-branch-meta">
+          {branch.routeModel ? <Tag>{branch.routeModel}</Tag> : null}
+          {outputPreview ? (
+            <Typography.Text ellipsis type="secondary">
+              {outputPreview}
+            </Typography.Text>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function LlmToolRouteNode({
   callback,
   onLoadArtifact
@@ -208,6 +297,8 @@ function LlmToolRouteNode({
   }
 
   const routeTraceItem = buildRouteTraceItem(callback);
+  const branchSummaries = callback.routeTrace.branchSummaries;
+  const routeTraceTitle = routeTraceLabel(callback.routeTrace);
 
   return (
     <div
@@ -217,11 +308,23 @@ function LlmToolRouteNode({
       <div className="agent-flow-editor__debug-llm-route-node-row">
         <DebugWorkflowNodeRow item={routeTraceItem} />
       </div>
+      {branchSummaries.length > 0 ? (
+        <div className="agent-flow-editor__debug-llm-route-branch-list">
+          {branchSummaries.map((branch, index) => (
+            <LlmToolRouteBranchNode
+              key={`${branch.nodeId ?? callback.id}-${index}`}
+              branch={branch}
+              callback={callback}
+              index={index}
+            />
+          ))}
+        </div>
+      ) : null}
       <div className="agent-flow-editor__debug-llm-route-node-detail">
         <RuntimeDebugPayloadBlock
           height="11rem"
           payload={callback.routeTrace.rawPayload}
-          title={i18nText('agentFlow', 'auto.route_trace')}
+          title={routeTraceTitle}
           onLoadArtifact={onLoadArtifact}
         />
       </div>
@@ -259,7 +362,7 @@ function LlmToolCallbackItem({
           <Typography.Text strong>{callback.name}</Typography.Text>
           {callback.routeTrace ? (
             <Tag className="agent-flow-editor__debug-llm-tool-route-tag">
-              {i18nText('agentFlow', 'auto.route_trace')}
+              {routeTraceLabel(callback.routeTrace)}
             </Tag>
           ) : (
             <LlmToolInlineMetrics callback={callback} />

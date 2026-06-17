@@ -317,6 +317,14 @@ pub(super) fn visible_internal_llm_tool_route_event(
     );
     payload.insert("tool_name".to_string(), Value::String(tool.name.clone()));
     payload.insert(
+        "tool_mode".to_string(),
+        Value::String(tool.tool_mode.as_str().to_string()),
+    );
+    payload.insert(
+        "execution_mode".to_string(),
+        Value::String(tool.execution_mode.as_str().to_string()),
+    );
+    payload.insert(
         "tool_call_id".to_string(),
         Value::String(tool_call_id(tool_call)),
     );

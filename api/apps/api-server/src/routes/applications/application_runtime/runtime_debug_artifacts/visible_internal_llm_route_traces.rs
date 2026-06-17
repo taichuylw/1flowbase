@@ -50,6 +50,8 @@ impl VisibleInternalLlmToolRouteTrace {
 struct VisibleInternalLlmToolTraceFacts {
     tool_call_id: String,
     tool_name: Option<String>,
+    route_kind: Option<String>,
+    execution_mode: Option<String>,
     main_node_id: Option<String>,
     target_node_id: Option<String>,
     route_node_id: Option<String>,
@@ -67,6 +69,22 @@ struct VisibleInternalLlmToolTraceFacts {
     waiting_events: Vec<Value>,
     failed_event: Option<Value>,
     completed_event: Option<Value>,
+    branch_traces: Vec<VisibleInternalLlmToolBranchTraceFacts>,
+}
+
+struct VisibleInternalLlmToolBranchTraceFacts {
+    event_type: String,
+    node_id: Option<String>,
+    node_alias: Option<String>,
+    node_type: Option<String>,
+    status: String,
+    route_model: Option<String>,
+    provider_route: Option<Value>,
+    output: Option<Value>,
+    output_summary: Value,
+    metrics_payload: Option<Value>,
+    debug_payload: Option<Value>,
+    debug_payload_ref: Option<Value>,
 }
 
 pub(super) fn collect_visible_internal_llm_tool_route_traces(
@@ -135,6 +153,11 @@ fn collect_trace_event_facts(
             &mut entry.tool_name,
             string_field(event_object, &["tool_name"]),
         );
+        set_if_some(&mut entry.route_kind, route_kind_from_event(event_object));
+        set_if_some(
+            &mut entry.execution_mode,
+            string_field(event_object, &["execution_mode"]),
+        );
         set_if_some(
             &mut entry.main_node_id,
             string_field(event_object, &["main_node_id"]),
@@ -145,14 +168,23 @@ fn collect_trace_event_facts(
         );
         set_if_some(
             &mut entry.route_node_id,
-            string_field(event_object, &["node_id", "waiting_node_id"]),
+            string_field(
+                event_object,
+                &["route_node_id", "node_id", "waiting_node_id"],
+            ),
         );
         set_if_some(
             &mut entry.route_node_alias,
-            string_field(event_object, &["node_alias", "waiting_node_alias"]),
+            string_field(
+                event_object,
+                &["route_node_alias", "node_alias", "waiting_node_alias"],
+            ),
         );
         if entry.arguments.is_none() {
             entry.arguments = event_object.get("arguments").cloned();
+        }
+        if let Some(branch_trace) = branch_trace_from_event(event_object) {
+            entry.branch_traces.push(branch_trace);
         }
 
         match event_object
@@ -203,6 +235,89 @@ fn collect_trace_event_facts(
     }
 
     facts_by_tool_call_id
+}
+
+fn route_kind_from_event(event_object: &Map<String, Value>) -> Option<String> {
+    let route_kind = string_field(event_object, &["route_kind", "tool_mode"])
+        .or_else(|| string_field(event_object, &["execution_mode"]));
+    match route_kind.as_deref() {
+        Some("fusion") | Some("bounded_parallel_panel") => Some("fusion".to_string()),
+        Some("agent") | Some("sequential_resume") | Some("route") => Some("route".to_string()),
+        _ => None,
+    }
+}
+
+fn branch_trace_from_event(
+    event_object: &Map<String, Value>,
+) -> Option<VisibleInternalLlmToolBranchTraceFacts> {
+    let event_type = event_object.get("event_type").and_then(Value::as_str)?;
+    let (status, node_id, node_alias) = match event_type {
+        "visible_internal_llm_tool_completed" => (
+            "succeeded",
+            string_field(event_object, &["route_node_id", "node_id"]),
+            string_field(event_object, &["route_node_alias", "node_alias"]),
+        ),
+        "visible_internal_llm_tool_waiting_callback" => (
+            "waiting_callback",
+            string_field(
+                event_object,
+                &["route_node_id", "waiting_node_id", "node_id"],
+            ),
+            string_field(
+                event_object,
+                &["route_node_alias", "waiting_node_alias", "node_alias"],
+            ),
+        ),
+        "visible_internal_llm_tool_failed" => (
+            "failed",
+            string_field(
+                event_object,
+                &["route_node_id", "node_id", "waiting_node_id"],
+            ),
+            string_field(
+                event_object,
+                &["route_node_alias", "node_alias", "waiting_node_alias"],
+            ),
+        ),
+        _ => return None,
+    };
+    if node_id.is_none() && event_type != "visible_internal_llm_tool_failed" {
+        return None;
+    }
+    let provider_route = event_object.get("provider_route").cloned();
+    let route_model = provider_route
+        .as_ref()
+        .and_then(Value::as_object)
+        .and_then(|route| string_field(route, &["model"]));
+    let output = value_field(
+        event_object,
+        &[
+            "content",
+            "output",
+            "output_payload",
+            "result",
+            "response_payload",
+        ],
+    );
+    let output_summary = output
+        .as_ref()
+        .map(summarize_runtime_value)
+        .unwrap_or_else(|| summarize_runtime_value(&Value::Null));
+
+    Some(VisibleInternalLlmToolBranchTraceFacts {
+        event_type: event_type.to_string(),
+        node_id,
+        node_alias,
+        node_type: string_field(event_object, &["node_type"]),
+        status: status.to_string(),
+        route_model,
+        provider_route,
+        output,
+        output_summary,
+        metrics_payload: event_object.get("metrics_payload").cloned(),
+        debug_payload: event_object.get("debug_payload").cloned(),
+        debug_payload_ref: event_object.get("debug_payload_ref").cloned(),
+    })
 }
 
 fn collect_trace_round_facts(
@@ -287,6 +402,10 @@ fn route_trace_from_facts(
     facts: VisibleInternalLlmToolTraceFacts,
     main_resume_output_fallback: Option<&Value>,
 ) -> Option<VisibleInternalLlmToolRouteTrace> {
+    let route_kind = route_trace_kind(&facts);
+    let branch_summaries = branch_summary_payloads(&facts.branch_traces, &route_kind);
+    let branch_traces = branch_detail_payloads(&facts.branch_traces, &route_kind);
+    let branch_count = branch_summaries.len() as i64;
     let route_output = facts
         .tool_result
         .as_ref()
@@ -321,10 +440,21 @@ fn route_trace_from_facts(
     let main_resume = main_resume_output.is_some();
     let status = route_trace_status(&facts, returned_to_main, main_resume);
     let tool_name = facts.tool_name.unwrap_or_else(|| "Tool".to_string());
+    let fan_in = if route_kind == "fusion" {
+        json!({
+            "mode": facts.execution_mode,
+            "branch_count": branch_count,
+            "returned_to_main": returned_to_main,
+            "main_resume": main_resume,
+        })
+    } else {
+        Value::Null
+    };
 
     let summary_payload = json!({
         "kind": VISIBLE_INTERNAL_LLM_TOOL_TRACE_KIND,
         "preview_kind": VISIBLE_INTERNAL_LLM_TOOL_TRACE_KIND,
+        "route_kind": route_kind,
         "tool_call_id": facts.tool_call_id,
         "tool_name": tool_name,
         "status": status,
@@ -341,9 +471,13 @@ fn route_trace_from_facts(
         "main_resume_round_index": facts.main_resume_round_index,
         "route_output_summary": route_output_summary,
         "final_output_summary": final_output_summary,
+        "branch_count": branch_count,
+        "branch_summaries": branch_summaries,
+        "fan_in": fan_in,
     });
     let detail_payload = json!({
         "kind": VISIBLE_INTERNAL_LLM_TOOL_TRACE_KIND,
+        "route_kind": summary_payload["route_kind"],
         "tool_call_id": summary_payload["tool_call_id"],
         "tool_name": summary_payload["tool_name"],
         "status": summary_payload["status"],
@@ -371,6 +505,8 @@ fn route_trace_from_facts(
         "main_resume_output": main_resume_output,
         "final_output": final_output,
         "final_output_summary": summary_payload["final_output_summary"],
+        "branch_traces": branch_traces,
+        "fan_in": summary_payload["fan_in"],
         "callback_requests": facts.waiting_events.iter().map(callback_request_detail).collect::<Vec<_>>(),
         "events": facts.events,
     });
@@ -379,6 +515,67 @@ fn route_trace_from_facts(
         detail_payload,
         summary_payload,
     })
+}
+
+fn route_trace_kind(facts: &VisibleInternalLlmToolTraceFacts) -> String {
+    if facts.route_kind.as_deref() == Some("fusion") || facts.branch_traces.len() > 1 {
+        "fusion".to_string()
+    } else {
+        "route".to_string()
+    }
+}
+
+fn branch_summary_payloads(
+    branch_traces: &[VisibleInternalLlmToolBranchTraceFacts],
+    route_kind: &str,
+) -> Vec<Value> {
+    if route_kind != "fusion" {
+        return Vec::new();
+    }
+
+    branch_traces
+        .iter()
+        .map(|branch| {
+            json!({
+                "event_type": branch.event_type,
+                "node_id": branch.node_id,
+                "node_alias": branch.node_alias,
+                "node_type": branch.node_type,
+                "status": branch.status,
+                "route_model": branch.route_model,
+                "output_summary": branch.output_summary,
+            })
+        })
+        .collect()
+}
+
+fn branch_detail_payloads(
+    branch_traces: &[VisibleInternalLlmToolBranchTraceFacts],
+    route_kind: &str,
+) -> Vec<Value> {
+    if route_kind != "fusion" {
+        return Vec::new();
+    }
+
+    branch_traces
+        .iter()
+        .map(|branch| {
+            json!({
+                "event_type": branch.event_type,
+                "node_id": branch.node_id,
+                "node_alias": branch.node_alias,
+                "node_type": branch.node_type,
+                "status": branch.status,
+                "route_model": branch.route_model,
+                "provider_route": branch.provider_route,
+                "output": branch.output,
+                "output_summary": branch.output_summary,
+                "metrics_payload": branch.metrics_payload,
+                "debug_payload": branch.debug_payload,
+                "debug_payload_ref": branch.debug_payload_ref,
+            })
+        })
+        .collect()
 }
 
 fn main_resume_output_from_node_output(output_payload: &Value) -> Option<Value> {
@@ -841,6 +1038,140 @@ mod tests {
         assert_eq!(
             summary["final_output_summary"]["preview"],
             json!("很好，图片分析出来了！这是一个 1flowbase 的顶部导航栏。")
+        );
+    }
+
+    #[test]
+    fn fusion_trace_projects_panel_branch_summaries_and_fan_in_detail() {
+        let debug_payload = json!({
+            "llm_rounds": [
+                {
+                    "round_index": 0,
+                    "assistant": {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_fusion",
+                                "name": "fusion_review",
+                                "arguments": {
+                                    "topic": "refund policy"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "round_index": 1,
+                    "tool_results": [
+                        {
+                            "role": "tool",
+                            "tool_call_id": "call_fusion",
+                            "name": "fusion_review",
+                            "content": "panel A says strict\npanel B says flexible"
+                        }
+                    ]
+                },
+                {
+                    "round_index": 2,
+                    "assistant": {
+                        "role": "assistant",
+                        "content": "main merged the fusion panel"
+                    }
+                }
+            ],
+            "visible_internal_llm_tool_events": [
+                {
+                    "event_type": "visible_internal_llm_tool_started",
+                    "main_node_id": "node-main-llm",
+                    "target_node_id": "node-panel-a",
+                    "tool_name": "fusion_review",
+                    "tool_call_id": "call_fusion",
+                    "tool_mode": "fusion",
+                    "execution_mode": "bounded_parallel_panel"
+                },
+                {
+                    "event_type": "visible_internal_llm_tool_completed",
+                    "main_node_id": "node-main-llm",
+                    "target_node_id": "node-panel-a",
+                    "tool_name": "fusion_review",
+                    "tool_call_id": "call_fusion",
+                    "tool_mode": "fusion",
+                    "execution_mode": "bounded_parallel_panel",
+                    "node_id": "node-panel-a",
+                    "node_alias": "Risk Panel",
+                    "node_type": "llm",
+                    "provider_route": {
+                        "model": "risk-v1"
+                    },
+                    "content": "panel A says strict",
+                    "debug_payload": {
+                        "llm_rounds": [
+                            {
+                                "round_index": 0,
+                                "assistant": {
+                                    "content": "risk result"
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "event_type": "visible_internal_llm_tool_completed",
+                    "main_node_id": "node-main-llm",
+                    "target_node_id": "node-panel-a",
+                    "tool_name": "fusion_review",
+                    "tool_call_id": "call_fusion",
+                    "tool_mode": "fusion",
+                    "execution_mode": "bounded_parallel_panel",
+                    "node_id": "node-panel-b",
+                    "node_alias": "Support Panel",
+                    "node_type": "llm",
+                    "provider_route": {
+                        "model": "support-v1"
+                    },
+                    "content": "panel B says flexible",
+                    "debug_payload_ref": "artifact-panel-b"
+                }
+            ]
+        });
+
+        let traces = collect_visible_internal_llm_tool_route_traces(&debug_payload);
+
+        assert_eq!(traces.len(), 1);
+        let summary = traces[0].inline_summary_payload();
+        assert_eq!(summary["route_kind"], json!("fusion"));
+        assert_eq!(summary["branch_count"], json!(2));
+        assert_eq!(
+            summary["branch_summaries"][0]["node_id"],
+            json!("node-panel-a")
+        );
+        assert_eq!(
+            summary["branch_summaries"][0]["node_alias"],
+            json!("Risk Panel")
+        );
+        assert_eq!(
+            summary["branch_summaries"][0]["route_model"],
+            json!("risk-v1")
+        );
+        assert_eq!(
+            summary["branch_summaries"][0]["output_summary"]["preview"],
+            json!("panel A says strict")
+        );
+        assert!(!summary.to_string().contains("risk result"));
+
+        let detail = traces[0].detail_payload();
+        assert_eq!(detail["route_kind"], json!("fusion"));
+        assert_eq!(detail["fan_in"]["mode"], json!("bounded_parallel_panel"));
+        assert_eq!(detail["fan_in"]["branch_count"], json!(2));
+        assert_eq!(detail["fan_in"]["returned_to_main"], json!(true));
+        assert_eq!(detail["fan_in"]["main_resume"], json!(true));
+        assert_eq!(
+            detail["branch_traces"][0]["debug_payload"]["llm_rounds"][0]["assistant"]["content"],
+            json!("risk result")
+        );
+        assert_eq!(
+            detail["branch_traces"][1]["debug_payload_ref"],
+            json!("artifact-panel-b")
         );
     }
 }

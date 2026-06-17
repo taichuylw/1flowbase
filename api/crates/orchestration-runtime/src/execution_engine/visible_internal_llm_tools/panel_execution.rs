@@ -145,25 +145,30 @@ where
         active_node_ids.remove(&node.node_id);
 
         match execution {
-            VisibleInternalLlmToolNodeExecution::Completed(output_payload) => {
-                branch_text = visible_internal_llm_tool_output_text(&output_payload);
+            VisibleInternalLlmToolNodeExecution::Completed(node_output) => {
+                branch_text = visible_internal_llm_tool_output_text(&node_output.output_payload);
                 route_events.push(visible_internal_llm_tool_route_event(
                     "visible_internal_llm_tool_completed",
                     main_node_id,
                     tool_call,
                     tool,
                     json!({
+                        "route_node_id": node.node_id,
                         "node_id": node.node_id,
-                        "provider_route": output_payload
+                        "node_alias": node.alias,
+                        "node_type": node.node_type,
+                        "provider_route": node_output.output_payload
                             .get("provider_route")
                             .cloned()
                             .unwrap_or(Value::Null),
+                        "metrics_payload": node_output.metrics_payload.clone(),
+                        "debug_payload": node_output.debug_payload.clone(),
                         "content": branch_text.clone(),
                     }),
                 ));
                 variable_pool.insert(
                     node.node_id.clone(),
-                    project_node_variable_payload(&node, &output_payload)?,
+                    project_node_variable_payload(&node, &node_output.output_payload)?,
                 );
                 activate_downstream_nodes(plan, active_node_ids, &node, None);
             }
@@ -205,7 +210,10 @@ where
                     tool_call,
                     tool,
                     json!({
+                        "route_node_id": node.node_id,
                         "node_id": node.node_id,
+                        "node_alias": node.alias,
+                        "node_type": node.node_type,
                         "error_payload": error_payload,
                     }),
                 ));

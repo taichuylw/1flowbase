@@ -235,8 +235,24 @@ pub(super) enum VisibleInternalLlmToolBranchExecution {
     },
 }
 
+pub(super) struct VisibleInternalLlmToolNodeOutput {
+    pub(super) output_payload: Value,
+    pub(super) metrics_payload: Option<Value>,
+    pub(super) debug_payload: Option<Value>,
+}
+
+impl VisibleInternalLlmToolNodeOutput {
+    pub(super) fn from_output_payload(output_payload: Value) -> Self {
+        Self {
+            output_payload,
+            metrics_payload: None,
+            debug_payload: None,
+        }
+    }
+}
+
 pub(super) enum VisibleInternalLlmToolNodeExecution {
-    Completed(Value),
+    Completed(Box<VisibleInternalLlmToolNodeOutput>),
     Waiting(Box<LlmToolCallbackWait>),
     Failed(Value),
 }

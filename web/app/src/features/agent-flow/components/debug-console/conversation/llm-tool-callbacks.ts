@@ -24,6 +24,7 @@ export interface LlmToolCallback {
 export interface LlmToolRouteTraceSummary {
   detailArtifactRef: string | null;
   rawPayload: Record<string, unknown>;
+  routeKind: string | null;
   status: string | null;
   routeModel: string | null;
   targetNodeId: string | null;
@@ -33,6 +34,19 @@ export interface LlmToolRouteTraceSummary {
   mainResume: boolean;
   routeOutputSummary: Record<string, unknown> | null;
   finalOutputSummary: Record<string, unknown> | null;
+  branchCount: number | null;
+  branchSummaries: LlmToolRouteBranchSummary[];
+  fanIn: Record<string, unknown> | null;
+}
+
+export interface LlmToolRouteBranchSummary {
+  nodeId: string | null;
+  nodeAlias: string | null;
+  nodeType: string | null;
+  status: string | null;
+  routeModel: string | null;
+  outputSummary: Record<string, unknown> | null;
+  rawPayload: Record<string, unknown>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -144,6 +158,7 @@ function readRouteTraceSummary(value: unknown): {
         'detail_artifact_ref'
       ]),
       rawPayload: value,
+      routeKind: firstStringField(value, ['route_kind']),
       status: firstStringField(value, ['status']),
       routeModel: firstStringField(value, ['route_model']),
       targetNodeId: firstStringField(value, ['target_node_id']),
@@ -152,8 +167,27 @@ function readRouteTraceSummary(value: unknown): {
       returnedToMain: optionalBooleanField(value, ['returned_to_main']),
       mainResume: optionalBooleanField(value, ['main_resume']),
       routeOutputSummary: optionalRecordField(value, ['route_output_summary']),
-      finalOutputSummary: optionalRecordField(value, ['final_output_summary'])
+      finalOutputSummary: optionalRecordField(value, ['final_output_summary']),
+      branchCount: optionalNumberField(value, ['branch_count']),
+      branchSummaries: recordArray(value.branch_summaries).map(
+        readRouteBranchSummary
+      ),
+      fanIn: optionalRecordField(value, ['fan_in'])
     }
+  };
+}
+
+function readRouteBranchSummary(
+  value: Record<string, unknown>
+): LlmToolRouteBranchSummary {
+  return {
+    nodeId: firstStringField(value, ['node_id']),
+    nodeAlias: firstStringField(value, ['node_alias']),
+    nodeType: firstStringField(value, ['node_type']),
+    status: firstStringField(value, ['status']),
+    routeModel: firstStringField(value, ['route_model']),
+    outputSummary: optionalRecordField(value, ['output_summary']),
+    rawPayload: value
   };
 }
 
@@ -167,9 +201,7 @@ function readVisibleInternalRouteTraces(
   return recordArray(debugPayload.visible_internal_llm_tool_trace)
     .map(readRouteTraceSummary)
     .filter(
-      (
-        trace
-      ): trace is { id: string; trace: LlmToolRouteTraceSummary } =>
+      (trace): trace is { id: string; trace: LlmToolRouteTraceSummary } =>
         trace !== null
     );
 }
@@ -259,7 +291,8 @@ function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
           'result_context_usage'
         ]),
         duration_ms: optionalNumberField(toolCallback, ['duration_ms']),
-        routeTrace: readRouteTraceSummary(toolCallback.route_trace)?.trace ?? null,
+        routeTrace:
+          readRouteTraceSummary(toolCallback.route_trace)?.trace ?? null,
         detailArtifactRef: firstStringField(toolCallback, [
           'artifact_ref',
           'detail_artifact_ref'

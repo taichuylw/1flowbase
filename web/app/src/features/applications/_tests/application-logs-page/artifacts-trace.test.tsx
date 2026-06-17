@@ -735,6 +735,176 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     );
   }, 20_000);
 
+  test('renders fusion route branch summaries as trace sub nodes', async () => {
+    const detail = sampleRunDetail();
+    const llmNodeRun = detail.node_runs[0]!;
+    detail.stitched_trace = [
+      {
+        source_flow_run: {
+          ...detail.flow_run,
+          id: 'run-prior-fusion',
+          status: 'succeeded',
+          started_at: '2026-04-17T08:59:50Z',
+          finished_at: '2026-04-17T08:59:59Z'
+        },
+        node_runs: [
+          {
+            ...llmNodeRun,
+            id: 'node-run-prior-fusion-llm',
+            flow_run_id: 'run-prior-fusion',
+            output_payload: {
+              text: 'main merged fusion review'
+            },
+            debug_payload: {
+              llm_rounds: [
+                {
+                  round_index: 0,
+                  assistant: {
+                    role: 'assistant',
+                    content: 'need fusion review',
+                    tool_calls: [
+                      {
+                        id: 'call_fusion',
+                        name: 'fusion_review'
+                      }
+                    ]
+                  }
+                },
+                {
+                  round_index: 1,
+                  tool_results: [
+                    {
+                      tool_call_id: 'call_fusion',
+                      name: 'fusion_review',
+                      content: 'panel A says strict\npanel B says flexible'
+                    }
+                  ]
+                },
+                {
+                  round_index: 2,
+                  assistant: {
+                    role: 'assistant',
+                    content: 'main merged fusion review'
+                  }
+                }
+              ],
+              visible_internal_llm_tool_trace: [
+                {
+                  kind: 'visible_internal_llm_tool_trace',
+                  preview_kind: 'visible_internal_llm_tool_trace',
+                  route_kind: 'fusion',
+                  tool_call_id: 'call_fusion',
+                  tool_name: 'fusion_review',
+                  status: 'succeeded',
+                  route_model: 'fusion-main-v1',
+                  target_node_id: 'node-panel-a',
+                  route_node_id: 'node-panel-a',
+                  route_node_alias: 'Fusion fan-in',
+                  returned_to_main: true,
+                  main_resume: true,
+                  branch_count: 2,
+                  branch_summaries: [
+                    {
+                      node_id: 'node-panel-a',
+                      node_alias: 'Risk Panel',
+                      node_type: 'llm',
+                      status: 'succeeded',
+                      route_model: 'risk-v1',
+                      output_summary: {
+                        kind: 'text',
+                        preview: 'panel A says strict',
+                        char_count: 19,
+                        truncated: false
+                      }
+                    },
+                    {
+                      node_id: 'node-panel-b',
+                      node_alias: 'Support Panel',
+                      node_type: 'llm',
+                      status: 'succeeded',
+                      route_model: 'support-v1',
+                      output_summary: {
+                        kind: 'text',
+                        preview: 'panel B says flexible',
+                        char_count: 21,
+                        truncated: false
+                      }
+                    }
+                  ],
+                  fan_in: {
+                    mode: 'bounded_parallel_panel',
+                    branch_count: 2,
+                    returned_to_main: true,
+                    main_resume: true
+                  }
+                }
+              ]
+            },
+            started_at: '2026-04-17T08:59:51Z',
+            finished_at: '2026-04-17T08:59:58Z'
+          }
+        ],
+        callback_tasks: [],
+        events: []
+      }
+    ];
+    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const openLogButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      ),
+      'expected conversation log button'
+    );
+    fireEvent.click(openLogButton);
+
+    const logPanel = await screen.findByRole('complementary', {
+      name: '对话日志'
+    });
+    fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+
+    const llmTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
+    expect(llmTraceNode).toHaveTextContent('工具 1');
+    fireEvent.click(llmTraceNode);
+
+    const toolsNode = within(logPanel).getByRole('button', {
+      name: /工具 1 次工具回调/
+    });
+    fireEvent.click(toolsNode);
+
+    const toolCallbackNode = within(logPanel).getByRole('button', {
+      name: /fusion_review/
+    });
+    expect(toolCallbackNode).toHaveTextContent('fusion');
+    fireEvent.click(toolCallbackNode);
+
+    const routeNode = within(logPanel).getByTestId('debug-llm-route-node');
+    expect(routeNode).toHaveTextContent('Fusion fan-in');
+    expect(routeNode).toHaveTextContent('执行成功');
+    const branchNodes = within(routeNode).getAllByTestId(
+      'debug-llm-route-branch-node'
+    );
+    expect(branchNodes).toHaveLength(2);
+    expect(branchNodes[0]).toHaveTextContent('Risk Panel');
+    expect(branchNodes[0]).toHaveTextContent('risk-v1');
+    expect(branchNodes[1]).toHaveTextContent('Support Panel');
+    expect(branchNodes[1]).toHaveTextContent('support-v1');
+    expect(within(routeNode).getByLabelText('fusion JSON')).toHaveTextContent(
+      'branch_summaries'
+    );
+  }, 20_000);
+
   test('keeps expanded trace tools and loaded tool details across floating window activation', async () => {
     const detail = sampleRunDetail();
     const llmNodeRun = detail.node_runs[0]!;

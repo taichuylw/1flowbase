@@ -647,7 +647,10 @@ where
                     tool_call,
                     tool,
                     json!({
+                        "route_node_id": node.node_id,
                         "node_id": node.node_id,
+                        "node_alias": node.alias,
+                        "node_type": node.node_type,
                         "error_payload": error_payload,
                     }),
                 ));
@@ -658,7 +661,7 @@ where
             }
         };
         let rendered_templates = render_templated_bindings(node, &resolved_inputs);
-        let output_payload = match execute_visible_internal_llm_tool_node(
+        let node_output = match execute_visible_internal_llm_tool_node(
             node,
             &resolved_inputs,
             &rendered_templates,
@@ -669,7 +672,7 @@ where
         )
         .await?
         {
-            VisibleInternalLlmToolNodeExecution::Completed(output_payload) => output_payload,
+            VisibleInternalLlmToolNodeExecution::Completed(output) => output,
             VisibleInternalLlmToolNodeExecution::Waiting(wait) => {
                 let branch_text = format!(
                     "{}{}",
@@ -711,7 +714,10 @@ where
                     tool_call,
                     tool,
                     json!({
+                        "route_node_id": node.node_id,
                         "node_id": node.node_id,
+                        "node_alias": node.alias,
+                        "node_type": node.node_type,
                         "error_payload": error_payload,
                     }),
                 ));
@@ -722,7 +728,7 @@ where
             }
         };
 
-        branch_text = visible_internal_llm_tool_output_text(&output_payload);
+        branch_text = visible_internal_llm_tool_output_text(&node_output.output_payload);
         if node.node_type == "llm" {
             route_events.push(visible_internal_llm_tool_route_event(
                 "visible_internal_llm_tool_completed",
@@ -730,18 +736,23 @@ where
                 tool_call,
                 tool,
                 json!({
+                    "route_node_id": node.node_id,
                     "node_id": node.node_id,
-                    "provider_route": output_payload
+                    "node_alias": node.alias,
+                    "node_type": node.node_type,
+                    "provider_route": node_output.output_payload
                         .get("provider_route")
                         .cloned()
                         .unwrap_or(Value::Null),
+                    "metrics_payload": node_output.metrics_payload.clone(),
+                    "debug_payload": node_output.debug_payload.clone(),
                     "content": branch_text.clone(),
                 }),
             ));
         }
         variable_pool.insert(
             node.node_id.clone(),
-            project_node_variable_payload(node, &output_payload)?,
+            project_node_variable_payload(node, &node_output.output_payload)?,
         );
         if node.node_type == TOOL_RESULT_NODE_TYPE {
             return Ok(VisibleInternalLlmToolBranchExecution::Completed(
@@ -826,9 +837,13 @@ where
                 return Ok(VisibleInternalLlmToolNodeExecution::Waiting(Box::new(wait)));
             }
 
-            Ok(VisibleInternalLlmToolNodeExecution::Completed(
-                execution.output_payload,
-            ))
+            Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
+                VisibleInternalLlmToolNodeOutput {
+                    output_payload: execution.output_payload,
+                    metrics_payload: Some(execution.metrics_payload),
+                    debug_payload: Some(execution.debug_payload),
+                },
+            )))
         }
         "template_transform" | "answer" | TOOL_RESULT_NODE_TYPE => {
             let output_key = first_output_key(node);
@@ -843,9 +858,14 @@ where
                         .cloned()
                         .unwrap_or(Value::Null)
                 });
-            Ok(VisibleInternalLlmToolNodeExecution::Completed(
-                template_output_payload(node, output_key, output_value, variable_pool),
-            ))
+            Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
+                VisibleInternalLlmToolNodeOutput::from_output_payload(template_output_payload(
+                    node,
+                    output_key,
+                    output_value,
+                    variable_pool,
+                )),
+            )))
         }
         "code" => {
             let execution = execute_code_node(node, resolved_inputs, invoker).await?;
@@ -853,9 +873,13 @@ where
                 return Ok(VisibleInternalLlmToolNodeExecution::Failed(error_payload));
             }
 
-            Ok(VisibleInternalLlmToolNodeExecution::Completed(
-                execution.output_payload,
-            ))
+            Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
+                VisibleInternalLlmToolNodeOutput {
+                    output_payload: execution.output_payload,
+                    metrics_payload: None,
+                    debug_payload: Some(execution.debug_payload),
+                },
+            )))
         }
         "http_request" => {
             let execution =
@@ -864,9 +888,9 @@ where
                 return Ok(VisibleInternalLlmToolNodeExecution::Failed(error_payload));
             }
 
-            Ok(VisibleInternalLlmToolNodeExecution::Completed(
-                execution.output_payload,
-            ))
+            Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
+                VisibleInternalLlmToolNodeOutput::from_output_payload(execution.output_payload),
+            )))
         }
         "plugin_node" => {
             let execution =
@@ -876,13 +900,19 @@ where
                 return Ok(VisibleInternalLlmToolNodeExecution::Failed(error_payload));
             }
 
-            Ok(VisibleInternalLlmToolNodeExecution::Completed(
-                execution.output_payload,
-            ))
+            Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
+                VisibleInternalLlmToolNodeOutput {
+                    output_payload: execution.output_payload,
+                    metrics_payload: Some(execution.metrics_payload),
+                    debug_payload: Some(execution.debug_payload),
+                },
+            )))
         }
-        "variable_assigner" => Ok(VisibleInternalLlmToolNodeExecution::Completed(
-            execute_variable_assignment_node(node, resolved_inputs, variable_pool)?,
-        )),
+        "variable_assigner" => Ok(VisibleInternalLlmToolNodeExecution::Completed(Box::new(
+            VisibleInternalLlmToolNodeOutput::from_output_payload(
+                execute_variable_assignment_node(node, resolved_inputs, variable_pool)?,
+            ),
+        ))),
         unsupported => Ok(VisibleInternalLlmToolNodeExecution::Failed(json!({
             "message": format!("visible internal LLM tool branch node type {unsupported} is not supported"),
         }))),
@@ -1080,11 +1110,11 @@ where
             );
             Ok(VisibleInternalLlmToolResume::Waiting(wait))
         }
-        VisibleInternalLlmToolNodeExecution::Completed(output_payload) => {
+        VisibleInternalLlmToolNodeExecution::Completed(node_output) => {
             let branch_text = format!(
                 "{}{}",
                 state.branch_text,
-                visible_internal_llm_tool_output_text(&output_payload)
+                visible_internal_llm_tool_output_text(&node_output.output_payload)
             );
             let tool = VisibleInternalLlmTool {
                 name: state.tool_name.clone(),
@@ -1106,7 +1136,7 @@ where
             };
             variable_pool.insert(
                 node.node_id.clone(),
-                project_node_variable_payload(node, &output_payload)?,
+                project_node_variable_payload(node, &node_output.output_payload)?,
             );
             route_events.push(visible_internal_llm_tool_route_event(
                 "visible_internal_llm_tool_completed",
@@ -1114,11 +1144,16 @@ where
                 &state.tool_call,
                 &tool,
                 json!({
+                    "route_node_id": node.node_id,
                     "node_id": node.node_id,
-                    "provider_route": output_payload
+                    "node_alias": node.alias,
+                    "node_type": node.node_type,
+                    "provider_route": node_output.output_payload
                         .get("provider_route")
                         .cloned()
                         .unwrap_or(Value::Null),
+                    "metrics_payload": node_output.metrics_payload.clone(),
+                    "debug_payload": node_output.debug_payload.clone(),
                     "content": branch_text.clone(),
                 }),
             ));
@@ -1389,7 +1424,10 @@ where
                 &state.tool_call,
                 &tool,
                 json!({
+                    "route_node_id": node.node_id,
                     "node_id": node.node_id,
+                    "node_alias": node.alias,
+                    "node_type": node.node_type,
                     "error_payload": error_payload,
                 }),
             ));
