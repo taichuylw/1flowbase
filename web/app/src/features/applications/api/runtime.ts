@@ -1,5 +1,6 @@
 import {
   completeConsoleCallbackTask,
+  getConsoleApplicationRunConversationLogDetail,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
@@ -7,6 +8,7 @@ import {
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
   getConsoleRuntimeDebugStream,
+  type ConsoleApplicationConversationLogDetail,
   type ConsoleApplicationConversationMessage,
   type ConsoleApplicationConversationMessagesPage,
   type ConsoleApplicationRunMonitoringApiKeyUsage,
@@ -67,6 +69,8 @@ export interface ApplicationRunsPage {
   page_size: number;
 }
 export type ApplicationRunDetail = ConsoleApplicationRunDetail;
+export type ApplicationRunConversationLogDetail =
+  ConsoleApplicationConversationLogDetail;
 export type ApplicationRunMonitoringBucket =
   ConsoleApplicationRunMonitoringBucket;
 export type ApplicationRunMonitoringReport =
@@ -211,6 +215,19 @@ export const applicationRunDetailQueryKey = (
   runId: string
 ) => ['applications', applicationId, 'runtime', 'runs', runId] as const;
 
+export const applicationRunConversationLogDetailQueryKey = (
+  applicationId: string,
+  runId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'conversation-log'
+  ] as const;
+
 export const applicationConversationMessagesQueryKey = (
   applicationId: string,
   input: {
@@ -354,6 +371,17 @@ export function fetchApplicationRunDetail(
   runId: string
 ) {
   return getConsoleApplicationRunDetail(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunConversationLogDetail(
+  applicationId: string,
+  runId: string
+) {
+  return getConsoleApplicationRunConversationLogDetail(
     applicationId,
     runId,
     getApplicationsApiBaseUrl()

@@ -1186,6 +1186,22 @@ pub fn enrich_application_run_detail_visible_internal_llm_route_traces(
     detail
 }
 
+pub fn enrich_application_run_detail_visible_internal_llm_route_trace_summaries(
+    mut detail: domain::ApplicationRunDetail,
+    runtime_events: &[domain::RuntimeEventRecord],
+) -> domain::ApplicationRunDetail {
+    enrich_node_runs_visible_internal_llm_route_trace_summaries(&mut detail.node_runs, runtime_events);
+
+    for trace in &mut detail.stitched_trace {
+        enrich_node_runs_visible_internal_llm_route_trace_summaries(
+            &mut trace.node_runs,
+            &trace.runtime_events,
+        );
+    }
+
+    detail
+}
+
 pub fn enrich_node_last_run_visible_internal_llm_route_traces(
     mut last_run: domain::NodeLastRun,
     runtime_events: &[domain::RuntimeEventRecord],
@@ -1236,6 +1252,28 @@ fn enrich_node_runs_visible_internal_llm_route_traces(
                 Some(&node_run.output_payload),
                 &branch_node_run_payloads,
             );
+    }
+}
+
+fn enrich_node_runs_visible_internal_llm_route_trace_summaries(
+    node_runs: &mut [domain::NodeRunRecord],
+    runtime_events: &[domain::RuntimeEventRecord],
+) {
+    let runtime_events_by_node_run_id =
+        visible_internal_llm_tool_runtime_events_by_node_run_id(node_runs, runtime_events);
+    let branch_node_run_payloads = visible_internal_llm_tool_branch_node_run_payloads(node_runs);
+
+    for node_run in node_runs {
+        let runtime_events = runtime_events_by_node_run_id
+            .get(&node_run.id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        node_run.debug_payload = compact_visible_internal_llm_tool_debug_payload(
+            node_run.debug_payload.clone(),
+            runtime_events,
+            Some(&node_run.output_payload),
+            &branch_node_run_payloads,
+        );
     }
 }
 
@@ -1544,4 +1582,39 @@ fn with_inline_visible_internal_llm_tool_trace_index_with_branch_node_runs(
     }
 
     payload
+}
+
+fn compact_visible_internal_llm_tool_debug_payload(
+    payload: Value,
+    runtime_events: &[Value],
+    main_resume_output_fallback: Option<&Value>,
+    branch_node_run_payloads: &[VisibleInternalLlmToolBranchNodeRunPayload],
+) -> Value {
+    let mut compact_payload = with_synthetic_visible_internal_llm_tool_rounds(payload, runtime_events);
+    let analysis_payload =
+        with_runtime_visible_internal_llm_tool_events(compact_payload.clone(), runtime_events);
+    let traces = collect_visible_internal_llm_tool_route_traces_with_branch_node_runs(
+        &analysis_payload,
+        main_resume_output_fallback,
+        branch_node_run_payloads,
+    );
+
+    let Some(object) = compact_payload.as_object_mut() else {
+        return compact_payload;
+    };
+    object.remove("visible_internal_llm_tool_events");
+
+    if !traces.is_empty() {
+        object.insert(
+            "visible_internal_llm_tool_trace".to_string(),
+            Value::Array(
+                traces
+                    .into_iter()
+                    .map(|trace| trace.inline_summary_payload())
+                    .collect(),
+            ),
+        );
+    }
+
+    compact_payload
 }

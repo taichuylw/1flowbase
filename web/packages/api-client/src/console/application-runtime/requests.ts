@@ -3,6 +3,7 @@ import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import { ApiClientError } from '../../errors';
 import { apiFetch } from '../../transport';
 import type {
+  ConsoleApplicationConversationLogDetail,
   ConsoleApplicationRunDetail,
   ConsoleApplicationRunMonitoringReport,
   ConsoleApplicationRunsPage,
@@ -178,6 +179,17 @@ export function getConsoleApplicationRunDetail(
 ) {
   return apiFetch<ConsoleApplicationRunDetail>({
     path: `/api/console/applications/${applicationId}/logs/runs/${runId}`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunConversationLogDetail(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationConversationLogDetail>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/conversation-log`,
     baseUrl
   });
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
   getConsoleApplicationRunConversationMessages,
+  getConsoleApplicationRunConversationLogDetail,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
@@ -592,6 +593,65 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         tool_callback_count: 0
       },
       detail: { kind: 'agent_flow' },
+      flow_run: { id: 'run-1' }
+    });
+  });
+
+  test('reads lightweight conversation log detail responses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            run: {
+              id: 'run-1',
+              application_id: 'app-1',
+              application_type: 'agent_flow',
+              run_object_kind: 'application_run',
+              run_kind: 'published_api_run',
+              status: 'succeeded',
+              title: '退款总结',
+              source: 'public_api',
+              subject: { kind: 'agent_flow' },
+              actor: { kind: 'user' },
+              correlation: {},
+              started_at: '2026-05-08T00:00:00Z',
+              finished_at: '2026-05-08T00:00:01Z',
+              created_at: '2026-05-08T00:00:00Z',
+              updated_at: '2026-05-08T00:00:01Z'
+            },
+            statistics: {
+              total_tokens: null,
+              input_tokens: null,
+              output_tokens: null,
+              input_cache_hit_tokens: null,
+              unique_node_count: 0,
+              tool_callback_count: 0
+            },
+            flow_run: { id: 'run-1' },
+            node_runs: [],
+            stitched_trace: []
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunConversationLogDetail(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      run: {
+        application_type: 'agent_flow',
+        run_object_kind: 'application_run'
+      },
+      statistics: {
+        total_tokens: null,
+        unique_node_count: 0,
+        tool_callback_count: 0
+      },
       flow_run: { id: 'run-1' }
     });
   });

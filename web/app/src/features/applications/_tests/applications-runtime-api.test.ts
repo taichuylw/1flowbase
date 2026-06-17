@@ -2,6 +2,36 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@1flowbase/api-client', () => ({
   completeConsoleCallbackTask: vi.fn().mockResolvedValue(undefined),
+  getConsoleApplicationRunConversationLogDetail: vi.fn().mockResolvedValue({
+    run: {
+      id: 'run-1',
+      application_id: 'app-1',
+      application_type: 'agent_flow',
+      run_object_kind: 'application_run',
+      run_kind: 'published_api_run',
+      status: 'succeeded',
+      title: '退款总结',
+      source: 'public_api',
+      subject: { kind: 'agent_flow' },
+      actor: { kind: 'user' },
+      correlation: {},
+      started_at: '2026-05-08T00:00:00Z',
+      finished_at: '2026-05-08T00:00:01Z',
+      created_at: '2026-05-08T00:00:00Z',
+      updated_at: '2026-05-08T00:00:01Z'
+    },
+    statistics: {
+      total_tokens: null,
+      input_tokens: null,
+      output_tokens: null,
+      input_cache_hit_tokens: null,
+      unique_node_count: 0,
+      tool_callback_count: 0
+    },
+    flow_run: { id: 'run-1' },
+    node_runs: [],
+    stitched_trace: []
+  }),
   getConsoleApplicationRunDetail: vi.fn().mockResolvedValue({
     flow_run: { id: 'run-1' },
     node_runs: [],
@@ -182,6 +212,7 @@ vi.mock('@1flowbase/api-client', () => ({
 import {
   completeConsoleCallbackTask,
   fetchConsoleRuntimeModelRecords,
+  getConsoleApplicationRunConversationLogDetail,
   getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
@@ -191,6 +222,7 @@ import {
 } from '@1flowbase/api-client';
 
 import {
+  applicationRunConversationLogDetailQueryKey,
   applicationRunDetailQueryKey,
   applicationRunMonitoringReportQueryKey,
   applicationRuntimeActivityQueryKey,
@@ -198,6 +230,7 @@ import {
   applicationRuntimeDebugStreamQueryKey,
   completeCallbackTask,
   fetchApplicationConversationMessages,
+  fetchApplicationRunConversationLogDetail,
   fetchApplicationRunDetail,
   fetchApplicationRunMonitoringReport,
   fetchApplicationRuntimeActivity,
@@ -245,6 +278,14 @@ describe('applications runtime api', () => {
       'runs',
       'run-1'
     ]);
+    expect(applicationRunConversationLogDetailQueryKey('app-1', 'run-1')).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'conversation-log'
+    ]);
     expect(applicationRuntimeDebugStreamQueryKey('app-1', 'run-1')).toEqual([
       'applications',
       'app-1',
@@ -274,6 +315,7 @@ describe('applications runtime api', () => {
   test('passes the resolved base url to runtime read requests', async () => {
     await fetchApplicationRuns('app-1', { cacheMode: 'refresh' });
     await fetchApplicationRunDetail('app-1', 'run-1');
+    await fetchApplicationRunConversationLogDetail('app-1', 'run-1');
     await fetchApplicationRunMonitoringReport('app-1', {
       timeRangeDays: 28,
       bucket: 'week'
@@ -295,6 +337,11 @@ describe('applications runtime api', () => {
     );
     expect(getConsoleApplicationRuns).not.toHaveBeenCalled();
     expect(getConsoleApplicationRunDetail).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunConversationLogDetail).toHaveBeenCalledWith(
       'app-1',
       'run-1',
       'http://127.0.0.1:7800'
