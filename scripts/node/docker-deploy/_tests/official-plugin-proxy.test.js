@@ -79,6 +79,106 @@ test('docker deploy shell script can prefill official plugin GitHub proxy URL', 
   );
 });
 
+test('docker deploy shell script adds default official plugin signature policy to old env files', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
+  const tempBin = path.join(tempRoot, 'bin');
+  const dockerDir = path.join(tempRoot, 'docker');
+  fs.mkdirSync(tempBin);
+  fs.mkdirSync(dockerDir);
+  fs.writeFileSync(
+    path.join(dockerDir, '.env.example'),
+    [
+      'POSTGRES_PASSWORD=example-password',
+      'API_PROVIDER_SECRET_MASTER_KEY=example-secret',
+      'API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=',
+      '',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(dockerDir, '.env'),
+    [
+      'POSTGRES_PASSWORD=old-password',
+      'API_PROVIDER_SECRET_MASTER_KEY=old-secret',
+      'API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=',
+      '',
+    ].join('\n'),
+  );
+  makeExecutable(
+    path.join(tempBin, 'docker'),
+    '#!/usr/bin/env sh\nif [ "$1 $2" = "compose version" ]; then exit 0; fi\nexit 0\n',
+  );
+
+  const result = spawnSync(
+    'sh',
+    [
+      path.join(repoRoot, 'scripts', 'shell', 'docker-deploy.sh'),
+      '--non-interactive',
+      '--no-pull',
+      '--no-start',
+    ],
+    {
+      cwd: tempRoot,
+      env: {
+        ...process.env,
+        PATH: `${tempBin}${path.delimiter}${process.env.PATH || ''}`,
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  const envFile = fs.readFileSync(path.join(dockerDir, '.env'), 'utf8');
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Added API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true to docker\/.env/u);
+  assert.match(envFile, /^API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true$/mu);
+});
+
+test('docker deploy shell script can prefill official plugin signature policy', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
+  const tempBin = path.join(tempRoot, 'bin');
+  const dockerDir = path.join(tempRoot, 'docker');
+  fs.mkdirSync(tempBin);
+  fs.mkdirSync(dockerDir);
+  fs.writeFileSync(
+    path.join(dockerDir, '.env.example'),
+    [
+      'POSTGRES_PASSWORD=example-password',
+      'API_PROVIDER_SECRET_MASTER_KEY=example-secret',
+      'API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=',
+      'API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true',
+      '',
+    ].join('\n'),
+  );
+  makeExecutable(
+    path.join(tempBin, 'docker'),
+    '#!/usr/bin/env sh\nif [ "$1 $2" = "compose version" ]; then exit 0; fi\nexit 0\n',
+  );
+
+  const result = spawnSync(
+    'sh',
+    [
+      path.join(repoRoot, 'scripts', 'shell', 'docker-deploy.sh'),
+      '--non-interactive',
+      '--no-pull',
+      '--no-start',
+      '--official-plugin-signature-required',
+      'false',
+    ],
+    {
+      cwd: tempRoot,
+      env: {
+        ...process.env,
+        PATH: `${tempBin}${path.delimiter}${process.env.PATH || ''}`,
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  const envFile = fs.readFileSync(path.join(dockerDir, '.env'), 'utf8');
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Updated API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED in docker\/.env/u);
+  assert.match(envFile, /^API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=false$/mu);
+});
+
 test('docker deploy shell script generates provider secret when env example keeps placeholder', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
   const tempBin = path.join(tempRoot, 'bin');
@@ -363,6 +463,8 @@ test('docker compose and env example expose an empty official plugin GitHub prox
   );
   assert.doesNotMatch(compose, /^\s+# API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:/mu);
   assert.match(envExample, /^API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=$/mu);
+  assert.match(compose, /^\s+API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED: \$\{API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED:-true\}$/mu);
+  assert.match(envExample, /^API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true$/mu);
 });
 
 test('docker deploy scripts document the CN accelerator prompt and default proxy URL', () => {
@@ -373,6 +475,7 @@ test('docker deploy scripts document the CN accelerator prompt and default proxy
     assert.match(script, /Use CN GitHub plugin download accelerator\?/u);
     assert.match(script, /https:\/\/gh-proxy\.com\//u);
     assert.match(script, /API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL/u);
+    assert.match(script, /API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED/u);
     assert.match(script, /DOCKER_DEFAULT_PLATFORM/u);
     assert.match(script, /linux\/amd64/u);
     assert.match(script, /linux\/arm64/u);
@@ -388,8 +491,11 @@ test('docker deploy scripts document the CN accelerator prompt and default proxy
 
   assert.match(shellScript, /openssl rand -hex 32/u);
   assert.match(shellScript, /--plugin-github-proxy-url VALUE/u);
+  assert.match(shellScript, /--official-plugin-signature-required VALUE/u);
+  assert.match(shellScript, /FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED/u);
   assert.match(powershellScript, /RandomNumberGenerator/u);
   assert.match(powershellScript, /\$PluginGithubProxyUrl/u);
+  assert.match(powershellScript, /\$OfficialPluginSignatureRequired/u);
 });
 
 test('container image workflow publishes linux amd64 and arm64 manifests', () => {

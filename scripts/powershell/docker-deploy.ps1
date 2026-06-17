@@ -5,6 +5,7 @@ param(
   [string]$ProviderSecret = $env:FLOWBASE_PROVIDER_SECRET,
   [string]$WebPort = $env:FLOWBASE_WEB_PORT,
   [string]$PluginGithubProxyUrl = $env:FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL,
+  [string]$OfficialPluginSignatureRequired = $env:FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED,
   [switch]$Pull,
   [switch]$NoPull,
   [switch]$Start,
@@ -43,6 +44,9 @@ if ($NoStart -or $PrepareOnly -or $env:FLOWBASE_START_CONTAINERS -eq "0" -or $en
 }
 if (-not $PluginGithubProxyUrl -and $env:API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL) {
   $PluginGithubProxyUrl = $env:API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL
+}
+if (-not $OfficialPluginSignatureRequired -and $env:API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED) {
+  $OfficialPluginSignatureRequired = $env:API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED
 }
 
 function Fail([string]$Message) {
@@ -120,6 +124,14 @@ function Ensure-ProviderSecretMasterKey() {
   }
 }
 
+function Ensure-OfficialPluginSignatureRequired() {
+  $CurrentValue = Read-EnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" ".\docker\.env"
+  if (-not $CurrentValue) {
+    Set-EnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" "true" ".\docker\.env"
+    Write-Host "Added API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true to docker/.env."
+  }
+}
+
 function Format-EnvDisplayValue([string]$Key, [string]$Value) {
   if (-not $Value) {
     return "<empty>"
@@ -146,7 +158,8 @@ function Show-EnvSummary([string]$Path) {
       "BOOTSTRAP_ROOT_ACCOUNT",
       "BOOTSTRAP_ROOT_PASSWORD",
       "API_PROVIDER_SECRET_MASTER_KEY",
-      "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL"
+      "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL",
+      "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED"
     )) {
     $Value = Read-EnvValue $Key $Path
     Write-Host "  $Key=$(Format-EnvDisplayValue $Key $Value)"
@@ -178,6 +191,16 @@ function Convert-ToYesNo([string]$Value) {
     return $true
   }
   return $false
+}
+
+function Convert-ToTrueFalseEnvValue([string]$Name, [string]$Value) {
+  if ($Value -match "^(y|yes|true|1)$") {
+    return "true"
+  }
+  if ($Value -match "^(n|no|false|0)$") {
+    return "false"
+  }
+  Fail "Invalid value for ${Name}: $Value. Use true or false."
 }
 
 function Invoke-NativeQuiet([scriptblock]$Command) {
@@ -216,6 +239,26 @@ function Prompt-OfficialPluginGithubProxyUrl() {
   } else {
     Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" "" ".\docker\.env"
     Write-Host "Disabled API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
+  }
+}
+
+function Prompt-TrueFalseEnvValue([string]$Key, [string]$Label) {
+  $CurrentValue = Read-EnvValue $Key ".\docker\.env"
+  if ($CurrentValue) {
+    $InputValue = Read-Host "$Label [$CurrentValue]"
+  } else {
+    $InputValue = Read-Host "$Label"
+  }
+
+  if ($InputValue) {
+    Set-EnvValue $Key (Convert-ToTrueFalseEnvValue $Key $InputValue) ".\docker\.env"
+    Write-Host "Updated $Key in docker/.env."
+  } else {
+    if ($CurrentValue) {
+      Write-Host "Keeping ${Key}: $CurrentValue"
+    } else {
+      Write-Host "Keeping ${Key}: empty"
+    }
   }
 }
 
@@ -453,9 +496,11 @@ if (Test-Path ".\docker\.env") {
 if (-not (Test-Path ".\docker\.env")) {
   Copy-Item ".\docker\.env.example" ".\docker\.env"
   Write-Host "Created docker/.env from docker/.env.example."
+  Ensure-OfficialPluginSignatureRequired
   $PromptConfigValues = $true
 } else {
   Write-Host "Using existing docker/.env."
+  Ensure-OfficialPluginSignatureRequired
   if ($ShouldPrompt) {
     Show-EnvSummary ".\docker\.env"
     $UpdateEnv = Prompt-YesNo "Update current docker/.env configuration?" $false
@@ -491,6 +536,11 @@ if ($PluginGithubProxyUrl) {
   Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" $PluginGithubProxyUrl ".\docker\.env"
   Write-Host "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
 }
+if ($OfficialPluginSignatureRequired) {
+  $OfficialPluginSignatureRequired = Convert-ToTrueFalseEnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" $OfficialPluginSignatureRequired
+  Set-EnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" $OfficialPluginSignatureRequired ".\docker\.env"
+  Write-Host "Updated API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED in docker/.env."
+}
 
 if ($ShouldPrompt -and $PromptConfigValues) {
   Write-Host "Configure docker/.env. Press Enter to keep the value shown in brackets."
@@ -500,6 +550,7 @@ if ($ShouldPrompt -and $PromptConfigValues) {
   Prompt-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" "API provider secret master key"
   Prompt-EnvValue "WEB_PORT" "Web port"
   Prompt-OfficialPluginGithubProxyUrl
+  Prompt-TrueFalseEnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" "Require official plugin signatures (true/false)"
 }
 
 Ensure-ProviderSecretMasterKey

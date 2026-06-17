@@ -419,4 +419,4 @@ docker compose pull
 docker compose up -d
 ```
 
-非交互环境可以使用 `--db-password`、`--root-account`、`--root-password`、`--provider-secret`、`--web-port`、`--plugin-github-proxy-url`、`--pull`、`--start`、`--no-pull`、`--no-start` 和 `--non-interactive` 控制行为。也可以用 `FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL` 预填官方插件 GitHub raw 下载代理。
+非交互环境可以使用 `--db-password`、`--root-account`、`--root-password`、`--provider-secret`、`--web-port`、`--plugin-github-proxy-url`、`--official-plugin-signature-required`、`--pull`、`--start`、`--no-pull`、`--no-start` 和 `--non-interactive` 控制行为。也可以用 `FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL` 预填官方插件 GitHub raw 下载代理，用 `FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=false` 显式关闭官方插件签名强制校验。

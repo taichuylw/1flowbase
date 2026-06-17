@@ -12,6 +12,7 @@ ROOT_PASSWORD="${FLOWBASE_ROOT_PASSWORD:-}"
 PROVIDER_SECRET="${FLOWBASE_PROVIDER_SECRET:-}"
 WEB_PORT="${FLOWBASE_WEB_PORT:-}"
 PLUGIN_GITHUB_PROXY_URL="${FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-${API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-}}"
+OFFICIAL_PLUGIN_SIGNATURE_REQUIRED="${FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED:-${API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED:-}}"
 PULL_IMAGES="${FLOWBASE_PULL_IMAGES:-}"
 START_CONTAINERS="${FLOWBASE_START_CONTAINERS:-}"
 INTERACTIVE=1
@@ -86,7 +87,8 @@ print_env_summary() {
     BOOTSTRAP_ROOT_ACCOUNT \
     BOOTSTRAP_ROOT_PASSWORD \
     API_PROVIDER_SECRET_MASTER_KEY \
-    API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL
+    API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL \
+    API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED
   do
     value="$(read_env_value "$key" "$file")"
     echo "  ${key}=$(display_env_value "$key" "$value")"
@@ -97,6 +99,22 @@ require_value() {
   option="$1"
   [ -n "${2-}" ] || fail "Missing value for ${option}."
   printf '%s\n' "$2"
+}
+
+normalize_true_false_value() {
+  option="$1"
+  value="$2"
+  case "$value" in
+    true|TRUE|True|1|yes|YES|Yes|y|Y)
+      printf '%s\n' "true"
+      ;;
+    false|FALSE|False|0|no|NO|No|n|N)
+      printf '%s\n' "false"
+      ;;
+    *)
+      fail "Invalid value for ${option}: ${value}. Use true or false."
+      ;;
+  esac
 }
 
 provider_secret_master_key_is_placeholder() {
@@ -135,6 +153,14 @@ ensure_provider_secret_master_key() {
   fi
 }
 
+ensure_official_plugin_signature_required() {
+  current_value="$(read_env_value API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED ./docker/.env)"
+  if [ -z "$current_value" ]; then
+    set_env_value API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED true ./docker/.env
+    echo "Added API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true to docker/.env."
+  fi
+}
+
 read_from_tty() {
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
     IFS= read -r value < /dev/tty || value=""
@@ -158,6 +184,27 @@ prompt_env_value() {
   input="$(read_from_tty)"
   if [ -n "$input" ]; then
     set_env_value "$key" "$input" ./docker/.env
+    echo "Updated ${key} in docker/.env."
+  else
+    echo "Keeping ${key}: ${current_value:-empty}"
+  fi
+}
+
+prompt_true_false_env_value() {
+  key="$1"
+  label="$2"
+  current_value="$(read_env_value "$key" ./docker/.env)"
+
+  if [ -n "$current_value" ]; then
+    printf '%s [%s]: ' "$label" "$current_value" > /dev/tty 2>/dev/null || true
+  else
+    printf '%s: ' "$label" > /dev/tty 2>/dev/null || true
+  fi
+
+  input="$(read_from_tty)"
+  if [ -n "$input" ]; then
+    normalized_value="$(normalize_true_false_value "$key" "$input")"
+    set_env_value "$key" "$normalized_value" ./docker/.env
     echo "Updated ${key} in docker/.env."
   else
     echo "Keeping ${key}: ${current_value:-empty}"
@@ -444,6 +491,8 @@ Options:
   --web-port VALUE          Pre-fill WEB_PORT before the interactive prompt.
   --plugin-github-proxy-url VALUE
                             Pre-fill API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL before the interactive prompt.
+  --official-plugin-signature-required VALUE
+                            Pre-fill API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED as true or false.
   --pull                    Pull images without asking.
   --no-pull                 Do not pull images without asking.
   --start                   Start containers without asking.
@@ -458,6 +507,7 @@ Environment variables with the same effect:
   FLOWBASE_PROVIDER_SECRET
   FLOWBASE_WEB_PORT
   FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL
+  FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED
   FLOWBASE_PULL_IMAGES=1
   FLOWBASE_START_CONTAINERS=1
   FLOWBASE_NON_INTERACTIVE=1
@@ -513,6 +563,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --plugin-github-proxy-url=*)
       PLUGIN_GITHUB_PROXY_URL="${1#*=}"
+      shift
+      ;;
+    --official-plugin-signature-required)
+      OFFICIAL_PLUGIN_SIGNATURE_REQUIRED="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --official-plugin-signature-required=*)
+      OFFICIAL_PLUGIN_SIGNATURE_REQUIRED="${1#*=}"
       shift
       ;;
     --pull)
@@ -592,9 +650,11 @@ fi
 if [ ! -f ./docker/.env ]; then
   cp ./docker/.env.example ./docker/.env
   echo "Created docker/.env from docker/.env.example."
+  ensure_official_plugin_signature_required
   PROMPT_CONFIG_VALUES=1
 else
   echo "Using existing docker/.env."
+  ensure_official_plugin_signature_required
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
     print_env_summary ./docker/.env
     UPDATE_ENV="$(prompt_yes_no "Update current docker/.env configuration?" "no")"
@@ -630,6 +690,11 @@ if [ -n "$PLUGIN_GITHUB_PROXY_URL" ]; then
   set_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL "$PLUGIN_GITHUB_PROXY_URL" ./docker/.env
   echo "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
 fi
+if [ -n "$OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" ]; then
+  OFFICIAL_PLUGIN_SIGNATURE_REQUIRED="$(normalize_true_false_value API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED "$OFFICIAL_PLUGIN_SIGNATURE_REQUIRED")"
+  set_env_value API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED "$OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" ./docker/.env
+  echo "Updated API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED in docker/.env."
+fi
 
 if [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   echo "Configure docker/.env. Press Enter to keep the value shown in brackets."
@@ -639,6 +704,7 @@ if [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tt
   prompt_env_value API_PROVIDER_SECRET_MASTER_KEY "API provider secret master key"
   prompt_env_value WEB_PORT "Web port"
   prompt_official_plugin_github_proxy_url
+  prompt_true_false_env_value API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED "Require official plugin signatures (true/false)"
 elif [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ]; then
   echo "No interactive terminal was found. Keeping docker/.env values."
 fi
