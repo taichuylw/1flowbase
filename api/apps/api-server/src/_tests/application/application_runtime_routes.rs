@@ -613,7 +613,7 @@ async fn wait_for_run_detail(
             .oneshot(
                 Request::builder()
                     .uri(format!(
-                        "/api/console/applications/{application_id}/logs/runs/{run_id}"
+                        "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree"
                     ))
                     .header("cookie", cookie)
                     .body(Body::empty())

@@ -225,27 +225,136 @@ pub async fn list_application_run_conversation_messages(
     Ok(Json(ApiSuccess::new(fallback_page)))
 }
 
+async fn load_application_run_detail_for_trace_tree(
+    state: Arc<ApiState>,
+    application_id: Uuid,
+    flow_run_id: Uuid,
+) -> Result<domain::ApplicationRunDetail, ApiError> {
+    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+        &state.store,
+        application_id,
+        flow_run_id,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+    let runtime_events = <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
+        &state.store,
+        flow_run_id,
+        0,
+    )
+    .await?;
+
+    Ok(enrich_application_run_detail_visible_internal_llm_route_traces(
+        detail,
+        &runtime_events,
+    ))
+}
+
 #[utoipa::path(
     get,
-    path = "/api/console/applications/{id}/logs/runs/{run_id}",
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree",
     params(
         ("id" = String, Path, description = "Application id"),
         ("run_id" = String, Path, description = "Flow run id")
     ),
     responses(
-        (status = 200, body = ApplicationRunDetailResponse),
+        (status = 200, body = ApplicationRunTraceTreeResponse),
         (status = 401, body = crate::error_response::ErrorBody),
         (status = 403, body = crate::error_response::ErrorBody),
         (status = 404, body = crate::error_response::ErrorBody)
     )
 )]
-pub async fn get_application_run_detail(
+pub async fn get_application_run_trace_tree(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path((id, run_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
+) -> Result<Json<ApiSuccess<ApplicationRunTraceTreeResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
+    let detail = load_application_run_detail_for_trace_tree(state, id, run_id).await?;
+    let response = to_application_run_trace_tree_response(&application, detail);
+
+    Ok(Json(ApiSuccess::new(response)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("parent_trace_node_id" = String, Query, description = "Trace node id to expand")
+    ),
+    responses(
+        (status = 200, body = ApplicationRunTraceNodeChildrenResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_run_trace_node_children(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+    Query(query): Query<ApplicationRunTraceNodeChildrenQuery>,
+) -> Result<Json<ApiSuccess<ApplicationRunTraceNodeChildrenResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    let detail = load_application_run_detail_for_trace_tree(state, id, run_id).await?;
+    let response = trace_node_children_response(detail, &query.parent_trace_node_id)?;
+
+    Ok(Json(ApiSuccess::new(response)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/content",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("trace_node_id" = String, Path, description = "Trace node id to load")
+    ),
+    responses(
+        (status = 200, body = ApplicationRunTraceNodeContentResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_run_trace_node_content(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id, trace_node_id)): Path<(Uuid, Uuid, String)>,
+) -> Result<Json<ApiSuccess<ApplicationRunTraceNodeContentResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    let detail = load_application_run_detail_for_trace_tree(state, id, run_id).await?;
+    let response = trace_node_content_response(detail, &trace_node_id)?;
+
+    Ok(Json(ApiSuccess::new(response)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/resume-timeline",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id")
+    ),
+    responses(
+        (status = 200, body = ApplicationRunResumeTimelineResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_run_resume_timeline(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiSuccess<ApplicationRunResumeTimelineResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
     let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
         &state.store,
         id,
@@ -253,17 +362,34 @@ pub async fn get_application_run_detail(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
-    let runtime_events = <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
-        &state.store,
-        run_id,
-        0,
-    )
-    .await?;
-    let detail =
-        enrich_application_run_detail_visible_internal_llm_route_traces(detail, &runtime_events);
-    let response = to_application_run_detail_response(&application, detail);
+    let events = detail
+        .events
+        .into_iter()
+        .filter(|event| {
+            matches!(
+                event.event_type.as_str(),
+                "public_run_resume_requested"
+                    | "public_run_resume_succeeded"
+                    | "public_run_resume_failed"
+                    | "public_run_resume_cancelled"
+                    | "flow_run_resumed"
+            )
+        })
+        .map(to_run_event_response)
+        .collect();
+    let callback_tasks = detail
+        .callback_tasks
+        .into_iter()
+        .map(to_callback_task_response)
+        .collect();
 
-    Ok(Json(ApiSuccess::new(response)))
+    Ok(Json(ApiSuccess::new(
+        ApplicationRunResumeTimelineResponse {
+            flow_run: to_flow_run_response(detail.flow_run),
+            callback_tasks,
+            events,
+        },
+    )))
 }
 
 #[utoipa::path(

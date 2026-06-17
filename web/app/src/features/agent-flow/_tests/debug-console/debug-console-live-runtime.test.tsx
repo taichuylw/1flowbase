@@ -202,8 +202,8 @@ describe('debug console live runtime', () => {
     const queryClient = createQueryClient();
     const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
     vi.spyOn(runtimeApi, 'startFlowDebugRun').mockResolvedValue(createRunningRunDetail());
-    const fetchApplicationRunDetailSpy = vi
-      .spyOn(runtimeApi, 'fetchApplicationRunDetail')
+    const fetchApplicationRunDebugSnapshotSpy = vi
+      .spyOn(runtimeApi, 'fetchApplicationRunDebugSnapshot')
       .mockResolvedValue(createSucceededRunDetail());
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
@@ -227,7 +227,7 @@ describe('debug console live runtime', () => {
       await vi.advanceTimersByTimeAsync(250);
     });
 
-    expect(fetchApplicationRunDetailSpy).toHaveBeenCalledWith(
+    expect(fetchApplicationRunDebugSnapshotSpy).toHaveBeenCalledWith(
       'app-1',
       'flow-run-live'
     );
@@ -239,9 +239,9 @@ describe('debug console live runtime', () => {
   test('sends cancel request when stopping a live run and updates session to cancelled', async () => {
     const queryClient = createQueryClient();
     vi.spyOn(runtimeApi, 'startFlowDebugRun').mockResolvedValue(createRunningRunDetail());
-    const fetchApplicationRunDetailSpy = vi.spyOn(
+    const fetchApplicationRunDebugSnapshotSpy = vi.spyOn(
       runtimeApi,
-      'fetchApplicationRunDetail'
+      'fetchApplicationRunDebugSnapshot'
     );
     const cancelFlowDebugRunSpy = vi
       .spyOn(runtimeApi, 'cancelFlowDebugRun')
@@ -277,7 +277,7 @@ describe('debug console live runtime', () => {
       await vi.advanceTimersByTimeAsync(250);
     });
 
-    expect(fetchApplicationRunDetailSpy).not.toHaveBeenCalled();
+    expect(fetchApplicationRunDebugSnapshotSpy).not.toHaveBeenCalled();
     expect(result.current.messages.at(-1)?.status).toBe('cancelled');
   });
 

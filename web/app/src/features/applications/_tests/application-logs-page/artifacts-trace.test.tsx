@@ -30,8 +30,57 @@ const runtimeApi = vi.hoisted(() => ({
       input?.sortBy ?? 'started_at',
       input?.sortOrder ?? 'desc'
     ] as const,
-  applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
-    ['applications', applicationId, 'runtime', 'runs', runId] as const,
+  applicationRunTraceTreeQueryKey: (applicationId: string, runId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree'
+    ] as const,
+  applicationRunTraceNodeChildrenQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'children'
+    ] as const,
+  applicationRunTraceNodeContentQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'content'
+    ] as const,
+  applicationRunResumeTimelineQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'resume-timeline'
+    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -59,7 +108,10 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunDetail: vi.fn(),
+  fetchApplicationRunTraceTree: vi.fn(),
+  fetchApplicationRunTraceNodeChildren: vi.fn(),
+  fetchApplicationRunTraceNodeContent: vi.fn(),
+  fetchApplicationRunResumeTimeline: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
@@ -69,7 +121,7 @@ const runtimeApi = vi.hoisted(() => ({
 
 vi.mock('../../api/runtime', () => runtimeApi);
 
-import type { ApplicationRunDetail } from '../../api/runtime';
+import type { ConsoleApplicationRunDetail as ApplicationRunDetail } from '@1flowbase/api-client';
 import { AppProviders } from '../../../../app/AppProviders';
 import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
@@ -256,7 +308,73 @@ function sampleRunDetail(): ApplicationRunDetail {
   };
 }
 
+function traceTreeFromDetail(detail: ApplicationRunDetail) {
+  const nodeRuns = [
+    ...detail.node_runs,
+    ...(detail.stitched_trace ?? []).flatMap((trace) => trace.node_runs)
+  ];
+
+  return {
+    run: detail.run,
+    statistics: detail.statistics,
+    flow_run: detail.flow_run,
+    answer_snapshot: detail.answer_snapshot ?? null,
+    nodes: nodeRuns.map((nodeRun) => ({
+      trace_node_id: `node_run:${nodeRun.id}`,
+      parent_trace_node_id: null,
+      node_kind: 'node_run',
+      flow_run_id: nodeRun.flow_run_id,
+      node_run_id: nodeRun.id,
+      callback_task_id: null,
+      node_id: nodeRun.node_id,
+      node_type: nodeRun.node_type,
+      node_alias: nodeRun.node_alias,
+      status: nodeRun.status,
+      started_at: nodeRun.started_at,
+      finished_at: nodeRun.finished_at,
+      duration_ms: null,
+      metrics_payload: nodeRun.metrics_payload,
+      has_children: false,
+      has_content: true
+    }))
+  };
+}
+
+function traceNodeContentFromDetail(
+  detail: ApplicationRunDetail,
+  traceNodeId: string
+) {
+  const nodeRunId = traceNodeId.startsWith('node_run:')
+    ? traceNodeId.slice('node_run:'.length)
+    : traceNodeId;
+  const stitchedTrace =
+    detail.stitched_trace?.find((trace) =>
+      trace.node_runs.some((candidate) => candidate.id === nodeRunId)
+    ) ?? null;
+  const nodeRun =
+    detail.node_runs.find((candidate) => candidate.id === nodeRunId) ??
+    stitchedTrace?.node_runs.find((candidate) => candidate.id === nodeRunId) ??
+    detail.node_runs[0]!;
+  const checkpoints: ApplicationRunDetail['checkpoints'] = stitchedTrace
+    ? []
+    : detail.checkpoints;
+  const events = stitchedTrace?.events ?? detail.events;
+
+  return {
+    trace_node_id: `node_run:${nodeRun.id}`,
+    node_kind: 'node_run',
+    node_run: nodeRun,
+    callback_task: null,
+    flow_run: null,
+    checkpoints: checkpoints.filter(
+      (checkpoint) => checkpoint.node_run_id === nodeRun.id
+    ),
+    events: events.filter((event) => event.node_run_id === nodeRun.id)
+  };
+}
+
 describe('ApplicationLogsPage - artifacts and trace', () => {
+  let currentRunDetail: ApplicationRunDetail;
   let getBoundingClientRectSpy: { mockRestore: () => void } | undefined;
   let innerHeightSpy: { mockRestore: () => void } | undefined;
   let innerWidthSpy: { mockRestore: () => void } | undefined;
@@ -270,10 +388,14 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunDetail.mockReset();
+    runtimeApi.fetchApplicationRunTraceTree.mockReset();
+    runtimeApi.fetchApplicationRunTraceNodeChildren.mockReset();
+    runtimeApi.fetchApplicationRunTraceNodeContent.mockReset();
+    runtimeApi.fetchApplicationRunResumeTimeline.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
+    currentRunDetail = sampleRunDetail();
 
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
       applicationRunsPage([
@@ -293,7 +415,21 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
+    runtimeApi.fetchApplicationRunTraceTree.mockImplementation(async () =>
+      traceTreeFromDetail(currentRunDetail)
+    );
+    runtimeApi.fetchApplicationRunTraceNodeChildren.mockResolvedValue({
+      items: []
+    });
+    runtimeApi.fetchApplicationRunTraceNodeContent.mockImplementation(
+      async (_applicationId: string, _runId: string, traceNodeId: string) =>
+        traceNodeContentFromDetail(currentRunDetail, traceNodeId)
+    );
+    runtimeApi.fetchApplicationRunResumeTimeline.mockResolvedValue({
+      flow_run: sampleRunDetail().flow_run,
+      callback_tasks: sampleRunDetail().callback_tasks,
+      events: sampleRunDetail().events
+    });
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
         {
@@ -368,7 +504,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       },
       rendered_templates: {}
     };
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    currentRunDetail = detail;
     runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
       async (_applicationId: string, artifactRef: string) => {
         if (artifactRef === 'artifact-detail-answer') {
@@ -405,25 +541,19 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     const logPanel = await screen.findByRole('complementary', {
       name: '对话日志'
     });
-    const detailLoadButton = within(logPanel).getByRole('button', {
-      name: '加载完整值'
-    });
-    expect(detailLoadButton).toBeEnabled();
-    fireEvent.click(detailLoadButton);
-
-    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+    expect(
+      within(logPanel).queryByRole('button', {
+        name: '加载完整值'
+      })
+    ).not.toBeInTheDocument();
+    expect(runtimeApi.fetchRuntimeDebugArtifact).not.toHaveBeenCalledWith(
       'app-1',
       'artifact-detail-answer'
     );
-    await waitFor(() =>
-      expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
-        '详情完整回答'
-      )
-    );
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
-    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
-    const traceLoadButton = within(logPanel).getByRole('button', {
+    fireEvent.click(await within(logPanel).findByRole('button', { name: /LLM/ }));
+    const traceLoadButton = await within(logPanel).findByRole('button', {
       name: '加载完整值'
     });
     expect(traceLoadButton).toBeEnabled();
@@ -508,7 +638,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         finished_at: null
       }
     ];
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    currentRunDetail = detail;
 
     render(
       <AppProviders>
@@ -534,15 +664,18 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     });
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
 
-    expect(
-      within(logPanel).getAllByTestId('debug-workflow-node-row')
-    ).toHaveLength(1);
+    await waitFor(() => {
+      expect(
+        within(logPanel).getAllByTestId('debug-workflow-node-row')
+      ).toHaveLength(1);
+    });
 
-    const llmTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
-    expect(llmTraceNode).toHaveTextContent('工具 2');
+    const llmTraceNode = await within(logPanel).findByRole('button', {
+      name: /LLM/
+    });
     fireEvent.click(llmTraceNode);
 
-    const toolsNode = within(logPanel).getByRole('button', {
+    const toolsNode = await within(logPanel).findByRole('button', {
       name: /工具 2 次工具回调/
     });
     expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
@@ -682,7 +815,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         events: []
       }
     ];
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    currentRunDetail = detail;
 
     render(
       <AppProviders>
@@ -708,11 +841,12 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     });
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
 
-    const llmTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
-    expect(llmTraceNode).toHaveTextContent('工具 1');
+    const llmTraceNode = await within(logPanel).findByRole('button', {
+      name: /LLM/
+    });
     fireEvent.click(llmTraceNode);
 
-    const toolsNode = within(logPanel).getByRole('button', {
+    const toolsNode = await within(logPanel).findByRole('button', {
       name: /工具 1 次工具回调/
     });
     fireEvent.click(toolsNode);
@@ -850,7 +984,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         events: []
       }
     ];
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    currentRunDetail = detail;
     runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
       async (_applicationId: string, artifactRef: string) => {
         if (artifactRef === 'artifact-fusion-route') {
@@ -983,11 +1117,12 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     });
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
 
-    const llmTraceNode = within(logPanel).getByRole('button', { name: /LLM/ });
-    expect(llmTraceNode).toHaveTextContent('工具 1');
+    const llmTraceNode = await within(logPanel).findByRole('button', {
+      name: /LLM/
+    });
     fireEvent.click(llmTraceNode);
 
-    const toolsNode = within(logPanel).getByRole('button', {
+    const toolsNode = await within(logPanel).findByRole('button', {
       name: /工具 1 次工具回调/
     });
     fireEvent.click(toolsNode);
@@ -1122,7 +1257,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         finished_at: '2026-04-17T09:00:02Z'
       }
     ];
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(detail);
+    currentRunDetail = detail;
     runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
       async (_applicationId: string, artifactRef: string) => {
         if (artifactRef === 'artifact-tool-weather') {
@@ -1184,11 +1319,12 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       name: '对话日志'
     });
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
-    fireEvent.click(
-      within(logPanel).getByRole('button', { name: /LLM.*工具 1/ })
-    );
+    const llmTraceNode = await within(logPanel).findByRole('button', {
+      name: /LLM/
+    });
+    fireEvent.click(llmTraceNode);
 
-    const toolsNode = within(logPanel).getByRole('button', {
+    const toolsNode = await within(logPanel).findByRole('button', {
       name: /工具 1 次工具回调/
     });
     fireEvent.click(toolsNode);
@@ -1248,18 +1384,14 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       })
     ).toHaveAttribute('aria-expanded', 'true');
 
-    fireEvent.click(
-      within(logPanel).getByRole('button', { name: /LLM.*工具 1/ })
-    );
+    fireEvent.click(llmTraceNode);
     expect(
       within(logPanel).queryByRole('button', {
         name: /lookup_weather/
       })
     ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      within(logPanel).getByRole('button', { name: /LLM.*工具 1/ })
-    );
+    fireEvent.click(llmTraceNode);
     fireEvent.click(
       within(logPanel).getByRole('button', {
         name: /工具 1 次工具回调/

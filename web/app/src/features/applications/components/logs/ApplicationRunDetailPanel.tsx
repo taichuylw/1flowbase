@@ -1,5 +1,5 @@
 import { CheckOutlined, CopyOutlined } from '@ant-design/icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { App, Button, Tooltip } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -9,22 +9,14 @@ import type {
   AgentFlowDebugMessageStatus,
   AgentFlowRunContext
 } from '../../../agent-flow/api/runtime';
-import {
-  extractAssistantOutputText,
-  mapRunDetailToTrace
-} from '../../../agent-flow/lib/debug-console/run-detail-mapper';
 import type { AgentFlowDebugSessionStatus } from '../../../agent-flow/hooks/runtime/useAgentFlowDebugSession';
 import { useClipboardCopy } from '../../../../shared/ui/clipboard/use-clipboard-copy';
 import {
-  applicationRunDetailQueryKey,
   applicationRunConversationMessagesQueryKey,
-  fetchApplicationRunDetail,
   fetchApplicationRunConversationMessages,
-  type ApplicationRunDetail,
   type ApplicationRunConversationMessage,
   type ApplicationRunConversationMessagesPage
 } from '../../api/runtime';
-import { formatApplicationRunCompatibilityMode } from '../../lib/run-compatibility-mode';
 import { isActiveRunStatus } from '../../lib/run-status';
 import './application-run-detail-panel.css';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -121,43 +113,6 @@ function RunIdSubtitle({ runId }: { runId: string }) {
       </Tooltip>
     </span>
   );
-}
-
-function runDetailCompatibilityMode(detail: ApplicationRunDetail) {
-  return (
-    detail.run?.compatibility_mode ??
-    detail.run?.correlation?.compatibility_mode ??
-    null
-  );
-}
-
-function buildConversationLogMessage(
-  detail: ApplicationRunDetail
-): AgentFlowDebugMessage {
-  const assistantContent =
-    extractAssistantOutputText(detail) ||
-    i18nText('applications', 'auto.no_output_yet');
-  const rawOutput =
-    Object.keys(detail.flow_run.output_payload).length > 0
-      ? detail.flow_run.output_payload
-      : null;
-  const compatibilityMode = runDetailCompatibilityMode(detail);
-
-  return {
-    id: `conversation-log-${detail.flow_run.id}`,
-    role: 'assistant',
-    content: assistantContent,
-    status: mapRunStatusToMessageStatus(detail.flow_run.status),
-    runId: detail.flow_run.id,
-    detailRunId: detail.flow_run.id,
-    canOpenDetail: true,
-    compatibilityMode,
-    compatibilityModeLabel:
-      formatApplicationRunCompatibilityMode(compatibilityMode),
-    rawOutput,
-    statistics: detail.statistics,
-    traceSummary: mapRunDetailToTrace(detail)
-  };
 }
 
 function conversationItemDetailRunId(
@@ -332,7 +287,6 @@ function RunConversation({
   onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   runId: string;
 }) {
-  const queryClient = useQueryClient();
   const [previousConversationPages, setPreviousConversationPages] = useState<
     ApplicationRunConversationMessagesPage[]
   >([]);
@@ -372,7 +326,7 @@ function RunConversation({
     return () => window.clearInterval(intervalId);
   }, [conversationPage, refetchInitialConversation]);
 
-  async function handleOpenMessageLog(message: AgentFlowDebugMessage) {
+  function handleOpenMessageLog(message: AgentFlowDebugMessage) {
     const detailRunId =
       nonEmptyString(message.detailRunId) ??
       (message.canOpenDetail === false ? null : nonEmptyString(message.runId));
@@ -381,12 +335,11 @@ function RunConversation({
       return;
     }
 
-    const detail = await queryClient.fetchQuery({
-      queryKey: applicationRunDetailQueryKey(applicationId, detailRunId),
-      queryFn: () => fetchApplicationRunDetail(applicationId, detailRunId)
+    onOpenMessageLog?.({
+      ...message,
+      detailRunId,
+      canOpenDetail: true
     });
-
-    onOpenMessageLog?.(buildConversationLogMessage(detail));
   }
 
   async function loadPreviousConversationPage() {

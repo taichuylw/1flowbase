@@ -128,12 +128,24 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(list_application_run_conversation_messages),
         )
         .route(
-            "/applications/:id/logs/runs/:run_id/nodes/:node_id",
-            get(get_application_run_node_last_run),
+            "/applications/:id/logs/runs/:run_id/trace-tree",
+            get(get_application_run_trace_tree),
         )
         .route(
-            "/applications/:id/logs/runs/:run_id",
-            get(get_application_run_detail),
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes",
+            get(get_application_run_trace_node_children),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/content",
+            get(get_application_run_trace_node_content),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/resume-timeline",
+            get(get_application_run_resume_timeline),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/nodes/:node_id",
+            get(get_application_run_node_last_run),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/debug-stream",
@@ -150,6 +162,8 @@ include!("application_runtime/summary_responses.rs");
 include!("application_runtime/conversation_helpers.rs");
 
 include!("application_runtime/detail_responses.rs");
+
+include!("application_runtime/trace_tree_responses.rs");
 
 include!("application_runtime/debug_handlers.rs");
 

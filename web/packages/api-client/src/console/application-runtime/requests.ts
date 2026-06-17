@@ -7,6 +7,10 @@ import type {
   ConsoleApplicationRunMonitoringReport,
   ConsoleApplicationRunsPage,
   ConsoleApplicationRuntimeActivity,
+  ConsoleApplicationRunTraceNodeChildren,
+  ConsoleApplicationRunTraceNodeContent,
+  ConsoleApplicationRunTraceTree,
+  ConsoleApplicationRunResumeTimeline,
   ConsoleDebugVariableSnapshot,
   ConsoleNodeLastRun,
   DeleteConsoleDebugVariableCacheEntriesInput,
@@ -171,13 +175,54 @@ export function getConsoleApplicationRuntimeActivity(
   });
 }
 
-export function getConsoleApplicationRunDetail(
+export function getConsoleApplicationRunTraceTree(
   applicationId: string,
   runId: string,
   baseUrl?: string
 ) {
-  return apiFetch<ConsoleApplicationRunDetail>({
-    path: `/api/console/applications/${applicationId}/logs/runs/${runId}`,
+  return apiFetch<ConsoleApplicationRunTraceTree>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceNodeChildren(
+  applicationId: string,
+  runId: string,
+  parentTraceNodeId: string,
+  baseUrl?: string
+) {
+  const searchParams = new URLSearchParams({
+    parent_trace_node_id: parentTraceNodeId
+  });
+
+  return apiFetch<ConsoleApplicationRunTraceNodeChildren>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree/nodes?` +
+      searchParams.toString(),
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceNodeContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunTraceNodeContent>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree/nodes/${encodeURIComponent(traceNodeId)}/content`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunResumeTimeline(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunResumeTimeline>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/resume-timeline`,
     baseUrl
   });
 }

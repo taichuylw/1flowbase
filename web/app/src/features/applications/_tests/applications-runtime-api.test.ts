@@ -2,10 +2,21 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@1flowbase/api-client', () => ({
   completeConsoleCallbackTask: vi.fn().mockResolvedValue(undefined),
-  getConsoleApplicationRunDetail: vi.fn().mockResolvedValue({
-    flow_run: { id: 'run-1' },
-    node_runs: [],
+  getConsoleApplicationRunTraceTree: vi.fn().mockResolvedValue({ nodes: [] }),
+  getConsoleApplicationRunTraceNodeChildren: vi
+    .fn()
+    .mockResolvedValue({ items: [] }),
+  getConsoleApplicationRunTraceNodeContent: vi.fn().mockResolvedValue({
+    trace_node_id: 'node_run:node-run-1',
+    node_kind: 'node_run',
+    node_run: null,
+    callback_task: null,
+    flow_run: null,
     checkpoints: [],
+    events: []
+  }),
+  getConsoleApplicationRunResumeTimeline: vi.fn().mockResolvedValue({
+    flow_run: { id: 'run-1' },
     callback_tasks: [],
     events: []
   }),
@@ -182,8 +193,11 @@ vi.mock('@1flowbase/api-client', () => ({
 import {
   completeConsoleCallbackTask,
   fetchConsoleRuntimeModelRecords,
-  getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
+  getConsoleApplicationRunResumeTimeline,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceTree,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugStream,
@@ -191,15 +205,21 @@ import {
 } from '@1flowbase/api-client';
 
 import {
-  applicationRunDetailQueryKey,
   applicationRunMonitoringReportQueryKey,
+  applicationRunResumeTimelineQueryKey,
+  applicationRunTraceNodeChildrenQueryKey,
+  applicationRunTraceNodeContentQueryKey,
+  applicationRunTraceTreeQueryKey,
   applicationRuntimeActivityQueryKey,
   applicationRunsQueryKey,
   applicationRuntimeDebugStreamQueryKey,
   completeCallbackTask,
   fetchApplicationConversationMessages,
-  fetchApplicationRunDetail,
   fetchApplicationRunMonitoringReport,
+  fetchApplicationRunResumeTimeline,
+  fetchApplicationRunTraceNodeChildren,
+  fetchApplicationRunTraceNodeContent,
+  fetchApplicationRunTraceTree,
   fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
   fetchRuntimeDebugStream,
@@ -238,12 +258,53 @@ describe('applications runtime api', () => {
       'desc',
       '退款'
     ]);
-    expect(applicationRunDetailQueryKey('app-1', 'run-1')).toEqual([
+    expect(applicationRunTraceTreeQueryKey('app-1', 'run-1')).toEqual([
       'applications',
       'app-1',
       'runtime',
       'runs',
-      'run-1'
+      'run-1',
+      'trace-tree'
+    ]);
+    expect(
+      applicationRunTraceNodeChildrenQueryKey(
+        'app-1',
+        'run-1',
+        'node_run:node-run-1'
+      )
+    ).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'trace-tree',
+      'node_run:node-run-1',
+      'children'
+    ]);
+    expect(
+      applicationRunTraceNodeContentQueryKey(
+        'app-1',
+        'run-1',
+        'node_run:node-run-1'
+      )
+    ).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'trace-tree',
+      'node_run:node-run-1',
+      'content'
+    ]);
+    expect(applicationRunResumeTimelineQueryKey('app-1', 'run-1')).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'resume-timeline'
     ]);
     expect(applicationRuntimeDebugStreamQueryKey('app-1', 'run-1')).toEqual([
       'applications',
@@ -273,7 +334,18 @@ describe('applications runtime api', () => {
 
   test('passes the resolved base url to runtime read requests', async () => {
     await fetchApplicationRuns('app-1', { cacheMode: 'refresh' });
-    await fetchApplicationRunDetail('app-1', 'run-1');
+    await fetchApplicationRunTraceTree('app-1', 'run-1');
+    await fetchApplicationRunTraceNodeChildren(
+      'app-1',
+      'run-1',
+      'node_run:node-run-1'
+    );
+    await fetchApplicationRunTraceNodeContent(
+      'app-1',
+      'run-1',
+      'node_run:node-run-1'
+    );
+    await fetchApplicationRunResumeTimeline('app-1', 'run-1');
     await fetchApplicationRunMonitoringReport('app-1', {
       timeRangeDays: 28,
       bucket: 'week'
@@ -294,7 +366,24 @@ describe('applications runtime api', () => {
       'http://127.0.0.1:7800'
     );
     expect(getConsoleApplicationRuns).not.toHaveBeenCalled();
-    expect(getConsoleApplicationRunDetail).toHaveBeenCalledWith(
+    expect(getConsoleApplicationRunTraceTree).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunTraceNodeChildren).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'node_run:node-run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunTraceNodeContent).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'node_run:node-run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunResumeTimeline).toHaveBeenCalledWith(
       'app-1',
       'run-1',
       'http://127.0.0.1:7800'

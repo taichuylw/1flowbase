@@ -276,8 +276,7 @@ async fn seed_large_runtime_read_payloads(
 }
 
 #[tokio::test]
-async fn application_runtime_routes_get_run_detail_and_node_last_run_do_not_materialize_artifacts()
-{
+async fn application_runtime_routes_trace_tree_and_node_last_run_do_not_materialize_artifacts() {
     let (state, database_url) = test_api_state_with_database_url().await;
     let app = crate::app_with_state_and_config(state.clone(), &test_config());
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
@@ -330,7 +329,12 @@ async fn application_runtime_routes_get_run_detail_and_node_last_run_do_not_mate
     let before = runtime_read_payload_snapshot(&pool, flow_run_id).await;
 
     for uri in [
-        format!("/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}"),
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree"
+        ),
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree/nodes/node_run:{node_run_id}/content"
+        ),
         format!(
             "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/nodes/node-llm"
         ),

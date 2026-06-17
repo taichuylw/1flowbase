@@ -455,6 +455,55 @@ export interface ConsoleApplicationRunDetail {
   stitched_trace?: ConsoleApplicationRunStitchedTrace[];
 }
 
+export type ConsoleApplicationRunTraceNodeKind = 'node_run' | 'callback_task';
+
+export interface ConsoleApplicationRunTraceNodeSummary {
+  trace_node_id: string;
+  parent_trace_node_id?: string | null;
+  node_kind: ConsoleApplicationRunTraceNodeKind;
+  flow_run_id: string;
+  node_run_id?: string | null;
+  callback_task_id?: string | null;
+  node_id?: string | null;
+  node_type?: string | null;
+  node_alias: string;
+  status: string;
+  started_at: string;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  metrics_payload: Record<string, unknown>;
+  has_children: boolean;
+  has_content: boolean;
+}
+
+export interface ConsoleApplicationRunTraceTree {
+  run: ConsoleApplicationRunLog;
+  statistics: ConsoleApplicationRunStatistics;
+  flow_run: ConsoleFlowRunDetail;
+  answer_snapshot?: ConsoleAnswerSnapshot | null;
+  nodes: ConsoleApplicationRunTraceNodeSummary[];
+}
+
+export interface ConsoleApplicationRunTraceNodeChildren {
+  items: ConsoleApplicationRunTraceNodeSummary[];
+}
+
+export interface ConsoleApplicationRunTraceNodeContent {
+  trace_node_id: string;
+  node_kind: ConsoleApplicationRunTraceNodeKind;
+  node_run?: ConsoleNodeRunDetail | null;
+  callback_task?: ConsoleCallbackTask | null;
+  flow_run?: ConsoleFlowRunDetail | null;
+  checkpoints: ConsoleRunCheckpoint[];
+  events: ConsoleRunEvent[];
+}
+
+export interface ConsoleApplicationRunResumeTimeline {
+  flow_run: ConsoleFlowRunDetail;
+  callback_tasks: ConsoleCallbackTask[];
+  events: ConsoleRunEvent[];
+}
+
 export interface ConsoleApplicationConversationMessage {
   run_id: string;
   detail_run_id?: string | null;

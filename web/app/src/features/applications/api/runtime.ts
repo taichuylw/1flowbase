@@ -1,9 +1,12 @@
 import {
   completeConsoleCallbackTask,
-  getConsoleApplicationRunDetail,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
+  getConsoleApplicationRunResumeTimeline,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceTree,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
   getConsoleRuntimeDebugStream,
@@ -20,8 +23,11 @@ import {
   type ConsoleApplicationRunMonitoringRunRank,
   type ConsoleApplicationRunMonitoringSourceBreakdown,
   resumeConsoleFlowRun,
-  type ConsoleApplicationRunDetail,
   type ConsoleApplicationRunSummary,
+  type ConsoleApplicationRunResumeTimeline,
+  type ConsoleApplicationRunTraceNodeChildren,
+  type ConsoleApplicationRunTraceNodeContent,
+  type ConsoleApplicationRunTraceTree,
   type ConsoleCallbackTask,
   type ConsoleNodeRunDetail,
   type ConsoleRunCheckpoint,
@@ -66,7 +72,12 @@ export interface ApplicationRunsPage {
   page: number;
   page_size: number;
 }
-export type ApplicationRunDetail = ConsoleApplicationRunDetail;
+export type ApplicationRunTraceTree = ConsoleApplicationRunTraceTree;
+export type ApplicationRunResumeTimeline = ConsoleApplicationRunResumeTimeline;
+export type ApplicationRunTraceNodeChildren =
+  ConsoleApplicationRunTraceNodeChildren;
+export type ApplicationRunTraceNodeContent =
+  ConsoleApplicationRunTraceNodeContent;
 export type ApplicationRunMonitoringBucket =
   ConsoleApplicationRunMonitoringBucket;
 export type ApplicationRunMonitoringReport =
@@ -206,10 +217,63 @@ export const applicationConversationsQueryKey = (
     input.externalConversationId ?? ''
   ] as const;
 
-export const applicationRunDetailQueryKey = (
+export const applicationRunTraceTreeQueryKey = (
   applicationId: string,
   runId: string
-) => ['applications', applicationId, 'runtime', 'runs', runId] as const;
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'trace-tree'
+  ] as const;
+
+export const applicationRunTraceNodeChildrenQueryKey = (
+  applicationId: string,
+  runId: string,
+  traceNodeId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'trace-tree',
+    traceNodeId,
+    'children'
+  ] as const;
+
+export const applicationRunTraceNodeContentQueryKey = (
+  applicationId: string,
+  runId: string,
+  traceNodeId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'trace-tree',
+    traceNodeId,
+    'content'
+  ] as const;
+
+export const applicationRunResumeTimelineQueryKey = (
+  applicationId: string,
+  runId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'resume-timeline'
+  ] as const;
 
 export const applicationConversationMessagesQueryKey = (
   applicationId: string,
@@ -349,11 +413,48 @@ export function fetchApplicationRuntimeActivity(applicationId: string) {
   );
 }
 
-export function fetchApplicationRunDetail(
+export function fetchApplicationRunTraceTree(
   applicationId: string,
   runId: string
 ) {
-  return getConsoleApplicationRunDetail(
+  return getConsoleApplicationRunTraceTree(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunTraceNodeChildren(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string
+) {
+  return getConsoleApplicationRunTraceNodeChildren(
+    applicationId,
+    runId,
+    traceNodeId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunTraceNodeContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string
+) {
+  return getConsoleApplicationRunTraceNodeContent(
+    applicationId,
+    runId,
+    traceNodeId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunResumeTimeline(
+  applicationId: string,
+  runId: string
+) {
+  return getConsoleApplicationRunResumeTimeline(
     applicationId,
     runId,
     getApplicationsApiBaseUrl()
@@ -636,10 +737,7 @@ function applicationConversationMessageFilter(
   return filter;
 }
 
-function stringField(
-  record: Record<string, unknown>,
-  field: string
-): string {
+function stringField(record: Record<string, unknown>, field: string): string {
   const value = record[field];
 
   if (typeof value !== 'string') {
@@ -666,10 +764,7 @@ function optionalStringField(
   return value;
 }
 
-function numberField(
-  record: Record<string, unknown>,
-  field: string
-): number {
+function numberField(record: Record<string, unknown>, field: string): number {
   const value = record[field];
 
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -735,7 +830,10 @@ function toApplicationRunSummary(
     id,
     application_id: stringField(record, 'application_id'),
     scope_id: stringField(record, 'scope_id'),
-    run_mode: stringField(record, 'run_mode') as ApplicationRunSummary['run_mode'],
+    run_mode: stringField(
+      record,
+      'run_mode'
+    ) as ApplicationRunSummary['run_mode'],
     status: stringField(record, 'status'),
     target_node_id: optionalStringField(record, 'target_node_id'),
     title: stringField(record, 'title'),
@@ -744,7 +842,10 @@ function toApplicationRunSummary(
     authorized_account: optionalStringField(record, 'authorized_account'),
     api_key_id: optionalStringField(record, 'api_key_id'),
     api_key_name_snapshot: optionalStringField(record, 'api_key_name_snapshot'),
-    publication_version_id: optionalStringField(record, 'publication_version_id'),
+    publication_version_id: optionalStringField(
+      record,
+      'publication_version_id'
+    ),
     external_conversation_id: optionalStringField(
       record,
       'external_conversation_id'
@@ -755,7 +856,10 @@ function toApplicationRunSummary(
     total_tokens: optionalNumberField(record, 'total_tokens'),
     input_tokens: optionalNumberField(record, 'input_tokens'),
     output_tokens: optionalNumberField(record, 'output_tokens'),
-    input_cache_hit_tokens: optionalNumberField(record, 'input_cache_hit_tokens'),
+    input_cache_hit_tokens: optionalNumberField(
+      record,
+      'input_cache_hit_tokens'
+    ),
     unique_node_count: numberField(record, 'unique_node_count'),
     tool_callback_count: numberField(record, 'tool_callback_count'),
     started_at: stringField(record, 'started_at'),
@@ -822,7 +926,8 @@ function toApplicationRunNodeRun(
     node_alias: stringField(record, 'node_alias'),
     status: stringField(record, 'status'),
     input_payload: recordPayload(record, 'input_payload'),
-    input_payload_view: optionalRecordPayload(record, 'input_payload_view') ?? undefined,
+    input_payload_view:
+      optionalRecordPayload(record, 'input_payload_view') ?? undefined,
     output_payload: recordPayload(record, 'output_payload'),
     error_payload: optionalRecordPayload(record, 'error_payload'),
     metrics_payload: recordPayload(record, 'metrics_payload'),
@@ -832,7 +937,9 @@ function toApplicationRunNodeRun(
   };
 }
 
-function toApplicationRunEvent(record: Record<string, unknown>): ConsoleRunEvent {
+function toApplicationRunEvent(
+  record: Record<string, unknown>
+): ConsoleRunEvent {
   return {
     id: stringField(record, 'id'),
     flow_run_id: stringField(record, 'flow_run_id'),

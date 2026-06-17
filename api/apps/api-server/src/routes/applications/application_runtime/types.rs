@@ -227,6 +227,63 @@ pub struct ApplicationRunDetailResponse {
     pub stitched_trace: Vec<ApplicationRunStitchedTraceResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeSummaryResponse {
+    pub trace_node_id: String,
+    pub parent_trace_node_id: Option<String>,
+    pub node_kind: String,
+    pub flow_run_id: String,
+    pub node_run_id: Option<String>,
+    pub callback_task_id: Option<String>,
+    pub node_id: Option<String>,
+    pub node_type: Option<String>,
+    pub node_alias: String,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub metrics_payload: serde_json::Value,
+    pub has_children: bool,
+    pub has_content: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceTreeResponse {
+    pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
+    pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
+    pub nodes: Vec<ApplicationRunTraceNodeSummaryResponse>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ApplicationRunTraceNodeChildrenQuery {
+    pub parent_trace_node_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeChildrenResponse {
+    pub items: Vec<ApplicationRunTraceNodeSummaryResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeContentResponse {
+    pub trace_node_id: String,
+    pub node_kind: String,
+    pub node_run: Option<NodeRunResponse>,
+    pub callback_task: Option<CallbackTaskResponse>,
+    pub flow_run: Option<FlowRunResponse>,
+    pub checkpoints: Vec<CheckpointResponse>,
+    pub events: Vec<RunEventResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunResumeTimelineResponse {
+    pub flow_run: FlowRunResponse,
+    pub callback_tasks: Vec<CallbackTaskResponse>,
+    pub events: Vec<RunEventResponse>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RuntimeDebugStreamResponse {
     pub parts: Vec<RuntimeDebugStreamPartResponse>,

@@ -2,11 +2,14 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
   getConsoleApplicationRunConversationMessages,
-  getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRunNodeLastRun,
+  getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRuns,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceTree,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRunStream,
@@ -180,6 +183,81 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/nodes/node-llm',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches lazy run trace tree resources', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: { nodes: [] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunTraceTree(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ nodes: [] });
+    await expect(
+      getConsoleApplicationRunTraceNodeChildren(
+        'app-1',
+        'run-1',
+        'node_run:node-run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ nodes: [] });
+    await expect(
+      getConsoleApplicationRunTraceNodeContent(
+        'app-1',
+        'run-1',
+        'node_run:node-run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ nodes: [] });
+    await expect(
+      getConsoleApplicationRunResumeTimeline(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ nodes: [] });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes?parent_trace_node_id=node_run%3Anode-run-1',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/node_run%3Anode-run-1/content',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/resume-timeline',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
@@ -533,66 +611,4 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
   });
 
-  test('keeps typed application run detail beside legacy flow fields', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            run: {
-              id: 'run-1',
-              application_id: 'app-1',
-              application_type: 'agent_flow',
-              run_object_kind: 'application_run',
-              run_kind: 'debug_flow_run',
-              status: 'succeeded',
-              title: '退款总结',
-              source: 'console',
-              subject: { kind: 'agent_flow', id: 'flow-1' },
-              actor: { kind: 'user', id: 'user-1' },
-              correlation: {},
-              started_at: '2026-05-08T00:00:00Z',
-              finished_at: null,
-              created_at: '2026-05-08T00:00:00Z',
-              updated_at: '2026-05-08T00:00:00Z'
-            },
-            statistics: {
-              total_tokens: null,
-              unique_node_count: 0,
-              tool_callback_count: 0
-            },
-            detail: {
-              kind: 'agent_flow',
-              flow_run: { id: 'run-1' },
-              node_runs: [],
-              checkpoints: [],
-              callback_tasks: [],
-              events: []
-            },
-            flow_run: { id: 'run-1' },
-            node_runs: [],
-            checkpoints: [],
-            callback_tasks: [],
-            events: []
-          }
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      )
-    );
-
-    await expect(
-      getConsoleApplicationRunDetail('app-1', 'run-1', 'http://127.0.0.1:7800')
-    ).resolves.toMatchObject({
-      run: {
-        application_type: 'agent_flow',
-        run_object_kind: 'application_run'
-      },
-      statistics: {
-        total_tokens: null,
-        unique_node_count: 0,
-        tool_callback_count: 0
-      },
-      detail: { kind: 'agent_flow' },
-      flow_run: { id: 'run-1' }
-    });
-  });
 });
