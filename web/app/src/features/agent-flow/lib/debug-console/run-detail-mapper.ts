@@ -12,12 +12,6 @@ import {
   parseAssistantContent
 } from './assistant-content';
 
-type FlowDebugRunDetailLike = Pick<
-  FlowDebugRunDetail,
-  'flow_run' | 'answer_snapshot' | 'node_runs' | 'statistics'
-> &
-  Partial<Pick<FlowDebugRunDetail, 'detail' | 'events' | 'stitched_trace'>>;
-
 function summarizePayload(payload: Record<string, unknown> | null | undefined) {
   if (!payload || Object.keys(payload).length === 0) {
     return '';
@@ -57,15 +51,11 @@ function extractDeltaText(payload: unknown): string {
   return '';
 }
 
-function runtimeEvents(detail: FlowDebugRunDetailLike) {
-  return Array.isArray(detail.events) ? detail.events : [];
-}
-
 function collectDeltaEvents(
-  detail: FlowDebugRunDetailLike,
+  detail: FlowDebugRunDetail,
   eventType: 'text_delta' | 'reasoning_delta'
 ): string | null {
-  const text = runtimeEvents(detail)
+  const text = detail.events
     .filter((event) => event.event_type === eventType)
     .sort((left, right) => left.sequence - right.sequence)
     .map((event) => extractDeltaText(event.payload))
@@ -74,14 +64,14 @@ function collectDeltaEvents(
   return text.trim().length > 0 ? text : null;
 }
 
-function collectTextDeltaEvents(detail: FlowDebugRunDetailLike): string | null {
+function collectTextDeltaEvents(detail: FlowDebugRunDetail): string | null {
   return collectDeltaEvents(detail, 'text_delta');
 }
 
 function collectOrderedAssistantContentEvents(
-  detail: FlowDebugRunDetailLike
+  detail: FlowDebugRunDetail
 ): string | null {
-  const content = runtimeEvents(detail)
+  const content = detail.events
     .filter(
       (event) =>
         event.event_type === 'text_delta' ||
@@ -146,7 +136,7 @@ function findAnswerNodeOutputText(detail: FlowDebugRunDetail): string | null {
 }
 
 function mapAnswerSnapshot(
-  detail: FlowDebugRunDetailLike
+  detail: FlowDebugRunDetail
 ): AgentFlowAnswerSnapshot | null {
   const snapshot =
     detail.answer_snapshot ?? detail.detail?.answer_snapshot ?? null;
@@ -274,7 +264,7 @@ function stitchedTraceDebugPayload({
 }
 
 function mapStitchedTraceToTraceItems(
-  detail: FlowDebugRunDetailLike
+  detail: FlowDebugRunDetail
 ): AgentFlowTraceItem[] {
   const stitchedTrace =
     detail.stitched_trace ?? detail.detail?.stitched_trace ?? [];
@@ -290,7 +280,7 @@ function mapStitchedTraceToTraceItems(
 }
 
 export function mapRunDetailToTrace(
-  detail: FlowDebugRunDetailLike
+  detail: FlowDebugRunDetail
 ): AgentFlowTraceItem[] {
   const answerSnapshot = mapAnswerSnapshot(detail);
 
@@ -309,7 +299,7 @@ export function mapRunDetailToTrace(
   return [...currentTraceItems, ...mapStitchedTraceToTraceItems(detail)];
 }
 
-export function extractAssistantOutputText(detail: FlowDebugRunDetailLike): string {
+export function extractAssistantOutputText(detail: FlowDebugRunDetail): string {
   if (
     detail.flow_run.status === 'waiting_human' ||
     detail.flow_run.status === 'waiting_callback' ||
@@ -344,7 +334,7 @@ export function extractAssistantOutputText(detail: FlowDebugRunDetailLike): stri
   return '';
 }
 
-function extractAssistantContent(detail: FlowDebugRunDetailLike): string {
+function extractAssistantContent(detail: FlowDebugRunDetail): string {
   const orderedStreamContent = collectOrderedAssistantContentEvents(detail);
 
   if (orderedStreamContent) {
@@ -380,7 +370,7 @@ function extractAssistantContent(detail: FlowDebugRunDetailLike): string {
 }
 
 export function mapRunDetailToConversation(
-  detail: FlowDebugRunDetailLike
+  detail: FlowDebugRunDetail
 ): AgentFlowDebugMessage {
   const traceItems = mapRunDetailToTrace(detail);
   const rawOutput =

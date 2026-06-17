@@ -126,10 +126,7 @@ const runtimeApi = vi.hoisted(() => ({
 
 vi.mock('../../api/runtime', () => runtimeApi);
 
-import type {
-  ApplicationRunConversationLogDetail,
-  ApplicationRunDetail
-} from '../../api/runtime';
+import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
 import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
@@ -295,7 +292,6 @@ function sampleRunDetail(): ApplicationRunDetail {
         finished_at: '2026-04-17T09:00:01Z'
       }
     ],
-    stitched_trace: [],
     checkpoints: [],
     callback_tasks: [],
     events: [
@@ -322,19 +318,6 @@ function sampleRunDetail(): ApplicationRunDetail {
         created_at: '2026-04-17T09:00:01Z'
       }
     ]
-  };
-}
-
-function sampleConversationLogDetail(): ApplicationRunConversationLogDetail {
-  const detail = sampleRunDetail();
-
-  return {
-    run: detail.run!,
-    statistics: detail.statistics!,
-    flow_run: detail.flow_run,
-    answer_snapshot: detail.answer_snapshot,
-    node_runs: detail.node_runs,
-    stitched_trace: detail.stitched_trace ?? []
   };
 }
 
@@ -414,7 +397,7 @@ describe('ApplicationLogsPage - floating windows', () => {
       }
     );
     runtimeApi.fetchApplicationRunConversationLogDetail.mockResolvedValue(
-      sampleConversationLogDetail()
+      sampleRunDetail()
     );
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
