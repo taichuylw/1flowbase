@@ -1,6 +1,13 @@
 import { DownOutlined, RightOutlined, ToolOutlined } from '@ant-design/icons';
 import { Tag, Tooltip, Typography } from 'antd';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ReactNode,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState
+} from 'react';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
 import {
@@ -263,6 +270,22 @@ function isRouteBranchTrace(
   return Object.prototype.hasOwnProperty.call(branch, 'inputPayload');
 }
 
+function routeBranchNodeKey(
+  callback: LlmToolCallback,
+  branch: LlmToolRouteBranchSummary | LlmToolRouteBranchTrace
+) {
+  const debugPayloadRef = isRouteBranchTrace(branch)
+    ? branch.debugPayloadRef
+    : null;
+
+  return (
+    branch.nodeId ??
+    debugPayloadRef ??
+    branch.nodeAlias ??
+    `${callback.id}:${JSON.stringify(branch.rawPayload)}`
+  );
+}
+
 function runtimeDetailPayloadHasValue(value: unknown): boolean {
   if (value === null || value === undefined) {
     return false;
@@ -376,36 +399,41 @@ function LlmToolRouteNode({
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const [loadedRouteTrace, setLoadedRouteTrace] =
-    useState<LlmToolRouteTraceSummary | null>(null);
-  const [loadingRouteTrace, setLoadingRouteTrace] = useState(false);
-  const [routeTraceLoadFailed, setRouteTraceLoadFailed] = useState(false);
+  const [routeTraceLoadState, dispatchRouteTraceLoad] = useReducer(
+    routeTraceLoadReducer,
+    INITIAL_ROUTE_TRACE_LOAD_STATE
+  );
+  const loadArtifactRef = useRef(onLoadArtifact);
   const sourceRouteTrace = callback.routeTrace;
   const routeKind = sourceRouteTrace?.routeKind ?? null;
   const detailArtifactRef = sourceRouteTrace?.detailArtifactRef ?? null;
+  const hasArtifactLoader = Boolean(onLoadArtifact);
 
   useEffect(() => {
-    setLoadedRouteTrace(null);
-    setLoadingRouteTrace(false);
-    setRouteTraceLoadFailed(false);
-  }, [callback.id, detailArtifactRef, routeKind]);
+    loadArtifactRef.current = onLoadArtifact;
+  }, [onLoadArtifact]);
 
   useEffect(() => {
     if (
       !expanded ||
       routeKind !== 'fusion' ||
       !detailArtifactRef ||
-      !onLoadArtifact ||
-      loadedRouteTrace ||
-      routeTraceLoadFailed
+      !hasArtifactLoader ||
+      routeTraceLoadState.loadedRouteTrace ||
+      routeTraceLoadState.loadFailed
     ) {
       return;
     }
 
     let active = true;
-    setLoadingRouteTrace(true);
-    setRouteTraceLoadFailed(false);
-    void onLoadArtifact(detailArtifactRef)
+    const loadArtifact = loadArtifactRef.current;
+
+    if (!loadArtifact) {
+      return;
+    }
+
+    dispatchRouteTraceLoad({ type: 'start' });
+    void loadArtifact(detailArtifactRef)
       .then((payload) => {
         if (!active) {
           return;
@@ -414,16 +442,11 @@ function LlmToolRouteNode({
         if (!detail) {
           throw new Error('invalid_route_trace_detail');
         }
-        setLoadedRouteTrace(detail);
+        dispatchRouteTraceLoad({ type: 'success', routeTrace: detail });
       })
       .catch(() => {
         if (active) {
-          setRouteTraceLoadFailed(true);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setLoadingRouteTrace(false);
+          dispatchRouteTraceLoad({ type: 'failed' });
         }
       });
 
@@ -433,17 +456,17 @@ function LlmToolRouteNode({
   }, [
     detailArtifactRef,
     expanded,
-    loadedRouteTrace,
-    onLoadArtifact,
+    hasArtifactLoader,
     routeKind,
-    routeTraceLoadFailed
+    routeTraceLoadState.loadFailed,
+    routeTraceLoadState.loadedRouteTrace
   ]);
 
   if (!sourceRouteTrace) {
     return null;
   }
 
-  const routeTrace = loadedRouteTrace ?? sourceRouteTrace;
+  const routeTrace = routeTraceLoadState.loadedRouteTrace ?? sourceRouteTrace;
   const branchTraces = routeTrace.branchTraces;
   const branchNodes =
     branchTraces.length > 0 ? branchTraces : routeTrace.branchSummaries;
@@ -478,12 +501,12 @@ function LlmToolRouteNode({
         </button>
         {expanded ? (
           <div className="agent-flow-editor__debug-llm-route-node-detail">
-            {loadingRouteTrace ? (
+            {routeTraceLoadState.loading ? (
               <Tag color="processing">
                 {i18nText('agentFlow', 'auto.loading')}
               </Tag>
             ) : null}
-            {routeTraceLoadFailed ? (
+            {routeTraceLoadState.loadFailed ? (
               <Tag color="error">
                 {i18nText('agentFlow', 'auto.loading_failed')}
               </Tag>
@@ -492,7 +515,7 @@ function LlmToolRouteNode({
               <div className="agent-flow-editor__debug-llm-route-branch-list">
                 {branchNodes.map((branch, index) => (
                   <LlmToolRouteBranchNode
-                    key={`${branch.nodeId ?? callback.id}-${index}`}
+                    key={routeBranchNodeKey(callback, branch)}
                     branch={branch}
                     callback={callback}
                     index={index}
@@ -524,7 +547,7 @@ function LlmToolRouteNode({
             <div className="agent-flow-editor__debug-llm-route-branch-list">
               {branchNodes.map((branch, index) => (
                 <LlmToolRouteBranchNode
-                  key={`${branch.nodeId ?? callback.id}-${index}`}
+                  key={routeBranchNodeKey(callback, branch)}
                   branch={branch}
                   callback={callback}
                   index={index}
@@ -610,6 +633,7 @@ function LlmToolCallbackItem({
           {!loading && !loadFailed ? (
             <>
               <LlmToolRouteNode
+                key={routeTraceNodeKey(callback)}
                 callback={callback}
                 onLoadArtifact={onLoadArtifact}
               />
@@ -647,7 +671,181 @@ function LlmToolCallbackItem({
   );
 }
 
-export function LlmToolTraceTree({
+interface RouteTraceLoadState {
+  loadedRouteTrace: LlmToolRouteTraceSummary | null;
+  loading: boolean;
+  loadFailed: boolean;
+}
+
+const INITIAL_ROUTE_TRACE_LOAD_STATE: RouteTraceLoadState = {
+  loadedRouteTrace: null,
+  loading: false,
+  loadFailed: false
+};
+
+type RouteTraceLoadAction =
+  | { type: 'start' }
+  | { type: 'success'; routeTrace: LlmToolRouteTraceSummary }
+  | { type: 'failed' };
+
+function routeTraceLoadReducer(
+  state: RouteTraceLoadState,
+  action: RouteTraceLoadAction
+): RouteTraceLoadState {
+  switch (action.type) {
+    case 'start':
+      return {
+        ...state,
+        loading: true,
+        loadFailed: false
+      };
+    case 'success':
+      return {
+        loadedRouteTrace: action.routeTrace,
+        loading: false,
+        loadFailed: false
+      };
+    case 'failed':
+      return {
+        ...state,
+        loading: false,
+        loadFailed: true
+      };
+    default:
+      return state;
+  }
+}
+
+function routeTraceNodeKey(callback: LlmToolCallback) {
+  const routeTrace = callback.routeTrace;
+
+  return [
+    callback.id,
+    routeTrace?.routeKind ?? '',
+    routeTrace?.detailArtifactRef ?? ''
+  ].join(':');
+}
+
+interface LlmToolTraceTreeState {
+  toolsExpanded: boolean;
+  expandedToolKey: string | null;
+  loadedToolCallbacks: Record<string, Omit<LlmToolCallback, 'key'>>;
+  loadingToolKey: string | null;
+  failedToolKeys: Set<string>;
+}
+
+const INITIAL_LLM_TOOL_TRACE_TREE_STATE: LlmToolTraceTreeState = {
+  toolsExpanded: false,
+  expandedToolKey: null,
+  loadedToolCallbacks: {},
+  loadingToolKey: null,
+  failedToolKeys: new Set()
+};
+
+type LlmToolTraceTreeAction =
+  | { type: 'toggle-tools' }
+  | { type: 'set-expanded-tool'; toolKey: string | null }
+  | { type: 'load-start'; toolKey: string }
+  | {
+      type: 'load-success';
+      callbackId: string;
+      loadedCallback: Omit<LlmToolCallback, 'key'>;
+    }
+  | { type: 'load-failed'; toolKey: string }
+  | { type: 'load-finished'; toolKey: string };
+
+function llmToolTraceTreeReducer(
+  state: LlmToolTraceTreeState,
+  action: LlmToolTraceTreeAction
+): LlmToolTraceTreeState {
+  switch (action.type) {
+    case 'toggle-tools':
+      return {
+        ...state,
+        toolsExpanded: !state.toolsExpanded
+      };
+    case 'set-expanded-tool':
+      return {
+        ...state,
+        expandedToolKey: action.toolKey
+      };
+    case 'load-start': {
+      const failedToolKeys = new Set(state.failedToolKeys);
+      failedToolKeys.delete(action.toolKey);
+
+      return {
+        ...state,
+        loadingToolKey: action.toolKey,
+        failedToolKeys
+      };
+    }
+    case 'load-success':
+      return {
+        ...state,
+        loadedToolCallbacks: {
+          ...state.loadedToolCallbacks,
+          [action.callbackId]: action.loadedCallback
+        }
+      };
+    case 'load-failed':
+      return {
+        ...state,
+        failedToolKeys: new Set(state.failedToolKeys).add(action.toolKey)
+      };
+    case 'load-finished':
+      return {
+        ...state,
+        loadingToolKey:
+          state.loadingToolKey === action.toolKey ? null : state.loadingToolKey
+      };
+    default:
+      return state;
+  }
+}
+
+const debugPayloadIdentityKeys = new WeakMap<object, string>();
+let debugPayloadIdentityKeySequence = 0;
+
+function debugPayloadIdentityKey(value: unknown) {
+  if (
+    (typeof value !== 'object' && typeof value !== 'function') ||
+    value === null
+  ) {
+    return `${typeof value}:${String(value)}`;
+  }
+
+  const existingKey = debugPayloadIdentityKeys.get(value);
+  if (existingKey) {
+    return existingKey;
+  }
+
+  debugPayloadIdentityKeySequence += 1;
+  const key = `debug-payload:${debugPayloadIdentityKeySequence}`;
+  debugPayloadIdentityKeys.set(value, key);
+  return key;
+}
+
+function llmToolTraceTreeResetKey({
+  debugPayload,
+  debugPayloads
+}: {
+  debugPayload: unknown;
+  debugPayloads?: unknown[];
+}) {
+  return debugPayloadIdentityKey(debugPayloads ?? debugPayload);
+}
+
+export function LlmToolTraceTree(props: {
+  debugPayload: unknown;
+  debugPayloads?: unknown[];
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+}) {
+  const resetKey = llmToolTraceTreeResetKey(props);
+
+  return <LlmToolTraceTreeContent key={resetKey} {...props} />;
+}
+
+function LlmToolTraceTreeContent({
   debugPayload,
   debugPayloads,
   onLoadArtifact
@@ -656,14 +854,9 @@ export function LlmToolTraceTree({
   debugPayloads?: unknown[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
-  const [toolsExpanded, setToolsExpanded] = useState(false);
-  const [expandedToolKey, setExpandedToolKey] = useState<string | null>(null);
-  const [loadedToolCallbacks, setLoadedToolCallbacks] = useState<
-    Record<string, Omit<LlmToolCallback, 'key'>>
-  >({});
-  const [loadingToolKey, setLoadingToolKey] = useState<string | null>(null);
-  const [failedToolKeys, setFailedToolKeys] = useState<Set<string>>(
-    () => new Set()
+  const [traceTreeState, dispatchTraceTree] = useReducer(
+    llmToolTraceTreeReducer,
+    INITIAL_LLM_TOOL_TRACE_TREE_STATE
   );
   const mountedRef = useRef(true);
   const debugPayloadList = useMemo(
@@ -677,7 +870,7 @@ export function LlmToolTraceTree({
   const effectiveToolCallbacks = useMemo(
     () =>
       toolCallbacks.map((callback) => {
-        const loadedCallback = loadedToolCallbacks[callback.id];
+        const loadedCallback = traceTreeState.loadedToolCallbacks[callback.id];
 
         if (!loadedCallback) {
           return callback;
@@ -697,7 +890,7 @@ export function LlmToolTraceTree({
           routeTrace: loadedCallback.routeTrace ?? callback.routeTrace
         };
       }),
-    [loadedToolCallbacks, toolCallbacks]
+    [traceTreeState.loadedToolCallbacks, toolCallbacks]
   );
   useEffect(() => {
     mountedRef.current = true;
@@ -707,28 +900,18 @@ export function LlmToolTraceTree({
     };
   }, []);
 
-  useEffect(() => {
-    setToolsExpanded(false);
-    setExpandedToolKey(null);
-    setLoadedToolCallbacks({});
-    setLoadingToolKey(null);
-    setFailedToolKeys(new Set());
-  }, [debugPayload]);
-
   const loadToolCallbackDetail = (callback: LlmToolCallback) => {
     if (!callback.detailArtifactRef || !onLoadArtifact) {
       return;
     }
-    if (loadedToolCallbacks[callback.id] || loadingToolKey === callback.key) {
+    if (
+      traceTreeState.loadedToolCallbacks[callback.id] ||
+      traceTreeState.loadingToolKey === callback.key
+    ) {
       return;
     }
 
-    setLoadingToolKey(callback.key);
-    setFailedToolKeys((current) => {
-      const next = new Set(current);
-      next.delete(callback.key);
-      return next;
-    });
+    dispatchTraceTree({ type: 'load-start', toolKey: callback.key });
 
     void onLoadArtifact(callback.detailArtifactRef)
       .then((payload) => {
@@ -741,26 +924,25 @@ export function LlmToolTraceTree({
           throw new Error('invalid_tool_callback_detail');
         }
 
-        setLoadedToolCallbacks((current) => ({
-          ...current,
-          [callback.id]: loadedCallback
-        }));
+        dispatchTraceTree({
+          type: 'load-success',
+          callbackId: callback.id,
+          loadedCallback
+        });
       })
       .catch(() => {
         if (!mountedRef.current) {
           return;
         }
 
-        setFailedToolKeys((current) => new Set(current).add(callback.key));
+        dispatchTraceTree({ type: 'load-failed', toolKey: callback.key });
       })
       .finally(() => {
         if (!mountedRef.current) {
           return;
         }
 
-        setLoadingToolKey((current) =>
-          current === callback.key ? null : current
-        );
+        dispatchTraceTree({ type: 'load-finished', toolKey: callback.key });
       });
   };
 
@@ -769,7 +951,7 @@ export function LlmToolTraceTree({
   }
 
   const handleToggleTools = () => {
-    setToolsExpanded((current) => !current);
+    dispatchTraceTree({ type: 'toggle-tools' });
   };
 
   const summaryText =
@@ -785,7 +967,7 @@ export function LlmToolTraceTree({
       className="agent-flow-editor__debug-llm-tools"
     >
       <button
-        aria-expanded={toolsExpanded}
+        aria-expanded={traceTreeState.toolsExpanded}
         className="agent-flow-editor__debug-llm-tools-trigger"
         onClick={handleToggleTools}
         type="button"
@@ -797,13 +979,13 @@ export function LlmToolTraceTree({
           </Typography.Text>
           <Typography.Text type="secondary">{summaryText}</Typography.Text>
         </span>
-        {toolsExpanded ? (
+        {traceTreeState.toolsExpanded ? (
           <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
         ) : (
           <RightOutlined className="agent-flow-editor__debug-workflow-collapse" />
         )}
       </button>
-      {toolsExpanded ? (
+      {traceTreeState.toolsExpanded ? (
         <div className="agent-flow-editor__debug-llm-tools-body">
           {effectiveToolCallbacks.length > 0 ? (
             <>
@@ -812,19 +994,25 @@ export function LlmToolTraceTree({
                 className="agent-flow-editor__debug-llm-tool-list"
               >
                 {effectiveToolCallbacks.map((callback) => {
-                  const expanded = expandedToolKey === callback.key;
+                  const expanded =
+                    traceTreeState.expandedToolKey === callback.key;
 
                   return (
                     <LlmToolCallbackItem
                       key={callback.key}
                       callback={callback}
                       expanded={expanded}
-                      loadFailed={failedToolKeys.has(callback.key)}
-                      loading={loadingToolKey === callback.key}
+                      loadFailed={traceTreeState.failedToolKeys.has(
+                        callback.key
+                      )}
+                      loading={traceTreeState.loadingToolKey === callback.key}
                       onLoadArtifact={onLoadArtifact}
                       onToggle={() => {
                         const nextExpanded = !expanded;
-                        setExpandedToolKey(nextExpanded ? callback.key : null);
+                        dispatchTraceTree({
+                          type: 'set-expanded-tool',
+                          toolKey: nextExpanded ? callback.key : null
+                        });
 
                         if (nextExpanded) {
                           loadToolCallbackDetail(callback);

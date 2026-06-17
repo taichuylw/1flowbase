@@ -52,10 +52,9 @@ export function DebugWorkflowProcess({
   const status = workflowStatus(items);
 
   return (
-    <div
+    <section
       aria-label={i18nText('agentFlow', 'auto.workflow')}
       className="agent-flow-editor__debug-workflow-process"
-      role="group"
     >
       <button
         aria-expanded={expanded}
@@ -111,6 +110,6 @@ export function DebugWorkflowProcess({
           })}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

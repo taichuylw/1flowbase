@@ -152,15 +152,27 @@ function ConversationTrace({
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
+  return (
+    <ConversationTraceContent
+      key={message.id}
+      message={message}
+      onLoadArtifact={onLoadArtifact}
+    />
+  );
+}
+
+function ConversationTraceContent({
+  message,
+  onLoadArtifact
+}: {
+  message: AgentFlowDebugMessage;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+}) {
   const [expandedNodeKey, setExpandedNodeKey] = useState<string | null>(null);
   const traceGroups = useMemo(
     () => groupTraceItemsForDisplay(message.traceSummary),
     [message.traceSummary]
   );
-
-  useEffect(() => {
-    setExpandedNodeKey(null);
-  }, [message.id]);
 
   if (message.traceSummary.length === 0) {
     return (
@@ -220,7 +232,9 @@ function useConversationLogArtifactLoader(
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>
 ) {
   const loadArtifactRef = useRef(onLoadArtifact);
-  const artifactRequestsRef = useRef<Map<string, Promise<unknown>>>(new Map());
+  const artifactRequestsRef = useRef<Map<string, Promise<unknown>> | null>(
+    null
+  );
   const hasArtifactLoader = Boolean(onLoadArtifact);
 
   useEffect(() => {
@@ -228,11 +242,16 @@ function useConversationLogArtifactLoader(
   }, [onLoadArtifact]);
 
   useEffect(() => {
-    artifactRequestsRef.current.clear();
+    artifactRequestsRef.current?.clear();
   }, [messageId]);
 
   const loadCachedArtifact = useCallback(async (artifactRef: string) => {
-    const existingRequest = artifactRequestsRef.current.get(artifactRef);
+    if (artifactRequestsRef.current === null) {
+      artifactRequestsRef.current = new Map();
+    }
+
+    const artifactRequests = artifactRequestsRef.current;
+    const existingRequest = artifactRequests.get(artifactRef);
 
     if (existingRequest) {
       return existingRequest;
@@ -244,13 +263,13 @@ function useConversationLogArtifactLoader(
     }
 
     const request = loadArtifact(artifactRef).catch((error: unknown) => {
-      if (artifactRequestsRef.current.get(artifactRef) === request) {
-        artifactRequestsRef.current.delete(artifactRef);
+      if (artifactRequests.get(artifactRef) === request) {
+        artifactRequests.delete(artifactRef);
       }
       throw error;
     });
 
-    artifactRequestsRef.current.set(artifactRef, request);
+    artifactRequests.set(artifactRef, request);
     return request;
   }, []);
 
