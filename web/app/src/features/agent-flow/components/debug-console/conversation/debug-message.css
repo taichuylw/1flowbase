@@ -396,29 +396,18 @@
 
 .agent-flow-editor__debug-llm-route-node {
   display: grid;
-  border: 1px solid #dbe7e4;
-  border-radius: 0.5rem;
-  background: #ffffff;
-  overflow: hidden;
-}
-
-.agent-flow-editor__debug-llm-route-node-row {
-  padding: 0.4rem 0.5rem;
-  background: #f8fafc;
+  min-width: 0;
 }
 
 .agent-flow-editor__debug-llm-route-branch-list {
   display: grid;
   gap: 0.375rem;
-  padding: 0.5rem 0.5rem 0;
+  border-left: 2px solid #c7d2fe;
+  padding-left: 0.625rem;
 }
 
 .agent-flow-editor__debug-llm-route-branch-node {
-  display: grid;
-  gap: 0.25rem;
-  border-left: 2px solid #c7d2fe;
-  padding: 0.375rem 0.5rem;
-  background: #fbfdff;
+  min-width: 0;
 }
 
 .agent-flow-editor__debug-llm-route-branch-meta {
@@ -427,13 +416,11 @@
   align-items: center;
   gap: 0.375rem;
   min-width: 0;
-  padding-left: 1.75rem;
 }
 
-.agent-flow-editor__debug-llm-route-node-detail {
-  display: grid;
+.agent-flow-editor__debug-llm-route-node-detail,
+.agent-flow-editor__debug-llm-route-branch-detail {
   gap: 0.5rem;
-  padding: 0 0.5rem 0.5rem;
 }
 
 .agent-flow-editor__debug-llm-tool-token-attribution {

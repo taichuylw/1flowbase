@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
 import { RuntimeDebugPayloadBlock } from '../../detail/last-run/NodeRunIOCard';
-import { DebugWorkflowNodeRow } from './DebugWorkflowNodeRow';
+import { DebugWorkflowNodeItem } from './DebugWorkflowNodeRow';
 import {
   collectLlmToolCallbacksFromDebugPayloads,
   readLlmToolCallbackDetail,
@@ -256,31 +256,49 @@ function summaryPreviewText(summary: Record<string, unknown> | null) {
 function LlmToolRouteBranchNode({
   branch,
   callback,
-  index
+  index,
+  onLoadArtifact
 }: {
   branch: LlmToolRouteBranchSummary;
   callback: LlmToolCallback;
   index: number;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const branchTraceItem = buildRouteBranchTraceItem(callback, branch, index);
   const outputPreview = summaryPreviewText(branch.outputSummary);
+  const branchDetailTitle =
+    branch.nodeAlias ?? branch.nodeId ?? `Panel ${index + 1}`;
 
   return (
     <div
       className="agent-flow-editor__debug-llm-route-branch-node"
       data-testid="debug-llm-route-branch-node"
     >
-      <DebugWorkflowNodeRow item={branchTraceItem} />
-      {branch.routeModel || outputPreview ? (
-        <div className="agent-flow-editor__debug-llm-route-branch-meta">
-          {branch.routeModel ? <Tag>{branch.routeModel}</Tag> : null}
-          {outputPreview ? (
-            <Typography.Text ellipsis type="secondary">
-              {outputPreview}
-            </Typography.Text>
+      <DebugWorkflowNodeItem
+        expanded={expanded}
+        item={branchTraceItem}
+        onToggle={() => setExpanded((current) => !current)}
+      >
+        <div className="agent-flow-editor__debug-workflow-node-detail agent-flow-editor__debug-llm-route-branch-detail">
+          {branch.routeModel || outputPreview ? (
+            <div className="agent-flow-editor__debug-llm-route-branch-meta">
+              {branch.routeModel ? <Tag>{branch.routeModel}</Tag> : null}
+              {outputPreview ? (
+                <Typography.Text ellipsis type="secondary">
+                  {outputPreview}
+                </Typography.Text>
+              ) : null}
+            </div>
           ) : null}
+          <RuntimeDebugPayloadBlock
+            height="8rem"
+            payload={branch.rawPayload}
+            title={branchDetailTitle}
+            onLoadArtifact={onLoadArtifact}
+          />
         </div>
-      ) : null}
+      </DebugWorkflowNodeItem>
     </div>
   );
 }
@@ -292,6 +310,8 @@ function LlmToolRouteNode({
   callback: LlmToolCallback;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
+  const [expanded, setExpanded] = useState(true);
+
   if (!callback.routeTrace) {
     return null;
   }
@@ -305,29 +325,33 @@ function LlmToolRouteNode({
       className="agent-flow-editor__debug-llm-route-node"
       data-testid="debug-llm-route-node"
     >
-      <div className="agent-flow-editor__debug-llm-route-node-row">
-        <DebugWorkflowNodeRow item={routeTraceItem} />
-      </div>
-      {branchSummaries.length > 0 ? (
-        <div className="agent-flow-editor__debug-llm-route-branch-list">
-          {branchSummaries.map((branch, index) => (
-            <LlmToolRouteBranchNode
-              key={`${branch.nodeId ?? callback.id}-${index}`}
-              branch={branch}
-              callback={callback}
-              index={index}
-            />
-          ))}
+      <DebugWorkflowNodeItem
+        expanded={expanded}
+        item={routeTraceItem}
+        onToggle={() => setExpanded((current) => !current)}
+      >
+        <div className="agent-flow-editor__debug-workflow-node-detail agent-flow-editor__debug-llm-route-node-detail">
+          {branchSummaries.length > 0 ? (
+            <div className="agent-flow-editor__debug-llm-route-branch-list">
+              {branchSummaries.map((branch, index) => (
+                <LlmToolRouteBranchNode
+                  key={`${branch.nodeId ?? callback.id}-${index}`}
+                  branch={branch}
+                  callback={callback}
+                  index={index}
+                  onLoadArtifact={onLoadArtifact}
+                />
+              ))}
+            </div>
+          ) : null}
+          <RuntimeDebugPayloadBlock
+            height="11rem"
+            payload={callback.routeTrace.rawPayload}
+            title={routeTraceTitle}
+            onLoadArtifact={onLoadArtifact}
+          />
         </div>
-      ) : null}
-      <div className="agent-flow-editor__debug-llm-route-node-detail">
-        <RuntimeDebugPayloadBlock
-          height="11rem"
-          payload={callback.routeTrace.rawPayload}
-          title={routeTraceTitle}
-          onLoadArtifact={onLoadArtifact}
-        />
-      </div>
+      </DebugWorkflowNodeItem>
     </div>
   );
 }

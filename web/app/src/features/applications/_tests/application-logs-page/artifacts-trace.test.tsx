@@ -892,17 +892,39 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     const routeNode = within(logPanel).getByTestId('debug-llm-route-node');
     expect(routeNode).toHaveTextContent('Fusion fan-in');
     expect(routeNode).toHaveTextContent('执行成功');
+    const routeTrigger = within(routeNode).getByRole('button', {
+      name: /Fusion fan-in/
+    });
+    expect(routeTrigger).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(routeNode).getAllByTestId('debug-workflow-node-item')
+    ).toHaveLength(3);
     const branchNodes = within(routeNode).getAllByTestId(
       'debug-llm-route-branch-node'
     );
     expect(branchNodes).toHaveLength(2);
     expect(branchNodes[0]).toHaveTextContent('Risk Panel');
-    expect(branchNodes[0]).toHaveTextContent('risk-v1');
     expect(branchNodes[1]).toHaveTextContent('Support Panel');
-    expect(branchNodes[1]).toHaveTextContent('support-v1');
+    const firstBranchTrigger = within(branchNodes[0]).getByRole('button', {
+      name: /Risk Panel/
+    });
+    expect(firstBranchTrigger).toHaveAttribute('aria-expanded', 'false');
+    expect(branchNodes[0]).not.toHaveTextContent('risk-v1');
+    fireEvent.click(firstBranchTrigger);
+    expect(firstBranchTrigger).toHaveAttribute('aria-expanded', 'true');
+    expect(branchNodes[0]).toHaveTextContent('risk-v1');
+    expect(branchNodes[0]).toHaveTextContent('panel A says strict');
+    fireEvent.click(firstBranchTrigger);
+    expect(firstBranchTrigger).toHaveAttribute('aria-expanded', 'false');
+    expect(branchNodes[0]).not.toHaveTextContent('risk-v1');
     expect(within(routeNode).getByLabelText('fusion JSON')).toHaveTextContent(
       'branch_summaries'
     );
+    fireEvent.click(routeTrigger);
+    expect(routeTrigger).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(routeNode).queryByTestId('debug-llm-route-branch-node')
+    ).not.toBeInTheDocument();
   }, 20_000);
 
   test('keeps expanded trace tools and loaded tool details across floating window activation', async () => {
@@ -1017,7 +1039,9 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       name: '对话日志'
     });
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
-    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
+    fireEvent.click(
+      within(logPanel).getByRole('button', { name: /LLM.*工具 1/ })
+    );
 
     const toolsNode = within(logPanel).getByRole('button', {
       name: /工具 1 次工具回调/
@@ -1079,14 +1103,18 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       })
     ).toHaveAttribute('aria-expanded', 'true');
 
-    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
+    fireEvent.click(
+      within(logPanel).getByRole('button', { name: /LLM.*工具 1/ })
+    );
     expect(
       within(logPanel).queryByRole('button', {
         name: /lookup_weather/
       })
     ).not.toBeInTheDocument();
 
-    fireEvent.click(within(logPanel).getByRole('button', { name: /LLM/ }));
+    fireEvent.click(
+      within(logPanel).getByRole('button', { name: /LLM.*工具 1/ })
+    );
     fireEvent.click(
       within(logPanel).getByRole('button', {
         name: /工具 1 次工具回调/
