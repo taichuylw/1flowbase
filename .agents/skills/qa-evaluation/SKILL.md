@@ -59,8 +59,8 @@ Dev Acceptance Gate 和 Project Health Gate 都必须把代码体检问题绑定
 - 需要处理周期性质量门禁值守、GitHub Issue / Actions 报告闭环或无权限贡献者本地门禁取证时，看 `references/quality-gate-watch.md`
 - 评估范围命中容器镜像、Trivy、GHCR、Dockerfile、基础镜像或镜像漏洞报告时，再加载 `references/container-image-security.md`
 - 如果评估范围命中后端，必须先读 `api/AGENTS.md`，再对齐 `.memory/project-memory` 中最近的后端规范、计划和插件边界记忆，不能沿用旧口径
-- `task mode / Dev Acceptance Gate` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归；后端 API 任务必须把预期产出与测试 / 接口 evidence 对照，不能只凭编译、cargo 或代码阅读下结论
-- `project evaluation mode / Project Health Gate` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口、风险热力图和维护建议
+- `task mode / Dev Acceptance Gate` 必查：验收场景、交互流、变化传播、状态 / API / 数据映射、关键回归；后端 API 任务必须把已确认验收预期与 TDD / 定向接口 evidence 对照，不能只凭编译、cargo 或代码阅读下结论
+- `project evaluation mode / Project Health Gate` 必查：UI 一致性、流程逻辑、响应式降级、API 契约、状态数据一致性、架构边界、测试缺口、风险热力图和维护建议；后端接口体检使用 mock / fixture / 受控数据跑质量门禁，检查状态是否正常、返回结构是否稳定、值是否正确、过期 / 禁用 / 缺失状态是否符合预期
 - 前后端字段契约必查：接口字段名必须沿用后端 DTO / 领域语义；展示文案可本地化，但不得为展示另起业务字段别名
 - 用户可见文案硬边界：不得改 locale value、按钮/菜单/标题/导航/placeholder/empty/error/help text、schema label、节点展示名或默认 alias 等任何用户能看到的字符串；发现错字、不一致或表达问题时只写 finding / warning，并要求产品或开发者确认新文案
 - i18n hygiene 修复边界：不得为了消除重复 value、未引用 key 或 common 抽取 warning 改文案值；只能复用既有 key、调整 key 引用、合并重复 key、删除确认失效 key，或保留相同文案值并说明原因
@@ -75,7 +75,7 @@ Dev Acceptance Gate 和 Project Health Gate 都必须把代码体检问题绑定
 - 评估范围命中前端 `i18n/`、插件 `i18n/`、语言切换或 UI 文案抽取时，必须运行或读取 `node scripts/node/tooling.js i18n-hygiene`
 - 没有运行时证据时，前端样式结论默认降级为受限结论
 - 只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须加载后端专项检查
-- 后端任务必查：预期产出 contract、三平面、接口包装、认证 / CSRF / ACL、状态写入口、`HostExtension / RuntimeExtension / CapabilityPlugin` 边界、HostExtension manifest contribution、pre-state infra provider、route/worker/migration registry、`storage-durable/postgres` 内 `storage-postgres` 的 repository/mapper 拆分、`storage-durable / storage-object` 边界、`workspace/system` 命名面、`SYSTEM_SCOPE_ID`、runtime `scope_id`、无 legacy alias、验证命令、API evidence 与 blast radius
+- 后端任务必查：已确认验收预期、三平面、接口包装、认证 / CSRF / ACL、状态写入口、接口返回结构和值正确性、过期 / 禁用 / 缺失状态、`HostExtension / RuntimeExtension / CapabilityPlugin` 边界、HostExtension manifest contribution、pre-state infra provider、route/worker/migration registry、`storage-durable/postgres` 内 `storage-postgres` 的 repository/mapper 拆分、`storage-durable / storage-object` 边界、`workspace/system` 命名面、`SYSTEM_SCOPE_ID`、runtime `scope_id`、无 legacy alias、验证命令、API evidence 与 blast radius
 - Provider / 上游 runtime 错误属于透传 contract：QA 不得把 provider stdout / stderr / upstream error 原样进入 `RuntimeContract` / API response 误判为泄漏或要求脱敏；应检查宿主是否改写、截断、翻译、吞掉或泛化上游信息，导致 provider / 协议排障信息损失
 - 后端范围命中 Rust 代码时，必须额外检查类型不变量、错误边界、状态方法、事务、幂等、async 阻塞、锁跨 await、数据库约束和 Rust 质量门禁
 - Rust 后端验收必须核对 completion self-check；缺少证据时对应项只能写 `未验证`，不能下通过结论

@@ -1,6 +1,6 @@
 ---
 name: backend-development
-description: "Use for 1flowbase backend implementation in api/: building, fixing, refactoring, or code-reviewing Rust/Axum APIs, routes, services, repositories, storage adapters, migrations, domain models, state transitions, write paths, module boundaries, permissions, HostExtension/RuntimeExtension boundaries, or core business logic. Also use to state the expected backend outcome before implementation so Codex can verify the result with tests and API evidence. Use after non-trivial requirements have been aligned by problem-framing, or when the user explicitly asks for direct implementation; do not use for standalone requirement alignment or QA reports."
+description: "Use for 1flowbase backend implementation in api/: building, fixing, refactoring, or code-reviewing Rust/Axum APIs, routes, services, repositories, storage adapters, migrations, domain models, state transitions, write paths, module boundaries, permissions, HostExtension/RuntimeExtension boundaries, or core business logic. Use after non-trivial requirements have been aligned by problem-framing, or when the user explicitly asks for direct implementation; do not use for standalone requirement alignment, test design, or QA reports."
 ---
 
 # Backend Development
@@ -14,20 +14,8 @@ description: "Use for 1flowbase backend implementation in api/: building, fixing
 - 需求仍有数据、contract、migration、权限、状态归属、架构方向或跨模块职责选择时，先回 `problem-framing`。
 - 涉及可测试行为变化时，先联动 `test-driven-development`；不能走 TDD 时，交付说明必须写明替代验证。
 - 用户要求自检、验收、回归、质量报告或证据结论时，切到 `qa-evaluation`。
+- 后端 API / 状态入口缺少已确认的接口预期、验收证据或测试设计时，不在实现期补需求；回到 `problem-framing` / `test-driven-development`。
 - 进入 `api/` 前先读 `api/AGENTS.md`；存在更近的 `AGENTS.md` 时按最近规则执行。
-
-## Expected Outcome Contract
-
-实现前先写清本次后端可观察结果。若无法说清预期，不进入实现，回到 `problem-framing` 收敛 contract。
-
-涉及 HTTP API、状态写入口或外部调用方时，至少确认：
-
-- 入口：route / method / plane、service command / action、repository 或 adapter 边界。
-- 认证与 scope：session、CSRF、ACL、`workspace/system`、`SYSTEM_SCOPE_ID`、runtime `scope_id`。
-- 请求：DTO 字段名、必填 / 可选语义、校验错误和幂等键。
-- 返回：status code、`ApiSuccess` / `204 No Content` / 统一错误结构、DTO 字段名和错误 shape。
-- 状态结果：会改变的领域对象、事务边界、副作用、审计、事件或运行日志。
-- 验证证据：先用什么测试锁住预期，完成后用什么命令、route integration 或 API evidence 证明结果。
 
 ## When to Use
 
@@ -80,7 +68,6 @@ description: "Use for 1flowbase backend implementation in api/: building, fixing
 ## Exit Handoff
 
 - 交付时写清修改的 route / service / repository / domain / adapter 边界。
-- 交付时对照 `Expected Outcome Contract` 写清已满足的预期、实际测试 / API evidence，以及没有验证的范围。
 - Rust 后端实现完成前按 `references/rust-backend-practices.md` 的 completion self-check 自检；不能保证的项标为风险或待办。
 - 验证命令按当前变更 blast radius 选择最小证据链；需要正式 QA 结论时移交 `qa-evaluation`。
 
@@ -93,4 +80,4 @@ description: "Use for 1flowbase backend implementation in api/: building, fixing
 - 用隐式副作用完成状态变化。
 - 用 bool 参数、重复空值校验或 pass-through service 处理特殊 case。
 - 用 `handler/manager/process/utils/helper/do_*/*_impl` 命名隐藏真实职责。
-- 没写清 API / 状态预期就开始实现，最后只用代码阅读或编译通过证明完成。
+- 在实现期临时决定接口预期、测试设计或验收口径。
