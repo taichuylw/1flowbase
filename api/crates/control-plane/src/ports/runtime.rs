@@ -513,6 +513,58 @@ pub struct CompleteCallbackTaskInput {
     pub completed_at: OffsetDateTime,
 }
 
+#[derive(Debug, Clone)]
+pub struct ApplicationRunTraceNodeProjectionInput {
+    pub trace_node_id: Uuid,
+    pub parent_trace_node_id: Option<Uuid>,
+    pub stable_locator: String,
+    pub node_kind: String,
+    pub owner_kind: Option<String>,
+    pub owner_id: Option<String>,
+    pub order_key: String,
+    pub node_id: Option<String>,
+    pub node_type: Option<String>,
+    pub node_alias: String,
+    pub status: String,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+    pub duration_ms: Option<i64>,
+    pub metrics_payload: serde_json::Value,
+    pub has_children: bool,
+    pub child_count: i64,
+    pub has_content: bool,
+    pub content_ref: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApplicationRunTraceNodeContentProjectionInput {
+    pub trace_node_id: Uuid,
+    pub content_kind: String,
+    pub payload: serde_json::Value,
+    pub source_refs: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReplaceApplicationRunTraceProjectionInput {
+    pub flow_run_id: Uuid,
+    pub projection_version: i32,
+    pub source_watermark: String,
+    pub nodes: Vec<ApplicationRunTraceNodeProjectionInput>,
+    pub contents: Vec<ApplicationRunTraceNodeContentProjectionInput>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertApplicationRunTraceProjectionStatusInput {
+    pub flow_run_id: Uuid,
+    pub projection_version: i32,
+    pub status: domain::ApplicationRunTraceProjectionStatus,
+    pub source_watermark: String,
+    pub attempt_count: i32,
+    pub last_attempt_at: Option<OffsetDateTime>,
+    pub last_success_at: Option<OffsetDateTime>,
+    pub diagnostic: Option<domain::ApplicationRunTraceProjectionDiagnostic>,
+}
+
 #[async_trait]
 pub trait OrchestrationRuntimeRepository: Send + Sync {
     async fn upsert_compiled_plan(
@@ -862,6 +914,59 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         application_id: Uuid,
         flow_run_id: Uuid,
     ) -> anyhow::Result<Option<domain::ApplicationRunDetail>>;
+    async fn replace_application_run_trace_projection(
+        &self,
+        input: &ReplaceApplicationRunTraceProjectionInput,
+    ) -> anyhow::Result<()> {
+        let _ = input;
+        anyhow::bail!("replace_application_run_trace_projection not implemented")
+    }
+    async fn upsert_application_run_trace_projection_status(
+        &self,
+        input: &UpsertApplicationRunTraceProjectionStatusInput,
+    ) -> anyhow::Result<()> {
+        let _ = input;
+        anyhow::bail!("upsert_application_run_trace_projection_status not implemented")
+    }
+    async fn get_application_run_trace_projection_status(
+        &self,
+        flow_run_id: Uuid,
+        projection_version: i32,
+    ) -> anyhow::Result<Option<domain::ApplicationRunTraceProjectionStatusRecord>> {
+        let _ = (flow_run_id, projection_version);
+        anyhow::bail!("get_application_run_trace_projection_status not implemented")
+    }
+    async fn list_application_run_trace_roots(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+        let _ = flow_run_id;
+        anyhow::bail!("list_application_run_trace_roots not implemented")
+    }
+    async fn list_application_run_trace_children(
+        &self,
+        flow_run_id: Uuid,
+        parent_trace_node_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+        let _ = (flow_run_id, parent_trace_node_id);
+        anyhow::bail!("list_application_run_trace_children not implemented")
+    }
+    async fn get_application_run_trace_node_by_locator(
+        &self,
+        flow_run_id: Uuid,
+        stable_locator: &str,
+    ) -> anyhow::Result<Option<domain::ApplicationRunTraceNodeRecord>> {
+        let _ = (flow_run_id, stable_locator);
+        anyhow::bail!("get_application_run_trace_node_by_locator not implemented")
+    }
+    async fn get_application_run_trace_node_content(
+        &self,
+        flow_run_id: Uuid,
+        trace_node_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ApplicationRunTraceNodeContentRecord>> {
+        let _ = (flow_run_id, trace_node_id);
+        anyhow::bail!("get_application_run_trace_node_content not implemented")
+    }
     async fn get_latest_node_run(
         &self,
         application_id: Uuid,

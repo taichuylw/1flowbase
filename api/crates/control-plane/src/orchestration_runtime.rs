@@ -45,6 +45,7 @@ mod persistence;
 mod provider_invoker;
 mod runtime_event_persister;
 pub mod scheduler_admission;
+pub mod trace_projection;
 
 #[cfg(test)]
 pub(crate) use provider_invoker::test_support;
