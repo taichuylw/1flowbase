@@ -417,7 +417,7 @@ impl TraceProjectionBuilder {
             node_id: None,
             node_type: Some("tool".to_string()),
             node_alias: tool_name,
-            status: task.status.as_str().to_string(),
+            status: callback_task_trace_node_status(task),
             started_at: task.created_at,
             finished_at: task.completed_at,
             duration_ms: trace_node_duration_ms(task.created_at, task.completed_at),
@@ -720,7 +720,7 @@ impl TraceProjectionBuilder {
             node_id: None,
             node_type: Some(task.callback_kind.clone()),
             node_alias: task.callback_kind.clone(),
-            status: task.status.as_str().to_string(),
+            status: callback_task_trace_node_status(task),
             started_at: task.created_at,
             finished_at: task.completed_at,
             duration_ms: trace_node_duration_ms(task.created_at, task.completed_at),
@@ -1340,22 +1340,32 @@ fn tool_callback_content_payload(
     })
 }
 
+fn callback_task_trace_node_status(task: &domain::CallbackTaskRecord) -> String {
+    match task.status {
+        domain::CallbackTaskStatus::Pending => domain::NodeRunStatus::WaitingCallback,
+        domain::CallbackTaskStatus::Completed => domain::NodeRunStatus::Succeeded,
+        domain::CallbackTaskStatus::Cancelled => domain::NodeRunStatus::Failed,
+    }
+    .as_str()
+    .to_string()
+}
+
 fn tool_group_status(tool_tasks: &[&domain::CallbackTaskRecord]) -> String {
     if tool_tasks
         .iter()
         .any(|task| task.status == domain::CallbackTaskStatus::Pending)
     {
-        return domain::CallbackTaskStatus::Pending.as_str().to_string();
+        return domain::NodeRunStatus::WaitingCallback.as_str().to_string();
     }
 
     if tool_tasks
         .iter()
         .any(|task| task.status == domain::CallbackTaskStatus::Cancelled)
     {
-        return domain::CallbackTaskStatus::Cancelled.as_str().to_string();
+        return domain::NodeRunStatus::Failed.as_str().to_string();
     }
 
-    domain::CallbackTaskStatus::Completed.as_str().to_string()
+    domain::NodeRunStatus::Succeeded.as_str().to_string()
 }
 
 fn node_run_group_content(

@@ -206,6 +206,7 @@ export function DebugWorkflowNodeItem({
       className="agent-flow-editor__debug-workflow-node-item"
       data-expanded={expanded ? 'true' : 'false'}
       data-selected={selected ? 'true' : 'false'}
+      data-node-type={item.nodeType}
       data-testid="debug-workflow-node-item"
     >
       <button

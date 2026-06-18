@@ -26,6 +26,8 @@ import './conversation-log-panel.css';
 import { formatDateTime, formatNumber } from '../../../../shared/i18n/format';
 import { i18nText } from '../../../../shared/i18n/text';
 
+const CONVERSATION_LOG_QUERY_STALE_TIME_MS = 60_000;
+
 interface ConversationLogTraceNodeSummary {
   trace_node_id: string;
   stable_locator?: string;
@@ -352,7 +354,9 @@ function ConversationLogLazyDetail({
 }) {
   const overviewQuery = useQuery({
     queryKey: ['conversation-log-run-overview', overviewRunId],
-    queryFn: () => overviewLoader.loadOverview(overviewRunId)
+    queryFn: () => overviewLoader.loadOverview(overviewRunId),
+    refetchOnWindowFocus: false,
+    staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
   });
 
   if (overviewQuery.isLoading) {
@@ -570,7 +574,9 @@ function LazyConversationTrace({
 }) {
   const traceTreeQuery = useQuery({
     queryKey: ['conversation-log-trace-tree', runId],
-    queryFn: () => traceLoader.loadTree(runId)
+    queryFn: () => traceLoader.loadTree(runId),
+    refetchOnWindowFocus: false,
+    staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
   });
 
   if (traceTreeQuery.isLoading) {
@@ -673,7 +679,9 @@ function LazyTraceNodeItem({
       runId,
       node.trace_node_id
     ],
-    queryFn: () => traceLoader.loadContent(runId, node.trace_node_id)
+    queryFn: () => traceLoader.loadContent(runId, node.trace_node_id),
+    refetchOnWindowFocus: false,
+    staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
   });
   const childrenQuery = useQuery({
     enabled: expanded && node.has_children,
@@ -683,7 +691,9 @@ function LazyTraceNodeItem({
       node.trace_node_id
     ],
     queryFn: () =>
-      traceLoader.loadChildren(runId, node.trace_node_id, undefined)
+      traceLoader.loadChildren(runId, node.trace_node_id, undefined),
+    refetchOnWindowFocus: false,
+    staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
   });
   useEffect(() => {
     setChildNodes([]);

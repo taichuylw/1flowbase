@@ -298,7 +298,8 @@ function RunConversation({
     queryFn: () =>
       fetchApplicationRunConversationMessages(applicationId, runId, {
         limit: RUN_CONVERSATION_PAGE_LIMIT
-      })
+      }),
+    refetchOnWindowFocus: false
   });
   const refetchInitialConversation = initialConversationQuery.refetch;
   const conversationPage = useMemo(

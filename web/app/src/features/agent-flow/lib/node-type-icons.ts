@@ -52,6 +52,7 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   question_classifier: createElement(QuestionCircleOutlined),
   if_else: createElement(SwapOutlined),
   http_request: createElement(ApiOutlined),
+  tools: createElement(ToolOutlined),
   tool: createElement(ToolOutlined),
   tool_result: createElement(MessageOutlined),
   data_model_list: createElement(DatabaseOutlined),

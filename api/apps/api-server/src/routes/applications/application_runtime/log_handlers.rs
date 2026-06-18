@@ -419,6 +419,8 @@ fn encode_application_run_trace_children_cursor(
 fn to_trace_node_summary_from_projection(
     node: domain::ApplicationRunTraceNodeRecord,
 ) -> ApplicationRunTraceNodeSummaryResponse {
+    let status = trace_node_summary_status(&node.status);
+
     ApplicationRunTraceNodeSummaryResponse {
         trace_node_id: node.trace_node_id.to_string(),
         stable_locator: node.stable_locator,
@@ -440,7 +442,7 @@ fn to_trace_node_summary_from_projection(
         node_id: node.node_id,
         node_type: node.node_type,
         node_alias: node.node_alias,
-        status: node.status,
+        status,
         started_at: format_time(node.started_at),
         finished_at: format_optional_time(node.finished_at),
         duration_ms: node.duration_ms,
@@ -449,6 +451,16 @@ fn to_trace_node_summary_from_projection(
         child_count: node.child_count,
         has_content: node.has_content,
     }
+}
+
+fn trace_node_summary_status(status: &str) -> String {
+    match status {
+        "pending" => domain::NodeRunStatus::WaitingCallback.as_str(),
+        "completed" => domain::NodeRunStatus::Succeeded.as_str(),
+        "cancelled" => domain::NodeRunStatus::Failed.as_str(),
+        value => value,
+    }
+    .to_string()
 }
 
 fn trace_projection_statistics(
