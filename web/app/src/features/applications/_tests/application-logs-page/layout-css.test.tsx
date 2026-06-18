@@ -25,8 +25,57 @@ const runtimeApi = vi.hoisted(() => ({
       input?.sortBy ?? 'started_at',
       input?.sortOrder ?? 'desc'
     ] as const,
-  applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
-    ['applications', applicationId, 'runtime', 'runs', runId] as const,
+  applicationRunTraceTreeQueryKey: (applicationId: string, runId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree'
+    ] as const,
+  applicationRunTraceNodeChildrenQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'children'
+    ] as const,
+  applicationRunTraceNodeContentQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'content'
+    ] as const,
+  applicationRunResumeTimelineQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'resume-timeline'
+    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -54,7 +103,10 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunDetail: vi.fn(),
+  fetchApplicationRunTraceTree: vi.fn(),
+  fetchApplicationRunTraceNodeChildren: vi.fn(),
+  fetchApplicationRunTraceNodeContent: vi.fn(),
+  fetchApplicationRunResumeTimeline: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
@@ -64,7 +116,7 @@ const runtimeApi = vi.hoisted(() => ({
 
 vi.mock('../../api/runtime', () => runtimeApi);
 
-import type { ApplicationRunDetail } from '../../api/runtime';
+import type { ConsoleApplicationRunDetail as ApplicationRunDetail } from '@1flowbase/api-client';
 import { resetAuthStore } from '../../../../state/auth-store';
 
 function applicationRunsPage<T>(
@@ -216,7 +268,6 @@ describe('ApplicationLogsPage - layout CSS', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
@@ -239,7 +290,6 @@ describe('ApplicationLogsPage - layout CSS', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue({
       items: [
         {

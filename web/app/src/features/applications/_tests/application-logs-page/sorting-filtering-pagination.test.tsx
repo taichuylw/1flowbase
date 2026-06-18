@@ -34,8 +34,57 @@ const runtimeApi = vi.hoisted(() => ({
       input?.sortOrder ?? 'desc',
       input?.titleIncludes ?? ''
     ] as const,
-  applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
-    ['applications', applicationId, 'runtime', 'runs', runId] as const,
+  applicationRunTraceTreeQueryKey: (applicationId: string, runId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree'
+    ] as const,
+  applicationRunTraceNodeChildrenQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'children'
+    ] as const,
+  applicationRunTraceNodeContentQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'content'
+    ] as const,
+  applicationRunResumeTimelineQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'resume-timeline'
+    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -63,7 +112,10 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunDetail: vi.fn(),
+  fetchApplicationRunTraceTree: vi.fn(),
+  fetchApplicationRunTraceNodeChildren: vi.fn(),
+  fetchApplicationRunTraceNodeContent: vi.fn(),
+  fetchApplicationRunResumeTimeline: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
@@ -73,7 +125,7 @@ const runtimeApi = vi.hoisted(() => ({
 
 vi.mock('../../api/runtime', () => runtimeApi);
 
-import type { ApplicationRunDetail } from '../../api/runtime';
+import type { ConsoleApplicationRunDetail as ApplicationRunDetail } from '@1flowbase/api-client';
 import { AppProviders } from '../../../../app/AppProviders';
 import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
@@ -230,7 +282,6 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
@@ -253,7 +304,6 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue({
       items: [
         {
@@ -637,8 +687,6 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
       sortOrder: 'desc',
       titleIncludes: '退款'
     });
-    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
-
     fireEvent.change(screen.getByPlaceholderText('搜索标题'), {
       target: { value: '' }
     });

@@ -613,7 +613,7 @@ async fn wait_for_run_detail(
             .oneshot(
                 Request::builder()
                     .uri(format!(
-                        "/api/console/applications/{application_id}/logs/runs/{run_id}"
+                        "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree"
                     ))
                     .header("cookie", cookie)
                     .body(Body::empty())
@@ -754,6 +754,7 @@ fn sse_data_payload(frame: &str) -> Value {
 }
 
 mod artifacts_billing_routes;
+mod lazy_tree_contract_routes;
 mod logs_routes;
 mod read_side_effect_routes;
 mod resume_cancel_routes;

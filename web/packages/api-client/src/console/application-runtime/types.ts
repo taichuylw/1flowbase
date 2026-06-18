@@ -455,6 +455,113 @@ export interface ConsoleApplicationRunDetail {
   stitched_trace?: ConsoleApplicationRunStitchedTrace[];
 }
 
+export interface ConsoleApplicationRunOverview {
+  run: ConsoleApplicationRunLog;
+  statistics: ConsoleApplicationRunStatistics;
+  flow_run: ConsoleFlowRunDetail;
+  answer_snapshot?: ConsoleAnswerSnapshot | null;
+}
+
+export type ConsoleApplicationRunTraceNodeKind =
+  | 'node_run'
+  | 'callback_task'
+  | 'tool_group'
+  | 'tool_callback'
+  | 'stitched_context'
+  | 'stitched_run'
+  | 'route'
+  | 'fusion'
+  | 'branch'
+  | 'event';
+
+export interface ConsoleApplicationRunTraceNodeSummary {
+  trace_node_id: string;
+  stable_locator: string;
+  parent_trace_node_id?: string | null;
+  node_kind: ConsoleApplicationRunTraceNodeKind;
+  flow_run_id: string;
+  node_run_id?: string | null;
+  callback_task_id?: string | null;
+  node_id?: string | null;
+  node_type?: string | null;
+  node_alias: string;
+  status: string;
+  started_at: string;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  metrics_payload: Record<string, unknown>;
+  has_children: boolean;
+  child_count: number;
+  has_content: boolean;
+}
+
+export interface ConsoleApplicationRunTraceProjectionStatus {
+  projection_status:
+    | 'pending'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'stale'
+    | 'partial';
+  projection_version: number;
+  source_watermark: string;
+  attempt_count: number;
+  last_attempt_at?: string | null;
+  last_success_at?: string | null;
+  last_error_code?: string | null;
+  last_error_stage?: string | null;
+  last_error_source_kind?: string | null;
+  last_error_source_locator?: string | null;
+  last_error_ref?: string | null;
+  retriable: boolean;
+}
+
+export interface ConsoleApplicationRunTraceTree {
+  run: ConsoleApplicationRunLog;
+  statistics: ConsoleApplicationRunStatistics;
+  flow_run: ConsoleFlowRunDetail;
+  answer_snapshot?: ConsoleAnswerSnapshot | null;
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
+  nodes: ConsoleApplicationRunTraceNodeSummary[];
+}
+
+export interface ConsoleApplicationRunTraceNodeChildrenPageInfo {
+  has_more: boolean;
+  next_cursor?: string | null;
+  page_size: number;
+}
+
+export interface ConsoleApplicationRunTraceNodeChildren {
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
+  items: ConsoleApplicationRunTraceNodeSummary[];
+  page_info: ConsoleApplicationRunTraceNodeChildrenPageInfo;
+}
+
+export interface ConsoleApplicationRunTraceNodeContent {
+  trace_node_id: string;
+  node_kind: ConsoleApplicationRunTraceNodeKind;
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
+  node_run?: ConsoleNodeRunDetail | null;
+  callback_task?: ConsoleCallbackTask | null;
+  flow_run?: ConsoleFlowRunDetail | null;
+  checkpoints: ConsoleRunCheckpoint[];
+  events: ConsoleRunEvent[];
+  payload?: Record<string, unknown> | null;
+}
+
+export interface ConsoleApplicationRunTraceToolCallbackContent {
+  trace_node_id: string;
+  tool_call_id: string;
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
+  payload: Record<string, unknown>;
+}
+
+export interface ConsoleApplicationRunResumeTimeline {
+  flow_run: ConsoleFlowRunDetail;
+  callback_tasks: ConsoleCallbackTask[];
+  events: ConsoleRunEvent[];
+}
+
 export interface ConsoleApplicationConversationMessage {
   run_id: string;
   detail_run_id?: string | null;

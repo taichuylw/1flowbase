@@ -250,7 +250,7 @@ describe('node last run runtime', () => {
     vi.spyOn(runtimeApi, 'fetchNodeLastRun')
       .mockResolvedValueOnce(null)
       .mockResolvedValue(sampleNodeLastRun());
-    vi.spyOn(runtimeApi, 'fetchApplicationRunDetail').mockResolvedValue(
+    vi.spyOn(runtimeApi, 'fetchApplicationRunDebugSnapshot').mockResolvedValue(
       sampleRunDetail()
     );
     vi.spyOn(runtimeApi, 'startNodeDebugPreview').mockResolvedValue(

@@ -17,6 +17,7 @@ export function AgentFlowDebugConsole({
   ariaLabel,
   closeLabel,
   composerUiOnly = false,
+  logActionRunId,
   messages,
   runContext,
   showClearAction = true,
@@ -38,6 +39,7 @@ export function AgentFlowDebugConsole({
   ariaLabel?: string;
   closeLabel?: string;
   composerUiOnly?: boolean;
+  logActionRunId?: string | null;
   messages: AgentFlowDebugMessage[];
   runContext: AgentFlowRunContext;
   showClearAction?: boolean;
@@ -107,6 +109,7 @@ export function AgentFlowDebugConsole({
       >
         <DebugConversationPane
           composerUiOnly={composerUiOnly}
+          logActionRunId={logActionRunId}
           messages={messages}
           runContext={runContext}
           status={status}

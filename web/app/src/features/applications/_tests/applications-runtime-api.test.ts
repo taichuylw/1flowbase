@@ -1,11 +1,47 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+const traceProjectionStatus = vi.hoisted(() => ({
+  projection_status: 'succeeded',
+  projection_version: 1,
+  source_watermark: 'run-1:1',
+  attempt_count: 1,
+  last_attempt_at: '2026-05-08T00:00:00Z',
+  last_success_at: '2026-05-08T00:00:01Z',
+  last_error_code: null,
+  last_error_stage: null,
+  last_error_source_kind: null,
+  last_error_source_locator: null,
+  last_error_ref: null,
+  retriable: false
+}));
+
 vi.mock('@1flowbase/api-client', () => ({
   completeConsoleCallbackTask: vi.fn().mockResolvedValue(undefined),
-  getConsoleApplicationRunDetail: vi.fn().mockResolvedValue({
-    flow_run: { id: 'run-1' },
-    node_runs: [],
+  getConsoleApplicationRunTraceTree: vi.fn().mockResolvedValue({
+    projection_status: traceProjectionStatus,
+    nodes: []
+  }),
+  getConsoleApplicationRunTraceNodeChildren: vi.fn().mockResolvedValue({
+    projection_status: traceProjectionStatus,
+    items: [],
+    page_info: {
+      has_more: false,
+      next_cursor: null,
+      page_size: 20
+    }
+  }),
+  getConsoleApplicationRunTraceNodeContent: vi.fn().mockResolvedValue({
+    trace_node_id: '11111111-1111-4111-8111-111111111111',
+    node_kind: 'node_run',
+    projection_status: traceProjectionStatus,
+    node_run: null,
+    callback_task: null,
+    flow_run: null,
     checkpoints: [],
+    events: []
+  }),
+  getConsoleApplicationRunResumeTimeline: vi.fn().mockResolvedValue({
+    flow_run: { id: 'run-1' },
     callback_tasks: [],
     events: []
   }),
@@ -182,8 +218,11 @@ vi.mock('@1flowbase/api-client', () => ({
 import {
   completeConsoleCallbackTask,
   fetchConsoleRuntimeModelRecords,
-  getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
+  getConsoleApplicationRunResumeTimeline,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceTree,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugStream,
@@ -191,15 +230,21 @@ import {
 } from '@1flowbase/api-client';
 
 import {
-  applicationRunDetailQueryKey,
   applicationRunMonitoringReportQueryKey,
+  applicationRunResumeTimelineQueryKey,
+  applicationRunTraceNodeChildrenQueryKey,
+  applicationRunTraceNodeContentQueryKey,
+  applicationRunTraceTreeQueryKey,
   applicationRuntimeActivityQueryKey,
   applicationRunsQueryKey,
   applicationRuntimeDebugStreamQueryKey,
   completeCallbackTask,
   fetchApplicationConversationMessages,
-  fetchApplicationRunDetail,
   fetchApplicationRunMonitoringReport,
+  fetchApplicationRunResumeTimeline,
+  fetchApplicationRunTraceNodeChildren,
+  fetchApplicationRunTraceNodeContent,
+  fetchApplicationRunTraceTree,
   fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
   fetchRuntimeDebugStream,
@@ -212,6 +257,8 @@ afterEach(() => {
 
 describe('applications runtime api', () => {
   test('builds stable runtime query keys', () => {
+    const traceNodeId = '11111111-1111-4111-8111-111111111111';
+
     expect(applicationRunsQueryKey('app-1')).toEqual([
       'applications',
       'app-1',
@@ -224,26 +271,59 @@ describe('applications runtime api', () => {
       'desc',
       ''
     ]);
+    expect(applicationRunsQueryKey('app-1', { titleIncludes: '退款' })).toEqual(
+      [
+        'applications',
+        'app-1',
+        'runtime',
+        'runs',
+        1,
+        20,
+        'all',
+        'started_at',
+        'desc',
+        '退款'
+      ]
+    );
+    expect(applicationRunTraceTreeQueryKey('app-1', 'run-1')).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'trace-tree'
+    ]);
     expect(
-      applicationRunsQueryKey('app-1', { titleIncludes: '退款' })
+      applicationRunTraceNodeChildrenQueryKey('app-1', 'run-1', traceNodeId)
     ).toEqual([
       'applications',
       'app-1',
       'runtime',
       'runs',
-      1,
-      20,
-      'all',
-      'started_at',
-      'desc',
-      '退款'
+      'run-1',
+      'trace-tree',
+      traceNodeId,
+      'children'
     ]);
-    expect(applicationRunDetailQueryKey('app-1', 'run-1')).toEqual([
+    expect(
+      applicationRunTraceNodeContentQueryKey('app-1', 'run-1', traceNodeId)
+    ).toEqual([
       'applications',
       'app-1',
       'runtime',
       'runs',
-      'run-1'
+      'run-1',
+      'trace-tree',
+      traceNodeId,
+      'content'
+    ]);
+    expect(applicationRunResumeTimelineQueryKey('app-1', 'run-1')).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'resume-timeline'
     ]);
     expect(applicationRuntimeDebugStreamQueryKey('app-1', 'run-1')).toEqual([
       'applications',
@@ -272,8 +352,13 @@ describe('applications runtime api', () => {
   });
 
   test('passes the resolved base url to runtime read requests', async () => {
+    const traceNodeId = '11111111-1111-4111-8111-111111111111';
+
     await fetchApplicationRuns('app-1', { cacheMode: 'refresh' });
-    await fetchApplicationRunDetail('app-1', 'run-1');
+    await fetchApplicationRunTraceTree('app-1', 'run-1');
+    await fetchApplicationRunTraceNodeChildren('app-1', 'run-1', traceNodeId);
+    await fetchApplicationRunTraceNodeContent('app-1', 'run-1', traceNodeId);
+    await fetchApplicationRunResumeTimeline('app-1', 'run-1');
     await fetchApplicationRunMonitoringReport('app-1', {
       timeRangeDays: 28,
       bucket: 'week'
@@ -294,7 +379,25 @@ describe('applications runtime api', () => {
       'http://127.0.0.1:7800'
     );
     expect(getConsoleApplicationRuns).not.toHaveBeenCalled();
-    expect(getConsoleApplicationRunDetail).toHaveBeenCalledWith(
+    expect(getConsoleApplicationRunTraceTree).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunTraceNodeChildren).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'http://127.0.0.1:7800',
+      undefined
+    );
+    expect(getConsoleApplicationRunTraceNodeContent).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunResumeTimeline).toHaveBeenCalledWith(
       'app-1',
       'run-1',
       'http://127.0.0.1:7800'

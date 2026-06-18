@@ -1,6 +1,6 @@
 import { Empty, Tag, Typography } from 'antd';
 
-import type { ApplicationRunDetail } from '../../api/runtime';
+import type { ApplicationRunResumeTimeline as ApplicationRunResumeTimelineData } from '../../api/runtime';
 import { i18nText } from '../../../../shared/i18n/text';
 import './application-run-detail-panel.css';
 
@@ -96,7 +96,7 @@ function payloadString(payload: Record<string, unknown>, key: string) {
 }
 
 function buildResumeTimeline(
-  detail: ApplicationRunDetail
+  detail: ApplicationRunResumeTimelineData
 ): ResumeTimelineItem[] {
   const eventItems: ResumeTimelineItem[] = [];
   for (const event of detail.events) {
@@ -132,7 +132,7 @@ function buildResumeTimeline(
 export function ApplicationRunResumeTimeline({
   detail
 }: {
-  detail: ApplicationRunDetail | null;
+  detail: ApplicationRunResumeTimelineData | null;
 }) {
   const items = detail ? buildResumeTimeline(detail) : [];
 

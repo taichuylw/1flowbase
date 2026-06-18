@@ -332,6 +332,53 @@ pub async fn subscribe_flow_debug_run_stream(
 }
 
 #[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/orchestration/runs/{run_id}/debug-snapshot",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id")
+    ),
+    responses(
+        (status = 200, body = ApplicationRunDetailResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_flow_debug_run_snapshot(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
+    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+        &state.store,
+        id,
+        run_id,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+
+    if detail.flow_run.created_by != context.user.id {
+        return Err(ControlPlaneError::NotFound("flow_run").into());
+    }
+
+    let detail = offload_application_run_detail_artifacts(
+        state,
+        context.actor.current_workspace_id,
+        id,
+        detail,
+    )
+    .await?;
+
+    Ok(Json(ApiSuccess::new(to_application_run_detail_response(
+        &application,
+        detail,
+    ))))
+}
+
+#[utoipa::path(
     post,
     path = "/api/console/applications/{id}/orchestration/runs/{run_id}/cancel",
     params(

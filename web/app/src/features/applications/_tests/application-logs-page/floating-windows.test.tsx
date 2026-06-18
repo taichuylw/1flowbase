@@ -42,8 +42,66 @@ const runtimeApi = vi.hoisted(() => ({
       input?.sortBy ?? 'started_at',
       input?.sortOrder ?? 'desc'
     ] as const,
-  applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
-    ['applications', applicationId, 'runtime', 'runs', runId] as const,
+  applicationRunTraceTreeQueryKey: (applicationId: string, runId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree'
+    ] as const,
+  applicationRunOverviewQueryKey: (applicationId: string, runId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'overview'
+    ] as const,
+  applicationRunTraceNodeChildrenQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'children'
+    ] as const,
+  applicationRunTraceNodeContentQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'content'
+    ] as const,
+  applicationRunResumeTimelineQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'resume-timeline'
+    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -71,7 +129,11 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunDetail: vi.fn(),
+  fetchApplicationRunOverview: vi.fn(),
+  fetchApplicationRunTraceTree: vi.fn(),
+  fetchApplicationRunTraceNodeChildren: vi.fn(),
+  fetchApplicationRunTraceNodeContent: vi.fn(),
+  fetchApplicationRunResumeTimeline: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn().mockImplementation(
     async (
@@ -113,7 +175,7 @@ const runtimeApi = vi.hoisted(() => ({
 
 vi.mock('../../api/runtime', () => runtimeApi);
 
-import type { ApplicationRunDetail } from '../../api/runtime';
+import type { ConsoleApplicationRunDetail as ApplicationRunDetail } from '@1flowbase/api-client';
 import { AppProviders } from '../../../../app/AppProviders';
 import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
@@ -308,6 +370,94 @@ function sampleRunDetail(): ApplicationRunDetail {
   };
 }
 
+function sampleTraceTree() {
+  return {
+    run: {
+      id: 'run-1',
+      application_id: 'app-1',
+      application_type: 'agent_flow',
+      run_object_kind: 'application_run',
+      run_kind: 'published_api_run',
+      status: 'succeeded',
+      title: '公开 API 退款总结',
+      source: 'api_key',
+      compatibility_mode: 'openai-responses-v1',
+      subject: {
+        kind: 'agent_flow',
+        id: 'flow-1',
+        draft_id: 'draft-1',
+        target_node_id: 'node-llm'
+      },
+      actor: {
+        kind: 'user',
+        id: 'user-1',
+        display_name: 'root'
+      },
+      correlation: {
+        compatibility_mode: 'openai-responses-v1'
+      },
+      started_at: '2026-04-17T09:00:00Z',
+      finished_at: '2026-04-17T09:00:01Z',
+      created_at: '2026-04-17T09:00:00Z',
+      updated_at: '2026-04-17T09:00:01Z'
+    },
+    statistics: {
+      total_tokens: 50,
+      input_tokens: 40,
+      output_tokens: 10,
+      input_cache_hit_tokens: 12,
+      unique_node_count: 3,
+      tool_callback_count: 20
+    },
+    flow_run: sampleRunDetail().flow_run,
+    answer_snapshot: null,
+    nodes: [
+      {
+        trace_node_id: 'node_run:node-run-1',
+        parent_trace_node_id: null,
+        node_kind: 'node_run',
+        flow_run_id: 'run-1',
+        node_run_id: 'node-run-1',
+        node_id: 'node-llm',
+        node_type: 'llm',
+        node_alias: 'LLM',
+        status: 'succeeded',
+        started_at: '2026-04-17T09:00:00Z',
+        finished_at: '2026-04-17T09:00:01Z',
+        duration_ms: 1000,
+        metrics_payload: {
+          output_contract_count: 1
+        },
+        has_children: false,
+        has_content: true
+      }
+    ]
+  };
+}
+
+function sampleRunOverview() {
+  const detail = sampleRunDetail();
+
+  return {
+    run: detail.run,
+    statistics: detail.statistics,
+    flow_run: detail.flow_run,
+    answer_snapshot: detail.answer_snapshot ?? null
+  };
+}
+
+function sampleTraceNodeContent() {
+  return {
+    trace_node_id: 'node_run:node-run-1',
+    node_kind: 'node_run',
+    node_run: sampleRunDetail().node_runs[0],
+    callback_task: null,
+    flow_run: null,
+    checkpoints: [],
+    events: sampleRunDetail().events
+  };
+}
+
 describe('ApplicationLogsPage - floating windows', () => {
   let getBoundingClientRectSpy: { mockRestore: () => void } | undefined;
   let innerHeightSpy: { mockRestore: () => void } | undefined;
@@ -322,7 +472,11 @@ describe('ApplicationLogsPage - floating windows', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunDetail.mockReset();
+    runtimeApi.fetchApplicationRunOverview.mockReset();
+    runtimeApi.fetchApplicationRunTraceTree.mockReset();
+    runtimeApi.fetchApplicationRunTraceNodeChildren.mockReset();
+    runtimeApi.fetchApplicationRunTraceNodeContent.mockReset();
+    runtimeApi.fetchApplicationRunResumeTimeline.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
@@ -351,37 +505,28 @@ describe('ApplicationLogsPage - floating windows', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationRunDetail.mockImplementation(
-      async (appId, runId) => {
-        if (runId === 'run-0') {
-          return {
-            ...sampleRunDetail(),
-            run: {
-              ...sampleRunDetail().run,
-              id: 'run-0',
-              started_at: null,
-              finished_at: null
-            },
-            flow_run: {
-              ...sampleRunDetail().flow_run,
-              id: 'run-0',
-              started_at: null,
-              finished_at: null
-            },
-            statistics: {
-              total_tokens: null,
-              input_tokens: null,
-              output_tokens: null,
-              input_cache_hit_tokens: null,
-              unique_node_count: 0,
-              tool_callback_count: 0
-            },
-            node_runs: []
-          };
-        }
-        return sampleRunDetail();
-      }
+    runtimeApi.fetchApplicationRunTraceTree.mockResolvedValue(
+      sampleTraceTree()
     );
+    runtimeApi.fetchApplicationRunOverview.mockResolvedValue(
+      sampleRunOverview()
+    );
+    runtimeApi.fetchApplicationRunTraceNodeChildren.mockResolvedValue({
+      items: [],
+      page_info: {
+        has_more: false,
+        next_cursor: null,
+        page_size: 20
+      }
+    });
+    runtimeApi.fetchApplicationRunTraceNodeContent.mockResolvedValue(
+      sampleTraceNodeContent()
+    );
+    runtimeApi.fetchApplicationRunResumeTimeline.mockResolvedValue({
+      flow_run: sampleRunDetail().flow_run,
+      callback_tasks: sampleRunDetail().callback_tasks,
+      events: sampleRunDetail().events
+    });
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue(
       conversationMessagesPage([
         {
@@ -494,7 +639,6 @@ describe('ApplicationLogsPage - floating windows', () => {
         runtimeApi.fetchApplicationRunConversationMessages
       ).toHaveBeenCalledWith('app-1', 'run-1', { limit: 5 });
     });
-    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
     const detailPane = await screen.findByRole('complementary', {
       name: '运行详情'
     });
@@ -590,10 +734,6 @@ describe('ApplicationLogsPage - floating windows', () => {
       name: '对话日志'
     });
     expect(logPanel).toBeInTheDocument();
-    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
-      'app-1',
-      'run-1'
-    );
     expect(
       screen.getByRole('dialog', { name: '对话日志' })
     ).toBeInTheDocument();
@@ -606,16 +746,45 @@ describe('ApplicationLogsPage - floating windows', () => {
       'aria-selected',
       'true'
     );
-    expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
+    expect(runtimeApi.fetchApplicationRunTraceTree).not.toHaveBeenCalled();
+    expect(await within(logPanel).findByLabelText('输出 JSON')).toHaveTextContent(
       '退款政策摘要'
     );
     expect(within(logPanel).getByText('协议')).toBeInTheDocument();
     expect(within(logPanel).queryByText('节点数')).not.toBeInTheDocument();
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRunTraceTree).toHaveBeenCalledWith(
+        'app-1',
+        'run-1'
+      );
+    });
     expect(
-      within(logPanel).queryByRole('region', { name: 'LLM 节点详情' })
+      runtimeApi.fetchApplicationRunTraceNodeContent
+    ).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      await within(logPanel).findByRole('button', { name: /LLM.*llm/ })
+    );
+    const nodeDetail = await within(logPanel).findByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    expect(
+      within(nodeDetail).queryByRole('button', { name: '详情' })
     ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        runtimeApi.fetchApplicationRunTraceNodeContent
+      ).toHaveBeenCalledWith('app-1', 'run-1', 'node_run:node-run-1');
+    });
+    await waitFor(() => {
+      expect(
+        within(logPanel)
+          .getAllByLabelText('输入 JSON')
+          .some((element) => element.textContent?.includes('总结退款政策'))
+      ).toBe(true);
+    });
 
     fireEvent.click(screen.getByRole('button', { name: '关闭运行详情' }));
 
@@ -950,8 +1119,8 @@ describe('ApplicationLogsPage - floating windows', () => {
     innerHeightSpy = vi
       .spyOn(window, 'innerHeight', 'get')
       .mockReturnValue(900);
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue({
-      ...sampleRunDetail(),
+    runtimeApi.fetchApplicationRunResumeTimeline.mockResolvedValue({
+      flow_run: sampleRunDetail().flow_run,
       callback_tasks: [
         {
           id: 'callback-1',
@@ -1046,7 +1215,7 @@ describe('ApplicationLogsPage - floating windows', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Resume 请求已接收')).toBeInTheDocument();
     expect(screen.getByText('工具调用回调')).toBeInTheDocument();
-    expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
+    expect(runtimeApi.fetchApplicationRunResumeTimeline).toHaveBeenCalledWith(
       'app-1',
       'run-1'
     );
@@ -1097,7 +1266,7 @@ describe('ApplicationLogsPage - floating windows', () => {
 
     await screen.findByTestId('application-logs-floating-resume-timeline');
     await waitFor(() => {
-      expect(runtimeApi.fetchApplicationRunDetail).toHaveBeenCalledWith(
+      expect(runtimeApi.fetchApplicationRunResumeTimeline).toHaveBeenCalledWith(
         'app-1',
         'run-0'
       );

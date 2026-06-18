@@ -5,7 +5,7 @@ import type {
 import {
   cancelConsoleFlowRun,
   deleteConsoleDebugVariableCacheEntries,
-  getConsoleApplicationRunDetail,
+  getConsoleApplicationRunDebugSnapshot,
   getConsoleApplicationRunNodeLastRun,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
@@ -284,11 +284,11 @@ export function startFlowDebugRunStream(
   );
 }
 
-export function fetchApplicationRunDetail(
+export async function fetchApplicationRunDebugSnapshot(
   applicationId: string,
   runId: string
-) {
-  return getConsoleApplicationRunDetail(
+): Promise<FlowDebugRunDetail> {
+  return getConsoleApplicationRunDebugSnapshot(
     applicationId,
     runId,
     getApplicationsApiBaseUrl()

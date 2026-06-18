@@ -1,15 +1,29 @@
 import { Button, Input, Space, Typography } from 'antd';
 import { useState } from 'react';
 
-import type { ApplicationRunDetail } from '../../api/runtime';
+import type {
+  ConsoleCallbackTask,
+  ConsoleFlowRunDetail,
+  ConsoleRunCheckpoint
+} from '@1flowbase/api-client';
 import { i18nText } from '../../../../shared/i18n/text';
+
+interface ApplicationRunResumeCardDetail {
+  flow_run: Pick<ConsoleFlowRunDetail, 'status'>;
+  checkpoints: Array<
+    Pick<ConsoleRunCheckpoint, 'id' | 'locator_payload' | 'external_ref_payload'>
+  >;
+  callback_tasks: Array<
+    Pick<ConsoleCallbackTask, 'id' | 'status' | 'callback_kind'>
+  >;
+}
 
 export function ApplicationRunResumeCard({
   detail,
   onResume,
   onCompleteCallback
 }: {
-  detail: ApplicationRunDetail;
+  detail: ApplicationRunResumeCardDetail;
   onResume: (
     checkpointId: string,
     inputPayload: Record<string, unknown>

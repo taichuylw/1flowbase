@@ -1,5 +1,12 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { StrictMode, type ComponentProps } from 'react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StrictMode, type ComponentProps, type ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type {
@@ -7,6 +14,7 @@ import type {
   AgentFlowRunContext
 } from '../../api/runtime';
 import { AgentFlowDebugConsole } from '../../components/debug-console/AgentFlowDebugConsole';
+import { ConversationLogPanel } from '../../components/debug-console/ConversationLogPanel';
 import { appI18n } from '../../../../shared/i18n/app-i18n';
 
 const runContext: AgentFlowRunContext = {
@@ -23,6 +31,23 @@ const runContext: AgentFlowRunContext = {
     }
   ]
 };
+
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false }
+    }
+  });
+}
+
+function renderWithQueryClient(children: ReactNode) {
+  const queryClient = createQueryClient();
+
+  return render(
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
 
 const assistantMessage: AgentFlowDebugMessage = {
   id: 'assistant-1',
@@ -633,6 +658,394 @@ describe('debug conversation log panel', () => {
     expect(within(panel).queryByText('provider')).not.toBeInTheDocument();
   });
 
+  test('loads lazy overview for application log details before trace root', async () => {
+    const loadOverview = vi.fn().mockResolvedValue({
+      run: {
+        id: 'run-application-log',
+        compatibility_mode: 'openai-responses-v1',
+        started_at: '2026-04-25T10:00:00Z',
+        finished_at: '2026-04-25T10:00:05Z'
+      },
+      statistics: {
+        total_tokens: 154,
+        unique_node_count: 2,
+        tool_callback_count: 0
+      },
+      flow_run: {
+        id: 'run-application-log',
+        status: 'succeeded',
+        input_payload: {
+          'node-start': {
+            query: '总结退款政策',
+            model: 'deepseek-chat'
+          }
+        },
+        output_payload: {
+          answer: '退款政策摘要'
+        },
+        error_payload: null,
+        started_at: '2026-04-25T10:00:00Z',
+        finished_at: '2026-04-25T10:00:05Z'
+      },
+      answer_snapshot: null
+    });
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [] }),
+      loadChildren: vi.fn(),
+      loadContent: vi.fn()
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        overviewLoader={{ loadOverview }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('query')
+    );
+    expect(screen.getByLabelText('输入 JSON')).toHaveTextContent(
+      '总结退款政策'
+    );
+    expect(screen.getByLabelText('输出 JSON')).toHaveTextContent(
+      '退款政策摘要'
+    );
+    expect(screen.getByText('run-application-log')).toBeInTheDocument();
+    expect(screen.getByText('154')).toBeInTheDocument();
+    expect(loadOverview).toHaveBeenCalledWith('run-application-log');
+    expect(traceLoader.loadTree).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+
+    await waitFor(() =>
+      expect(traceLoader.loadTree).toHaveBeenCalledWith('run-application-log')
+    );
+  });
+
+  test('shows projection status instead of empty trace while the lazy trace index is pending', async () => {
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({
+        projection_status: {
+          projection_status: 'pending',
+          projection_version: 1,
+          source_watermark: 'run-application-log:1',
+          attempt_count: 0,
+          last_attempt_at: null,
+          last_success_at: null,
+          last_error_code: null,
+          last_error_stage: null,
+          last_error_source_kind: null,
+          last_error_source_locator: null,
+          last_error_ref: null,
+          retriable: true
+        },
+        nodes: []
+      }),
+      loadChildren: vi.fn(),
+      loadContent: vi.fn()
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+
+    expect(await screen.findByText('追踪索引等待生成')).toBeInTheDocument();
+    expect(screen.queryByText('暂无追踪记录')).not.toBeInTheDocument();
+    expect(traceLoader.loadChildren).not.toHaveBeenCalled();
+    expect(traceLoader.loadContent).not.toHaveBeenCalled();
+  });
+
+  test('loads lazy trace children and node content when a node expands', async () => {
+    const rootNode = {
+      trace_node_id: 'node_run:node-run-llm',
+      node_kind: 'node_run',
+      node_run_id: 'node-run-llm',
+      node_id: 'node-llm',
+      node_type: 'llm',
+      node_alias: 'LLM',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 4000,
+      metrics_payload: {
+        total_tokens: 154
+      },
+      has_children: true,
+      has_content: true
+    };
+    const childNode = {
+      trace_node_id: 'callback_task:callback-weather',
+      node_kind: 'callback_task',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'callback_task',
+      node_alias: 'lookup_weather',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: false,
+      has_content: false
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi.fn().mockResolvedValue({
+        items: [childNode],
+        page_info: {
+          has_more: false,
+          next_cursor: null,
+          page_size: 20
+        }
+      }),
+      loadContent: vi.fn().mockResolvedValue({
+        trace_node_id: 'node_run:node-run-llm',
+        node_kind: 'node_run',
+        node_run: {
+          id: 'node-run-llm',
+          node_id: 'node-llm',
+          node_type: 'llm',
+          node_alias: 'LLM',
+          status: 'succeeded',
+          input_payload: {
+            prompt: '总结退款政策'
+          },
+          output_payload: {
+            answer: '退款政策摘要'
+          },
+          error_payload: null,
+          metrics_payload: {
+            total_tokens: 154
+          },
+          debug_payload: {
+            provider: 'deepseek'
+          },
+          started_at: '2026-04-25T10:00:01Z',
+          finished_at: '2026-04-25T10:00:05Z'
+        }
+      })
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    await waitFor(() =>
+      expect(traceLoader.loadTree).toHaveBeenCalledWith('run-application-log')
+    );
+    expect(traceLoader.loadChildren).not.toHaveBeenCalled();
+    expect(traceLoader.loadContent).not.toHaveBeenCalled();
+
+    const llmTraceNode = await screen.findByRole('button', { name: /LLM/ });
+    fireEvent.click(llmTraceNode);
+
+    await waitFor(() =>
+      expect(traceLoader.loadChildren).toHaveBeenCalledWith(
+        'run-application-log',
+        'node_run:node-run-llm',
+        undefined
+      )
+    );
+    await waitFor(() =>
+      expect(traceLoader.loadContent).toHaveBeenCalledWith(
+        'run-application-log',
+        'node_run:node-run-llm'
+      )
+    );
+    const nodeDetail = await screen.findByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    expect(
+      within(nodeDetail).queryByRole('button', { name: '详情' })
+    ).not.toBeInTheDocument();
+    expect(
+      await within(nodeDetail).findByRole('button', { name: /lookup_weather/ })
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(nodeDetail).getByLabelText('输入 JSON')).toHaveTextContent(
+        '总结退款政策'
+      )
+    );
+  });
+
+  test('loads lazy trace tool details only when a tool callback expands', async () => {
+    const rootNode = {
+      trace_node_id: 'node_run:node-run-llm',
+      node_kind: 'node_run',
+      node_run_id: 'node-run-llm',
+      node_id: 'node-llm',
+      node_type: 'llm',
+      node_alias: 'LLM',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 4000,
+      metrics_payload: {},
+      has_children: false,
+      has_content: true
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi.fn().mockResolvedValue({
+        items: [],
+        page_info: {
+          has_more: false,
+          next_cursor: null,
+          page_size: 20
+        }
+      }),
+      loadContent: vi.fn().mockResolvedValue({
+        trace_node_id: 'node_run:node-run-llm',
+        node_kind: 'node_run',
+        node_run: {
+          id: 'node-run-llm',
+          node_id: 'node-llm',
+          node_type: 'llm',
+          node_alias: 'LLM',
+          status: 'succeeded',
+          input_payload: {
+            prompt: '总结退款政策'
+          },
+          output_payload: {
+            answer: '退款政策摘要'
+          },
+          error_payload: null,
+          metrics_payload: {},
+          debug_payload: {
+            tool_callbacks: [
+              {
+                id: 'call-refund-policy',
+                name: 'refund_policy_lookup',
+                callback_status: 'returned',
+                execution_status: 'succeeded',
+                request_round_index: 0,
+                result_round_index: 1,
+                duration_ms: 1234,
+                detail_ref: 'call-refund-policy'
+              }
+            ]
+          },
+          started_at: '2026-04-25T10:00:01Z',
+          finished_at: '2026-04-25T10:00:05Z'
+        }
+      }),
+      loadToolCallbackDetail: vi.fn().mockResolvedValue({
+        id: 'call-refund-policy',
+        name: 'refund_policy_lookup',
+        callback_status: 'returned',
+        execution_status: 'succeeded',
+        request_payload: {
+          arguments: {
+            topic: 'refund'
+          }
+        },
+        callback_payload: {
+          content: '30 days refund window'
+        },
+        parsed_result: {
+          content: '30 days refund window'
+        },
+        request_round_index: 0,
+        result_round_index: 1,
+        duration_ms: 1234
+      })
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    const llmTraceNode = await screen.findByRole('button', { name: /LLM/ });
+    fireEvent.click(llmTraceNode);
+    const nodeDetail = await screen.findByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    const toolsNode = await within(nodeDetail).findByRole('button', {
+      name: /工具.*1 次工具回调/
+    });
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
+
+    expect(traceLoader.loadToolCallbackDetail).not.toHaveBeenCalled();
+    const toolCallback = within(nodeDetail).getByRole('button', {
+      name: /refund_policy_lookup/
+    });
+    expect(toolCallback).toHaveTextContent('1.23 s');
+    expect(
+      within(nodeDetail).queryByLabelText('工具调用 JSON')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(toolCallback);
+
+    await waitFor(() =>
+      expect(traceLoader.loadToolCallbackDetail).toHaveBeenCalledWith(
+        'run-application-log',
+        'node_run:node-run-llm',
+        'call-refund-policy'
+      )
+    );
+    expect(
+      await within(nodeDetail).findByLabelText('工具调用 JSON')
+    ).toHaveTextContent('refund');
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('30 days refund window');
+  });
+
   test('shows clickable trace nodes and reuses node run detail sections', () => {
     renderConsole();
 
@@ -704,14 +1117,11 @@ describe('debug conversation log panel', () => {
     const toolsNode = within(nodeDetail).getByRole('button', {
       name: /工具.*1 次工具回调/
     });
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
     expect(
       within(nodeDetail).queryByText('temperature')
     ).not.toBeInTheDocument();
 
-    fireEvent.click(toolsNode);
-
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
     ).not.toBeInTheDocument();
@@ -776,9 +1186,9 @@ describe('debug conversation log panel', () => {
     const panel = screen.getByRole('complementary', { name: '对话日志' });
     fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
     fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
-    fireEvent.click(
+    expect(
       within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
-    );
+    ).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(
       within(panel).getByRole('button', { name: /fusion_review/ })
     );
@@ -818,9 +1228,9 @@ describe('debug conversation log panel', () => {
     const panel = screen.getByRole('complementary', { name: '对话日志' });
     fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
     fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
-    fireEvent.click(
+    expect(
       within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
-    );
+    ).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(
       within(panel).getByRole('button', { name: /fusion_review/ })
     );
@@ -880,7 +1290,7 @@ describe('debug conversation log panel', () => {
     const toolsNode = within(nodeDetail).getByRole('button', {
       name: /工具.*2 次工具回调/
     });
-    fireEvent.click(toolsNode);
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
 
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
@@ -983,7 +1393,7 @@ describe('debug conversation log panel', () => {
     const toolsNode = within(nodeDetail).getByRole('button', {
       name: /工具.*1 次工具回调/
     });
-    fireEvent.click(toolsNode);
+    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
 
     expect(
       within(nodeDetail).queryByRole('button', { name: '加载完整工具' })

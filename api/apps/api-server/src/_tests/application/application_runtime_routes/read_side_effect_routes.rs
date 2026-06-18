@@ -276,8 +276,7 @@ async fn seed_large_runtime_read_payloads(
 }
 
 #[tokio::test]
-async fn application_runtime_routes_get_run_detail_and_node_last_run_do_not_materialize_artifacts()
-{
+async fn application_runtime_routes_trace_tree_and_node_last_run_do_not_materialize_artifacts() {
     let (state, database_url) = test_api_state_with_database_url().await;
     let app = crate::app_with_state_and_config(state.clone(), &test_config());
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
@@ -329,8 +328,44 @@ async fn application_runtime_routes_get_run_detail_and_node_last_run_do_not_mate
     seed_large_runtime_read_payloads(&pool, flow_run_id, node_run_id).await;
     let before = runtime_read_payload_snapshot(&pool, flow_run_id).await;
 
+    let trace_tree_uri = format!(
+        "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree"
+    );
+    let trace_tree = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(trace_tree_uri.as_str())
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let trace_tree_status = trace_tree.status();
+    let trace_tree_body = to_bytes(trace_tree.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        trace_tree_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&trace_tree_body)
+    );
+    let trace_tree_payload: Value = serde_json::from_slice(&trace_tree_body).unwrap();
+    let trace_node_id = trace_tree_payload["data"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_id"] == json!("node-llm"))
+        .expect("LLM trace node exists")["trace_node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
     for uri in [
-        format!("/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}"),
+        trace_tree_uri,
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree/nodes/{trace_node_id}/content"
+        ),
         format!(
             "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/nodes/node-llm"
         ),

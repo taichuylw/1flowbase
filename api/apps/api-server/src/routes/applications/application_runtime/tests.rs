@@ -139,6 +139,141 @@ fn callback_task_tool_callback_count_reads_offloaded_tool_call_count() {
 }
 
 #[test]
+fn application_run_statistics_counts_indexed_llm_tool_callbacks() {
+    let application = test_application_record();
+    let flow_run_id = Uuid::now_v7();
+    let node_run_id = Uuid::now_v7();
+    let callback_task = domain::CallbackTaskRecord {
+        id: Uuid::now_v7(),
+        flow_run_id,
+        node_run_id,
+        callback_kind: "llm_tool_calls".to_string(),
+        status: domain::CallbackTaskStatus::Completed,
+        request_payload: serde_json::json!({
+            "tool_calls": [
+                { "id": "call-1", "name": "Read" }
+            ]
+        }),
+        response_payload: None,
+        external_ref_payload: None,
+        created_at: OffsetDateTime::UNIX_EPOCH,
+        completed_at: Some(OffsetDateTime::UNIX_EPOCH),
+    };
+    let detail = domain::ApplicationRunDetail {
+        flow_run: test_flow_run_record(
+            application.id,
+            flow_run_id,
+            domain::FlowRunStatus::Succeeded,
+            serde_json::json!({}),
+        ),
+        node_runs: vec![domain::NodeRunRecord {
+            id: node_run_id,
+            flow_run_id,
+            node_id: "node-llm".to_string(),
+            node_type: "llm".to_string(),
+            node_alias: "LLM".to_string(),
+            status: domain::NodeRunStatus::Succeeded,
+            input_payload: serde_json::json!({}),
+            output_payload: serde_json::json!({}),
+            error_payload: None,
+            metrics_payload: serde_json::json!({}),
+            debug_payload: serde_json::json!({
+                "llm_rounds": [
+                    {
+                        "round_index": 0,
+                        "assistant": {
+                            "tool_calls": [
+                                { "id": "call-1", "name": "Read" },
+                                { "id": "call-2", "name": "problem_review" }
+                            ]
+                        }
+                    }
+                ]
+            }),
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+        }],
+        checkpoints: Vec::new(),
+        callback_tasks: vec![callback_task],
+        events: Vec::new(),
+        stitched_trace: Vec::new(),
+    };
+
+    let statistics = application_run_statistics(&detail);
+
+    assert_eq!(statistics.tool_callback_count, 2);
+}
+
+#[test]
+fn trace_tree_endpoints_read_projection_without_full_detail_fallback() {
+    let log_endpoint_source = include_str!("log_handlers.rs");
+
+    for function_name in [
+        "get_application_run_trace_tree",
+        "get_application_run_trace_node_children",
+        "get_application_run_trace_node_content",
+        "get_application_run_trace_tool_callback_content",
+    ] {
+        let function_source =
+            application_trace_tree_endpoint_source(log_endpoint_source, function_name);
+
+        assert!(
+            function_source.contains("ensure_application_run_trace_projection_status"),
+            "{function_name} must enter through projection status"
+        );
+        assert!(
+            !function_source.contains("get_application_run_detail"),
+            "{function_name} must not fallback to full run detail reads"
+        );
+    }
+
+    assert!(application_trace_tree_endpoint_source(
+        log_endpoint_source,
+        "get_application_run_trace_tree"
+    )
+    .contains("list_application_run_trace_roots"));
+    assert!(application_trace_tree_endpoint_source(
+        log_endpoint_source,
+        "get_application_run_trace_node_children"
+    )
+    .contains("list_application_run_trace_children"));
+    assert!(
+        application_trace_tree_endpoint_source(
+            log_endpoint_source,
+            "get_application_run_trace_node_content"
+        )
+        .contains(
+            "<MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node_content"
+        )
+    );
+    assert!(
+        application_trace_tree_endpoint_source(
+            log_endpoint_source,
+            "get_application_run_trace_tool_callback_content"
+        )
+        .contains(
+            "<MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node_content"
+        )
+    );
+}
+
+fn application_trace_tree_endpoint_source<'a>(
+    log_endpoint_source: &'a str,
+    function_name: &str,
+) -> &'a str {
+    let start_marker = format!("pub async fn {function_name}");
+    let start = log_endpoint_source
+        .find(&start_marker)
+        .unwrap_or_else(|| panic!("{function_name} source exists"));
+    let remaining_source = &log_endpoint_source[start..];
+    let end = remaining_source
+        .find("\n#[utoipa::path(")
+        .unwrap_or(remaining_source.len());
+
+    &remaining_source[..end]
+}
+
+#[test]
 fn start_node_response_moves_legacy_output_payload_into_input() {
     let run = domain::NodeRunRecord {
         id: Uuid::now_v7(),

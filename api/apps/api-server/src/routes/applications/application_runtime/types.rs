@@ -227,6 +227,111 @@ pub struct ApplicationRunDetailResponse {
     pub stitched_trace: Vec<ApplicationRunStitchedTraceResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunOverviewResponse {
+    pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
+    pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeSummaryResponse {
+    pub trace_node_id: String,
+    pub stable_locator: String,
+    pub parent_trace_node_id: Option<String>,
+    pub node_kind: String,
+    pub flow_run_id: String,
+    pub node_run_id: Option<String>,
+    pub callback_task_id: Option<String>,
+    pub node_id: Option<String>,
+    pub node_type: Option<String>,
+    pub node_alias: String,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub metrics_payload: serde_json::Value,
+    pub has_children: bool,
+    pub child_count: i64,
+    pub has_content: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceProjectionStatusResponse {
+    pub projection_status: String,
+    pub projection_version: i32,
+    pub source_watermark: String,
+    pub attempt_count: i32,
+    pub last_attempt_at: Option<String>,
+    pub last_success_at: Option<String>,
+    pub last_error_code: Option<String>,
+    pub last_error_stage: Option<String>,
+    pub last_error_source_kind: Option<String>,
+    pub last_error_source_locator: Option<String>,
+    pub last_error_ref: Option<String>,
+    pub retriable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceTreeResponse {
+    pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
+    pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
+    pub nodes: Vec<ApplicationRunTraceNodeSummaryResponse>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ApplicationRunTraceNodeChildrenQuery {
+    pub parent_trace_node_id: String,
+    pub page_size: Option<i64>,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeChildrenPageInfoResponse {
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeChildrenResponse {
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
+    pub items: Vec<ApplicationRunTraceNodeSummaryResponse>,
+    pub page_info: ApplicationRunTraceNodeChildrenPageInfoResponse,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeContentResponse {
+    pub trace_node_id: String,
+    pub node_kind: String,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
+    pub node_run: Option<NodeRunResponse>,
+    pub callback_task: Option<CallbackTaskResponse>,
+    pub flow_run: Option<FlowRunResponse>,
+    pub checkpoints: Vec<CheckpointResponse>,
+    pub events: Vec<RunEventResponse>,
+    pub payload: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceToolCallbackContentResponse {
+    pub trace_node_id: String,
+    pub tool_call_id: String,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunResumeTimelineResponse {
+    pub flow_run: FlowRunResponse,
+    pub callback_tasks: Vec<CallbackTaskResponse>,
+    pub events: Vec<RunEventResponse>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RuntimeDebugStreamResponse {
     pub parts: Vec<RuntimeDebugStreamPartResponse>,

@@ -7,18 +7,24 @@ use axum::{
     routing::{get, post, put},
     Json, Router,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use control_plane::{
     application::ApplicationService,
     errors::ControlPlaneError,
     orchestration_runtime::{
         debug_stream_events, fail_runtime_event_stream_if_missing_terminal,
-        spawn_runtime_debug_event_persister, wait_for_runtime_debug_event_persister,
-        CancelFlowRunCommand, CompleteCallbackTaskCommand, ContinueFlowDebugRunCommand,
-        OrchestrationRuntimeService, PrepareFlowDebugRunCommand, ResumeFlowRunCommand,
-        StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
+        spawn_runtime_debug_event_persister,
+        trace_projection::{
+            build_application_run_trace_projection, projection_status_needs_lazy_rebuild,
+            trace_projection_source_watermark, APPLICATION_RUN_TRACE_PROJECTION_VERSION,
+        },
+        wait_for_runtime_debug_event_persister, CancelFlowRunCommand, CompleteCallbackTaskCommand,
+        ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
+        ResumeFlowRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
     },
     ports::{
-        ListApplicationConversationRunsPageInput, OrchestrationRuntimeRepository,
+        ApplicationRunTraceChildrenCursor, ListApplicationConversationRunsPageInput,
+        ListApplicationRunTraceChildrenPageInput, OrchestrationRuntimeRepository,
         RuntimeEventStreamPolicy,
     },
 };
@@ -53,7 +59,7 @@ pub use debug_variable_cache::{
 };
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
-    application_run_model, application_run_query,
+    application_run_model, application_run_query, count_llm_tool_callback_trace_items,
     enrich_application_run_detail_visible_internal_llm_route_traces,
     enrich_node_last_run_visible_internal_llm_route_traces, load_runtime_debug_artifact_json_value,
     load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
@@ -81,6 +87,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/orchestration/runs/:run_id/debug-stream",
             get(subscribe_flow_debug_run_stream),
+        )
+        .route(
+            "/applications/:id/orchestration/runs/:run_id/debug-snapshot",
+            get(get_flow_debug_run_snapshot),
         )
         .route(
             "/applications/:id/orchestration/runs/:run_id/resume",
@@ -128,12 +138,32 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(list_application_run_conversation_messages),
         )
         .route(
-            "/applications/:id/logs/runs/:run_id/nodes/:node_id",
-            get(get_application_run_node_last_run),
+            "/applications/:id/logs/runs/:run_id/overview",
+            get(get_application_run_overview),
         )
         .route(
-            "/applications/:id/logs/runs/:run_id",
-            get(get_application_run_detail),
+            "/applications/:id/logs/runs/:run_id/trace-tree",
+            get(get_application_run_trace_tree),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes",
+            get(get_application_run_trace_node_children),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/content",
+            get(get_application_run_trace_node_content),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/tool-callbacks/:tool_call_id/content",
+            get(get_application_run_trace_tool_callback_content),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/resume-timeline",
+            get(get_application_run_resume_timeline),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/nodes/:node_id",
+            get(get_application_run_node_last_run),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/debug-stream",

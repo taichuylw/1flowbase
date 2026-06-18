@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { AgentFlowDockPanel } from '../../../agent-flow/components/editor/AgentFlowDockPanel';
 import {
-  applicationRunDetailQueryKey,
-  fetchApplicationRunDetail
+  applicationRunResumeTimelineQueryKey,
+  fetchApplicationRunResumeTimeline
 } from '../../api/runtime';
 import { i18nText } from '../../../../shared/i18n/text';
 import { ApplicationRunResumeTimeline } from './ApplicationRunResumeTimeline';
@@ -18,8 +18,8 @@ export function ApplicationRunResumeTimelinePanel({
   runId: string;
 }) {
   const detailQuery = useQuery({
-    queryKey: applicationRunDetailQueryKey(applicationId, runId),
-    queryFn: () => fetchApplicationRunDetail(applicationId, runId),
+    queryKey: applicationRunResumeTimelineQueryKey(applicationId, runId),
+    queryFn: () => fetchApplicationRunResumeTimeline(applicationId, runId),
     refetchInterval: 1000
   });
 

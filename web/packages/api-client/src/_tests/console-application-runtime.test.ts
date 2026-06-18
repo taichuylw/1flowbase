@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  getConsoleApplicationRunDebugSnapshot,
+  getConsoleApplicationConversationMessages,
   getConsoleApplicationRunConversationMessages,
-  getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRunNodeLastRun,
+  getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRuns,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceToolCallbackContent,
+  getConsoleApplicationRunTraceTree,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
   startConsoleFlowDebugRunStream,
@@ -187,6 +193,200 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
   });
 
+  test('loads a debug session snapshot from the orchestration plane', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { flow_run: { id: 'run-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationRunDebugSnapshot(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ flow_run: { id: 'run-1' } });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/runs/run-1/debug-snapshot',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches lazy run trace tree resources', async () => {
+    const traceNodeId = '11111111-1111-4111-8111-111111111111';
+    const projectionStatus = {
+      projection_status: 'succeeded',
+      projection_version: 1,
+      source_watermark: 'run-1:1',
+      attempt_count: 1,
+      last_attempt_at: '2026-05-08T00:00:00Z',
+      last_success_at: '2026-05-08T00:00:01Z',
+      last_error_code: null,
+      last_error_stage: null,
+      last_error_source_kind: null,
+      last_error_source_locator: null,
+      last_error_ref: null,
+      retriable: false
+    };
+    const traceResponses = [
+      { projection_status: projectionStatus, nodes: [] },
+      {
+        projection_status: projectionStatus,
+        items: [],
+        page_info: {
+          has_more: true,
+          next_cursor: 'cursor-page-2',
+          page_size: 20
+        }
+      },
+      {
+        trace_node_id: traceNodeId,
+        node_kind: 'node_run',
+        projection_status: projectionStatus,
+        node_run: null,
+        callback_task: null,
+        flow_run: null,
+        checkpoints: [],
+        events: []
+      },
+      {
+        trace_node_id: traceNodeId,
+        tool_call_id: 'call/weather',
+        projection_status: projectionStatus,
+        payload: {
+          ok: true
+        }
+      },
+      { nodes: [] }
+    ];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: traceResponses.shift() }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunTraceTree(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      projection_status: projectionStatus,
+      nodes: []
+    });
+    await expect(
+      getConsoleApplicationRunTraceNodeChildren(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'http://127.0.0.1:7800',
+        {
+          cursor: 'cursor-page-1',
+          page_size: 20
+        }
+      )
+    ).resolves.toEqual({
+      projection_status: projectionStatus,
+      items: [],
+      page_info: {
+        has_more: true,
+        next_cursor: 'cursor-page-2',
+        page_size: 20
+      }
+    });
+    await expect(
+      getConsoleApplicationRunTraceNodeContent(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      node_kind: 'node_run',
+      projection_status: projectionStatus,
+      node_run: null,
+      callback_task: null,
+      flow_run: null,
+      checkpoints: [],
+      events: []
+    });
+    await expect(
+      getConsoleApplicationRunTraceToolCallbackContent(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'call/weather',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      tool_call_id: 'call/weather',
+      projection_status: projectionStatus,
+      payload: {
+        ok: true
+      }
+    });
+    await expect(
+      getConsoleApplicationRunResumeTimeline(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ nodes: [] });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes?parent_trace_node_id=${traceNodeId}&cursor=cursor-page-1&page_size=20`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/content`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/tool-callbacks/call%2Fweather/content`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/resume-timeline',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
   test('fetches conversation messages around an explicit flow run', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ data: { items: [], page: {} } }), {
@@ -206,6 +406,32 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/conversation/messages?limit=5',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches external conversation messages around an explicit flow run', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { items: [], page: {} } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationConversationMessages(
+        'app-1',
+        'conversation 1',
+        { around_run_id: 'run-2', limit: 5 },
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ items: [], page: {} });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/conversations/conversation%201/messages?around_run_id=run-2&limit=5',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
@@ -531,68 +757,5 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs?page=1&page_size=20&cache_mode=refresh',
       expect.objectContaining({ method: 'GET' })
     );
-  });
-
-  test('keeps typed application run detail beside legacy flow fields', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            run: {
-              id: 'run-1',
-              application_id: 'app-1',
-              application_type: 'agent_flow',
-              run_object_kind: 'application_run',
-              run_kind: 'debug_flow_run',
-              status: 'succeeded',
-              title: '退款总结',
-              source: 'console',
-              subject: { kind: 'agent_flow', id: 'flow-1' },
-              actor: { kind: 'user', id: 'user-1' },
-              correlation: {},
-              started_at: '2026-05-08T00:00:00Z',
-              finished_at: null,
-              created_at: '2026-05-08T00:00:00Z',
-              updated_at: '2026-05-08T00:00:00Z'
-            },
-            statistics: {
-              total_tokens: null,
-              unique_node_count: 0,
-              tool_callback_count: 0
-            },
-            detail: {
-              kind: 'agent_flow',
-              flow_run: { id: 'run-1' },
-              node_runs: [],
-              checkpoints: [],
-              callback_tasks: [],
-              events: []
-            },
-            flow_run: { id: 'run-1' },
-            node_runs: [],
-            checkpoints: [],
-            callback_tasks: [],
-            events: []
-          }
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      )
-    );
-
-    await expect(
-      getConsoleApplicationRunDetail('app-1', 'run-1', 'http://127.0.0.1:7800')
-    ).resolves.toMatchObject({
-      run: {
-        application_type: 'agent_flow',
-        run_object_kind: 'application_run'
-      },
-      statistics: {
-        total_tokens: null,
-        unique_node_count: 0,
-        tool_callback_count: 0
-      },
-      detail: { kind: 'agent_flow' },
-      flow_run: { id: 'run-1' }
-    });
   });
 });

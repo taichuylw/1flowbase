@@ -15,6 +15,11 @@ import { ConversationLogPanel } from '../../agent-flow/components/debug-console/
 import {
   applicationRunsQueryKey,
   fetchApplicationRuns,
+  fetchApplicationRunTraceNodeChildren,
+  fetchApplicationRunTraceNodeContent,
+  fetchApplicationRunTraceToolCallbackContent,
+  fetchApplicationRunTraceTree,
+  fetchApplicationRunOverview,
   type FetchApplicationRunsInput,
   fetchRuntimeDebugArtifact,
   type ApplicationRunSortField,
@@ -567,6 +572,34 @@ export function ApplicationLogsPage({
               onLoadArtifact={(artifactRef) =>
                 fetchRuntimeDebugArtifact(applicationId, artifactRef)
               }
+              traceLoader={{
+                loadTree: (runId) =>
+                  fetchApplicationRunTraceTree(applicationId, runId),
+                loadChildren: (runId, traceNodeId, cursor) =>
+                  fetchApplicationRunTraceNodeChildren(
+                    applicationId,
+                    runId,
+                    traceNodeId,
+                    cursor
+                  ),
+                loadContent: (runId, traceNodeId) =>
+                  fetchApplicationRunTraceNodeContent(
+                    applicationId,
+                    runId,
+                    traceNodeId
+                  ),
+                loadToolCallbackDetail: (runId, traceNodeId, toolCallId) =>
+                  fetchApplicationRunTraceToolCallbackContent(
+                    applicationId,
+                    runId,
+                    traceNodeId,
+                    toolCallId
+                  )
+              }}
+              overviewLoader={{
+                loadOverview: (runId) =>
+                  fetchApplicationRunOverview(applicationId, runId)
+              }}
             />
           </div>
         </ApplicationLogsFloatingWindow>

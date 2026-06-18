@@ -434,19 +434,18 @@ async fn application_runtime_routes_flow_output_offloads_answer_field_without_co
         run_id,
         &["succeeded", "failed", "cancelled"],
         |detail| {
-            let answer_node_output = detail["node_runs"]
+            let has_answer_node = detail["nodes"]
                 .as_array()
                 .and_then(|node_runs| {
                     node_runs
                         .iter()
                         .find(|node_run| node_run["node_id"] == json!("node-answer"))
                 })
-                .and_then(|node_run| node_run.get("output_payload"));
+                .is_some();
             detail["flow_run"]["output_payload"]["answer"]["__runtime_debug_artifact"] == true
-                && answer_node_output
-                    .is_some_and(|output| output["answer"]["__runtime_debug_artifact"] == true)
+                && has_answer_node
         },
-        "flow and answer node output artifact previews",
+        "flow output artifact preview and answer trace node",
     )
     .await;
 
@@ -490,14 +489,34 @@ async fn application_runtime_routes_flow_output_offloads_answer_field_without_co
     assert_eq!(flow_output["sys"]["workflow_run_id"], json!(run_id));
     assert_eq!(flow_output["env"], json!({}));
 
-    let answer_node_output = detail["node_runs"]
+    let answer_trace_node_id = detail["nodes"]
         .as_array()
-        .expect("node runs should be an array")
+        .expect("trace nodes should be an array")
         .iter()
         .find(|node_run| node_run["node_id"] == json!("node-answer"))
-        .expect("answer node should be present")
-        .get("output_payload")
-        .expect("answer node should have output payload");
+        .expect("answer node should be present")["trace_node_id"]
+        .as_str()
+        .expect("answer trace node id should exist");
+    let answer_node_content = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree/nodes/{answer_trace_node_id}/content"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(answer_node_content.status(), StatusCode::OK);
+    let answer_node_content_body = to_bytes(answer_node_content.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let answer_node_content_payload: Value =
+        serde_json::from_slice(&answer_node_content_body).unwrap();
+    let answer_node_output = &answer_node_content_payload["data"]["node_run"]["output_payload"];
     assert_eq!(
         answer_node_output["answer"]["__runtime_debug_artifact"],
         true
@@ -557,13 +576,31 @@ async fn application_runtime_routes_waiting_run_detail_reads_persisted_llm_round
 
     let detail =
         wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
-    let llm_node_run = detail["node_runs"]
+    let llm_trace_node_id = detail["nodes"]
         .as_array()
         .unwrap()
         .iter()
         .find(|node_run| node_run["node_id"].as_str() == Some("node-llm"))
-        .expect("waiting run detail should include the LLM node run");
-    let llm_rounds = &llm_node_run["debug_payload"]["llm_rounds"];
+        .expect("waiting run detail should include the LLM trace node")["trace_node_id"]
+        .as_str()
+        .expect("LLM trace node id should exist");
+    let llm_content = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree/nodes/{llm_trace_node_id}/content"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(llm_content.status(), StatusCode::OK);
+    let llm_content_body = to_bytes(llm_content.into_body(), usize::MAX).await.unwrap();
+    let llm_content_payload: Value = serde_json::from_slice(&llm_content_body).unwrap();
+    let llm_rounds = &llm_content_payload["data"]["node_run"]["debug_payload"]["llm_rounds"];
     assert_eq!(llm_rounds["__runtime_debug_artifact"], Value::Null);
 
     let llm_rounds = llm_rounds.as_array().unwrap();

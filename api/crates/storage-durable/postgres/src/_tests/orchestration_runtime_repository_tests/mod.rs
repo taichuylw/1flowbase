@@ -367,6 +367,7 @@ async fn seed_node_run_for(
 
 mod anthropic_internal_runs;
 mod application_logs;
+mod application_trace_projection;
 mod debug_artifacts;
 mod flow_runs;
 mod public_runs;

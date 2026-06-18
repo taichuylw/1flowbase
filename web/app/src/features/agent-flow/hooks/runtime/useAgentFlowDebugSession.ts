@@ -7,7 +7,7 @@ import {
   buildFlowDebugRunInput,
   cancelFlowDebugRun,
   deleteDebugVariableCacheEntries,
-  fetchApplicationRunDetail,
+  fetchApplicationRunDebugSnapshot,
   fetchDebugVariableSnapshot,
   startFlowDebugRun,
   startFlowDebugRunStream,
@@ -358,7 +358,7 @@ export function useAgentFlowDebugSession({
 
   async function pollRunDetail(runId: string) {
     try {
-      const detail = await fetchApplicationRunDetail(applicationId, runId);
+      const detail = await fetchApplicationRunDebugSnapshot(applicationId, runId);
 
       if (activeRunIdRef.current !== runId) {
         return;
@@ -570,7 +570,7 @@ export function useAgentFlowDebugSession({
         activeRunIdRef.current ?? streamAssistantMessage.runId;
       if (completedRunId) {
         try {
-          const detail = await fetchApplicationRunDetail(
+          const detail = await fetchApplicationRunDebugSnapshot(
             applicationId,
             completedRunId
           );
