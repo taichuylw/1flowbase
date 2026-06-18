@@ -23,34 +23,30 @@
   <a href="https://x.com/Tacihu2021" target="_blank">Twitter</a>
 </p>
 
-> **Open-source virtual model gateway for Claude Code, Codex, OpenCode, Cline, Continue, and other local AI agent clients.**
+> **Give local AI agents one model endpoint that can run your own observable multi-model workflow behind the scenes.**
 
-1flowbase lets you build multi-model workflows, publish them as OpenAI-compatible or Claude-compatible model endpoints, and inspect the execution trace behind every request.
-
-Use it when a normal LLM gateway or model router is not enough:
-
-- give text-first coding models vision by mounting a multimodal model as a tool
-- publish Fusion-style multi-model review panels as one reusable model endpoint
-- turn model chains, tools, verifiers, fallbacks, and formatters into a virtual model
-- call that virtual model from Claude Code, Codex, OpenCode, Cline, Continue, SDKs, or any client that supports custom model endpoints
-- debug node inputs, outputs, tool callbacks, tokens, latency, failures, and cost instead of only seeing the final answer
+Claude Code, Codex, OpenCode, Cline, Continue, and SDKs call one normal model name. 1flowbase can run a workflow behind that name: mount a vision model for screenshots, call several models as a Fusion-style review panel, verify or format the result, and show the full trace of model calls, tool callbacks, tokens, latency, and failures.
 
 ```text
-Build workflow -> Publish virtual model -> Call from agent clients -> Inspect trace -> Optimize
+Agent client -> one virtual model endpoint -> your workflow -> trace / tokens / cost -> final answer
 ```
 
-> LiteLLM, Portkey, Bifrost, and similar gateways help route model traffic.
-> 1flowbase helps compose several models and tools into a new observable virtual model endpoint.
+| If you need to... | 1flowbase helps you... |
+|---|---|
+| make a text coding model understand screenshots | mount GLM-5V-Turbo, Gemini, GPT vision, OCR, or another visual model as a tool |
+| run a Fusion-style model panel | fan out to several branch models, synthesize the result, and publish it as one endpoint |
+| debug why an agent answer was slow, expensive, or wrong | inspect workflow nodes, model calls, tool callbacks, token usage, latency, and errors |
+| reuse a better model chain from existing clients | publish the workflow as OpenAI-compatible or Claude-compatible model APIs |
+
+![Workflow Editor Preview](docs/assets/workflow_editor_preview.jpeg)
 
 ---
 
-## What You Can Build Now
+## What You Can Build
 
-### Claude Code vision for GLM-5.2, DeepSeek, and other text-first coding models
+### Add vision to text-first coding models
 
-Claude Code and other coding agents can receive screenshots, UI images, charts, and design references. Some strong coding models are still best used as text-first models in those client paths.
-
-1flowbase can intercept the image, call a vision model as a mounted tool, return structured visual context to the main coding model, and keep the whole trace visible.
+Keep GLM-5.2, DeepSeek, or another strong text coding model as the main planner, then let 1flowbase route screenshots, UI images, charts, and PDF pages to a mounted vision model.
 
 ```text
 Claude Code
@@ -64,11 +60,9 @@ Claude Code
 
 Guide: [Make GLM-5.2 See Images in Claude Code with 1flowbase](https://github.com/taichuy/1flowbase/wiki/Make-GLM-5.2-See-Images-in-Claude-Code-with-1flowbase)
 
-### Fusion-style multi-model review endpoint
+### Publish a Fusion-style multi-model reviewer
 
-OpenRouter Fusion made a useful pattern obvious: the next valuable model endpoint may be a compound workflow, not one larger model.
-
-1flowbase includes a `fusion` template that turns several branch models and one synthesis model into a publishable endpoint. Your agent client calls one model name; 1flowbase runs the model panel behind it and records every branch, token count, failure, and synthesis step.
+1flowbase includes a `fusion` template. Your client calls one model name; 1flowbase asks several branch models, runs a synthesis model, returns the final answer, and keeps every branch visible.
 
 ```text
 User request
@@ -83,9 +77,9 @@ User request
 
 Guide: [Fusion-Style Workflows: Publish a Multi-Model Panel as an Observable Virtual Model](https://github.com/taichuy/1flowbase/wiki/Fusion-Style-Workflow)
 
-### Workflow-backed model APIs
+### Publish workflow-backed model APIs
 
-Build once, then expose the workflow through common model APIs:
+Build the workflow once, then expose it through common model APIs:
 
 | Protocol | API path | Typical usage |
 |---|---:|---|
@@ -95,53 +89,82 @@ Build once, then expose the workflow through common model APIs:
 
 ---
 
-## Why 1flowbase
+## Try It In 3 Minutes
 
-Many AI tools only show the final response. A real agent request usually contains far more than the visible user message:
+The Docker path is for trying and self-hosting 1flowbase. It does **not** require Node.js or Rust.
 
-```text
-user input + system prompt + developer prompt + tool definitions + project context
-+ chat history + command outputs + image/file references + intermediate model calls
-+ verifier steps + formatter steps + fallback calls
-```
+### Requirements
 
-That hidden path controls quality, cost, latency, failure rate, and whether the agent can be trusted on long engineering tasks.
+- Docker installed and running: [Get Docker](https://docs.docker.com/get-started/get-docker/)
+- Docker Compose plugin or `docker-compose`: [Compose install guide](https://docs.docker.com/compose/install/)
+- Supported Docker server platform: `linux/amd64` or `linux/arm64`
+- Network access to GitHub and GHCR to download the Docker files and images
 
-1flowbase makes the path visible and programmable:
+Platform install shortcuts:
 
-- **Compose** multiple models, tools, verifiers, routers, and formatters
-- **Publish** the workflow as a normal OpenAI-compatible or Claude-compatible model
-- **Observe** node inputs, outputs, tool callbacks, tokens, latency, errors, and cost
-- **Optimize** expensive requests with model cascading, selective vision calls, fallbacks, and review panels
-- **Reuse** working workflows as named virtual models for local agent clients and application code
+- Desktop users: [Docker Desktop](https://docs.docker.com/desktop/)
+- Linux servers: [Docker Engine](https://docs.docker.com/engine/install/)
 
----
+### Guided local start
 
-## Quick Start
-
-### One-command Docker bootstrap
-
-The script checks whether Docker / Compose is available, pulls the `docker/` directory, and copies `docker/.env.example` to `docker/.env`.
+This command downloads the `docker/` directory, creates `docker/.env`, lets you review configuration, pulls images, and starts the stack.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --pull --start
 ```
 
 PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+$script = irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1
+& ([scriptblock]::Create($script)) -Pull -Start
 ```
 
-Windows CMD:
+Open after startup:
 
-```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
+```text
+http://127.0.0.1:3100
 ```
 
-### Run from source
+The initial root account and password are printed by the script and stored in `docker/.env` as `BOOTSTRAP_ROOT_ACCOUNT` and `BOOTSTRAP_ROOT_PASSWORD`. The template starts with `root / change-me-root-password`; change it before any public deployment.
 
-Requirements: Node.js `>= 24.0.0`, latest stable Rust, and Docker for local middleware.
+### Non-interactive local trial
+
+For a quick local-only trial, use the template defaults and start immediately:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --non-interactive --pull --start
+```
+
+PowerShell:
+
+```powershell
+$script = irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1
+& ([scriptblock]::Create($script)) -Pull -Start -NonInteractive
+```
+
+Do not expose a non-interactive default install to the public internet before changing secrets in `docker/.env`.
+
+### Manual Docker start
+
+If you prefer explicit steps:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
+cd docker
+docker compose pull
+docker compose up -d
+```
+
+See [docker/README.md](docker/README.md) for Docker configuration, image tags, ports, persistence paths, and local image builds.
+
+---
+
+## Run From Source
+
+Use this path when you want to develop 1flowbase itself.
+
+Requirements: Node.js `>= 24.0.0`, pnpm, latest stable Rust, and Docker for local middleware.
 
 ```bash
 git clone https://github.com/taichuy/1flowbase.git
@@ -187,21 +210,27 @@ node scripts/node/dev-up.js restart
 
 See [scripts/README.md](scripts/README.md) for more options.
 
-### Ask a coding agent to set it up
+---
+
+## Where 1flowbase Fits
+
+1flowbase is not just a model proxy and not just a generic workflow canvas.
+
+| Tool category | What it usually does | How 1flowbase is different |
+|---|---|---|
+| LLM gateway / model router | routes one request to one provider or model | composes multiple model and tool nodes into one workflow-backed virtual model |
+| AI workflow builder | builds an AI app or workflow | exposes the workflow as OpenAI / Claude-compatible model APIs |
+| Agent framework | helps developers code agent graphs | provides a visual runtime, protocol publishing, and execution logs |
+| Observability / cost tracker | shows token or spend totals | connects cost to workflow nodes, model calls, tool callbacks, and trace logs |
 
 ```text
-Clone https://github.com/taichuy/1flowbase, follow the README quick start, then help me publish a workflow as an OpenAI-compatible or Claude-compatible virtual model endpoint.
+Model routers choose a model.
+1flowbase builds a new virtual model from a workflow.
 ```
 
 ---
 
 ## Feature Preview
-
-### Build multi-model workflows
-
-Create workflows with multiple models, tools, verifiers, branch models, and formatter nodes.
-
-![Workflow Editor Preview](docs/assets/workflow_editor_preview.jpeg)
 
 ### Publish as OpenAI-compatible API
 
@@ -287,28 +316,6 @@ The client calls one model name while 1flowbase runs your workflow behind it.
 
 ---
 
-## How 1flowbase Differs
-
-1flowbase is not only a model proxy and not only a generic workflow canvas.
-
-It focuses on one gap:
-
-> Build a multi-model workflow, publish it as a standard model endpoint, and inspect the execution behind it.
-
-| Tool category | What it usually does | How 1flowbase is different |
-|---|---|---|
-| LLM gateway / model router | routes one request to one provider or model | composes multiple model and tool nodes into one workflow-backed virtual model |
-| AI workflow builder | builds an AI app or workflow | exposes the workflow as OpenAI / Claude-compatible model APIs |
-| Agent framework | helps developers code agent graphs | provides a visual runtime, protocol publishing, and execution logs |
-| Observability / cost tracker | shows token or spend totals | connects cost to workflow nodes, model calls, tool callbacks, and trace logs |
-
-```text
-Model routers choose a model.
-1flowbase builds a new virtual model from a workflow.
-```
-
----
-
 ## Current Status
 
 ### Implemented
@@ -383,7 +390,7 @@ api/          Rust backend workspace
 api/apps/     Backend service entry points
 api/crates/   Shared backend crates
 api/plugins/  Plugin workspace, HostExtension manifests, and templates
-docker/       Local middleware orchestration
+docker/       Local middleware orchestration and self-hosted stack
 scripts/      Development, testing, verification, and debugging scripts
 ```
 
