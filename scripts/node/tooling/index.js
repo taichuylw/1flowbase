@@ -10,6 +10,7 @@ const { main: runI18nHygiene } = require('../i18n-hygiene/core.js');
 const { main: runRepoHygiene } = require('../repo-hygiene/core.js');
 const { main: runSecurityRisk } = require('../security-risk/core.js');
 const { main: runPageDebug } = require('../page-debug/core.js');
+const { main: runApiDebug } = require('../api-debug/core.js');
 const { main: runMockUiSync } = require('../mock-ui-sync/core.js');
 const { main: runClaudeSkillSync } = require('../claude-skill-sync/core.js');
 const {
@@ -20,6 +21,7 @@ const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
 
 const TOOLING_COMMANDS = new Set([
   'check-style-boundary',
+  'api-debug',
   'check-rust-backend',
   'claude-skill-sync',
   'gate-router',
@@ -91,7 +93,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|security-risk> [args]\n'
+    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|security-risk> [args]\n'
   );
 }
 
@@ -109,6 +111,10 @@ async function main(argv = [], deps = {}) {
 
   if (options.command === 'check-style-boundary') {
     return (deps.runCheckStyleBoundaryImpl || runCheckStyleBoundary)(options.rest);
+  }
+
+  if (options.command === 'api-debug') {
+    return (deps.runApiDebugImpl || runApiDebug)(options.rest);
   }
 
   if (options.command === 'check-rust-backend') {

@@ -16,7 +16,7 @@
 
 1. 读相关 spec
 2. 跑后端验证命令
-3. 抽样检查关键路由
+3. 抽样检查关键路由和接口质量门禁 evidence
 4. 抽样检查 service 写入口
 5. 抽样检查 repository / mapper 分层
 6. 最后再给 QA 结论
@@ -87,12 +87,18 @@ cargo test -p <crate-name>
 
 ## Step 3: Sample Key Routes
 
-至少抽查每个被改动或被影响平面中的关键路由，确认：
+至少抽查每个被改动或被影响平面中的关键路由。QA 只读取已确认的验收预期、OpenAPI、DTO、测试或现有 contract；缺少预期时标为 `未验证`，不要在 QA 阶段临时发明接口语义。
 
+- 预期来源：method / path / plane、认证方式、CSRF 要求、请求 DTO、预期 status、response DTO / error shape、状态副作用、审计或事件
+- 认证态：in-process route integration 优先复用项目测试 support 的登录 / session / CSRF helper；运行态请求先调用 `/api/public/auth/providers/password-local/sign-in` 获取 session cookie 和 `data.csrf_token`，mutating console request 带 `cookie` 与 `x-csrf-token`
+- 运行态取证：优先使用 `node scripts/node/tooling.js api-debug [METHOD] <api-path-or-url> --expect-status <code>`；该工具从 api-server `.env` 读取 root 账号密码，自动登录并为任意 API 请求带认证态
+- evidence 记录：保留请求摘要、status、脱敏 headers、response body 关键字段、执行命令或测试名；原始 artifact 放 `tmp/test-governance/`，不得记录 cookie、token、secret 或密码
 - 路径是否仍放在正确平面
 - 是否保持 `ApiSuccess` / `204 No Content` / 统一错误结构
 - 认证、ACL、审计和 OpenAPI 暴露是否仍由宿主管理
 - 公共 API 契约变化后，调用方和相关回归是否同步成立
+- Project Health Gate 场景使用 mock / fixture / 受控数据跑接口质量门禁，检查状态是否正常、返回结构是否稳定、值是否正确、过期 / 禁用 / 缺失状态是否符合已确认预期
+- 如果没有运行态服务或脚本，route integration 测试可作为 API evidence；只测 service / repository 不能单独证明 route contract 成立
 
 ## Step 4: Sample Service Write Entrypoints
 

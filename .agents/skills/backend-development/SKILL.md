@@ -1,6 +1,6 @@
 ---
 name: backend-development
-description: "Use for 1flowbase backend implementation in api/: building, fixing, refactoring, or code-reviewing Rust/Axum APIs, routes, services, repositories, storage adapters, migrations, domain models, state transitions, write paths, module boundaries, permissions, HostExtension/RuntimeExtension boundaries, or core business logic. Use after non-trivial requirements have been aligned by problem-framing, or when the user explicitly asks for direct implementation; do not use for standalone requirement alignment or QA reports."
+description: "Use for 1flowbase backend implementation in api/: building, fixing, refactoring, or code-reviewing Rust/Axum APIs, routes, services, repositories, storage adapters, migrations, domain models, state transitions, write paths, module boundaries, permissions, HostExtension/RuntimeExtension boundaries, or core business logic. Use after non-trivial requirements have been aligned by problem-framing, or when the user explicitly asks for direct implementation; do not use for standalone requirement alignment, test design, or QA reports."
 ---
 
 # Backend Development
@@ -14,6 +14,7 @@ description: "Use for 1flowbase backend implementation in api/: building, fixing
 - 需求仍有数据、contract、migration、权限、状态归属、架构方向或跨模块职责选择时，先回 `problem-framing`。
 - 涉及可测试行为变化时，先联动 `test-driven-development`；不能走 TDD 时，交付说明必须写明替代验证。
 - 用户要求自检、验收、回归、质量报告或证据结论时，切到 `qa-evaluation`。
+- 后端 API / 状态入口缺少已确认的接口预期、验收证据或测试设计时，不在实现期补需求；回到 `problem-framing` / `test-driven-development`。
 - 进入 `api/` 前先读 `api/AGENTS.md`；存在更近的 `AGENTS.md` 时按最近规则执行。
 
 ## When to Use
@@ -79,3 +80,4 @@ description: "Use for 1flowbase backend implementation in api/: building, fixing
 - 用隐式副作用完成状态变化。
 - 用 bool 参数、重复空值校验或 pass-through service 处理特殊 case。
 - 用 `handler/manager/process/utils/helper/do_*/*_impl` 命名隐藏真实职责。
+- 在实现期临时决定接口预期、测试设计或验收口径。

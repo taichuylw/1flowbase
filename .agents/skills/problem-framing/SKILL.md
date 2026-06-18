@@ -1,6 +1,6 @@
 ---
 name: problem-framing
-description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构、数学/算法/状态机/图/队列/约束/物理公式等计算表达假设，或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；需要落地开发计划时默认走 L0 Umbrella 到 L1 ADR 到 L2 Epic 到 L3 Task 四层规划。涉及 contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 层级/分级标签、ADR drafting、设计对齐或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、复杂度归属、方案、风险、终止条件和用户拍板点，再进入实现。
+description: 1flowbase 需求类请求动工前使用：普通功能、缺陷、交互、重构、规则、文档、架构、数学/算法/状态机/图/队列/约束/物理公式等计算表达假设，或跨 frontend/backend 需求，默认先给 2-3 个轻量做法、明确推荐并等待用户确认；需要落地开发计划时默认走 L0 Umbrella 到 L1 ADR 到 L2 Epic 到 L3 Task 四层规划。涉及 API 验收预期、contract、defaults、migration、历史数据、权限、状态归属、用户内容、产品流程、issue shaping、issue 层级/分级标签、ADR drafting、设计对齐或 implementation planning 时升级为完整规划。先收敛目标、范围、成功标准、复杂度归属、方案、风险、终止条件和用户拍板点，再进入实现。
 ---
 
 # Problem Framing
@@ -110,6 +110,20 @@ Forbidden:
 
 方案进入 issue gate 或实现 handoff 前，若会新增抽象、公共接口、bool/flag 参数、通用 helper/manager/utils、重复校验、pass-through 层或非显然注释，先读取 `references/design-rules.md`。命中规则时停止，先给更小 redesign，不创建实现 issue、不进入实现。
 
+## Backend API Acceptance Framing
+
+涉及后端 API、状态写入口、DTO、权限或接口 contract 时，预期结果和验收设计归本 Skill 收敛；实现期不得临时补需求。
+
+在 alignment / issue gate 阶段至少明确：
+
+- 业务场景：用户动作、调用方、成功状态和失败状态。
+- 接口边界：method / path / plane、DTO 字段原名、status、response / error shape。
+- 认证与状态：session、CSRF、ACL、`workspace/system`、过期 / 禁用 / 缺失等异常状态。
+- 结果正确性：需要改变或读取的领域状态、返回值是否正确、是否过期、是否可见。
+- 验收证据：哪些行为用 TDD 锁住，哪些接口 / mock / fixture / 质量门禁在 QA 阶段验证；需要运行态接口取证时可使用 `node scripts/node/tooling.js api-debug ...`。
+
+这里不写测试代码步骤、不指定实现细节；测试写法交给 `test-driven-development`，项目体检和质量门禁交给 `qa-evaluation`。
+
 ## Computational Framing
 
 输出方案前，先做计算表达假设：这个需求是否能被数学关系、算法、数据结构、状态机、图、队列、约束、概率、评分、调度或物理公式更清晰地表达？
@@ -122,7 +136,7 @@ Forbidden:
 
 1. 整理事实：分离已确认事实、假设、未知点、不变量、失败模式和需要用户决策的问题。
 2. 做计算表达假设：使用本文件 `Computational Framing` 判断数学 / 算法 / 数据结构 / 物理公式是否应该成为方案生成维度；命中则写入方向和风险收益，不命中则不要展开。
-3. 检查设计对齐：使用本文件 `Design Alignment Gate` 判断是否需要补齐业务目标、非目标、关键约束、复杂度分配、可选方向、核心取舍和推荐倾向。
+3. 检查设计对齐：使用本文件 `Design Alignment Gate` 判断是否需要补齐业务目标、非目标、关键约束、复杂度分配、可选方向、核心取舍和推荐倾向；命中后端 API / 状态入口时补齐 `Backend API Acceptance Framing`。
 4. 先做简短对齐：普通需求按“现状、方向、风险收益、建议”输出 2-3 个轻量做法，明确推荐其中一个，并等待用户确认；命中设计对齐时，把复杂度归属和长期维护影响写入方向说明。
 5. 检查阶段顺序：使用本文件 `Phase Order Gate` 判断当前只允许输出什么；到阶段边界就停。
 6. 检查设计规则：方案可能引入抽象、接口、flag、helper、重复校验或 pass-through 时，读取 `references/design-rules.md`；违反时先输出更小 redesign。
@@ -164,7 +178,7 @@ Forbidden:
 
 ## Handoff Rules
 
-用户批准方案后，先完成 issue gate：输出或更新 L3 issue，包含目标、范围、验收证据、预算、停止条件、标签和 parent；等待用户确认 issue 内容。
+用户批准方案后，先完成 issue gate：输出或更新 L3 issue，包含目标、范围、验收证据、预算、停止条件、标签和 parent；涉及后端 API / 状态入口时写入已确认的接口验收预期；等待用户确认 issue 内容。
 
 issue 已确认后，再切换到相关实现 Skill：
 
