@@ -422,6 +422,8 @@ impl TraceProjectionBuilder {
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
         let tool_result = tool_result_for_call(task, &tool_call_id);
         let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
+        let metrics_payload =
+            tool_callback_metrics_payload(tool_call, tool_result.as_ref(), route_trace.as_ref());
         let payload = tool_callback_content_payload(
             Some(task),
             &tool_call_id,
@@ -447,7 +449,7 @@ impl TraceProjectionBuilder {
             started_at: task.created_at,
             finished_at: task.completed_at,
             duration_ms: trace_node_duration_ms(task.created_at, task.completed_at),
-            metrics_payload: serde_json::json!({}),
+            metrics_payload,
             has_children: has_route_child,
             child_count: i64::from(has_route_child),
             has_content: true,
@@ -547,6 +549,7 @@ impl TraceProjectionBuilder {
         let stable_locator = format!("{parent_stable_locator}/tool:{tool_call_id}");
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
         let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
+        let metrics_payload = tool_callback_metrics_payload(tool_call, None, route_trace.as_ref());
         let payload = tool_callback_content_payload(
             None,
             &tool_call_id,
@@ -574,7 +577,7 @@ impl TraceProjectionBuilder {
             started_at: parent_node_runs[0].started_at,
             finished_at: trace_node_group_finished_at(parent_node_runs),
             duration_ms: None,
-            metrics_payload: serde_json::json!({}),
+            metrics_payload,
             has_children: has_route_child,
             child_count: i64::from(has_route_child),
             has_content: true,
@@ -1395,6 +1398,47 @@ fn route_trace_metrics_payload(route_trace: &serde_json::Value) -> serde_json::V
         .unwrap_or_else(|| serde_json::json!({}))
 }
 
+fn payload_object_field<'a>(
+    payload: &'a serde_json::Value,
+    field_name: &str,
+) -> Option<&'a serde_json::Value> {
+    payload
+        .get(field_name)
+        .filter(|field| field.as_object().is_some())
+}
+
+fn route_trace_usage_payload(route_trace: &serde_json::Value) -> Option<&serde_json::Value> {
+    payload_object_field(route_trace, "call_usage")
+        .or_else(|| payload_object_field(route_trace, "usage"))
+        .or_else(|| {
+            let metrics_payload = route_trace
+                .get("metrics_payload")
+                .filter(|field| field.as_object().is_some())?;
+
+            payload_object_field(metrics_payload, "usage").or(Some(metrics_payload))
+        })
+}
+
+fn tool_callback_call_usage_payload<'a>(
+    tool_call: &'a serde_json::Value,
+    tool_result: Option<&'a serde_json::Value>,
+    route_trace: Option<&'a serde_json::Value>,
+) -> Option<&'a serde_json::Value> {
+    payload_object_field(tool_call, "call_usage")
+        .or_else(|| tool_result.and_then(|result| payload_object_field(result, "call_usage")))
+        .or_else(|| route_trace.and_then(route_trace_usage_payload))
+}
+
+fn tool_callback_metrics_payload(
+    tool_call: &serde_json::Value,
+    tool_result: Option<&serde_json::Value>,
+    route_trace: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    tool_callback_call_usage_payload(tool_call, tool_result, route_trace)
+        .map(|usage| serde_json::json!({ "usage": usage }))
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
 fn callback_status(task: &domain::CallbackTaskRecord) -> &'static str {
     if task.response_payload.is_some() {
         "returned"
@@ -1418,11 +1462,7 @@ fn tool_callback_content_payload(
     tool_result: Option<&serde_json::Value>,
     route_trace: Option<&serde_json::Value>,
 ) -> serde_json::Value {
-    let call_usage = tool_result
-        .and_then(|result| result.get("call_usage"))
-        .or_else(|| route_trace.and_then(|trace| trace.get("call_usage")))
-        .or_else(|| route_trace.and_then(|trace| trace.get("usage")))
-        .cloned();
+    let call_usage = tool_callback_call_usage_payload(tool_call, tool_result, route_trace).cloned();
     let result_context_usage = tool_result
         .and_then(|result| result.get("result_context_usage"))
         .cloned();
@@ -1677,7 +1717,15 @@ mod tests {
                 status: domain::CallbackTaskStatus::Completed,
                 request_payload: json!({
                     "tool_calls": [
-                        { "id": "call-weather", "name": "weather" }
+                        {
+                            "id": "call-weather",
+                            "name": "weather",
+                            "call_usage": {
+                                "input_tokens": 11,
+                                "output_tokens": 3,
+                                "total_tokens": 14
+                            }
+                        }
                     ]
                 }),
                 response_payload: Some(json!({
@@ -1712,6 +1760,23 @@ mod tests {
         assert!(locators.contains(
             &format!("run:{flow_run_id}/node:{node_run_id}/tools/tool:call-weather").as_str()
         ));
+        let tool_callback_node = projection
+            .nodes
+            .iter()
+            .find(|node| node.node_kind == "tool_callback")
+            .expect("tool callback node should be projected");
+        assert_eq!(
+            tool_callback_node.metrics_payload["usage"]["total_tokens"],
+            json!(14)
+        );
+        assert_eq!(
+            tool_callback_node.metrics_payload["usage"]["input_tokens"],
+            json!(11)
+        );
+        assert_eq!(
+            tool_callback_node.metrics_payload["usage"]["output_tokens"],
+            json!(3)
+        );
         assert_eq!(projection.contents.len(), 2);
         let node_run_content = projection
             .contents
@@ -1726,6 +1791,7 @@ mod tests {
         assert!(projection.contents.iter().any(|content| {
             content.content_kind == "tool_callback"
                 && content.payload["tool_call_id"] == json!("call-weather")
+                && content.payload["call_usage"]["total_tokens"] == json!(14)
                 && content.payload["tool_result"]["content"] == json!("22c")
         }));
     }
