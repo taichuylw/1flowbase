@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 2;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 3;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -272,11 +272,8 @@ impl TraceProjectionBuilder {
             .iter()
             .filter(|task| task.callback_kind == "llm_tool_calls")
             .collect();
-        let synthetic_tool_calls = if tool_tasks.is_empty() {
-            tool_calls_from_node_runs(parent_node_runs)
-        } else {
-            Vec::new()
-        };
+        let synthetic_tool_calls =
+            synthetic_tool_calls_not_in_callback_tasks(parent_node_runs, &tool_tasks);
 
         if !tool_tasks.is_empty() {
             child_index += 1;
@@ -286,6 +283,7 @@ impl TraceProjectionBuilder {
                 parent_stable_locator,
                 parent_node_runs,
                 &tool_tasks,
+                &synthetic_tool_calls,
             )?;
         } else if !synthetic_tool_calls.is_empty() {
             child_index += 1;
@@ -321,13 +319,15 @@ impl TraceProjectionBuilder {
         parent_stable_locator: &str,
         parent_node_runs: &[domain::NodeRunRecord],
         tool_tasks: &[&domain::CallbackTaskRecord],
+        synthetic_tool_calls: &[serde_json::Value],
     ) -> Result<()> {
         let stable_locator = format!("{parent_stable_locator}/tools");
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
         let tool_call_count = tool_tasks
             .iter()
             .flat_map(|task| tool_calls_from_callback_task(task))
-            .count();
+            .count()
+            + synthetic_tool_calls.len();
 
         self.nodes.push(ApplicationRunTraceNodeProjectionInput {
             trace_node_id,
@@ -368,6 +368,16 @@ impl TraceProjectionBuilder {
                     &tool_call,
                 )?;
             }
+        }
+        for tool_call in synthetic_tool_calls {
+            tool_index += 1;
+            self.push_synthetic_tool_callback_node(
+                child_order_key(&order_key, tool_index),
+                trace_node_id,
+                &stable_locator,
+                parent_node_runs,
+                tool_call,
+            )?;
         }
 
         Ok(())
@@ -1097,6 +1107,36 @@ fn callback_tasks_for_node_run_ids(
         .collect()
 }
 
+fn synthetic_tool_calls_not_in_callback_tasks(
+    node_runs: &[domain::NodeRunRecord],
+    tool_tasks: &[&domain::CallbackTaskRecord],
+) -> Vec<serde_json::Value> {
+    if tool_tasks.is_empty() {
+        return tool_calls_from_node_runs(node_runs);
+    }
+
+    let callback_tool_call_keys = tool_tasks
+        .iter()
+        .flat_map(|task| tool_calls_from_callback_task(task))
+        .map(|tool_call| tool_call_dedup_key(&tool_call))
+        .collect::<HashSet<_>>();
+
+    tool_calls_from_node_runs(node_runs)
+        .into_iter()
+        .filter(|tool_call| !callback_tool_call_keys.contains(&tool_call_dedup_key(tool_call)))
+        .collect()
+}
+
+fn tool_call_dedup_key(tool_call: &serde_json::Value) -> String {
+    tool_call
+        .get("id")
+        .or_else(|| tool_call.get("tool_call_id"))
+        .or_else(|| tool_call.get("call_id"))
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| tool_call.to_string())
+}
+
 fn tool_calls_from_callback_task(task: &domain::CallbackTaskRecord) -> Vec<serde_json::Value> {
     task.request_payload
         .get("tool_calls")
@@ -1691,6 +1731,178 @@ mod tests {
                 && content.content_kind == "branch"
                 && content.payload["output_summary"]["preview"] == json!("panel A says strict")
         }));
+    }
+
+    #[test]
+    fn builder_merges_callback_task_tools_with_internal_route_tools() {
+        let flow_run_id = Uuid::now_v7();
+        let callback_node_run_id = Uuid::now_v7();
+        let route_node_run_id = Uuid::now_v7();
+        let callback_task_id = Uuid::now_v7();
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let ordinary_tool_calls = json!([
+            { "id": "call-read-memory", "name": "Read" },
+            { "id": "call-read-agents", "name": "Read" },
+            { "id": "call-git-pull", "name": "Bash" },
+            { "id": "call-git-log", "name": "Bash" },
+            { "id": "call-git-log-detail", "name": "Bash" }
+        ]);
+        let branch_traces = json!([
+            {
+                "branch_ref": "panel-a",
+                "node_id": "node-llm-2",
+                "node_alias": "LLM2",
+                "node_type": "llm",
+                "status": "succeeded"
+            },
+            {
+                "branch_ref": "panel-b",
+                "node_id": "node-llm-3",
+                "node_alias": "LLM3",
+                "node_type": "llm",
+                "status": "succeeded"
+            },
+            {
+                "branch_ref": "panel-c",
+                "node_id": "node-llm-4",
+                "node_alias": "LLM4",
+                "node_type": "llm",
+                "status": "succeeded"
+            },
+            {
+                "branch_ref": "panel-d",
+                "node_id": "node-llm-5",
+                "node_alias": "LLM5",
+                "node_type": "llm",
+                "status": "succeeded"
+            }
+        ]);
+        let detail = domain::ApplicationRunDetail {
+            flow_run: flow_run(flow_run_id, now),
+            node_runs: vec![
+                domain::NodeRunRecord {
+                    id: callback_node_run_id,
+                    flow_run_id,
+                    node_id: "node-llm".to_string(),
+                    node_type: "llm".to_string(),
+                    node_alias: "Main LLM".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: json!({ "prompt": "prepare context" }),
+                    output_payload: json!({ "tool_calls": ordinary_tool_calls }),
+                    error_payload: None,
+                    metrics_payload: json!({}),
+                    debug_payload: json!({}),
+                    started_at: now,
+                    finished_at: Some(now + time::Duration::seconds(5)),
+                },
+                domain::NodeRunRecord {
+                    id: route_node_run_id,
+                    flow_run_id,
+                    node_id: "node-llm".to_string(),
+                    node_type: "llm".to_string(),
+                    node_alias: "Main LLM".to_string(),
+                    status: domain::NodeRunStatus::Succeeded,
+                    input_payload: json!({ "prompt": "review latest commits" }),
+                    output_payload: json!({ "answer": "review complete" }),
+                    error_payload: None,
+                    metrics_payload: json!({}),
+                    debug_payload: json!({
+                        "llm_rounds": [
+                            {
+                                "round_index": 3,
+                                "assistant": {
+                                    "tool_calls": [
+                                        {
+                                            "id": "call-problem-review",
+                                            "name": "problem_review"
+                                        }
+                                    ]
+                                },
+                                "tool_results": [
+                                    {
+                                        "tool_call_id": "call-problem-review",
+                                        "name": "problem_review",
+                                        "content": "problem review result"
+                                    }
+                                ]
+                            }
+                        ],
+                        "visible_internal_llm_tool_trace": [
+                            {
+                                "kind": "visible_internal_llm_tool_trace",
+                                "route_kind": "fusion",
+                                "tool_call_id": "call-problem-review",
+                                "tool_name": "problem_review",
+                                "status": "succeeded",
+                                "route_model": "gemini-3-flash",
+                                "branch_traces": branch_traces
+                            }
+                        ]
+                    }),
+                    started_at: now + time::Duration::seconds(6),
+                    finished_at: Some(now + time::Duration::seconds(12)),
+                },
+            ],
+            checkpoints: Vec::new(),
+            callback_tasks: vec![domain::CallbackTaskRecord {
+                id: callback_task_id,
+                flow_run_id,
+                node_run_id: callback_node_run_id,
+                callback_kind: "llm_tool_calls".to_string(),
+                status: domain::CallbackTaskStatus::Completed,
+                request_payload: json!({
+                    "tool_calls": ordinary_tool_calls
+                }),
+                response_payload: Some(json!({
+                    "tool_results": [
+                        { "tool_call_id": "call-read-memory", "content": "memory" },
+                        { "tool_call_id": "call-read-agents", "content": "agents" },
+                        { "tool_call_id": "call-git-pull", "content": "pulled" },
+                        { "tool_call_id": "call-git-log", "content": "log" },
+                        { "tool_call_id": "call-git-log-detail", "content": "details" }
+                    ]
+                })),
+                external_ref_payload: None,
+                created_at: now + time::Duration::seconds(1),
+                completed_at: Some(now + time::Duration::seconds(5)),
+            }],
+            events: Vec::new(),
+            stitched_trace: Vec::new(),
+        };
+
+        let projection = build_application_run_trace_projection(&detail).unwrap();
+        let tools = projection
+            .nodes
+            .iter()
+            .find(|node| node.node_kind == "tool_group")
+            .expect("tool group should be projected");
+        let tool_callbacks: Vec<_> = projection
+            .nodes
+            .iter()
+            .filter(|node| node.parent_trace_node_id == Some(tools.trace_node_id))
+            .collect();
+        let problem_review = tool_callbacks
+            .iter()
+            .find(|node| node.node_alias == "problem_review")
+            .expect("internal route tool should be projected beside callback task tools");
+        let fusion = projection
+            .nodes
+            .iter()
+            .find(|node| node.parent_trace_node_id == Some(problem_review.trace_node_id))
+            .expect("problem_review should expose its fusion route");
+        let branch_count = projection
+            .nodes
+            .iter()
+            .filter(|node| node.parent_trace_node_id == Some(fusion.trace_node_id))
+            .count();
+
+        assert_eq!(tools.child_count, 6);
+        assert_eq!(tool_callbacks.len(), 6);
+        assert!(problem_review.has_children);
+        assert_eq!(problem_review.child_count, 1);
+        assert_eq!(fusion.node_kind, "fusion");
+        assert_eq!(fusion.child_count, 4);
+        assert_eq!(branch_count, 4);
     }
 
     #[test]
