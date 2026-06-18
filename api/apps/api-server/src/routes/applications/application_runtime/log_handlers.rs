@@ -514,7 +514,7 @@ fn trace_projection_node_content_response(
     projection_status: ApplicationRunTraceProjectionStatusResponse,
 ) -> Result<ApplicationRunTraceNodeContentResponse, ApiError> {
     let content_kind = content.content_kind;
-    let mut payload = content.payload;
+    let payload = content.payload;
     let node_run = payload
         .get("node_run")
         .cloned()
@@ -523,14 +523,6 @@ fn trace_projection_node_content_response(
         .map_err(|_| ControlPlaneError::Conflict("trace_node_content"))?
         .map(|node_run| {
             let node_run = trace_node_content_node_run_without_tool_index(node_run);
-            if let Some(payload_object) = payload.as_object_mut() {
-                payload_object.insert(
-                    "node_run".to_string(),
-                    serde_json::to_value(&node_run)
-                        .map_err(|_| ControlPlaneError::Conflict("trace_node_content"))?,
-                );
-            }
-
             Ok::<_, ControlPlaneError>(to_node_run_response(node_run))
         })
         .transpose()?;
@@ -572,6 +564,7 @@ fn trace_projection_node_content_response(
         .into_iter()
         .map(to_run_event_response)
         .collect();
+    let payload = trace_node_content_raw_payload_response(&content_kind, payload);
 
     Ok(ApplicationRunTraceNodeContentResponse {
         trace_node_id: node.trace_node_id.to_string(),
@@ -582,8 +575,31 @@ fn trace_projection_node_content_response(
         flow_run,
         checkpoints,
         events,
-        payload: Some(payload),
+        payload,
     })
+}
+
+fn trace_node_content_raw_payload_response(
+    content_kind: &str,
+    mut payload: serde_json::Value,
+) -> Option<serde_json::Value> {
+    if content_kind != "node_run" {
+        return Some(payload);
+    }
+
+    let Some(payload_object) = payload.as_object_mut() else {
+        return None;
+    };
+
+    payload_object.remove("node_run");
+    payload_object.remove("checkpoints");
+    payload_object.remove("events");
+
+    if payload_object.is_empty() {
+        None
+    } else {
+        Some(payload)
+    }
 }
 
 fn trace_node_content_node_run_without_tool_index(

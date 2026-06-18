@@ -810,19 +810,29 @@ async fn application_runtime_routes_trace_node_content_excludes_tool_index_and_k
     assert_eq!(content.status(), StatusCode::OK);
     let content_body = to_bytes(content.into_body(), usize::MAX).await.unwrap();
     let content_payload: Value = serde_json::from_slice(&content_body).unwrap();
-    for debug_payload in [
-        &content_payload["data"]["node_run"]["debug_payload"],
-        &content_payload["data"]["payload"]["node_run"]["debug_payload"],
-    ] {
-        assert!(
-            debug_payload.get("tool_callbacks").is_none(),
-            "tool callback summaries should be loaded through projection children"
-        );
-        assert!(
-            debug_payload.get("llm_rounds").is_none(),
-            "LLM rounds can regenerate the tool list and must stay out of trace node content"
-        );
-    }
+    let debug_payload = &content_payload["data"]["node_run"]["debug_payload"];
+    assert!(
+        debug_payload.get("tool_callbacks").is_none(),
+        "tool callback summaries should be loaded through projection children"
+    );
+    assert!(
+        debug_payload.get("llm_rounds").is_none(),
+        "LLM rounds can regenerate the tool list and must stay out of trace node content"
+    );
+    assert!(
+        content_payload["data"]["payload"].get("node_run").is_none(),
+        "trace node content must not duplicate the full node_run in the raw payload"
+    );
+    assert!(
+        content_payload["data"]["payload"]
+            .get("checkpoints")
+            .is_none(),
+        "trace node content must not duplicate typed checkpoint records in the raw payload"
+    );
+    assert!(
+        content_payload["data"]["payload"].get("events").is_none(),
+        "trace node content must not duplicate typed event records in the raw payload"
+    );
 
     let detail = app
         .clone()
