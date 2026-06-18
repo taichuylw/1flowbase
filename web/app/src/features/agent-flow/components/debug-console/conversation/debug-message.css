@@ -460,7 +460,8 @@
   display: grid;
   gap: 0.375rem;
   border-left: 2px solid #c7d2fe;
-  padding-left: 0.625rem;
+  padding-left: 0.5rem;
+  margin-left: 0.25rem;
 }
 
 .agent-flow-editor__debug-llm-route-branch-node {

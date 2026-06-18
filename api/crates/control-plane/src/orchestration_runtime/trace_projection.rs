@@ -1418,6 +1418,15 @@ fn tool_callback_content_payload(
     tool_result: Option<&serde_json::Value>,
     route_trace: Option<&serde_json::Value>,
 ) -> serde_json::Value {
+    let call_usage = tool_result
+        .and_then(|result| result.get("call_usage"))
+        .or_else(|| route_trace.and_then(|trace| trace.get("call_usage")))
+        .or_else(|| route_trace.and_then(|trace| trace.get("usage")))
+        .cloned();
+    let result_context_usage = tool_result
+        .and_then(|result| result.get("result_context_usage"))
+        .cloned();
+
     serde_json::json!({
         "id": tool_call_id,
         "name": tool_name,
@@ -1428,6 +1437,8 @@ fn tool_callback_content_payload(
         "request_payload": tool_call,
         "callback_payload": tool_result,
         "parsed_result": tool_result,
+        "call_usage": call_usage,
+        "result_context_usage": result_context_usage,
         "duration_ms": task.and_then(|task| trace_node_duration_ms(task.created_at, task.completed_at)),
         "route_trace": route_trace,
         "tool_call": tool_call,

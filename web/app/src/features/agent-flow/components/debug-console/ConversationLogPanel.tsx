@@ -595,6 +595,35 @@ function mapPayloadContentToTraceItem(
     return mapToolCallbackPayloadToTraceItem(fallback, payload);
   }
 
+  if (content.node_kind === 'fusion' || content.node_kind === 'route') {
+    const metricsPayload = payloadRecordField(payload, 'metrics_payload');
+    const usage = payloadRecordField(payload, 'usage');
+    const effectiveMetrics = Object.keys(metricsPayload).length > 0 ? metricsPayload : usage;
+
+    return {
+      ...fallback,
+      inputPayload: {},
+      outputPayload: Object.keys(effectiveMetrics).length > 0 ? { usage: effectiveMetrics } : {},
+      debugPayload: payload,
+      metricsPayload: effectiveMetrics
+    };
+  }
+
+  if (content.node_kind === 'branch') {
+    const inputPayload = payloadRecordField(payload, 'input_payload');
+    const outputPayload = payloadRecordField(payload, 'output_payload');
+    const debugPayload = payloadRecordField(payload, 'debug_payload');
+    const metricsPayload = payloadRecordField(payload, 'metrics_payload');
+
+    return {
+      ...fallback,
+      inputPayload: Object.keys(inputPayload).length > 0 ? inputPayload : {},
+      outputPayload: Object.keys(outputPayload).length > 0 ? outputPayload : {},
+      debugPayload: Object.keys(debugPayload).length > 0 ? debugPayload : {},
+      metricsPayload: Object.keys(metricsPayload).length > 0 ? metricsPayload : fallback.metricsPayload
+    };
+  }
+
   const inputPayload = payloadRecordField(payload, 'input_payload');
   const outputPayload = payloadRecordField(payload, 'output_payload');
   const debugPayload = payloadRecordField(payload, 'debug_payload');
@@ -610,6 +639,8 @@ function mapPayloadContentToTraceItem(
   if (!hasStructuredPayload) {
     return {
       ...fallback,
+      inputPayload: {},
+      outputPayload: {},
       debugPayload: payload
     };
   }
