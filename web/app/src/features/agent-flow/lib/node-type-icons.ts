@@ -64,7 +64,10 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   iteration: createElement(SyncOutlined),
   loop: createElement(ReloadOutlined),
   plugin_node: createElement(BlockOutlined),
-  unresolved_node: createElement(WarningOutlined)
+  unresolved_node: createElement(WarningOutlined),
+  fusion: createElement(ThunderboltOutlined),
+  route: createElement(ThunderboltOutlined),
+  branch: createElement(ThunderboltOutlined)
 };
 
 export function getAgentFlowNodeTypeIcon(nodeType: string) {

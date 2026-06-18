@@ -11,6 +11,7 @@ import {
   getConsoleApplicationRuns,
   getConsoleApplicationRunTraceNodeChildren,
   getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceNodeDetail,
   getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
   getConsoleDebugVariableSnapshot,
@@ -257,10 +258,23 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       },
       {
         trace_node_id: traceNodeId,
-        tool_call_id: 'call/weather',
         projection_status: projectionStatus,
+        tool_call_id: 'call/weather',
         payload: {
           ok: true
+        }
+      },
+      {
+        trace_node_id: traceNodeId,
+        node_kind: 'node_run',
+        projection_status: projectionStatus,
+        detail_ref_id: 'node_run',
+        detail_kind: 'node_run',
+        source_refs: [],
+        payload: {
+          node_run: {
+            id: 'node-run-1'
+          }
         }
       },
       { nodes: [] }
@@ -338,6 +352,27 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       }
     });
     await expect(
+      getConsoleApplicationRunTraceNodeDetail(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'node_run',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      node_kind: 'node_run',
+      projection_status: projectionStatus,
+      detail_ref_id: 'node_run',
+      detail_kind: 'node_run',
+      source_refs: [],
+      payload: {
+        node_run: {
+          id: 'node-run-1'
+        }
+      }
+    });
+    await expect(
       getConsoleApplicationRunResumeTimeline(
         'app-1',
         'run-1',
@@ -379,6 +414,14 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/details/node_run`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/resume-timeline',
       expect.objectContaining({
         method: 'GET',

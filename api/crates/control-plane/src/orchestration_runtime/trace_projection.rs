@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 3;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 5;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -88,13 +88,29 @@ pub fn projection_status_needs_lazy_rebuild(
 }
 
 pub fn trace_projection_source_watermark(detail: &domain::ApplicationRunDetail) -> String {
-    format!(
-        "flow_run_updated_at:{}/node_runs:{}/callback_tasks:{}/events:{}/stitched:{}",
-        detail.flow_run.updated_at.unix_timestamp_nanos(),
+    trace_projection_source_watermark_from_counts(
+        detail.flow_run.updated_at,
         detail.node_runs.len(),
         detail.callback_tasks.len(),
         detail.events.len(),
-        detail.stitched_trace.len()
+        detail.stitched_trace.len(),
+    )
+}
+
+pub fn trace_projection_source_watermark_from_counts(
+    flow_run_updated_at: OffsetDateTime,
+    node_run_count: usize,
+    callback_task_count: usize,
+    event_count: usize,
+    stitched_trace_count: usize,
+) -> String {
+    format!(
+        "flow_run_updated_at:{}/node_runs:{}/callback_tasks:{}/events:{}/stitched:{}",
+        flow_run_updated_at.unix_timestamp_nanos(),
+        node_run_count,
+        callback_task_count,
+        event_count,
+        stitched_trace_count
     )
 }
 
@@ -406,6 +422,8 @@ impl TraceProjectionBuilder {
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
         let tool_result = tool_result_for_call(task, &tool_call_id);
         let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
+        let metrics_payload =
+            tool_callback_metrics_payload(tool_call, tool_result.as_ref(), route_trace.as_ref());
         let payload = tool_callback_content_payload(
             Some(task),
             &tool_call_id,
@@ -431,7 +449,7 @@ impl TraceProjectionBuilder {
             started_at: task.created_at,
             finished_at: task.completed_at,
             duration_ms: trace_node_duration_ms(task.created_at, task.completed_at),
-            metrics_payload: serde_json::json!({}),
+            metrics_payload,
             has_children: has_route_child,
             child_count: i64::from(has_route_child),
             has_content: true,
@@ -531,6 +549,7 @@ impl TraceProjectionBuilder {
         let stable_locator = format!("{parent_stable_locator}/tool:{tool_call_id}");
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
         let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
+        let metrics_payload = tool_callback_metrics_payload(tool_call, None, route_trace.as_ref());
         let payload = tool_callback_content_payload(
             None,
             &tool_call_id,
@@ -558,7 +577,7 @@ impl TraceProjectionBuilder {
             started_at: parent_node_runs[0].started_at,
             finished_at: trace_node_group_finished_at(parent_node_runs),
             duration_ms: None,
-            metrics_payload: serde_json::json!({}),
+            metrics_payload,
             has_children: has_route_child,
             child_count: i64::from(has_route_child),
             has_content: true,
@@ -1082,17 +1101,14 @@ fn merge_node_run_group(node_runs: &[domain::NodeRunRecord]) -> domain::NodeRunR
     merged
 }
 
-fn trace_node_content_debug_payload_without_tool_index(
-    debug_payload: serde_json::Value,
-) -> serde_json::Value {
-    let serde_json::Value::Object(mut object) = debug_payload else {
-        return debug_payload;
-    };
+pub fn merge_trace_node_run_detail(
+    node_runs: &[domain::NodeRunRecord],
+) -> Option<domain::NodeRunRecord> {
+    if node_runs.is_empty() {
+        return None;
+    }
 
-    object.remove("llm_rounds");
-    object.remove("tool_callbacks");
-
-    serde_json::Value::Object(object)
+    Some(merge_node_run_group(node_runs))
 }
 
 fn callback_tasks_for_node_run_ids(
@@ -1153,6 +1169,9 @@ fn tool_calls_from_node_runs(node_runs: &[domain::NodeRunRecord]) -> Vec<serde_j
         for tool_call in tool_calls_from_node_payload(&node_run.output_payload)
             .into_iter()
             .chain(tool_calls_from_node_debug_payload(&node_run.debug_payload))
+            .chain(tool_calls_from_visible_internal_route_traces(
+                &node_run.debug_payload,
+            ))
         {
             let tool_call_id = tool_call
                 .get("id")
@@ -1196,6 +1215,45 @@ fn tool_calls_from_node_debug_payload(payload: &serde_json::Value) -> Vec<serde_
         .filter_map(serde_json::Value::as_array)
         .flatten()
         .cloned()
+        .collect()
+}
+
+fn tool_calls_from_visible_internal_route_traces(
+    payload: &serde_json::Value,
+) -> Vec<serde_json::Value> {
+    payload
+        .get("visible_internal_llm_tool_trace")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|trace| {
+            let tool_call_id = trace
+                .get("tool_call_id")
+                .or_else(|| trace.get("id"))
+                .or_else(|| trace.get("call_id"))
+                .and_then(serde_json::Value::as_str)?;
+            let mut tool_call = serde_json::Map::new();
+            tool_call.insert("id".to_string(), serde_json::json!(tool_call_id));
+            tool_call.insert("tool_call_id".to_string(), serde_json::json!(tool_call_id));
+            if let Some(tool_name) = trace
+                .get("tool_name")
+                .or_else(|| trace.get("name"))
+                .or_else(|| trace.get("route_alias"))
+                .or_else(|| trace.get("fusion_alias"))
+                .and_then(serde_json::Value::as_str)
+            {
+                tool_call.insert("name".to_string(), serde_json::json!(tool_name));
+            }
+            if let Some(arguments) = trace.get("arguments") {
+                tool_call.insert("arguments".to_string(), arguments.clone());
+            }
+            tool_call.insert(
+                "source_kind".to_string(),
+                serde_json::json!("visible_internal_llm_tool_trace"),
+            );
+
+            Some(serde_json::Value::Object(tool_call))
+        })
         .collect()
 }
 
@@ -1340,6 +1398,47 @@ fn route_trace_metrics_payload(route_trace: &serde_json::Value) -> serde_json::V
         .unwrap_or_else(|| serde_json::json!({}))
 }
 
+fn payload_object_field<'a>(
+    payload: &'a serde_json::Value,
+    field_name: &str,
+) -> Option<&'a serde_json::Value> {
+    payload
+        .get(field_name)
+        .filter(|field| field.as_object().is_some())
+}
+
+fn route_trace_usage_payload(route_trace: &serde_json::Value) -> Option<&serde_json::Value> {
+    payload_object_field(route_trace, "call_usage")
+        .or_else(|| payload_object_field(route_trace, "usage"))
+        .or_else(|| {
+            let metrics_payload = route_trace
+                .get("metrics_payload")
+                .filter(|field| field.as_object().is_some())?;
+
+            payload_object_field(metrics_payload, "usage").or(Some(metrics_payload))
+        })
+}
+
+fn tool_callback_call_usage_payload<'a>(
+    tool_call: &'a serde_json::Value,
+    tool_result: Option<&'a serde_json::Value>,
+    route_trace: Option<&'a serde_json::Value>,
+) -> Option<&'a serde_json::Value> {
+    payload_object_field(tool_call, "call_usage")
+        .or_else(|| tool_result.and_then(|result| payload_object_field(result, "call_usage")))
+        .or_else(|| route_trace.and_then(route_trace_usage_payload))
+}
+
+fn tool_callback_metrics_payload(
+    tool_call: &serde_json::Value,
+    tool_result: Option<&serde_json::Value>,
+    route_trace: Option<&serde_json::Value>,
+) -> serde_json::Value {
+    tool_callback_call_usage_payload(tool_call, tool_result, route_trace)
+        .map(|usage| serde_json::json!({ "usage": usage }))
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
 fn callback_status(task: &domain::CallbackTaskRecord) -> &'static str {
     if task.response_payload.is_some() {
         "returned"
@@ -1363,6 +1462,11 @@ fn tool_callback_content_payload(
     tool_result: Option<&serde_json::Value>,
     route_trace: Option<&serde_json::Value>,
 ) -> serde_json::Value {
+    let call_usage = tool_callback_call_usage_payload(tool_call, tool_result, route_trace).cloned();
+    let result_context_usage = tool_result
+        .and_then(|result| result.get("result_context_usage"))
+        .cloned();
+
     serde_json::json!({
         "id": tool_call_id,
         "name": tool_name,
@@ -1373,6 +1477,8 @@ fn tool_callback_content_payload(
         "request_payload": tool_call,
         "callback_payload": tool_result,
         "parsed_result": tool_result,
+        "call_usage": call_usage,
+        "result_context_usage": result_context_usage,
         "duration_ms": task.and_then(|task| trace_node_duration_ms(task.created_at, task.completed_at)),
         "route_trace": route_trace,
         "tool_call": tool_call,
@@ -1417,9 +1523,6 @@ fn node_run_group_content(
         .iter()
         .map(|node_run| node_run.id)
         .collect::<HashSet<_>>();
-    let mut merged_node_run = merge_node_run_group(node_runs);
-    merged_node_run.debug_payload =
-        trace_node_content_debug_payload_without_tool_index(merged_node_run.debug_payload);
     let checkpoints: Vec<&domain::CheckpointRecord> = detail
         .checkpoints
         .iter()
@@ -1438,6 +1541,16 @@ fn node_run_group_content(
                 .is_some_and(|node_run_id| node_run_ids.contains(&node_run_id))
         })
         .collect();
+    let primary_node_run = &node_runs[0];
+    let source_ref_values = node_runs
+        .iter()
+        .map(|node_run| {
+            serde_json::json!({
+                "source_kind": "node_run",
+                "source_locator": node_run.id
+            })
+        })
+        .collect::<Vec<_>>();
     let source_refs = node_runs
         .iter()
         .map(|node_run| {
@@ -1447,14 +1560,54 @@ fn node_run_group_content(
             })
         })
         .collect::<Vec<_>>();
+    let node_run_refs = node_runs
+        .iter()
+        .map(|node_run| {
+            serde_json::json!({
+                "detail_kind": "node_run",
+                "source_kind": "node_run",
+                "source_locator": node_run.id,
+                "count": 1
+            })
+        })
+        .collect::<Vec<_>>();
+    let detail_refs = serde_json::json!([
+        {
+            "detail_ref_id": "node_run",
+            "detail_kind": "node_run",
+            "source_kind": "node_run",
+            "source_locator": primary_node_run.id,
+            "count": node_runs.len()
+        },
+        {
+            "detail_ref_id": "checkpoints",
+            "detail_kind": "checkpoints",
+            "source_kind": "flow_run_checkpoints",
+            "source_locator": trace_node_id,
+            "count": checkpoints.len()
+        },
+        {
+            "detail_ref_id": "events",
+            "detail_kind": "events",
+            "source_kind": "flow_run_events",
+            "source_locator": trace_node_id,
+            "count": events.len()
+        }
+    ]);
 
     Ok(ApplicationRunTraceNodeContentProjectionInput {
         trace_node_id,
         content_kind: "node_run".to_string(),
         payload: serde_json::json!({
-            "node_run": merged_node_run,
-            "checkpoints": checkpoints,
-            "events": events
+            "payload_index": {
+                "node_run_count": node_runs.len(),
+                "checkpoint_count": checkpoints.len(),
+                "event_count": events.len(),
+                "node_run_ids": node_runs.iter().map(|node_run| node_run.id).collect::<Vec<_>>()
+            },
+            "source_refs": source_ref_values,
+            "detail_refs": detail_refs,
+            "node_run_refs": node_run_refs
         }),
         source_refs: serde_json::Value::Array(source_refs),
     })
@@ -1564,7 +1717,15 @@ mod tests {
                 status: domain::CallbackTaskStatus::Completed,
                 request_payload: json!({
                     "tool_calls": [
-                        { "id": "call-weather", "name": "weather" }
+                        {
+                            "id": "call-weather",
+                            "name": "weather",
+                            "call_usage": {
+                                "input_tokens": 11,
+                                "output_tokens": 3,
+                                "total_tokens": 14
+                            }
+                        }
                     ]
                 }),
                 response_payload: Some(json!({
@@ -1599,24 +1760,127 @@ mod tests {
         assert!(locators.contains(
             &format!("run:{flow_run_id}/node:{node_run_id}/tools/tool:call-weather").as_str()
         ));
+        let tool_callback_node = projection
+            .nodes
+            .iter()
+            .find(|node| node.node_kind == "tool_callback")
+            .expect("tool callback node should be projected");
+        assert_eq!(
+            tool_callback_node.metrics_payload["usage"]["total_tokens"],
+            json!(14)
+        );
+        assert_eq!(
+            tool_callback_node.metrics_payload["usage"]["input_tokens"],
+            json!(11)
+        );
+        assert_eq!(
+            tool_callback_node.metrics_payload["usage"]["output_tokens"],
+            json!(3)
+        );
         assert_eq!(projection.contents.len(), 2);
         let node_run_content = projection
             .contents
             .iter()
             .find(|content| content.content_kind == "node_run")
             .expect("node run content should be projected");
-        let projected_debug_payload = &node_run_content.payload["node_run"]["debug_payload"];
-        assert!(projected_debug_payload.get("tool_callbacks").is_none());
-        assert!(projected_debug_payload.get("llm_rounds").is_none());
         assert_eq!(
-            projected_debug_payload["debug_summary"]["kept"],
-            json!(true)
+            node_run_content.payload["payload_index"]["node_run_count"],
+            json!(1)
         );
+        assert!(node_run_content.payload.get("node_run").is_none());
         assert!(projection.contents.iter().any(|content| {
             content.content_kind == "tool_callback"
                 && content.payload["tool_call_id"] == json!("call-weather")
+                && content.payload["call_usage"]["total_tokens"] == json!(14)
                 && content.payload["tool_result"]["content"] == json!("22c")
         }));
+    }
+
+    #[test]
+    fn builder_projects_node_run_content_as_lightweight_refs() {
+        let flow_run_id = Uuid::now_v7();
+        let node_run_id = Uuid::now_v7();
+        let checkpoint_id = Uuid::now_v7();
+        let event_id = Uuid::now_v7();
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let detail = domain::ApplicationRunDetail {
+            flow_run: flow_run(flow_run_id, now),
+            node_runs: vec![domain::NodeRunRecord {
+                id: node_run_id,
+                flow_run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "Main LLM".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: json!({ "prompt": "refund" }),
+                output_payload: json!({ "answer": "done" }),
+                error_payload: None,
+                metrics_payload: json!({ "usage": { "total_tokens": 12 } }),
+                debug_payload: json!({
+                    "visible_internal_llm_tool_trace": ["large route trace"],
+                    "debug_summary": {
+                        "kept": true
+                    }
+                }),
+                started_at: now,
+                finished_at: Some(now + time::Duration::seconds(2)),
+            }],
+            checkpoints: vec![domain::CheckpointRecord {
+                id: checkpoint_id,
+                flow_run_id,
+                node_run_id: Some(node_run_id),
+                status: "waiting_callback".to_string(),
+                reason: "human_input".to_string(),
+                locator_payload: json!({ "node_id": "node-llm" }),
+                variable_snapshot: json!({ "large": ["snapshot"] }),
+                external_ref_payload: None,
+                created_at: now,
+            }],
+            callback_tasks: Vec::new(),
+            events: vec![domain::RunEventRecord {
+                id: event_id,
+                flow_run_id,
+                node_run_id: Some(node_run_id),
+                sequence: 1,
+                event_type: "node_completed".to_string(),
+                payload: json!({ "large": ["event"] }),
+                created_at: now,
+            }],
+            stitched_trace: Vec::new(),
+        };
+
+        let projection = build_application_run_trace_projection(&detail).unwrap();
+        let node_run_content = projection
+            .contents
+            .iter()
+            .find(|content| content.content_kind == "node_run")
+            .expect("node run content should be projected");
+
+        assert!(node_run_content.payload.get("node_run").is_none());
+        assert!(node_run_content.payload.get("checkpoints").is_none());
+        assert!(node_run_content.payload.get("events").is_none());
+        assert_eq!(
+            node_run_content.payload["payload_index"]["node_run_count"],
+            json!(1)
+        );
+        assert_eq!(
+            node_run_content.payload["payload_index"]["checkpoint_count"],
+            json!(1)
+        );
+        assert_eq!(
+            node_run_content.payload["payload_index"]["event_count"],
+            json!(1)
+        );
+        assert!(node_run_content.payload["detail_refs"]
+            .as_array()
+            .is_some_and(|refs| refs.iter().any(|value| {
+                value["detail_kind"] == json!("node_run")
+                    && value["source_locator"] == json!(node_run_id.to_string())
+            })));
+        assert_eq!(
+            node_run_content.source_refs[0]["source_kind"],
+            json!("node_run")
+        );
     }
 
     #[test]

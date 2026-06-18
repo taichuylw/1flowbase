@@ -20,8 +20,9 @@ use control_plane::{
         AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
         AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput,
         AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRunTraceChildrenCursor,
-        AttachCompiledPlanToFlowRunInput, CompleteCallbackTaskInput, CompleteFlowRunInput,
-        CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        ApplicationRunTraceProjectionStatistics, AttachCompiledPlanToFlowRunInput,
+        CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
+        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         DataModelSideEffectReceiptClaim, DebugVariableCacheEntry,
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
@@ -542,6 +543,19 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .await
     }
 
+    async fn get_application_run_trace_projection_source_watermark(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<String>> {
+        PgControlPlaneStore::get_application_run_trace_projection_source_watermark(
+            self,
+            application_id,
+            flow_run_id,
+        )
+        .await
+    }
+
     async fn replace_application_run_trace_projection(
         &self,
         input: &ReplaceApplicationRunTraceProjectionInput,
@@ -576,12 +590,11 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         PgControlPlaneStore::list_application_run_trace_roots(self, flow_run_id).await
     }
 
-    async fn list_application_run_trace_nodes_for_statistics(
+    async fn get_application_run_trace_statistics(
         &self,
         flow_run_id: Uuid,
-    ) -> Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
-        PgControlPlaneStore::list_application_run_trace_nodes_for_statistics(self, flow_run_id)
-            .await
+    ) -> Result<ApplicationRunTraceProjectionStatistics> {
+        PgControlPlaneStore::get_application_run_trace_statistics(self, flow_run_id).await
     }
 
     async fn list_application_run_trace_children_page(
@@ -621,6 +634,19 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
             self,
             flow_run_id,
             trace_node_id,
+        )
+        .await
+    }
+
+    async fn list_application_run_trace_node_run_details(
+        &self,
+        flow_run_id: Uuid,
+        node_run_ids: Vec<Uuid>,
+    ) -> Result<Vec<domain::NodeRunRecord>> {
+        PgControlPlaneStore::list_application_run_trace_node_run_details(
+            self,
+            flow_run_id,
+            node_run_ids,
         )
         .await
     }

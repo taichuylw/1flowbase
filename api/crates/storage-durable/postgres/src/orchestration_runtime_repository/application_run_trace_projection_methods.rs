@@ -1,4 +1,122 @@
 impl PgControlPlaneStore {
+    async fn get_application_run_trace_projection_source_watermark(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<String>> {
+        let Some(flow_run) = sqlx::query(
+            r#"
+            select
+                id,
+                application_id,
+                external_conversation_id,
+                external_user,
+                api_key_id,
+                compatibility_mode,
+                started_at,
+                updated_at
+            from flow_runs
+            where application_id = $1
+              and id = $2
+            "#,
+        )
+        .bind(application_id)
+        .bind(flow_run_id)
+        .fetch_optional(self.pool())
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let flow_run_updated_at: OffsetDateTime = flow_run.get("updated_at");
+        let node_run_count = sqlx::query_scalar::<_, i64>(
+            "select count(*) from node_runs where flow_run_id = $1",
+        )
+        .bind(flow_run_id)
+        .fetch_one(self.pool())
+        .await?;
+        let callback_task_count = sqlx::query_scalar::<_, i64>(
+            "select count(*) from flow_run_callback_tasks where flow_run_id = $1",
+        )
+        .bind(flow_run_id)
+        .fetch_one(self.pool())
+        .await?;
+        let event_count = sqlx::query_scalar::<_, i64>(
+            "select count(*) from flow_run_events where flow_run_id = $1",
+        )
+        .bind(flow_run_id)
+        .fetch_one(self.pool())
+        .await?;
+        let external_conversation_id: Option<String> = flow_run.get("external_conversation_id");
+        let external_user: Option<String> = flow_run.get("external_user");
+        let stitched_trace_count = if let (Some(external_conversation_id), Some(external_user)) = (
+            external_conversation_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
+            external_user
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
+        ) {
+            let current_started_at: OffsetDateTime = flow_run.get("started_at");
+            let api_key_id: Option<Uuid> = flow_run.get("api_key_id");
+            let compatibility_mode: Option<String> = flow_run.get("compatibility_mode");
+
+            sqlx::query_scalar::<_, i64>(
+                r#"
+                select count(*)
+                from flow_runs prior
+                where prior.application_id = $1
+                  and prior.external_conversation_id = $2
+                  and prior.id <> $3
+                  and prior.started_at < $4
+                  and prior.external_user = $5
+                  and prior.api_key_id is not distinct from $6
+                  and prior.compatibility_mode is not distinct from $7
+                  and prior.status in ('cancelled', 'waiting_callback')
+                  and not exists (
+                      select 1
+                      from flow_runs boundary
+                      where boundary.application_id = prior.application_id
+                        and boundary.external_conversation_id = prior.external_conversation_id
+                        and boundary.external_user = prior.external_user
+                        and boundary.api_key_id is not distinct from prior.api_key_id
+                        and boundary.compatibility_mode is not distinct from prior.compatibility_mode
+                        and boundary.id <> $3
+                        and boundary.started_at > prior.started_at
+                        and boundary.started_at < $4
+                        and boundary.status in ('succeeded', 'failed')
+                  )
+                "#,
+            )
+            .bind(application_id)
+            .bind(external_conversation_id)
+            .bind(flow_run_id)
+            .bind(current_started_at)
+            .bind(external_user)
+            .bind(api_key_id)
+            .bind(compatibility_mode.as_deref())
+            .fetch_one(self.pool())
+            .await?
+        } else {
+            0
+        };
+
+        Ok(Some(
+            control_plane::orchestration_runtime::trace_projection::trace_projection_source_watermark_from_counts(
+                flow_run_updated_at,
+                usize::try_from(node_run_count)
+                    .map_err(|_| anyhow!("node_run_count must fit usize"))?,
+                usize::try_from(callback_task_count)
+                    .map_err(|_| anyhow!("callback_task_count must fit usize"))?,
+                usize::try_from(event_count).map_err(|_| anyhow!("event_count must fit usize"))?,
+                usize::try_from(stitched_trace_count)
+                    .map_err(|_| anyhow!("stitched_trace_count must fit usize"))?,
+            ),
+        ))
+    }
+
     async fn replace_application_run_trace_projection(
         &self,
         input: &ReplaceApplicationRunTraceProjectionInput,
@@ -187,21 +305,83 @@ impl PgControlPlaneStore {
             .collect()
     }
 
-    async fn list_application_run_trace_nodes_for_statistics(
+    async fn get_application_run_trace_statistics(
         &self,
         flow_run_id: Uuid,
-    ) -> Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
-        let sql = trace_node_select_sql(
-            "where flow_run_id = $1 order by order_key asc, trace_node_id asc",
+    ) -> Result<ApplicationRunTraceProjectionStatistics> {
+        let row = sqlx::query(
+            r#"
+            select
+                sum(
+                    case
+                        when metrics_payload #>> '{usage,total_tokens}' ~ '^-?[0-9]+$'
+                        then (metrics_payload #>> '{usage,total_tokens}')::bigint
+                        when metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                          or metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                          or metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
+                        then
+                            coalesce(
+                                case
+                                    when metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                                    then (metrics_payload #>> '{usage,input_tokens}')::bigint
+                                end,
+                                0
+                            )
+                            + coalesce(
+                                case
+                                    when metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                                    then (metrics_payload #>> '{usage,output_tokens}')::bigint
+                                end,
+                                0
+                            )
+                            + coalesce(
+                                case
+                                    when metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
+                                    then (metrics_payload #>> '{usage,reasoning_tokens}')::bigint
+                                end,
+                                0
+                            )
+                    end
+                )::bigint as total_tokens,
+                sum(
+                    case
+                        when metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                        then (metrics_payload #>> '{usage,input_tokens}')::bigint
+                    end
+                )::bigint as input_tokens,
+                sum(
+                    case
+                        when metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                        then (metrics_payload #>> '{usage,output_tokens}')::bigint
+                    end
+                )::bigint as output_tokens,
+                sum(
+                    case
+                        when metrics_payload #>> '{usage,input_cache_hit_tokens}' ~ '^-?[0-9]+$'
+                        then (metrics_payload #>> '{usage,input_cache_hit_tokens}')::bigint
+                        when metrics_payload #>> '{usage,cache_read_tokens}' ~ '^-?[0-9]+$'
+                        then (metrics_payload #>> '{usage,cache_read_tokens}')::bigint
+                    end
+                )::bigint as input_cache_hit_tokens,
+                count(distinct node_id) filter (where node_id is not null)::bigint as unique_node_count,
+                count(*) filter (where node_kind = 'tool_callback')::bigint as tool_callback_count
+            from application_run_trace_nodes
+            where flow_run_id = $1
+            "#,
         );
-        let rows = sqlx::query(&sql)
+        let row = row
             .bind(flow_run_id)
-            .fetch_all(self.pool())
+            .fetch_one(self.pool())
             .await?;
 
-        rows.into_iter()
-            .map(map_application_run_trace_node_record)
-            .collect()
+        Ok(ApplicationRunTraceProjectionStatistics {
+            total_tokens: row.get("total_tokens"),
+            input_tokens: row.get("input_tokens"),
+            output_tokens: row.get("output_tokens"),
+            input_cache_hit_tokens: row.get("input_cache_hit_tokens"),
+            unique_node_count: row.get("unique_node_count"),
+            tool_callback_count: row.get("tool_callback_count"),
+        })
     }
 
     async fn list_application_run_trace_children_page(
@@ -317,6 +497,25 @@ impl PgControlPlaneStore {
 
         row.map(map_application_run_trace_node_content_record)
             .transpose()
+    }
+
+    async fn list_application_run_trace_node_run_details(
+        &self,
+        flow_run_id: Uuid,
+        node_run_ids: Vec<Uuid>,
+    ) -> Result<Vec<domain::NodeRunRecord>> {
+        let mut node_runs = Vec::with_capacity(node_run_ids.len());
+
+        for node_run_id in node_run_ids {
+            let Some(node_run) = fetch_node_run(self, node_run_id).await? else {
+                continue;
+            };
+            if node_run.flow_run_id == flow_run_id {
+                node_runs.push(node_run);
+            }
+        }
+
+        Ok(node_runs)
     }
 }
 

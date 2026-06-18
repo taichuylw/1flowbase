@@ -17,6 +17,7 @@ import {
   fetchApplicationRuns,
   fetchApplicationRunTraceNodeChildren,
   fetchApplicationRunTraceNodeContent,
+  fetchApplicationRunTraceNodeDetail,
   fetchApplicationRunTraceToolCallbackContent,
   fetchApplicationRunTraceTree,
   fetchApplicationRunOverview,
@@ -587,6 +588,13 @@ export function ApplicationLogsPage({
                     applicationId,
                     runId,
                     traceNodeId
+                  ),
+                loadDetail: (runId, traceNodeId, detailRefId) =>
+                  fetchApplicationRunTraceNodeDetail(
+                    applicationId,
+                    runId,
+                    traceNodeId,
+                    detailRefId
                   ),
                 loadToolCallbackDetail: (runId, traceNodeId, toolCallId) =>
                   fetchApplicationRunTraceToolCallbackContent(

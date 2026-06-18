@@ -3,8 +3,20 @@
 ## Ownership
 
 - 开发阶段不自动注入完整仓库质量门禁清单。
+- 当前本地开发分支默认只做当前任务结果验证；仓库级、线上级、重型质量门禁默认在 beta / CI / 专门质量工作区运行和归档。
 - 进入自检、验收、回归或交付阶段后，由 `qa-evaluation` 负责回答“当前范围该跑哪条门禁、是否需要组合、证据能否支撑 QA 结论”。
 - 最近作用域的 `AGENTS.md` 只保留实现规则与少量不可变 QA 边界，不再枚举完整脚本清单。
+
+## Heavy Gate Criteria
+
+`重型质量门禁` 不按命令名字一刀切，按目的、范围、成本和运行态影响判断。命中任一条时，默认不作为 Dev Acceptance 本地收尾动作，除非 L3 / handoff 已前置说明收益、成本和不可延后原因。
+
+- 目的：回答“仓库是否可合入 / CI 是否可过 / 项目健康度如何”，而不是“当前任务结果是否成立”。
+- 范围：跨 workspace、全仓、全前端、全后端、全 coverage、全 hygiene，或检查与当前改动无直接调用链的大量消费者。
+- 成本：会触发大范围编译、build、clippy、full test、coverage、security scan，或明显超过一个主验证命令和必要 smoke 的时间预算。
+- 运行态影响：需要重启服务、真实认证链、外部中间件、运行态接口取证、写 `tmp/test-governance/` 全局 artifact，或可能干扰开发反馈节奏。
+
+常见重门禁：`cargo test --workspace`、`cargo clippy --workspace --all-targets`、workspace 级 `pnpm build` / full lint / full test、`verify-repo`、`verify-ci`、coverage、repo hygiene、i18n hygiene、container / security scan、服务重启后 `api-debug` 取证。定向 crate test、route integration test、单消费者 contract test、局部 `tsc`、单路由 screenshot/page-debug 通常不是重门禁。
 
 ## Repo-Level Gate Map
 
@@ -33,6 +45,7 @@
 ## Selection Defaults
 
 - 默认先按最近作用域选门禁，不要一上来就 `verify-ci`。
+- Dev Acceptance 只选能证明当前任务结果的最小门禁；完整 lint / build / clippy / workspace test / coverage / hygiene / verify-repo 默认不在本地开发分支自动运行。
 - 只改局部前端页面时，先满足 `web/AGENTS.md` 的局部验证，再决定是否升级到仓库级 `test-frontend` 或 `verify-repo`。
 - 只改后端局部实现时，先满足 `api/AGENTS.md` 的局部验证，再决定是否升级到 `test-backend` 或 `verify-repo`。
 - 命中共享契约、共享 DTO、共享样式场景注册、跨消费者协议时，优先补 `test-contracts`。

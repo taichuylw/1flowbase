@@ -8,6 +8,7 @@ import {
   getConsoleApplicationRunOverview,
   getConsoleApplicationRunTraceNodeChildren,
   getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceNodeDetail,
   getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
   fetchConsoleRuntimeModelRecords,
@@ -31,6 +32,7 @@ import {
   type ConsoleApplicationRunResumeTimeline,
   type ConsoleApplicationRunTraceNodeChildren,
   type ConsoleApplicationRunTraceNodeContent,
+  type ConsoleApplicationRunTraceNodeDetail,
   type ConsoleApplicationRunTraceTree,
   type ConsoleCallbackTask,
   type ConsoleNodeRunDetail,
@@ -500,6 +502,21 @@ export function fetchApplicationRunTraceNodeContent(
     applicationId,
     runId,
     traceNodeId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunTraceNodeDetail(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  detailRefId: string
+): Promise<ConsoleApplicationRunTraceNodeDetail> {
+  return getConsoleApplicationRunTraceNodeDetail(
+    applicationId,
+    runId,
+    traceNodeId,
+    detailRefId,
     getApplicationsApiBaseUrl()
   );
 }
