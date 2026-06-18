@@ -80,6 +80,10 @@
   gap: 12px;
 }
 
+.agent-flow-editor__conversation-log-projection-status {
+  border-radius: 8px;
+}
+
 .agent-flow-editor__conversation-log-metadata,
 .agent-flow-editor__conversation-log-node-detail {
   display: flex;

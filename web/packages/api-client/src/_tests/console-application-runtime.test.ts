@@ -219,9 +219,47 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
   });
 
   test('fetches lazy run trace tree resources', async () => {
+    const traceNodeId = '11111111-1111-4111-8111-111111111111';
+    const projectionStatus = {
+      projection_status: 'succeeded',
+      projection_version: 1,
+      source_watermark: 'run-1:1',
+      attempt_count: 1,
+      last_attempt_at: '2026-05-08T00:00:00Z',
+      last_success_at: '2026-05-08T00:00:01Z',
+      last_error_code: null,
+      last_error_stage: null,
+      last_error_source_kind: null,
+      last_error_source_locator: null,
+      last_error_ref: null,
+      retriable: false
+    };
+    const traceResponses = [
+      { projection_status: projectionStatus, nodes: [] },
+      { projection_status: projectionStatus, items: [] },
+      {
+        trace_node_id: traceNodeId,
+        node_kind: 'node_run',
+        projection_status: projectionStatus,
+        node_run: null,
+        callback_task: null,
+        flow_run: null,
+        checkpoints: [],
+        events: []
+      },
+      {
+        trace_node_id: traceNodeId,
+        tool_call_id: 'call/weather',
+        projection_status: projectionStatus,
+        payload: {
+          ok: true
+        }
+      },
+      { nodes: [] }
+    ];
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
       Promise.resolve(
-        new Response(JSON.stringify({ data: { nodes: [] } }), {
+        new Response(JSON.stringify({ data: traceResponses.shift() }), {
           status: 200,
           headers: { 'content-type': 'application/json' }
         })
@@ -234,32 +272,54 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         'run-1',
         'http://127.0.0.1:7800'
       )
-    ).resolves.toEqual({ nodes: [] });
+    ).resolves.toEqual({
+      projection_status: projectionStatus,
+      nodes: []
+    });
     await expect(
       getConsoleApplicationRunTraceNodeChildren(
         'app-1',
         'run-1',
-        'node_run:node-run-1',
+        traceNodeId,
         'http://127.0.0.1:7800'
       )
-    ).resolves.toEqual({ nodes: [] });
+    ).resolves.toEqual({
+      projection_status: projectionStatus,
+      items: []
+    });
     await expect(
       getConsoleApplicationRunTraceNodeContent(
         'app-1',
         'run-1',
-        'node_run:node-run-1',
+        traceNodeId,
         'http://127.0.0.1:7800'
       )
-    ).resolves.toEqual({ nodes: [] });
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      node_kind: 'node_run',
+      projection_status: projectionStatus,
+      node_run: null,
+      callback_task: null,
+      flow_run: null,
+      checkpoints: [],
+      events: []
+    });
     await expect(
       getConsoleApplicationRunTraceToolCallbackContent(
         'app-1',
         'run-1',
-        'node_run:node-run-1',
+        traceNodeId,
         'call/weather',
         'http://127.0.0.1:7800'
       )
-    ).resolves.toEqual({ nodes: [] });
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      tool_call_id: 'call/weather',
+      projection_status: projectionStatus,
+      payload: {
+        ok: true
+      }
+    });
     await expect(
       getConsoleApplicationRunResumeTimeline(
         'app-1',
@@ -278,7 +338,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes?parent_trace_node_id=node_run%3Anode-run-1',
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes?parent_trace_node_id=${traceNodeId}`,
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
@@ -286,7 +346,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/node_run%3Anode-run-1/content',
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/content`,
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
@@ -294,7 +354,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
-      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/node_run%3Anode-run-1/tool-callbacks/call%2Fweather/content',
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/tool-callbacks/call%2Fweather/content`,
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
@@ -681,5 +741,4 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       expect.objectContaining({ method: 'GET' })
     );
   });
-
 });

@@ -462,10 +462,21 @@ export interface ConsoleApplicationRunOverview {
   answer_snapshot?: ConsoleAnswerSnapshot | null;
 }
 
-export type ConsoleApplicationRunTraceNodeKind = 'node_run' | 'callback_task';
+export type ConsoleApplicationRunTraceNodeKind =
+  | 'node_run'
+  | 'callback_task'
+  | 'tool_group'
+  | 'tool_callback'
+  | 'stitched_context'
+  | 'stitched_run'
+  | 'route'
+  | 'fusion'
+  | 'branch'
+  | 'event';
 
 export interface ConsoleApplicationRunTraceNodeSummary {
   trace_node_id: string;
+  stable_locator: string;
   parent_trace_node_id?: string | null;
   node_kind: ConsoleApplicationRunTraceNodeKind;
   flow_run_id: string;
@@ -483,21 +494,45 @@ export interface ConsoleApplicationRunTraceNodeSummary {
   has_content: boolean;
 }
 
+export interface ConsoleApplicationRunTraceProjectionStatus {
+  projection_status:
+    | 'pending'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'stale'
+    | 'partial';
+  projection_version: number;
+  source_watermark: string;
+  attempt_count: number;
+  last_attempt_at?: string | null;
+  last_success_at?: string | null;
+  last_error_code?: string | null;
+  last_error_stage?: string | null;
+  last_error_source_kind?: string | null;
+  last_error_source_locator?: string | null;
+  last_error_ref?: string | null;
+  retriable: boolean;
+}
+
 export interface ConsoleApplicationRunTraceTree {
   run: ConsoleApplicationRunLog;
   statistics: ConsoleApplicationRunStatistics;
   flow_run: ConsoleFlowRunDetail;
   answer_snapshot?: ConsoleAnswerSnapshot | null;
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
   nodes: ConsoleApplicationRunTraceNodeSummary[];
 }
 
 export interface ConsoleApplicationRunTraceNodeChildren {
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
   items: ConsoleApplicationRunTraceNodeSummary[];
 }
 
 export interface ConsoleApplicationRunTraceNodeContent {
   trace_node_id: string;
   node_kind: ConsoleApplicationRunTraceNodeKind;
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
   node_run?: ConsoleNodeRunDetail | null;
   callback_task?: ConsoleCallbackTask | null;
   flow_run?: ConsoleFlowRunDetail | null;
@@ -508,6 +543,7 @@ export interface ConsoleApplicationRunTraceNodeContent {
 export interface ConsoleApplicationRunTraceToolCallbackContent {
   trace_node_id: string;
   tool_call_id: string;
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
   payload: Record<string, unknown>;
 }
 

@@ -734,6 +734,54 @@ describe('debug conversation log panel', () => {
     );
   });
 
+  test('shows projection status instead of empty trace while the lazy trace index is pending', async () => {
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({
+        projection_status: {
+          projection_status: 'pending',
+          projection_version: 1,
+          source_watermark: 'run-application-log:1',
+          attempt_count: 0,
+          last_attempt_at: null,
+          last_success_at: null,
+          last_error_code: null,
+          last_error_stage: null,
+          last_error_source_kind: null,
+          last_error_source_locator: null,
+          last_error_ref: null,
+          retriable: true
+        },
+        nodes: []
+      }),
+      loadChildren: vi.fn(),
+      loadContent: vi.fn()
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+
+    expect(await screen.findByText('追踪索引等待生成')).toBeInTheDocument();
+    expect(screen.queryByText('暂无追踪记录')).not.toBeInTheDocument();
+    expect(traceLoader.loadChildren).not.toHaveBeenCalled();
+    expect(traceLoader.loadContent).not.toHaveBeenCalled();
+  });
+
   test('loads lazy trace children and node content when a node expands', async () => {
     const rootNode = {
       trace_node_id: 'node_run:node-run-llm',
@@ -975,12 +1023,12 @@ describe('debug conversation log panel', () => {
         'call-refund-policy'
       )
     );
-    expect(await within(nodeDetail).findByLabelText('工具调用 JSON')).toHaveTextContent(
-      'refund'
-    );
-    expect(within(nodeDetail).getByLabelText('完整回调 JSON')).toHaveTextContent(
-      '30 days refund window'
-    );
+    expect(
+      await within(nodeDetail).findByLabelText('工具调用 JSON')
+    ).toHaveTextContent('refund');
+    expect(
+      within(nodeDetail).getByLabelText('完整回调 JSON')
+    ).toHaveTextContent('30 days refund window');
   });
 
   test('shows clickable trace nodes and reuses node run detail sections', () => {

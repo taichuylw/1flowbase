@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Descriptions, Empty, Spin, Tabs, Typography } from 'antd';
+import { Alert, Descriptions, Empty, Spin, Tabs, Typography } from 'antd';
 
 import type {
   AgentFlowDebugMessage,
@@ -20,6 +20,7 @@ import { i18nText } from '../../../../shared/i18n/text';
 
 interface ConversationLogTraceNodeSummary {
   trace_node_id: string;
+  stable_locator?: string;
   node_kind: string;
   node_run_id?: string | null;
   node_id?: string | null;
@@ -49,17 +50,41 @@ interface ConversationLogNodeRunContent {
   finished_at: string | null;
 }
 
+interface ConversationLogTraceProjectionStatus {
+  projection_status:
+    | 'pending'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'stale'
+    | 'partial';
+  projection_version: number;
+  source_watermark: string;
+  attempt_count: number;
+  last_attempt_at?: string | null;
+  last_success_at?: string | null;
+  last_error_code?: string | null;
+  last_error_stage?: string | null;
+  last_error_source_kind?: string | null;
+  last_error_source_locator?: string | null;
+  last_error_ref?: string | null;
+  retriable: boolean;
+}
+
 interface ConversationLogTraceTree {
+  projection_status?: ConversationLogTraceProjectionStatus;
   nodes: ConversationLogTraceNodeSummary[];
 }
 
 interface ConversationLogTraceNodeChildren {
+  projection_status?: ConversationLogTraceProjectionStatus;
   items: ConversationLogTraceNodeSummary[];
 }
 
 interface ConversationLogTraceNodeContent {
   trace_node_id: string;
   node_kind: string;
+  projection_status?: ConversationLogTraceProjectionStatus;
   node_run?: ConversationLogNodeRunContent | null;
 }
 
@@ -158,7 +183,9 @@ function overviewCompatibilityModeLabel(
   message: AgentFlowDebugMessage,
   overview: ConversationLogRunOverview | undefined
 ) {
-  return overview?.run.compatibility_mode ?? messageCompatibilityModeLabel(message);
+  return (
+    overview?.run.compatibility_mode ?? messageCompatibilityModeLabel(message)
+  );
 }
 
 function formatNullableNumber(value: number | null | undefined) {
@@ -446,6 +473,46 @@ function traceItemDurationMs(startedAt: string, finishedAt: string | null) {
   );
 }
 
+function traceProjectionStatusSucceeded(
+  status: ConversationLogTraceProjectionStatus | undefined
+) {
+  return !status || status.projection_status === 'succeeded';
+}
+
+function traceProjectionStatusMessage(
+  status: ConversationLogTraceProjectionStatus
+) {
+  switch (status.projection_status) {
+    case 'pending':
+      return i18nText('agentFlow', 'auto.trace_projection_pending');
+    case 'running':
+      return i18nText('agentFlow', 'auto.trace_projection_running');
+    case 'failed':
+      return i18nText('agentFlow', 'auto.trace_projection_failed');
+    case 'stale':
+      return i18nText('agentFlow', 'auto.trace_projection_stale');
+    case 'partial':
+      return i18nText('agentFlow', 'auto.trace_projection_partial');
+    case 'succeeded':
+      return i18nText('agentFlow', 'auto.trace_projection_succeeded');
+  }
+}
+
+function TraceProjectionStatusNotice({
+  status
+}: {
+  status: ConversationLogTraceProjectionStatus;
+}) {
+  return (
+    <Alert
+      className="agent-flow-editor__conversation-log-projection-status"
+      message={traceProjectionStatusMessage(status)}
+      showIcon
+      type={status.projection_status === 'failed' ? 'error' : 'info'}
+    />
+  );
+}
+
 function LazyConversationTrace({
   onLoadArtifact,
   runId,
@@ -468,7 +535,16 @@ function LazyConversationTrace({
     );
   }
 
+  const projectionStatus = traceTreeQuery.data?.projection_status;
   const nodes = traceTreeQuery.data?.nodes ?? [];
+
+  if (!traceProjectionStatusSucceeded(projectionStatus) && projectionStatus) {
+    return (
+      <div className="agent-flow-editor__conversation-log-trace">
+        <TraceProjectionStatusNotice status={projectionStatus} />
+      </div>
+    );
+  }
 
   if (nodes.length === 0) {
     return (
@@ -558,6 +634,8 @@ function LazyTraceNodeItem({
     [contentQuery.data, fallbackItem]
   );
   const childNodes = childrenQuery.data?.items ?? [];
+  const childProjectionStatus = childrenQuery.data?.projection_status;
+  const contentProjectionStatus = contentQuery.data?.projection_status;
   const loadToolCallbackDetail = traceLoader.loadToolCallbackDetail;
 
   return (
@@ -575,6 +653,9 @@ function LazyTraceNodeItem({
         {node.has_content ? (
           contentQuery.isLoading ? (
             <Spin />
+          ) : contentProjectionStatus &&
+            !traceProjectionStatusSucceeded(contentProjectionStatus) ? (
+            <TraceProjectionStatusNotice status={contentProjectionStatus} />
           ) : (
             <div className="agent-flow-editor__conversation-log-json-list">
               <DebugWorkflowNodeDetailContent
@@ -595,6 +676,10 @@ function LazyTraceNodeItem({
           )
         ) : null}
         {childrenQuery.isLoading ? <Spin /> : null}
+        {childProjectionStatus &&
+        !traceProjectionStatusSucceeded(childProjectionStatus) ? (
+          <TraceProjectionStatusNotice status={childProjectionStatus} />
+        ) : null}
         {childNodes.length > 0 ? (
           <LazyTraceNodeList
             nodes={childNodes}
