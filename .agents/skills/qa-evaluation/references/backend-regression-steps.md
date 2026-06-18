@@ -91,6 +91,7 @@ cargo test -p <crate-name>
 
 - 预期来源：method / path / plane、认证方式、CSRF 要求、请求 DTO、预期 status、response DTO / error shape、状态副作用、审计或事件
 - 认证态：in-process route integration 优先复用项目测试 support 的登录 / session / CSRF helper；运行态请求先调用 `/api/public/auth/providers/password-local/sign-in` 获取 session cookie 和 `data.csrf_token`，mutating console request 带 `cookie` 与 `x-csrf-token`
+- 运行态取证：优先使用 `node scripts/node/tooling.js api-debug [METHOD] <api-path-or-url> --expect-status <code>`；该工具从 api-server `.env` 读取 root 账号密码，自动登录并为任意 API 请求带认证态
 - evidence 记录：保留请求摘要、status、脱敏 headers、response body 关键字段、执行命令或测试名；原始 artifact 放 `tmp/test-governance/`，不得记录 cookie、token、secret 或密码
 - 路径是否仍放在正确平面
 - 是否保持 `ApiSuccess` / `204 No Content` / 统一错误结构

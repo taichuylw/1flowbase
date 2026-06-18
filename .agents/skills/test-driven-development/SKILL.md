@@ -49,6 +49,7 @@ description: Use when implementing 1flowbase features, bug fixes, refactors, bac
 - 测试命名和断言写清 method / path、请求 payload、预期 status、响应字段、错误 shape、scope、状态副作用、过期 / 禁用 / 缺失状态或审计结果。
 - 字段断言使用后端 DTO / 领域语义原名；不要为了前端展示别名写测试。
 - 红灯失败原因必须是当前缺失行为或 contract 不匹配；如果失败来自 fixture、认证或环境不稳定，先修测试入口再实现。
+- `api-debug` 只作为运行态取证工具，不替代红灯测试；需要自动化验证时仍写 route / service integration test。
 
 ## Evidence
 

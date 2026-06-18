@@ -120,7 +120,7 @@ Forbidden:
 - 接口边界：method / path / plane、DTO 字段原名、status、response / error shape。
 - 认证与状态：session、CSRF、ACL、`workspace/system`、过期 / 禁用 / 缺失等异常状态。
 - 结果正确性：需要改变或读取的领域状态、返回值是否正确、是否过期、是否可见。
-- 验收证据：哪些行为用 TDD 锁住，哪些接口 / mock / fixture / 质量门禁在 QA 阶段验证。
+- 验收证据：哪些行为用 TDD 锁住，哪些接口 / mock / fixture / 质量门禁在 QA 阶段验证；需要运行态接口取证时可使用 `node scripts/node/tooling.js api-debug ...`。
 
 这里不写测试代码步骤、不指定实现细节；测试写法交给 `test-driven-development`，项目体检和质量门禁交给 `qa-evaluation`。
 

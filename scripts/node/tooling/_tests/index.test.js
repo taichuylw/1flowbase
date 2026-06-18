@@ -31,6 +31,20 @@ test('tooling index dispatches check-style-boundary subcommand', async () => {
   assert.deepEqual(capturedArgv, ['all-pages']);
 });
 
+test('tooling index dispatches api-debug subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['api-debug', 'GET', '/api/console/me'], {
+    runApiDebugImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['GET', '/api/console/me']);
+});
+
 test('tooling index dispatches check-rust-backend subcommand', async () => {
   let capturedArgv = null;
 
