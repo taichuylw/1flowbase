@@ -5,9 +5,7 @@ import type {
 import {
   cancelConsoleFlowRun,
   deleteConsoleDebugVariableCacheEntries,
-  getConsoleApplicationRunTraceNodeChildren,
-  getConsoleApplicationRunTraceNodeContent,
-  getConsoleApplicationRunTraceTree,
+  getConsoleApplicationRunDebugSnapshot,
   getConsoleApplicationRunNodeLastRun,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
@@ -18,7 +16,6 @@ import {
   upsertConsoleDebugVariableCacheEntry,
   type ConsoleAnswerSnapshot,
   type ConsoleApplicationRunDetail,
-  type ConsoleApplicationRunTraceNodeSummary,
   type ConsoleDebugVariableSnapshot,
   type ConsoleFlowDebugStreamEvent,
   type ConsoleFlowDebugStreamCursor,
@@ -32,8 +29,6 @@ import type { NodeDebugPreviewVariableCache } from './runtime-preview';
 
 export type NodeLastRun = ConsoleNodeLastRun;
 export type FlowDebugRunDetail = ConsoleApplicationRunDetail;
-type FlowDebugNodeRun = FlowDebugRunDetail['node_runs'][number];
-type FlowDebugCallbackTask = FlowDebugRunDetail['callback_tasks'][number];
 export type RuntimeDebugArtifactPreview = ConsoleRuntimeDebugArtifactPreview;
 export type DebugVariableSnapshot = ConsoleDebugVariableSnapshot & {
   variable_cache: NodeDebugPreviewVariableCache;
@@ -289,76 +284,15 @@ export function startFlowDebugRunStream(
   );
 }
 
-async function fetchApplicationRunTraceNodeContents(
-  applicationId: string,
-  runId: string,
-  nodes: ConsoleApplicationRunTraceNodeSummary[]
-) {
-  const contents = await Promise.all(
-    nodes
-      .filter((node) => node.has_content)
-      .map((node) =>
-        getConsoleApplicationRunTraceNodeContent(
-          applicationId,
-          runId,
-          node.trace_node_id,
-          getApplicationsApiBaseUrl()
-        )
-      )
-  );
-
-  return contents;
-}
-
 export async function fetchApplicationRunDebugSnapshot(
   applicationId: string,
   runId: string
 ): Promise<FlowDebugRunDetail> {
-  const traceTree = await getConsoleApplicationRunTraceTree(
+  return getConsoleApplicationRunDebugSnapshot(
     applicationId,
     runId,
     getApplicationsApiBaseUrl()
   );
-  const rootContents = await fetchApplicationRunTraceNodeContents(
-    applicationId,
-    runId,
-    traceTree.nodes
-  );
-  const childNodes = (
-    await Promise.all(
-      traceTree.nodes
-        .filter((node) => node.has_children)
-        .map((node) =>
-          getConsoleApplicationRunTraceNodeChildren(
-            applicationId,
-            runId,
-            node.trace_node_id,
-            getApplicationsApiBaseUrl()
-          )
-        )
-    )
-  ).flatMap((response) => response.items);
-  const childContents = await fetchApplicationRunTraceNodeContents(
-    applicationId,
-    runId,
-    childNodes
-  );
-
-  return {
-    run: traceTree.run,
-    statistics: traceTree.statistics,
-    flow_run: traceTree.flow_run,
-    answer_snapshot: traceTree.answer_snapshot ?? null,
-    node_runs: rootContents
-      .map((content) => content.node_run)
-      .filter((nodeRun): nodeRun is FlowDebugNodeRun => Boolean(nodeRun)),
-    checkpoints: rootContents.flatMap((content) => content.checkpoints),
-    callback_tasks: childContents
-      .map((content) => content.callback_task)
-      .filter((task): task is FlowDebugCallbackTask => Boolean(task)),
-    events: rootContents.flatMap((content) => content.events),
-    stitched_trace: []
-  };
 }
 
 export function fetchApplicationRunNodeLastRun(

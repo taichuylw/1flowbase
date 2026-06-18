@@ -63,10 +63,32 @@ interface ConversationLogTraceNodeContent {
   node_run?: ConversationLogNodeRunContent | null;
 }
 
-interface ConversationLogTraceNodeGroup {
-  key: string;
-  item: AgentFlowTraceItem;
-  nodes: ConversationLogTraceNodeSummary[];
+interface ConversationLogRunOverview {
+  run: {
+    id: string;
+    status?: string;
+    compatibility_mode?: string | null;
+    started_at?: string | null;
+    finished_at?: string | null;
+  };
+  statistics?: {
+    total_tokens?: number | null;
+    unique_node_count?: number | null;
+    tool_callback_count?: number | null;
+  };
+  flow_run: {
+    id: string;
+    status: string;
+    input_payload: Record<string, unknown>;
+    output_payload: Record<string, unknown>;
+    error_payload?: Record<string, unknown> | null;
+    started_at: string;
+    finished_at?: string | null;
+  };
+  answer_snapshot?: {
+    text: string;
+    output_payload: Record<string, unknown>;
+  } | null;
 }
 
 export interface ConversationLogTraceLoader {
@@ -79,6 +101,15 @@ export interface ConversationLogTraceLoader {
     runId: string,
     traceNodeId: string
   ) => Promise<ConversationLogTraceNodeContent>;
+  loadToolCallbackDetail?: (
+    runId: string,
+    traceNodeId: string,
+    toolCallId: string
+  ) => Promise<unknown>;
+}
+
+export interface ConversationLogOverviewLoader {
+  loadOverview: (runId: string) => Promise<ConversationLogRunOverview>;
 }
 
 function buildDetailInput(message: AgentFlowDebugMessage) {
@@ -123,21 +154,67 @@ function messageCompatibilityModeLabel(message: AgentFlowDebugMessage) {
   return message.compatibilityModeLabel ?? message.compatibilityMode ?? '—';
 }
 
+function overviewCompatibilityModeLabel(
+  message: AgentFlowDebugMessage,
+  overview: ConversationLogRunOverview | undefined
+) {
+  return overview?.run.compatibility_mode ?? messageCompatibilityModeLabel(message);
+}
+
 function formatNullableNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value)
     ? formatNumber(value)
     : '-';
 }
 
-function ConversationLogDetail({
+function overviewDetailInput(
+  message: AgentFlowDebugMessage,
+  overview: ConversationLogRunOverview | undefined
+) {
+  return overview?.flow_run.input_payload ?? buildDetailInput(message);
+}
+
+function overviewDetailOutput(
+  message: AgentFlowDebugMessage,
+  overview: ConversationLogRunOverview | undefined
+) {
+  if (!overview) {
+    return buildDetailOutput(message);
+  }
+
+  if (Object.keys(overview.flow_run.output_payload).length > 0) {
+    return overview.flow_run.output_payload;
+  }
+
+  const answerPayload = overview.answer_snapshot?.output_payload;
+  if (answerPayload && Object.keys(answerPayload).length > 0) {
+    return answerPayload;
+  }
+
+  return {
+    answer: overview.answer_snapshot?.text ?? message.content
+  };
+}
+
+function ConversationLogDetailContent({
   message,
-  onLoadArtifact
+  onLoadArtifact,
+  overview
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  overview?: ConversationLogRunOverview;
 }) {
   const firstTraceItem = message.traceSummary[0] ?? null;
   const lastTraceItem = message.traceSummary.at(-1) ?? null;
+  const startedAt =
+    overview?.flow_run.started_at ??
+    overview?.run.started_at ??
+    firstTraceItem?.startedAt;
+  const finishedAt =
+    overview?.flow_run.finished_at ??
+    overview?.run.finished_at ??
+    lastTraceItem?.finishedAt;
 
   return (
     <div className="agent-flow-editor__conversation-log-tab">
@@ -145,8 +222,8 @@ function ConversationLogDetail({
         <NodeRunPayloadSections
           debugPayload={{}}
           includeDebugPayload={false}
-          inputPayload={buildDetailInput(message)}
-          outputPayload={buildDetailOutput(message)}
+          inputPayload={overviewDetailInput(message, overview)}
+          outputPayload={overviewDetailOutput(message, overview)}
           onLoadArtifact={onLoadArtifact}
         />
       </div>
@@ -163,52 +240,120 @@ function ConversationLogDetail({
             {
               key: 'runId',
               label: i18nText('agentFlow', 'auto.run_id'),
-              children: message.runId ?? '—'
+              children: overview?.flow_run.id ?? message.runId ?? '—'
             },
             {
               key: 'status',
               label: i18nText('agentFlow', 'auto.status'),
-              children: message.status
+              children: overview?.flow_run.status ?? message.status
             },
             {
               key: 'compatibilityMode',
               label: i18nText('agentFlow', 'auto.agreement'),
-              children: messageCompatibilityModeLabel(message)
+              children: overviewCompatibilityModeLabel(message, overview)
             },
             {
               key: 'totalTokens',
               label: i18nText('agentFlow', 'auto.total_tokens'),
-              children: formatNullableNumber(message.statistics?.total_tokens)
+              children: formatNullableNumber(
+                overview?.statistics?.total_tokens ??
+                  message.statistics?.total_tokens
+              )
             },
             {
               key: 'uniqueNodeCount',
               label: i18nText('agentFlow', 'auto.real_number_nodes'),
               children: formatNullableNumber(
-                message.statistics?.unique_node_count
+                overview?.statistics?.unique_node_count ??
+                  message.statistics?.unique_node_count
               )
             },
             {
               key: 'toolCallbackCount',
               label: i18nText('agentFlow', 'auto.number_tool_callbacks'),
               children: formatNullableNumber(
-                message.statistics?.tool_callback_count
+                overview?.statistics?.tool_callback_count ??
+                  message.statistics?.tool_callback_count
               )
             },
             {
               key: 'startedAt',
               label: i18nText('agentFlow', 'auto.start_time'),
-              children: formatTimestamp(firstTraceItem?.startedAt)
+              children: formatTimestamp(startedAt)
             },
             {
               key: 'finishedAt',
               label: i18nText('agentFlow', 'auto.end_time'),
-              children: formatTimestamp(lastTraceItem?.finishedAt)
+              children: formatTimestamp(finishedAt)
             }
           ]}
           size="small"
         />
       </section>
     </div>
+  );
+}
+
+function ConversationLogLazyDetail({
+  message,
+  onLoadArtifact,
+  overviewLoader,
+  overviewRunId
+}: {
+  message: AgentFlowDebugMessage;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  overviewLoader: ConversationLogOverviewLoader;
+  overviewRunId: string;
+}) {
+  const overviewQuery = useQuery({
+    queryKey: ['conversation-log-run-overview', overviewRunId],
+    queryFn: () => overviewLoader.loadOverview(overviewRunId)
+  });
+
+  if (overviewQuery.isLoading) {
+    return (
+      <div className="agent-flow-editor__conversation-log-empty">
+        <Spin />
+      </div>
+    );
+  }
+
+  return (
+    <ConversationLogDetailContent
+      message={message}
+      overview={overviewQuery.data}
+      onLoadArtifact={onLoadArtifact}
+    />
+  );
+}
+
+function ConversationLogDetail({
+  message,
+  onLoadArtifact,
+  overviewLoader
+}: {
+  message: AgentFlowDebugMessage;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  overviewLoader?: ConversationLogOverviewLoader;
+}) {
+  const overviewRunId = message.detailRunId ?? message.runId;
+
+  if (overviewLoader && overviewRunId) {
+    return (
+      <ConversationLogLazyDetail
+        message={message}
+        overviewLoader={overviewLoader}
+        overviewRunId={overviewRunId}
+        onLoadArtifact={onLoadArtifact}
+      />
+    );
+  }
+
+  return (
+    <ConversationLogDetailContent
+      message={message}
+      onLoadArtifact={onLoadArtifact}
+    />
   );
 }
 
@@ -301,41 +446,6 @@ function traceItemDurationMs(startedAt: string, finishedAt: string | null) {
   );
 }
 
-function groupTraceNodeSummariesForDisplay(
-  nodes: ConversationLogTraceNodeSummary[]
-): ConversationLogTraceNodeGroup[] {
-  const entries = nodes.map((node) => ({
-    node,
-    item: mapTraceSummaryToTraceItem(node)
-  }));
-  const nodeByItemKey = new Map<string, ConversationLogTraceNodeSummary>();
-
-  for (const entry of entries) {
-    nodeByItemKey.set(entry.item.nodeRunId ?? entry.item.nodeId, entry.node);
-  }
-
-  return groupTraceItemsForDisplay(entries.map((entry) => entry.item)).map(
-    (group) => ({
-      key: group.key,
-      item: group.item,
-      nodes: group.items
-        .map((item) => nodeByItemKey.get(item.nodeRunId ?? item.nodeId))
-        .filter((node): node is ConversationLogTraceNodeSummary => Boolean(node))
-    })
-  );
-}
-
-function mergeLoadedTraceItemsForDisplay(
-  fallback: AgentFlowTraceItem,
-  items: AgentFlowTraceItem[]
-) {
-  if (items.length === 0) {
-    return fallback;
-  }
-
-  return groupTraceItemsForDisplay(items).at(0)?.item ?? fallback;
-}
-
 function LazyConversationTrace({
   onLoadArtifact,
   runId,
@@ -394,17 +504,15 @@ function LazyTraceNodeList({
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
-  const groups = useMemo(() => groupTraceNodeSummariesForDisplay(nodes), [nodes]);
-
   return (
     <div
       aria-label={i18nText('agentFlow', 'auto.tracking_nodes')}
       className="agent-flow-editor__conversation-log-node-list"
     >
-      {groups.map((group) => (
-        <LazyTraceNodeGroupItem
-          key={group.key}
-          group={group}
+      {nodes.map((node) => (
+        <LazyTraceNodeItem
+          key={node.trace_node_id}
+          node={node}
           onLoadArtifact={onLoadArtifact}
           runId={runId}
           traceLoader={traceLoader}
@@ -414,69 +522,43 @@ function LazyTraceNodeList({
   );
 }
 
-function LazyTraceNodeGroupItem({
-  group,
+function LazyTraceNodeItem({
+  node,
   onLoadArtifact,
   runId,
   traceLoader
 }: {
-  group: ConversationLogTraceNodeGroup;
+  node: ConversationLogTraceNodeSummary;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const traceNodeIds = useMemo(
-    () => group.nodes.map((node) => node.trace_node_id),
-    [group.nodes]
-  );
-  const traceNodeIdsKey = traceNodeIds.join('|');
+  const fallbackItem = useMemo(() => mapTraceSummaryToTraceItem(node), [node]);
   const contentQuery = useQuery({
-    enabled: expanded && group.nodes.some((node) => node.has_content),
+    enabled: expanded && node.has_content,
     queryKey: [
-      'conversation-log-trace-node-group-content',
+      'conversation-log-trace-node-content',
       runId,
-      traceNodeIdsKey
+      node.trace_node_id
     ],
-    queryFn: async () =>
-      Promise.all(
-        group.nodes
-          .filter((node) => node.has_content)
-          .map(async (node) => ({
-            node,
-            content: await traceLoader.loadContent(runId, node.trace_node_id)
-          }))
-      )
+    queryFn: () => traceLoader.loadContent(runId, node.trace_node_id)
   });
   const childrenQuery = useQuery({
-    enabled: expanded && group.nodes.some((node) => node.has_children),
+    enabled: expanded && node.has_children,
     queryKey: [
-      'conversation-log-trace-node-group-children',
+      'conversation-log-trace-node-children',
       runId,
-      traceNodeIdsKey
+      node.trace_node_id
     ],
-    queryFn: async () => {
-      const responses = await Promise.all(
-        group.nodes
-          .filter((node) => node.has_children)
-          .map((node) => traceLoader.loadChildren(runId, node.trace_node_id))
-      );
-
-      return responses.flatMap((response) => response.items);
-    }
+    queryFn: () => traceLoader.loadChildren(runId, node.trace_node_id)
   });
-  const loadedItems = useMemo(
-    () =>
-      contentQuery.data?.map(({ node, content }) =>
-        mapTraceContentToTraceItem(mapTraceSummaryToTraceItem(node), content)
-      ) ?? [],
-    [contentQuery.data]
-  );
   const item = useMemo(
-    () => mergeLoadedTraceItemsForDisplay(group.item, loadedItems),
-    [group.item, loadedItems]
+    () => mapTraceContentToTraceItem(fallbackItem, contentQuery.data),
+    [contentQuery.data, fallbackItem]
   );
-  const childNodes = childrenQuery.data ?? [];
+  const childNodes = childrenQuery.data?.items ?? [];
+  const loadToolCallbackDetail = traceLoader.loadToolCallbackDetail;
 
   return (
     <DebugWorkflowNodeItem
@@ -486,20 +568,33 @@ function LazyTraceNodeGroupItem({
     >
       <section
         aria-label={i18nText('agentFlow', 'auto.node_details_alt', {
-          value1: nodeDisplayName(group.item)
+          value1: nodeDisplayName(fallbackItem)
         })}
         className="agent-flow-editor__conversation-log-node-detail"
       >
-        {contentQuery.isLoading ? (
-          <Spin />
-        ) : (
-          <div className="agent-flow-editor__conversation-log-json-list">
-            <DebugWorkflowNodeDetailContent
-              item={item}
-              onLoadArtifact={onLoadArtifact}
-            />
-          </div>
-        )}
+        {node.has_content ? (
+          contentQuery.isLoading ? (
+            <Spin />
+          ) : (
+            <div className="agent-flow-editor__conversation-log-json-list">
+              <DebugWorkflowNodeDetailContent
+                item={item}
+                onLoadArtifact={onLoadArtifact}
+                onLoadToolCallbackDetail={
+                  loadToolCallbackDetail
+                    ? (toolCallId) =>
+                        loadToolCallbackDetail(
+                          runId,
+                          node.trace_node_id,
+                          toolCallId
+                        )
+                    : undefined
+                }
+              />
+            </div>
+          )
+        ) : null}
+        {childrenQuery.isLoading ? <Spin /> : null}
         {childNodes.length > 0 ? (
           <LazyTraceNodeList
             nodes={childNodes}
@@ -632,11 +727,13 @@ export function ConversationLogPanel({
   message,
   onClose,
   onLoadArtifact,
+  overviewLoader,
   traceLoader
 }: {
   message: AgentFlowDebugMessage;
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  overviewLoader?: ConversationLogOverviewLoader;
   traceLoader?: ConversationLogTraceLoader;
 }) {
   const loadArtifact = useConversationLogArtifactLoader(
@@ -663,6 +760,7 @@ export function ConversationLogPanel({
             children: (
               <ConversationLogDetail
                 message={message}
+                overviewLoader={overviewLoader}
                 onLoadArtifact={loadArtifact}
               />
             )

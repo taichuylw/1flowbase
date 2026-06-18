@@ -304,10 +304,12 @@ function runtimeDetailPayloadHasValue(value: unknown): boolean {
 
 export function DebugWorkflowNodeDetailContent({
   item,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadToolCallbackDetail
 }: {
   item: AgentFlowTraceItem;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const debugPayload = stripLlmRoundsFromDebugPayload(item.debugPayload ?? {});
   const hasNodeDetail =
@@ -333,6 +335,7 @@ export function DebugWorkflowNodeDetailContent({
       <LlmToolTraceTree
         debugPayload={item.debugPayload}
         onLoadArtifact={onLoadArtifact}
+        onLoadToolCallbackDetail={onLoadToolCallbackDetail}
       />
       {item.answerSnapshot ? (
         <AnswerSnapshotTrace
@@ -735,7 +738,7 @@ interface LlmToolTraceTreeState {
 }
 
 const INITIAL_LLM_TOOL_TRACE_TREE_STATE: LlmToolTraceTreeState = {
-  toolsExpanded: false,
+  toolsExpanded: true,
   expandedToolKey: null,
   loadedToolCallbacks: {},
   loadingToolKey: null,
@@ -839,6 +842,7 @@ export function LlmToolTraceTree(props: {
   debugPayload: unknown;
   debugPayloads?: unknown[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const resetKey = llmToolTraceTreeResetKey(props);
 
@@ -848,11 +852,13 @@ export function LlmToolTraceTree(props: {
 function LlmToolTraceTreeContent({
   debugPayload,
   debugPayloads,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadToolCallbackDetail
 }: {
   debugPayload: unknown;
   debugPayloads?: unknown[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const [traceTreeState, dispatchTraceTree] = useReducer(
     llmToolTraceTreeReducer,
@@ -887,6 +893,7 @@ function LlmToolTraceTreeContent({
           duration_ms: loadedCallback.duration_ms ?? callback.duration_ms,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef,
+          detailRef: callback.detailRef ?? loadedCallback.detailRef,
           routeTrace: loadedCallback.routeTrace ?? callback.routeTrace
         };
       }),
@@ -901,7 +908,15 @@ function LlmToolTraceTreeContent({
   }, []);
 
   const loadToolCallbackDetail = (callback: LlmToolCallback) => {
-    if (!callback.detailArtifactRef || !onLoadArtifact) {
+    const loadDetail = callback.detailArtifactRef
+      ? onLoadArtifact
+        ? () => onLoadArtifact(callback.detailArtifactRef as string)
+        : null
+      : callback.detailRef && onLoadToolCallbackDetail
+        ? () => onLoadToolCallbackDetail(callback.detailRef as string)
+        : null;
+
+    if (!loadDetail) {
       return;
     }
     if (
@@ -913,7 +928,7 @@ function LlmToolTraceTreeContent({
 
     dispatchTraceTree({ type: 'load-start', toolKey: callback.key });
 
-    void onLoadArtifact(callback.detailArtifactRef)
+    void loadDetail()
       .then((payload) => {
         if (!mountedRef.current) {
           return;

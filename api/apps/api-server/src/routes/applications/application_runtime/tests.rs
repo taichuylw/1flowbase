@@ -139,6 +139,72 @@ fn callback_task_tool_callback_count_reads_offloaded_tool_call_count() {
 }
 
 #[test]
+fn application_run_statistics_counts_indexed_llm_tool_callbacks() {
+    let application = test_application_record();
+    let flow_run_id = Uuid::now_v7();
+    let node_run_id = Uuid::now_v7();
+    let callback_task = domain::CallbackTaskRecord {
+        id: Uuid::now_v7(),
+        flow_run_id,
+        node_run_id,
+        callback_kind: "llm_tool_calls".to_string(),
+        status: domain::CallbackTaskStatus::Completed,
+        request_payload: serde_json::json!({
+            "tool_calls": [
+                { "id": "call-1", "name": "Read" }
+            ]
+        }),
+        response_payload: None,
+        external_ref_payload: None,
+        created_at: OffsetDateTime::UNIX_EPOCH,
+        completed_at: Some(OffsetDateTime::UNIX_EPOCH),
+    };
+    let detail = domain::ApplicationRunDetail {
+        flow_run: test_flow_run_record(
+            application.id,
+            flow_run_id,
+            domain::FlowRunStatus::Succeeded,
+            serde_json::json!({}),
+        ),
+        node_runs: vec![domain::NodeRunRecord {
+            id: node_run_id,
+            flow_run_id,
+            node_id: "node-llm".to_string(),
+            node_type: "llm".to_string(),
+            node_alias: "LLM".to_string(),
+            status: domain::NodeRunStatus::Succeeded,
+            input_payload: serde_json::json!({}),
+            output_payload: serde_json::json!({}),
+            error_payload: None,
+            metrics_payload: serde_json::json!({}),
+            debug_payload: serde_json::json!({
+                "llm_rounds": [
+                    {
+                        "round_index": 0,
+                        "assistant": {
+                            "tool_calls": [
+                                { "id": "call-1", "name": "Read" },
+                                { "id": "call-2", "name": "problem_review" }
+                            ]
+                        }
+                    }
+                ]
+            }),
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+        }],
+        checkpoints: Vec::new(),
+        callback_tasks: vec![callback_task],
+        events: Vec::new(),
+        stitched_trace: Vec::new(),
+    };
+
+    let statistics = application_run_statistics(&detail);
+
+    assert_eq!(statistics.tool_callback_count, 2);
+}
+
+#[test]
 fn start_node_response_moves_legacy_output_payload_into_input() {
     let run = domain::NodeRunRecord {
         id: Uuid::now_v7(),

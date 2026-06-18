@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  getConsoleApplicationRunDebugSnapshot,
+  getConsoleApplicationConversationMessages,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
@@ -9,6 +11,7 @@ import {
   getConsoleApplicationRuns,
   getConsoleApplicationRunTraceNodeChildren,
   getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
@@ -190,6 +193,31 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
   });
 
+  test('loads a debug session snapshot from the orchestration plane', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { flow_run: { id: 'run-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationRunDebugSnapshot(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ flow_run: { id: 'run-1' } });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/runs/run-1/debug-snapshot',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
   test('fetches lazy run trace tree resources', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
       Promise.resolve(
@@ -220,6 +248,15 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         'app-1',
         'run-1',
         'node_run:node-run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ nodes: [] });
+    await expect(
+      getConsoleApplicationRunTraceToolCallbackContent(
+        'app-1',
+        'run-1',
+        'node_run:node-run-1',
+        'call/weather',
         'http://127.0.0.1:7800'
       )
     ).resolves.toEqual({ nodes: [] });
@@ -257,6 +294,14 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/node_run%3Anode-run-1/tool-callbacks/call%2Fweather/content',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/resume-timeline',
       expect.objectContaining({
         method: 'GET',
@@ -284,6 +329,32 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/conversation/messages?limit=5',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches external conversation messages around an explicit flow run', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { items: [], page: {} } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationConversationMessages(
+        'app-1',
+        'conversation 1',
+        { around_run_id: 'run-2', limit: 5 },
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ items: [], page: {} });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/conversations/conversation%201/messages?around_run_id=run-2&limit=5',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'

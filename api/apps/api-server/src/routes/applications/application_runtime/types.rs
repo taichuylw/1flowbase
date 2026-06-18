@@ -228,6 +228,14 @@ pub struct ApplicationRunDetailResponse {
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunOverviewResponse {
+    pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
+    pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunTraceNodeSummaryResponse {
     pub trace_node_id: String,
     pub parent_trace_node_id: Option<String>,
@@ -275,6 +283,13 @@ pub struct ApplicationRunTraceNodeContentResponse {
     pub flow_run: Option<FlowRunResponse>,
     pub checkpoints: Vec<CheckpointResponse>,
     pub events: Vec<RunEventResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceToolCallbackContentResponse {
+    pub trace_node_id: String,
+    pub tool_call_id: String,
+    pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

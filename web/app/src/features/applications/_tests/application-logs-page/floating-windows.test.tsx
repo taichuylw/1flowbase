@@ -51,6 +51,15 @@ const runtimeApi = vi.hoisted(() => ({
       runId,
       'trace-tree'
     ] as const,
+  applicationRunOverviewQueryKey: (applicationId: string, runId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'overview'
+    ] as const,
   applicationRunTraceNodeChildrenQueryKey: (
     applicationId: string,
     runId: string,
@@ -120,6 +129,7 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
+  fetchApplicationRunOverview: vi.fn(),
   fetchApplicationRunTraceTree: vi.fn(),
   fetchApplicationRunTraceNodeChildren: vi.fn(),
   fetchApplicationRunTraceNodeContent: vi.fn(),
@@ -425,6 +435,17 @@ function sampleTraceTree() {
   };
 }
 
+function sampleRunOverview() {
+  const detail = sampleRunDetail();
+
+  return {
+    run: detail.run,
+    statistics: detail.statistics,
+    flow_run: detail.flow_run,
+    answer_snapshot: detail.answer_snapshot ?? null
+  };
+}
+
 function sampleTraceNodeContent() {
   return {
     trace_node_id: 'node_run:node-run-1',
@@ -451,6 +472,7 @@ describe('ApplicationLogsPage - floating windows', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
+    runtimeApi.fetchApplicationRunOverview.mockReset();
     runtimeApi.fetchApplicationRunTraceTree.mockReset();
     runtimeApi.fetchApplicationRunTraceNodeChildren.mockReset();
     runtimeApi.fetchApplicationRunTraceNodeContent.mockReset();
@@ -485,6 +507,9 @@ describe('ApplicationLogsPage - floating windows', () => {
     );
     runtimeApi.fetchApplicationRunTraceTree.mockResolvedValue(
       sampleTraceTree()
+    );
+    runtimeApi.fetchApplicationRunOverview.mockResolvedValue(
+      sampleRunOverview()
     );
     runtimeApi.fetchApplicationRunTraceNodeChildren.mockResolvedValue({
       items: []
@@ -717,7 +742,7 @@ describe('ApplicationLogsPage - floating windows', () => {
       'true'
     );
     expect(runtimeApi.fetchApplicationRunTraceTree).not.toHaveBeenCalled();
-    expect(within(logPanel).getByLabelText('输出 JSON')).toHaveTextContent(
+    expect(await within(logPanel).findByLabelText('输出 JSON')).toHaveTextContent(
       '退款政策摘要'
     );
     expect(within(logPanel).getByText('协议')).toBeInTheDocument();
@@ -737,6 +762,12 @@ describe('ApplicationLogsPage - floating windows', () => {
     fireEvent.click(
       await within(logPanel).findByRole('button', { name: /LLM.*llm/ })
     );
+    const nodeDetail = await within(logPanel).findByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    expect(
+      within(nodeDetail).queryByRole('button', { name: '详情' })
+    ).not.toBeInTheDocument();
     await waitFor(() => {
       expect(
         runtimeApi.fetchApplicationRunTraceNodeContent

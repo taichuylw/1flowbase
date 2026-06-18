@@ -409,7 +409,7 @@ async fn application_runtime_routes_log_trace_tree_loads_summary_children_and_co
     let node_run_id =
         Uuid::parse_str(preview_payload["data"]["node_run"]["id"].as_str().unwrap()).unwrap();
 
-    let callback = <MainDurableStore as OrchestrationRuntimeRepository>::create_callback_task(
+    let _callback = <MainDurableStore as OrchestrationRuntimeRepository>::create_callback_task(
         &state.store,
         &CreateCallbackTaskInput {
             flow_run_id: Uuid::parse_str(&flow_run_id).unwrap(),
@@ -453,7 +453,7 @@ async fn application_runtime_routes_log_trace_tree_loads_summary_children_and_co
     assert_eq!(root_nodes.len(), 1);
     assert_eq!(root_nodes[0]["node_id"].as_str(), Some("node-llm"));
     assert_eq!(root_nodes[0]["node_kind"].as_str(), Some("node_run"));
-    assert_eq!(root_nodes[0]["has_children"].as_bool(), Some(true));
+    assert_eq!(root_nodes[0]["has_children"].as_bool(), Some(false));
     assert_eq!(root_nodes[0]["has_content"].as_bool(), Some(true));
     assert!(
         root_nodes[0].get("input_payload").is_none(),
@@ -482,15 +482,10 @@ async fn application_runtime_routes_log_trace_tree_loads_summary_children_and_co
     let children_body = to_bytes(children.into_body(), usize::MAX).await.unwrap();
     let children_payload: Value = serde_json::from_slice(&children_body).unwrap();
     let child_nodes = children_payload["data"]["items"].as_array().unwrap();
-    assert_eq!(child_nodes.len(), 1);
-    assert_eq!(child_nodes[0]["node_kind"].as_str(), Some("callback_task"));
     assert_eq!(
-        child_nodes[0]["callback_task_id"].as_str(),
-        Some(callback.id.to_string().as_str())
-    );
-    assert!(
-        child_nodes[0].get("request_payload").is_none(),
-        "callback child summary must not include heavy request payload"
+        child_nodes.len(),
+        0,
+        "llm_tool_calls stay inside the LLM Tools content, not trace child rows"
     );
 
     let content = app
@@ -1274,7 +1269,7 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
 
     let run_a_llm_node_run_id = latest_llm_node_run_id(&pool, run_a_uuid).await;
     let run_b_llm_node_run_id = latest_llm_node_run_id(&pool, run_b_uuid).await;
-    let run_a_callback_task =
+    let _run_a_callback_task =
         <MainDurableStore as OrchestrationRuntimeRepository>::create_callback_task(
             &state.store,
             &CreateCallbackTaskInput {
@@ -1292,7 +1287,7 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         )
         .await
         .unwrap();
-    let run_b_callback_task =
+    let _run_b_callback_task =
         <MainDurableStore as OrchestrationRuntimeRepository>::create_callback_task(
             &state.store,
             &CreateCallbackTaskInput {
@@ -1417,14 +1412,14 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         .find(|node| node["flow_run_id"] == json!(run_a_id) && node["node_id"] == json!("node-llm"))
         .expect("source Run A should expose its LLM trace node");
     let run_a_trace_node_id = run_a_trace_node["trace_node_id"].as_str().unwrap();
-    assert_eq!(run_a_trace_node["has_children"].as_bool(), Some(true));
+    assert_eq!(run_a_trace_node["has_children"].as_bool(), Some(false));
 
     let run_b_trace_node = root_nodes
         .iter()
         .find(|node| node["flow_run_id"] == json!(run_b_id) && node["node_id"] == json!("node-llm"))
         .expect("source Run B should expose its LLM trace node");
     let run_b_trace_node_id = run_b_trace_node["trace_node_id"].as_str().unwrap();
-    assert_eq!(run_b_trace_node["has_children"].as_bool(), Some(true));
+    assert_eq!(run_b_trace_node["has_children"].as_bool(), Some(false));
 
     let run_a_children = app
         .clone()
@@ -1444,37 +1439,12 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         .await
         .unwrap();
     let run_a_children_payload: Value = serde_json::from_slice(&run_a_children_body).unwrap();
-    let run_a_callback_node = &run_a_children_payload["data"]["items"].as_array().unwrap()[0];
     assert_eq!(
-        run_a_callback_node["callback_task_id"],
-        json!(run_a_callback_task.id.to_string())
-    );
-    assert!(run_a_callback_node.get("request_payload").is_none());
-
-    let run_a_callback_trace_node_id = run_a_callback_node["trace_node_id"].as_str().unwrap();
-    let run_a_callback_content = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{run_c_id}/trace-tree/nodes/{run_a_callback_trace_node_id}/content"
-                ))
-                .header("cookie", &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(run_a_callback_content.status(), StatusCode::OK);
-    let run_a_callback_content_body = to_bytes(run_a_callback_content.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let run_a_callback_content_payload: Value =
-        serde_json::from_slice(&run_a_callback_content_body).unwrap();
-    assert_eq!(
-        run_a_callback_content_payload["data"]["callback_task"]["request_payload"]["tool_calls"][0]
-            ["name"],
-        json!("image_llm")
+        run_a_children_payload["data"]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
     );
 
     let run_b_children = app
@@ -1495,36 +1465,12 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         .await
         .unwrap();
     let run_b_children_payload: Value = serde_json::from_slice(&run_b_children_body).unwrap();
-    let run_b_callback_node = &run_b_children_payload["data"]["items"].as_array().unwrap()[0];
     assert_eq!(
-        run_b_callback_node["callback_task_id"],
-        json!(run_b_callback_task.id.to_string())
-    );
-    let run_b_callback_trace_node_id = run_b_callback_node["trace_node_id"].as_str().unwrap();
-    let run_b_callback_content = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{run_c_id}/trace-tree/nodes/{run_b_callback_trace_node_id}/content"
-                ))
-                .header("cookie", &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(run_b_callback_content.status(), StatusCode::OK);
-    let run_b_callback_content_body = to_bytes(run_b_callback_content.into_body(), usize::MAX)
-        .await
-        .unwrap()
-        .to_vec();
-    let run_b_callback_content_payload: Value =
-        serde_json::from_slice(&run_b_callback_content_body).unwrap();
-    assert_eq!(
-        run_b_callback_content_payload["data"]["callback_task"]["request_payload"]["tool_calls"][0]
-            ["name"],
-        json!("Grep")
+        run_b_children_payload["data"]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
     );
 
     let run_a_node_content = app

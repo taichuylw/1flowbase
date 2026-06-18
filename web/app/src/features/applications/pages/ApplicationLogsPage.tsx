@@ -17,7 +17,9 @@ import {
   fetchApplicationRuns,
   fetchApplicationRunTraceNodeChildren,
   fetchApplicationRunTraceNodeContent,
+  fetchApplicationRunTraceToolCallbackContent,
   fetchApplicationRunTraceTree,
+  fetchApplicationRunOverview,
   type FetchApplicationRunsInput,
   fetchRuntimeDebugArtifact,
   type ApplicationRunSortField,
@@ -584,7 +586,18 @@ export function ApplicationLogsPage({
                     applicationId,
                     runId,
                     traceNodeId
+                  ),
+                loadToolCallbackDetail: (runId, traceNodeId, toolCallId) =>
+                  fetchApplicationRunTraceToolCallbackContent(
+                    applicationId,
+                    runId,
+                    traceNodeId,
+                    toolCallId
                   )
+              }}
+              overviewLoader={{
+                loadOverview: (runId) =>
+                  fetchApplicationRunOverview(applicationId, runId)
               }}
             />
           </div>

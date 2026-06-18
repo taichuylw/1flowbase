@@ -250,6 +250,49 @@ async fn load_application_run_detail_for_trace_tree(
     ))
 }
 
+async fn load_application_run_detail_for_log_overview(
+    state: Arc<ApiState>,
+    application_id: Uuid,
+    flow_run_id: Uuid,
+) -> Result<domain::ApplicationRunDetail, ApiError> {
+    Ok(
+        <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+            &state.store,
+            application_id,
+            flow_run_id,
+        )
+        .await?
+        .ok_or(ControlPlaneError::NotFound("flow_run"))?,
+    )
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/overview",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id")
+    ),
+    responses(
+        (status = 200, body = ApplicationRunOverviewResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_run_overview(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiSuccess<ApplicationRunOverviewResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
+    let detail = load_application_run_detail_for_log_overview(state, id, run_id).await?;
+    let response = to_application_run_overview_response(&application, detail);
+
+    Ok(Json(ApiSuccess::new(response)))
+}
+
 #[utoipa::path(
     get,
     path = "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree",
@@ -330,6 +373,35 @@ pub async fn get_application_run_trace_node_content(
     ensure_application_visible(&state, context.user.id, id).await?;
     let detail = load_application_run_detail_for_trace_tree(state, id, run_id).await?;
     let response = trace_node_content_response(detail, &trace_node_id)?;
+
+    Ok(Json(ApiSuccess::new(response)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/tool-callbacks/{tool_call_id}/content",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("trace_node_id" = String, Path, description = "Trace node id that owns the tool callback"),
+        ("tool_call_id" = String, Path, description = "Tool call id to load")
+    ),
+    responses(
+        (status = 200, body = ApplicationRunTraceToolCallbackContentResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_run_trace_tool_callback_content(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id, trace_node_id, tool_call_id)): Path<(Uuid, Uuid, String, String)>,
+) -> Result<Json<ApiSuccess<ApplicationRunTraceToolCallbackContentResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    let detail = load_application_run_detail_for_trace_tree(state, id, run_id).await?;
+    let response = trace_tool_callback_content_response(detail, &trace_node_id, &tool_call_id)?;
 
     Ok(Json(ApiSuccess::new(response)))
 }

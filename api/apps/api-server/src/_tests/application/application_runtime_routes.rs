@@ -754,6 +754,7 @@ fn sse_data_payload(frame: &str) -> Value {
 }
 
 mod artifacts_billing_routes;
+mod lazy_tree_contract_routes;
 mod logs_routes;
 mod read_side_effect_routes;
 mod resume_cancel_routes;

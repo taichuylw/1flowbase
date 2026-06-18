@@ -331,7 +331,7 @@ function RunConversation({
       nonEmptyString(message.detailRunId) ??
       (message.canOpenDetail === false ? null : nonEmptyString(message.runId));
 
-    if (!detailRunId) {
+    if (detailRunId !== runId) {
       return;
     }
 
@@ -376,6 +376,7 @@ function RunConversation({
         ariaLabel={i18nText('applications', 'auto.run_details_preview')}
         closeLabel={i18nText('applications', 'auto.close_run_details')}
         composerUiOnly
+        logActionRunId={runId}
         messages={messages}
         runContext={runConversationContext}
         showClearAction={false}

@@ -53,10 +53,11 @@ pub use debug_variable_cache::{
 };
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
-    application_run_model, application_run_query,
+    application_run_model, application_run_query, collect_llm_tool_callback_trace_items,
     enrich_application_run_detail_visible_internal_llm_route_traces,
     enrich_node_last_run_visible_internal_llm_route_traces, load_runtime_debug_artifact_json_value,
     load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
+    with_inline_llm_tool_callback_index, without_inline_visible_internal_llm_tool_trace,
 };
 
 fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
@@ -81,6 +82,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/orchestration/runs/:run_id/debug-stream",
             get(subscribe_flow_debug_run_stream),
+        )
+        .route(
+            "/applications/:id/orchestration/runs/:run_id/debug-snapshot",
+            get(get_flow_debug_run_snapshot),
         )
         .route(
             "/applications/:id/orchestration/runs/:run_id/resume",
@@ -128,6 +133,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(list_application_run_conversation_messages),
         )
         .route(
+            "/applications/:id/logs/runs/:run_id/overview",
+            get(get_application_run_overview),
+        )
+        .route(
             "/applications/:id/logs/runs/:run_id/trace-tree",
             get(get_application_run_trace_tree),
         )
@@ -138,6 +147,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/content",
             get(get_application_run_trace_node_content),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/tool-callbacks/:tool_call_id/content",
+            get(get_application_run_trace_tool_callback_content),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/resume-timeline",

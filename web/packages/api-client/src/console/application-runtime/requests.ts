@@ -5,10 +5,12 @@ import { apiFetch } from '../../transport';
 import type {
   ConsoleApplicationRunDetail,
   ConsoleApplicationRunMonitoringReport,
+  ConsoleApplicationRunOverview,
   ConsoleApplicationRunsPage,
   ConsoleApplicationRuntimeActivity,
   ConsoleApplicationRunTraceNodeChildren,
   ConsoleApplicationRunTraceNodeContent,
+  ConsoleApplicationRunTraceToolCallbackContent,
   ConsoleApplicationRunTraceTree,
   ConsoleApplicationRunResumeTimeline,
   ConsoleDebugVariableSnapshot,
@@ -55,6 +57,17 @@ export function startConsoleFlowDebugRun(
     method: 'POST',
     body: input,
     csrfToken,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunDebugSnapshot(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunDetail>({
+    path: `/api/console/applications/${applicationId}/orchestration/runs/${runId}/debug-snapshot`,
     baseUrl
   });
 }
@@ -186,6 +199,17 @@ export function getConsoleApplicationRunTraceTree(
   });
 }
 
+export function getConsoleApplicationRunOverview(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunOverview>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/overview`,
+    baseUrl
+  });
+}
+
 export function getConsoleApplicationRunTraceNodeChildren(
   applicationId: string,
   runId: string,
@@ -212,6 +236,22 @@ export function getConsoleApplicationRunTraceNodeContent(
 ) {
   return apiFetch<ConsoleApplicationRunTraceNodeContent>({
     path: `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree/nodes/${encodeURIComponent(traceNodeId)}/content`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceToolCallbackContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  toolCallId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunTraceToolCallbackContent>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}` +
+      `/trace-tree/nodes/${encodeURIComponent(traceNodeId)}` +
+      `/tool-callbacks/${encodeURIComponent(toolCallId)}/content`,
     baseUrl
   });
 }

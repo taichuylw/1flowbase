@@ -1,11 +1,14 @@
 import {
   completeConsoleCallbackTask,
+  getConsoleApplicationConversationMessages,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRunResumeTimeline,
+  getConsoleApplicationRunOverview,
   getConsoleApplicationRunTraceNodeChildren,
   getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
@@ -19,6 +22,7 @@ import {
   type ConsoleApplicationRunMonitoringExternalUserUsage,
   type ConsoleApplicationRunMonitoringProtocolBreakdown,
   type ConsoleApplicationRunMonitoringReport,
+  type ConsoleApplicationRunOverview,
   type ConsoleApplicationRuntimeActivity,
   type ConsoleApplicationRunMonitoringRunRank,
   type ConsoleApplicationRunMonitoringSourceBreakdown,
@@ -73,6 +77,7 @@ export interface ApplicationRunsPage {
   page_size: number;
 }
 export type ApplicationRunTraceTree = ConsoleApplicationRunTraceTree;
+export type ApplicationRunOverview = ConsoleApplicationRunOverview;
 export type ApplicationRunResumeTimeline = ConsoleApplicationRunResumeTimeline;
 export type ApplicationRunTraceNodeChildren =
   ConsoleApplicationRunTraceNodeChildren;
@@ -230,6 +235,19 @@ export const applicationRunTraceTreeQueryKey = (
     'trace-tree'
   ] as const;
 
+export const applicationRunOverviewQueryKey = (
+  applicationId: string,
+  runId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'overview'
+  ] as const;
+
 export const applicationRunTraceNodeChildrenQueryKey = (
   applicationId: string,
   runId: string,
@@ -311,6 +329,29 @@ export const applicationRunConversationMessagesQueryKey = (
     'runs',
     runId,
     'conversation-messages',
+    input.before ?? '',
+    input.after ?? '',
+    input.limit ?? 5
+  ] as const;
+
+export const applicationLogConversationMessagesQueryKey = (
+  applicationId: string,
+  externalConversationId: string,
+  input: {
+    aroundRunId?: string | null;
+    before?: string | null;
+    after?: string | null;
+    limit?: number;
+  } = {}
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'logs',
+    'conversations',
+    externalConversationId,
+    input.aroundRunId ?? '',
     input.before ?? '',
     input.after ?? '',
     input.limit ?? 5
@@ -424,6 +465,17 @@ export function fetchApplicationRunTraceTree(
   );
 }
 
+export function fetchApplicationRunOverview(
+  applicationId: string,
+  runId: string
+) {
+  return getConsoleApplicationRunOverview(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
 export function fetchApplicationRunTraceNodeChildren(
   applicationId: string,
   runId: string,
@@ -448,6 +500,23 @@ export function fetchApplicationRunTraceNodeContent(
     traceNodeId,
     getApplicationsApiBaseUrl()
   );
+}
+
+export async function fetchApplicationRunTraceToolCallbackContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  toolCallId: string
+) {
+  const response = await getConsoleApplicationRunTraceToolCallbackContent(
+    applicationId,
+    runId,
+    traceNodeId,
+    toolCallId,
+    getApplicationsApiBaseUrl()
+  );
+
+  return response.payload;
 }
 
 export function fetchApplicationRunResumeTimeline(
@@ -537,6 +606,29 @@ export function fetchApplicationRunConversationMessages(
     applicationId,
     runId,
     {
+      before: input.before ?? undefined,
+      after: input.after ?? undefined,
+      limit: input.limit
+    },
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationLogConversationMessages(
+  applicationId: string,
+  externalConversationId: string,
+  input: {
+    aroundRunId?: string | null;
+    before?: string | null;
+    after?: string | null;
+    limit?: number;
+  } = {}
+) {
+  return getConsoleApplicationConversationMessages(
+    applicationId,
+    externalConversationId,
+    {
+      around_run_id: input.aroundRunId ?? undefined,
       before: input.before ?? undefined,
       after: input.after ?? undefined,
       limit: input.limit

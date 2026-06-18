@@ -38,6 +38,7 @@ function debugMessageLabel(role: AgentFlowDebugMessage['role']) {
 
 export function DebugConversationPane({
   composerUiOnly = false,
+  logActionRunId,
   status,
   stopping,
   runContext,
@@ -63,6 +64,7 @@ export function DebugConversationPane({
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
   composerUiOnly?: boolean;
+  logActionRunId?: string | null;
   showComposer?: boolean;
 }) {
   const [uiOnlyComposerValue, setUiOnlyComposerValue] = useState('');
@@ -222,6 +224,14 @@ export function DebugConversationPane({
     }
   }
 
+  function messageMatchesLogActionRun(message: AgentFlowDebugMessage) {
+    if (!logActionRunId) {
+      return true;
+    }
+
+    return (message.detailRunId ?? message.runId) === logActionRunId;
+  }
+
   return (
     <div className="agent-flow-editor__debug-console-pane agent-flow-editor__debug-conversation-pane">
       <div
@@ -252,7 +262,11 @@ export function DebugConversationPane({
                   key={message.id}
                   message={message}
                   onLoadArtifact={onLoadArtifact}
-                  onOpenLog={onOpenMessageLog}
+                  onOpenLog={
+                    messageMatchesLogActionRun(message)
+                      ? onOpenMessageLog
+                      : undefined
+                  }
                   onOpenResumeTimeline={onOpenResumeTimeline}
                 />
               ) : (

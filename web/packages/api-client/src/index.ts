@@ -4,6 +4,7 @@ export * from './console/api-docs';
 export * from './console/application-orchestration';
 export * from './console/application-runtime';
 export {
+  getConsoleApplicationConversationMessages,
   getConsoleApplicationRunConversationMessages
 } from './console/application-run-conversation';
 export * from './console-data-models';

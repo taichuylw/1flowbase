@@ -455,6 +455,13 @@ export interface ConsoleApplicationRunDetail {
   stitched_trace?: ConsoleApplicationRunStitchedTrace[];
 }
 
+export interface ConsoleApplicationRunOverview {
+  run: ConsoleApplicationRunLog;
+  statistics: ConsoleApplicationRunStatistics;
+  flow_run: ConsoleFlowRunDetail;
+  answer_snapshot?: ConsoleAnswerSnapshot | null;
+}
+
 export type ConsoleApplicationRunTraceNodeKind = 'node_run' | 'callback_task';
 
 export interface ConsoleApplicationRunTraceNodeSummary {
@@ -496,6 +503,12 @@ export interface ConsoleApplicationRunTraceNodeContent {
   flow_run?: ConsoleFlowRunDetail | null;
   checkpoints: ConsoleRunCheckpoint[];
   events: ConsoleRunEvent[];
+}
+
+export interface ConsoleApplicationRunTraceToolCallbackContent {
+  trace_node_id: string;
+  tool_call_id: string;
+  payload: Record<string, unknown>;
 }
 
 export interface ConsoleApplicationRunResumeTimeline {
