@@ -453,7 +453,7 @@ async fn application_runtime_routes_log_trace_tree_loads_summary_children_and_co
     assert_eq!(root_nodes.len(), 1);
     assert_eq!(root_nodes[0]["node_id"].as_str(), Some("node-llm"));
     assert_eq!(root_nodes[0]["node_kind"].as_str(), Some("node_run"));
-    assert_eq!(root_nodes[0]["has_children"].as_bool(), Some(false));
+    assert_eq!(root_nodes[0]["has_children"].as_bool(), Some(true));
     assert_eq!(root_nodes[0]["has_content"].as_bool(), Some(true));
     assert!(
         root_nodes[0].get("input_payload").is_none(),
@@ -484,9 +484,12 @@ async fn application_runtime_routes_log_trace_tree_loads_summary_children_and_co
     let child_nodes = children_payload["data"]["items"].as_array().unwrap();
     assert_eq!(
         child_nodes.len(),
-        0,
-        "llm_tool_calls stay inside the LLM Tools content, not trace child rows"
+        1,
+        "llm_tool_calls are exposed through the projection tools group"
     );
+    assert_eq!(child_nodes[0]["node_kind"], json!("tool_group"));
+    assert_eq!(child_nodes[0]["has_children"], json!(true));
+    assert_eq!(child_nodes[0]["has_content"], json!(false));
 
     let content = app
         .clone()
@@ -1396,10 +1399,10 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         .any(|node| node["flow_run_id"] == json!(run_c_id)));
     assert!(root_nodes
         .iter()
-        .any(|node| node["flow_run_id"] == json!(run_a_id)));
+        .all(|node| node["flow_run_id"] != json!(run_a_id)));
     assert!(root_nodes
         .iter()
-        .any(|node| node["flow_run_id"] == json!(run_b_id)));
+        .all(|node| node["flow_run_id"] != json!(run_b_id)));
     assert!(root_nodes
         .iter()
         .all(|node| node.get("input_payload").is_none()));
@@ -1407,26 +1410,19 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         .iter()
         .all(|node| node.get("debug_payload").is_none()));
 
-    let run_a_trace_node = root_nodes
+    let stitched_group = root_nodes
         .iter()
-        .find(|node| node["flow_run_id"] == json!(run_a_id) && node["node_id"] == json!("node-llm"))
-        .expect("source Run A should expose its LLM trace node");
-    let run_a_trace_node_id = run_a_trace_node["trace_node_id"].as_str().unwrap();
-    assert_eq!(run_a_trace_node["has_children"].as_bool(), Some(false));
+        .find(|node| node["node_kind"] == json!("stitched_context"))
+        .expect("stitched context group should be present at root");
+    let stitched_group_id = stitched_group["trace_node_id"].as_str().unwrap();
+    assert_eq!(stitched_group["has_children"].as_bool(), Some(true));
 
-    let run_b_trace_node = root_nodes
-        .iter()
-        .find(|node| node["flow_run_id"] == json!(run_b_id) && node["node_id"] == json!("node-llm"))
-        .expect("source Run B should expose its LLM trace node");
-    let run_b_trace_node_id = run_b_trace_node["trace_node_id"].as_str().unwrap();
-    assert_eq!(run_b_trace_node["has_children"].as_bool(), Some(false));
-
-    let run_a_children = app
+    let stitched_children = app
         .clone()
         .oneshot(
             Request::builder()
                 .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{run_c_id}/trace-tree/nodes?parent_trace_node_id={run_a_trace_node_id}"
+                    "/api/console/applications/{application_id}/logs/runs/{run_c_id}/trace-tree/nodes?parent_trace_node_id={stitched_group_id}"
                 ))
                 .header("cookie", &cookie)
                 .body(Body::empty())
@@ -1434,44 +1430,19 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         )
         .await
         .unwrap();
-    assert_eq!(run_a_children.status(), StatusCode::OK);
-    let run_a_children_body = to_bytes(run_a_children.into_body(), usize::MAX)
+    assert_eq!(stitched_children.status(), StatusCode::OK);
+    let stitched_children_body = to_bytes(stitched_children.into_body(), usize::MAX)
         .await
         .unwrap();
-    let run_a_children_payload: Value = serde_json::from_slice(&run_a_children_body).unwrap();
-    assert_eq!(
-        run_a_children_payload["data"]["items"]
-            .as_array()
-            .unwrap()
-            .len(),
-        0
-    );
-
-    let run_b_children = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{run_c_id}/trace-tree/nodes?parent_trace_node_id={run_b_trace_node_id}"
-                ))
-                .header("cookie", &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
+    let stitched_children_payload: Value = serde_json::from_slice(&stitched_children_body).unwrap();
+    let stitched_runs = stitched_children_payload["data"]["items"]
+        .as_array()
         .unwrap();
-    assert_eq!(run_b_children.status(), StatusCode::OK);
-    let run_b_children_body = to_bytes(run_b_children.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let run_b_children_payload: Value = serde_json::from_slice(&run_b_children_body).unwrap();
-    assert_eq!(
-        run_b_children_payload["data"]["items"]
-            .as_array()
-            .unwrap()
-            .len(),
-        0
-    );
+    assert_eq!(stitched_runs.len(), 2);
+    assert!(stitched_runs
+        .iter()
+        .all(|node| node["node_kind"] == json!("stitched_run")));
+    let run_a_trace_node_id = stitched_runs[0]["trace_node_id"].as_str().unwrap();
 
     let run_a_node_content = app
         .clone()
@@ -1492,16 +1463,9 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
         .unwrap();
     let run_a_node_content_payload: Value =
         serde_json::from_slice(&run_a_node_content_body).unwrap();
-    let run_a_trace_node_content = &run_a_node_content_payload["data"]["node_run"];
     assert_eq!(
-        run_a_trace_node_content["debug_payload"]["visible_internal_llm_tool_trace"][0]
-            ["tool_name"],
-        json!("image_llm")
-    );
-    assert_eq!(
-        run_a_trace_node_content["debug_payload"]["visible_internal_llm_tool_trace"][0]
-            ["route_model"],
-        json!("mimo-v2.5")
+        run_a_node_content_payload["data"]["flow_run"]["id"],
+        json!(run_a_id)
     );
 }
 

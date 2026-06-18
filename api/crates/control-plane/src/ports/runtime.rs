@@ -914,6 +914,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         application_id: Uuid,
         flow_run_id: Uuid,
     ) -> anyhow::Result<Option<domain::ApplicationRunDetail>>;
+    async fn get_application_run_trace_projection_source(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ApplicationRunDetail>> {
+        let _ = (application_id, flow_run_id);
+        anyhow::bail!("get_application_run_trace_projection_source not implemented")
+    }
     async fn replace_application_run_trace_projection(
         &self,
         input: &ReplaceApplicationRunTraceProjectionInput,
@@ -943,6 +951,13 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = flow_run_id;
         anyhow::bail!("list_application_run_trace_roots not implemented")
     }
+    async fn list_application_run_trace_nodes_for_statistics(
+        &self,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+        let _ = flow_run_id;
+        anyhow::bail!("list_application_run_trace_nodes_for_statistics not implemented")
+    }
     async fn list_application_run_trace_children(
         &self,
         flow_run_id: Uuid,
@@ -950,6 +965,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
     ) -> anyhow::Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
         let _ = (flow_run_id, parent_trace_node_id);
         anyhow::bail!("list_application_run_trace_children not implemented")
+    }
+    async fn get_application_run_trace_node(
+        &self,
+        flow_run_id: Uuid,
+        trace_node_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ApplicationRunTraceNodeRecord>> {
+        let _ = (flow_run_id, trace_node_id);
+        anyhow::bail!("get_application_run_trace_node not implemented")
     }
     async fn get_application_run_trace_node_by_locator(
         &self,

@@ -131,13 +131,6 @@ impl LlmToolCallbackArtifact {
 
         Value::Object(object)
     }
-
-    fn trace_content_summary_payload(&self) -> Value {
-        let mut object = self.summary_payload_base();
-        object.insert("detail_ref".to_string(), json!(self.id));
-
-        Value::Object(object)
-    }
 }
 
 fn lightweight_route_trace_summary(route_trace: &Value) -> Value {
@@ -200,40 +193,6 @@ fn attach_inline_route_traces(callbacks: &mut [LlmToolCallbackArtifact], debug_p
         if callback.route_trace.is_none() {
             callback.route_trace = route_traces.get(&callback.id).cloned();
         }
-    }
-}
-
-pub(super) fn without_inline_visible_internal_llm_tool_trace(mut debug_payload: Value) -> Value {
-    let Some(object) = debug_payload.as_object_mut() else {
-        return debug_payload;
-    };
-    if !object.contains_key("tool_callbacks") {
-        return debug_payload;
-    }
-
-    object.remove("visible_internal_llm_tool_trace");
-    object.remove("visible_internal_llm_tool_events");
-    debug_payload
-}
-
-#[derive(Clone)]
-pub(super) struct LlmToolCallbackTraceItem {
-    id: String,
-    detail_payload: Value,
-    summary_payload: Value,
-}
-
-impl LlmToolCallbackTraceItem {
-    pub(super) fn id(&self) -> &str {
-        &self.id
-    }
-
-    pub(super) fn detail_payload(&self) -> Value {
-        self.detail_payload.clone()
-    }
-
-    pub(super) fn summary_payload(&self) -> Value {
-        self.summary_payload.clone()
     }
 }
 
@@ -718,10 +677,10 @@ fn collect_llm_tool_callbacks_from_callback_tasks(
     callbacks
 }
 
-pub(super) fn collect_llm_tool_callback_trace_items(
+pub(super) fn count_llm_tool_callback_trace_items(
     debug_payloads: &[Value],
     callback_tasks: &[domain::CallbackTaskRecord],
-) -> Vec<LlmToolCallbackTraceItem> {
+) -> usize {
     let runtime_facts = collect_llm_tool_callback_runtime_facts(callback_tasks);
     let mut callbacks = Vec::<LlmToolCallbackArtifact>::new();
     let mut index_by_id = std::collections::HashMap::<String, usize>::new();
@@ -739,41 +698,7 @@ pub(super) fn collect_llm_tool_callback_trace_items(
     }
     attach_inline_route_traces(&mut callbacks, debug_payloads);
 
-    callbacks
-        .into_iter()
-        .map(|callback| LlmToolCallbackTraceItem {
-            id: callback.id.clone(),
-            detail_payload: callback.detail_payload(),
-            summary_payload: callback.trace_content_summary_payload(),
-        })
-        .collect()
-}
-
-pub(super) fn with_inline_llm_tool_callback_index(
-    mut debug_payload: Value,
-    callback_tasks: &[domain::CallbackTaskRecord],
-) -> Value {
-    let Some(object) = debug_payload.as_object() else {
-        return debug_payload;
-    };
-    if object.contains_key("tool_callbacks") {
-        return debug_payload;
-    }
-
-    let summaries =
-        collect_llm_tool_callback_trace_items(std::slice::from_ref(&debug_payload), callback_tasks)
-            .into_iter()
-            .map(|callback| callback.summary_payload())
-            .collect::<Vec<_>>();
-    if summaries.is_empty() {
-        return debug_payload;
-    }
-
-    if let Some(object) = debug_payload.as_object_mut() {
-        object.insert("tool_callbacks".to_string(), Value::Array(summaries));
-    }
-
-    debug_payload
+    callbacks.len()
 }
 
 fn upsert_llm_tool_callback(

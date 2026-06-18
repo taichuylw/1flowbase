@@ -205,6 +205,75 @@ fn application_run_statistics_counts_indexed_llm_tool_callbacks() {
 }
 
 #[test]
+fn trace_tree_endpoints_read_projection_without_full_detail_fallback() {
+    let log_endpoint_source = include_str!("log_handlers.rs");
+
+    for function_name in [
+        "get_application_run_trace_tree",
+        "get_application_run_trace_node_children",
+        "get_application_run_trace_node_content",
+        "get_application_run_trace_tool_callback_content",
+    ] {
+        let function_source =
+            application_trace_tree_endpoint_source(log_endpoint_source, function_name);
+
+        assert!(
+            function_source.contains("ensure_application_run_trace_projection_status"),
+            "{function_name} must enter through projection status"
+        );
+        assert!(
+            !function_source.contains("get_application_run_detail"),
+            "{function_name} must not fallback to full run detail reads"
+        );
+    }
+
+    assert!(application_trace_tree_endpoint_source(
+        log_endpoint_source,
+        "get_application_run_trace_tree"
+    )
+    .contains("list_application_run_trace_roots"));
+    assert!(application_trace_tree_endpoint_source(
+        log_endpoint_source,
+        "get_application_run_trace_node_children"
+    )
+    .contains("list_application_run_trace_children"));
+    assert!(
+        application_trace_tree_endpoint_source(
+            log_endpoint_source,
+            "get_application_run_trace_node_content"
+        )
+        .contains(
+            "<MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node_content"
+        )
+    );
+    assert!(
+        application_trace_tree_endpoint_source(
+            log_endpoint_source,
+            "get_application_run_trace_tool_callback_content"
+        )
+        .contains(
+            "<MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node_content"
+        )
+    );
+}
+
+fn application_trace_tree_endpoint_source<'a>(
+    log_endpoint_source: &'a str,
+    function_name: &str,
+) -> &'a str {
+    let start_marker = format!("pub async fn {function_name}");
+    let start = log_endpoint_source
+        .find(&start_marker)
+        .unwrap_or_else(|| panic!("{function_name} source exists"));
+    let remaining_source = &log_endpoint_source[start..];
+    let end = remaining_source
+        .find("\n#[utoipa::path(")
+        .unwrap_or(remaining_source.len());
+
+    &remaining_source[..end]
+}
+
+#[test]
 fn start_node_response_moves_legacy_output_payload_into_input() {
     let run = domain::NodeRunRecord {
         id: Uuid::now_v7(),

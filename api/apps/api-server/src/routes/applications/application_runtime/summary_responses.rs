@@ -132,7 +132,7 @@ fn application_run_tool_callback_count(detail: &domain::ApplicationRunDetail) ->
         .map(|node_run| node_run.debug_payload.clone())
         .collect::<Vec<_>>();
     let indexed_count =
-        collect_llm_tool_callback_trace_items(&debug_payloads, &detail.callback_tasks).len() as i64;
+        count_llm_tool_callback_trace_items(&debug_payloads, &detail.callback_tasks) as i64;
     let task_count = detail
         .callback_tasks
         .iter()

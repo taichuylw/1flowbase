@@ -238,6 +238,7 @@ pub struct ApplicationRunOverviewResponse {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunTraceNodeSummaryResponse {
     pub trace_node_id: String,
+    pub stable_locator: String,
     pub parent_trace_node_id: Option<String>,
     pub node_kind: String,
     pub flow_run_id: String,
@@ -256,11 +257,28 @@ pub struct ApplicationRunTraceNodeSummaryResponse {
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceProjectionStatusResponse {
+    pub projection_status: String,
+    pub projection_version: i32,
+    pub source_watermark: String,
+    pub attempt_count: i32,
+    pub last_attempt_at: Option<String>,
+    pub last_success_at: Option<String>,
+    pub last_error_code: Option<String>,
+    pub last_error_stage: Option<String>,
+    pub last_error_source_kind: Option<String>,
+    pub last_error_source_locator: Option<String>,
+    pub last_error_ref: Option<String>,
+    pub retriable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunTraceTreeResponse {
     pub run: application_logs::ApplicationRunLogResponse,
     pub statistics: application_logs::ApplicationRunStatisticsResponse,
     pub flow_run: FlowRunResponse,
     pub answer_snapshot: Option<AnswerSnapshotResponse>,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
     pub nodes: Vec<ApplicationRunTraceNodeSummaryResponse>,
 }
 
@@ -271,6 +289,7 @@ pub struct ApplicationRunTraceNodeChildrenQuery {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunTraceNodeChildrenResponse {
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
     pub items: Vec<ApplicationRunTraceNodeSummaryResponse>,
 }
 
@@ -278,6 +297,7 @@ pub struct ApplicationRunTraceNodeChildrenResponse {
 pub struct ApplicationRunTraceNodeContentResponse {
     pub trace_node_id: String,
     pub node_kind: String,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
     pub node_run: Option<NodeRunResponse>,
     pub callback_task: Option<CallbackTaskResponse>,
     pub flow_run: Option<FlowRunResponse>,
@@ -289,6 +309,7 @@ pub struct ApplicationRunTraceNodeContentResponse {
 pub struct ApplicationRunTraceToolCallbackContentResponse {
     pub trace_node_id: String,
     pub tool_call_id: String,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
     pub payload: serde_json::Value,
 }
 

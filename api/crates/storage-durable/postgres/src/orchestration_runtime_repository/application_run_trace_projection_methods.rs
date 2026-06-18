@@ -187,6 +187,23 @@ impl PgControlPlaneStore {
             .collect()
     }
 
+    async fn list_application_run_trace_nodes_for_statistics(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+        let sql = trace_node_select_sql(
+            "where flow_run_id = $1 order by order_key asc, trace_node_id asc",
+        );
+        let rows = sqlx::query(&sql)
+            .bind(flow_run_id)
+            .fetch_all(self.pool())
+            .await?;
+
+        rows.into_iter()
+            .map(map_application_run_trace_node_record)
+            .collect()
+    }
+
     async fn list_application_run_trace_children(
         &self,
         flow_run_id: Uuid,
@@ -204,6 +221,21 @@ impl PgControlPlaneStore {
         rows.into_iter()
             .map(map_application_run_trace_node_record)
             .collect()
+    }
+
+    async fn get_application_run_trace_node(
+        &self,
+        flow_run_id: Uuid,
+        trace_node_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunTraceNodeRecord>> {
+        let sql = trace_node_select_sql("where flow_run_id = $1 and trace_node_id = $2");
+        let row = sqlx::query(&sql)
+            .bind(flow_run_id)
+            .bind(trace_node_id)
+            .fetch_optional(self.pool())
+            .await?;
+
+        row.map(map_application_run_trace_node_record).transpose()
     }
 
     async fn get_application_run_trace_node_by_locator(

@@ -528,6 +528,19 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         PgControlPlaneStore::get_application_run_detail(self, application_id, flow_run_id).await
     }
 
+    async fn get_application_run_trace_projection_source(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunDetail>> {
+        PgControlPlaneStore::get_application_run_trace_projection_source(
+            self,
+            application_id,
+            flow_run_id,
+        )
+        .await
+    }
+
     async fn replace_application_run_trace_projection(
         &self,
         input: &ReplaceApplicationRunTraceProjectionInput,
@@ -562,6 +575,14 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         PgControlPlaneStore::list_application_run_trace_roots(self, flow_run_id).await
     }
 
+    async fn list_application_run_trace_nodes_for_statistics(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+        PgControlPlaneStore::list_application_run_trace_nodes_for_statistics(self, flow_run_id)
+            .await
+    }
+
     async fn list_application_run_trace_children(
         &self,
         flow_run_id: Uuid,
@@ -573,6 +594,14 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
             parent_trace_node_id,
         )
         .await
+    }
+
+    async fn get_application_run_trace_node(
+        &self,
+        flow_run_id: Uuid,
+        trace_node_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunTraceNodeRecord>> {
+        PgControlPlaneStore::get_application_run_trace_node(self, flow_run_id, trace_node_id).await
     }
 
     async fn get_application_run_trace_node_by_locator(

@@ -207,7 +207,7 @@ async fn application_runtime_routes_trace_tree_excludes_llm_tool_calls_as_trace_
         .iter()
         .find(|node| node["node_id"] == json!("node-llm"))
         .expect("LLM node should be present");
-    assert_eq!(llm_node["has_children"].as_bool(), Some(false));
+    assert_eq!(llm_node["has_children"].as_bool(), Some(true));
     let llm_trace_node_id = llm_node["trace_node_id"].as_str().unwrap();
 
     let children = app
@@ -226,12 +226,14 @@ async fn application_runtime_routes_trace_tree_excludes_llm_tool_calls_as_trace_
     assert_eq!(children.status(), StatusCode::OK);
     let children_body = to_bytes(children.into_body(), usize::MAX).await.unwrap();
     let children_payload: Value = serde_json::from_slice(&children_body).unwrap();
+    let child_items = children_payload["data"]["items"].as_array().unwrap();
 
     assert_eq!(
-        children_payload["data"]["items"].as_array().unwrap().len(),
-        0,
-        "llm_tool_calls should stay inside the LLM Tools content, not appear as trace child rows"
+        child_items.len(),
+        1,
+        "llm_tool_calls should appear through the projection tools group"
     );
+    assert_eq!(child_items[0]["node_kind"], json!("tool_group"));
 }
 
 #[tokio::test]
@@ -437,11 +439,41 @@ async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_la
     assert_eq!(children.status(), StatusCode::OK);
     let children_body = to_bytes(children.into_body(), usize::MAX).await.unwrap();
     let children_payload: Value = serde_json::from_slice(&children_body).unwrap();
+    let children_items = children_payload["data"]["items"].as_array().unwrap();
     assert_eq!(
-        children_payload["data"]["items"].as_array().unwrap().len(),
-        0,
-        "llm_tool_calls must not come back as trace child rows"
+        children_items.len(),
+        1,
+        "llm_tool_calls must come back through the projection tools group"
     );
+    assert_eq!(children_items[0]["node_kind"], json!("tool_group"));
+    let tools_trace_node_id = children_items[0]["trace_node_id"].as_str().unwrap();
+
+    let tool_children = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tools_trace_node_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(tool_children.status(), StatusCode::OK);
+    let tool_children_body = to_bytes(tool_children.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let tool_children_payload: Value = serde_json::from_slice(&tool_children_body).unwrap();
+    let tool_child_items = tool_children_payload["data"]["items"].as_array().unwrap();
+    assert_eq!(tool_child_items.len(), 1);
+    assert_eq!(tool_child_items[0]["node_kind"], json!("tool_callback"));
+    assert_eq!(
+        tool_child_items[0]["node_alias"],
+        json!("refund_policy_lookup")
+    );
+    assert_eq!(tool_child_items[0]["has_content"], json!(true));
 
     let content = app
         .clone()
@@ -459,42 +491,11 @@ async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_la
     assert_eq!(content.status(), StatusCode::OK);
     let content_body = to_bytes(content.into_body(), usize::MAX).await.unwrap();
     let content_payload: Value = serde_json::from_slice(&content_body).unwrap();
-    let tool_callbacks = content_payload["data"]["node_run"]["debug_payload"]["tool_callbacks"]
-        .as_array()
-        .expect("LLM content should expose a lightweight tool callback index");
-    assert_eq!(tool_callbacks.len(), 1);
-    assert_eq!(tool_callbacks[0]["id"], json!("call-refund-policy"));
-    assert_eq!(tool_callbacks[0]["name"], json!("refund_policy_lookup"));
-    assert_eq!(tool_callbacks[0]["callback_status"], json!("returned"));
-    assert_eq!(tool_callbacks[0]["execution_status"], json!("succeeded"));
-    assert_eq!(tool_callbacks[0]["detail_ref"], json!("call-refund-policy"));
-    assert_eq!(
-        tool_callbacks[0]["route_trace"]["route_kind"],
-        json!("fusion")
-    );
-    assert_eq!(
-        tool_callbacks[0]["route_trace"]["route_model"],
-        json!("refund-review-v1")
-    );
-    assert_eq!(
-        tool_callbacks[0]["route_trace"]["branch_summaries"][0]["node_alias"],
-        json!("Refund Panel")
-    );
-    assert!(
-        tool_callbacks[0]["route_trace"]
-            .get("branch_traces")
-            .is_none(),
-        "tool callback index must not eagerly include route branch detail"
-    );
-    assert!(
-        tool_callbacks[0].get("callback_payload").is_none(),
-        "tool callback index must stay lightweight"
-    );
     assert!(
         content_payload["data"]["node_run"]["debug_payload"]
-            .get("visible_internal_llm_tool_trace")
+            .get("tool_callbacks")
             .is_none(),
-        "route traces should be owned by the lazy tool callback contract"
+        "tool callback summaries should be loaded through projection children"
     );
 
     let detail = app
@@ -695,7 +696,11 @@ async fn application_runtime_routes_trace_tree_groups_repeated_llm_node_runs_at_
     assert_eq!(root_nodes[0]["node_id"], json!("node-llm"));
     assert_eq!(root_nodes[0]["status"], json!("waiting_callback"));
     let trace_node_id = root_nodes[0]["trace_node_id"].as_str().unwrap();
-    assert!(trace_node_id.starts_with("node_run_group:"));
+    Uuid::parse_str(trace_node_id).expect("trace_node_id is deterministic UUID");
+    assert!(root_nodes[0]["stable_locator"]
+        .as_str()
+        .unwrap()
+        .contains("/node_group:"));
 
     let content = app
         .clone()
@@ -716,18 +721,61 @@ async fn application_runtime_routes_trace_tree_groups_repeated_llm_node_runs_at_
     let rounds = content_payload["data"]["node_run"]["debug_payload"]["llm_rounds"]
         .as_array()
         .unwrap();
-    let tool_callbacks = content_payload["data"]["node_run"]["debug_payload"]["tool_callbacks"]
-        .as_array()
-        .expect("grouped LLM content should expose callbacks from every grouped node run");
-    let tool_callback_ids = tool_callbacks
-        .iter()
-        .map(|callback| callback["id"].as_str().unwrap())
-        .collect::<Vec<_>>();
 
     assert_eq!(rounds.len(), 2);
-    assert_eq!(tool_callback_ids, vec!["call_weather", "call_policy"]);
+    assert!(
+        content_payload["data"]["node_run"]["debug_payload"]
+            .get("tool_callbacks")
+            .is_none(),
+        "grouped LLM tool callbacks are loaded through projection children"
+    );
     assert_eq!(
         content_payload["data"]["node_run"]["output_payload"]["tool_calls"][0]["id"],
         json!("call_policy")
     );
+
+    let tools = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={trace_node_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(tools.status(), StatusCode::OK);
+    let tools_body = to_bytes(tools.into_body(), usize::MAX).await.unwrap();
+    let tools_payload: Value = serde_json::from_slice(&tools_body).unwrap();
+    let tool_group_id = tools_payload["data"]["items"][0]["trace_node_id"]
+        .as_str()
+        .unwrap();
+    let tool_callbacks = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tool_group_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(tool_callbacks.status(), StatusCode::OK);
+    let tool_callbacks_body = to_bytes(tool_callbacks.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let tool_callbacks_payload: Value = serde_json::from_slice(&tool_callbacks_body).unwrap();
+    let tool_callback_aliases = tool_callbacks_payload["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|callback| callback["node_alias"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(tool_callback_aliases, vec!["lookup_weather", "read_policy"]);
 }

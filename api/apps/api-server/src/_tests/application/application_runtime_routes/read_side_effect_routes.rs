@@ -328,12 +328,43 @@ async fn application_runtime_routes_trace_tree_and_node_last_run_do_not_material
     seed_large_runtime_read_payloads(&pool, flow_run_id, node_run_id).await;
     let before = runtime_read_payload_snapshot(&pool, flow_run_id).await;
 
+    let trace_tree_uri = format!(
+        "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree"
+    );
+    let trace_tree = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(trace_tree_uri.as_str())
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let trace_tree_status = trace_tree.status();
+    let trace_tree_body = to_bytes(trace_tree.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        trace_tree_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&trace_tree_body)
+    );
+    let trace_tree_payload: Value = serde_json::from_slice(&trace_tree_body).unwrap();
+    let trace_node_id = trace_tree_payload["data"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_id"] == json!("node-llm"))
+        .expect("LLM trace node exists")["trace_node_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
     for uri in [
+        trace_tree_uri,
         format!(
-            "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree"
-        ),
-        format!(
-            "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree/nodes/node_run:{node_run_id}/content"
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree/nodes/{trace_node_id}/content"
         ),
         format!(
             "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/nodes/node-llm"

@@ -647,6 +647,27 @@ impl PgControlPlaneStore {
         }))
     }
 
+    async fn get_application_run_trace_projection_source(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunDetail>> {
+        let Some(flow_run) =
+            fetch_flow_run_for_application(self, application_id, flow_run_id).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(domain::ApplicationRunDetail {
+            node_runs: list_node_runs_for_flow_run(self, flow_run.id).await?,
+            checkpoints: list_checkpoints_for_flow_run(self, flow_run.id).await?,
+            callback_tasks: list_callback_tasks_for_flow_run(self, flow_run.id).await?,
+            events: list_events_for_flow_run(self, flow_run.id).await?,
+            stitched_trace: list_stitched_trace_for_flow_run(self, &flow_run).await?,
+            flow_run,
+        }))
+    }
+
     async fn get_latest_node_run(
         &self,
         application_id: Uuid,
