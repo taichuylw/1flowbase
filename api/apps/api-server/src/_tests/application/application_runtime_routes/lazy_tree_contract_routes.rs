@@ -473,7 +473,66 @@ async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_la
         tool_child_items[0]["node_alias"],
         json!("refund_policy_lookup")
     );
+    assert_eq!(tool_child_items[0]["has_children"], json!(true));
+    assert_eq!(tool_child_items[0]["child_count"], json!(1));
     assert_eq!(tool_child_items[0]["has_content"], json!(true));
+    let tool_callback_trace_node_id = tool_child_items[0]["trace_node_id"].as_str().unwrap();
+
+    let route_children = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tool_callback_trace_node_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(route_children.status(), StatusCode::OK);
+    let route_children_body = to_bytes(route_children.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let route_children_payload: Value = serde_json::from_slice(&route_children_body).unwrap();
+    let route_child_items = route_children_payload["data"]["items"].as_array().unwrap();
+    assert_eq!(route_child_items.len(), 1);
+    assert_eq!(route_child_items[0]["node_kind"], json!("fusion"));
+    assert_eq!(
+        route_child_items[0]["node_alias"],
+        json!("refund_policy_lookup")
+    );
+    assert_eq!(route_child_items[0]["has_children"], json!(true));
+    assert_eq!(route_child_items[0]["child_count"], json!(1));
+    assert_eq!(route_child_items[0]["has_content"], json!(true));
+    let fusion_trace_node_id = route_child_items[0]["trace_node_id"].as_str().unwrap();
+
+    let branch_children = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={fusion_trace_node_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(branch_children.status(), StatusCode::OK);
+    let branch_children_body = to_bytes(branch_children.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let branch_children_payload: Value = serde_json::from_slice(&branch_children_body).unwrap();
+    let branch_child_items = branch_children_payload["data"]["items"].as_array().unwrap();
+    assert_eq!(branch_child_items.len(), 1);
+    assert_eq!(branch_child_items[0]["node_kind"], json!("branch"));
+    assert_eq!(branch_child_items[0]["node_alias"], json!("Refund Panel"));
+    assert_eq!(branch_child_items[0]["has_children"], json!(false));
+    assert_eq!(branch_child_items[0]["child_count"], json!(0));
+    assert_eq!(branch_child_items[0]["has_content"], json!(true));
 
     let content = app
         .clone()

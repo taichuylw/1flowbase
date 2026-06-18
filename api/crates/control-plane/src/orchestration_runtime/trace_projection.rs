@@ -395,23 +395,25 @@ impl TraceProjectionBuilder {
         let stable_locator = format!("{parent_stable_locator}/tool:{tool_call_id}");
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
         let tool_result = tool_result_for_call(task, &tool_call_id);
+        let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
         let payload = tool_callback_content_payload(
             Some(task),
             &tool_call_id,
             &tool_name,
             tool_call,
             tool_result.as_ref(),
-            route_trace_for_tool_call(parent_node_runs, &tool_call_id).as_ref(),
+            route_trace.as_ref(),
         );
+        let has_route_child = route_trace.is_some();
 
         self.nodes.push(ApplicationRunTraceNodeProjectionInput {
             trace_node_id,
             parent_trace_node_id: Some(parent_trace_node_id),
-            stable_locator,
+            stable_locator: stable_locator.clone(),
             node_kind: "tool_callback".to_string(),
             owner_kind: Some("tool_call".to_string()),
             owner_id: Some(tool_call_id.clone()),
-            order_key,
+            order_key: order_key.clone(),
             node_id: None,
             node_type: Some("tool".to_string()),
             node_alias: tool_name,
@@ -420,8 +422,8 @@ impl TraceProjectionBuilder {
             finished_at: task.completed_at,
             duration_ms: trace_node_duration_ms(task.created_at, task.completed_at),
             metrics_payload: serde_json::json!({}),
-            has_children: false,
-            child_count: 0,
+            has_children: has_route_child,
+            child_count: i64::from(has_route_child),
             has_content: true,
             content_ref: None,
         });
@@ -435,6 +437,16 @@ impl TraceProjectionBuilder {
                     "source_locator": task.id
                 }]),
             });
+        if let Some(route_trace) = route_trace.as_ref() {
+            self.push_tool_route_node(
+                child_order_key(&order_key, 1),
+                trace_node_id,
+                &stable_locator,
+                task.created_at,
+                task.completed_at,
+                route_trace,
+            )?;
+        }
 
         Ok(())
     }
@@ -508,23 +520,25 @@ impl TraceProjectionBuilder {
             .unwrap_or_else(|| tool_call_id.clone());
         let stable_locator = format!("{parent_stable_locator}/tool:{tool_call_id}");
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
+        let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
         let payload = tool_callback_content_payload(
             None,
             &tool_call_id,
             &tool_name,
             tool_call,
             None,
-            route_trace_for_tool_call(parent_node_runs, &tool_call_id).as_ref(),
+            route_trace.as_ref(),
         );
+        let has_route_child = route_trace.is_some();
 
         self.nodes.push(ApplicationRunTraceNodeProjectionInput {
             trace_node_id,
             parent_trace_node_id: Some(parent_trace_node_id),
-            stable_locator,
+            stable_locator: stable_locator.clone(),
             node_kind: "tool_callback".to_string(),
             owner_kind: Some("tool_call".to_string()),
             owner_id: Some(tool_call_id.clone()),
-            order_key,
+            order_key: order_key.clone(),
             node_id: None,
             node_type: Some("tool".to_string()),
             node_alias: tool_name,
@@ -535,8 +549,8 @@ impl TraceProjectionBuilder {
             finished_at: trace_node_group_finished_at(parent_node_runs),
             duration_ms: None,
             metrics_payload: serde_json::json!({}),
-            has_children: false,
-            child_count: 0,
+            has_children: has_route_child,
+            child_count: i64::from(has_route_child),
             has_content: true,
             content_ref: None,
         });
@@ -548,6 +562,137 @@ impl TraceProjectionBuilder {
                 source_refs: serde_json::json!([{
                     "source_kind": "node_run_tool_call",
                     "source_locator": tool_call_id
+                }]),
+            });
+        if let Some(route_trace) = route_trace.as_ref() {
+            self.push_tool_route_node(
+                child_order_key(&order_key, 1),
+                trace_node_id,
+                &stable_locator,
+                parent_node_runs[0].started_at,
+                trace_node_group_finished_at(parent_node_runs),
+                route_trace,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn push_tool_route_node(
+        &mut self,
+        order_key: String,
+        parent_trace_node_id: Uuid,
+        parent_stable_locator: &str,
+        started_at: OffsetDateTime,
+        finished_at: Option<OffsetDateTime>,
+        route_trace: &serde_json::Value,
+    ) -> Result<()> {
+        let node_kind = route_trace_node_kind(route_trace).to_string();
+        let locator_component = route_trace_locator_component(route_trace, &node_kind, &order_key);
+        let stable_locator = format!("{parent_stable_locator}/{node_kind}:{locator_component}");
+        let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
+        let branch_traces = route_trace_branch_traces(route_trace);
+        let child_count = i64::try_from(branch_traces.len()).unwrap_or(i64::MAX);
+
+        self.nodes.push(ApplicationRunTraceNodeProjectionInput {
+            trace_node_id,
+            parent_trace_node_id: Some(parent_trace_node_id),
+            stable_locator: stable_locator.clone(),
+            node_kind: node_kind.clone(),
+            owner_kind: Some(node_kind.clone()),
+            owner_id: Some(locator_component.clone()),
+            order_key: order_key.clone(),
+            node_id: route_trace
+                .get("route_id")
+                .or_else(|| route_trace.get("node_id"))
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            node_type: Some(node_kind.clone()),
+            node_alias: route_trace_node_alias(route_trace, &node_kind),
+            status: route_trace_status(route_trace),
+            started_at,
+            finished_at,
+            duration_ms: trace_node_duration_ms(started_at, finished_at),
+            metrics_payload: route_trace_metrics_payload(route_trace),
+            has_children: child_count > 0,
+            child_count,
+            has_content: true,
+            content_ref: None,
+        });
+        self.contents
+            .push(ApplicationRunTraceNodeContentProjectionInput {
+                trace_node_id,
+                content_kind: node_kind,
+                payload: route_trace.clone(),
+                source_refs: serde_json::json!([{
+                    "source_kind": "visible_internal_llm_tool_trace",
+                    "source_locator": locator_component
+                }]),
+            });
+
+        for (index, branch_trace) in branch_traces.iter().enumerate() {
+            self.push_route_branch_node(
+                child_order_key(&order_key, index + 1),
+                trace_node_id,
+                &stable_locator,
+                started_at,
+                finished_at,
+                branch_trace,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn push_route_branch_node(
+        &mut self,
+        order_key: String,
+        parent_trace_node_id: Uuid,
+        parent_stable_locator: &str,
+        started_at: OffsetDateTime,
+        finished_at: Option<OffsetDateTime>,
+        branch_trace: &serde_json::Value,
+    ) -> Result<()> {
+        let locator_component = branch_locator_component(branch_trace, &order_key);
+        let stable_locator = format!("{parent_stable_locator}/branch:{locator_component}");
+        let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
+
+        self.nodes.push(ApplicationRunTraceNodeProjectionInput {
+            trace_node_id,
+            parent_trace_node_id: Some(parent_trace_node_id),
+            stable_locator,
+            node_kind: "branch".to_string(),
+            owner_kind: Some("branch".to_string()),
+            owner_id: Some(locator_component.clone()),
+            order_key,
+            node_id: branch_trace
+                .get("node_id")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned),
+            node_type: branch_trace
+                .get("node_type")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+                .or_else(|| Some("branch".to_string())),
+            node_alias: branch_trace_node_alias(branch_trace),
+            status: branch_trace_status(branch_trace),
+            started_at,
+            finished_at,
+            duration_ms: trace_node_duration_ms(started_at, finished_at),
+            metrics_payload: route_trace_metrics_payload(branch_trace),
+            has_children: false,
+            child_count: 0,
+            has_content: true,
+            content_ref: None,
+        });
+        self.contents
+            .push(ApplicationRunTraceNodeContentProjectionInput {
+                trace_node_id,
+                content_kind: "branch".to_string(),
+                payload: branch_trace.clone(),
+                source_refs: serde_json::json!([{
+                    "source_kind": "visible_internal_llm_tool_branch",
+                    "source_locator": locator_component
                 }]),
             });
 
@@ -1044,6 +1189,104 @@ fn route_trace_for_tool_call(
         .cloned()
 }
 
+fn route_trace_node_kind(route_trace: &serde_json::Value) -> &'static str {
+    match route_trace
+        .get("route_kind")
+        .or_else(|| route_trace.get("kind"))
+        .and_then(serde_json::Value::as_str)
+    {
+        Some("fusion") | Some("visible_internal_llm_tool_fusion") => "fusion",
+        _ => "route",
+    }
+}
+
+fn route_trace_locator_component(
+    route_trace: &serde_json::Value,
+    node_kind: &str,
+    order_key: &str,
+) -> String {
+    route_trace
+        .get("route_ref")
+        .or_else(|| route_trace.get("route_id"))
+        .or_else(|| route_trace.get("fusion_ref"))
+        .or_else(|| route_trace.get("fusion_id"))
+        .or_else(|| route_trace.get("tool_call_id"))
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| legacy_locator_component(node_kind, order_key, route_trace))
+}
+
+fn route_trace_branch_traces(route_trace: &serde_json::Value) -> Vec<serde_json::Value> {
+    route_trace
+        .get("branch_traces")
+        .or_else(|| route_trace.get("branch_summaries"))
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn route_trace_node_alias(route_trace: &serde_json::Value, node_kind: &str) -> String {
+    route_trace
+        .get("route_alias")
+        .or_else(|| route_trace.get("fusion_alias"))
+        .or_else(|| route_trace.get("tool_name"))
+        .or_else(|| route_trace.get("route_model"))
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| {
+            if node_kind == "fusion" {
+                "Fusion".to_string()
+            } else {
+                "Route".to_string()
+            }
+        })
+}
+
+fn branch_locator_component(branch_trace: &serde_json::Value, order_key: &str) -> String {
+    branch_trace
+        .get("branch_ref")
+        .or_else(|| branch_trace.get("branch_id"))
+        .or_else(|| branch_trace.get("node_run_id"))
+        .or_else(|| branch_trace.get("node_id"))
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| legacy_locator_component("branch", order_key, branch_trace))
+}
+
+fn branch_trace_node_alias(branch_trace: &serde_json::Value) -> String {
+    branch_trace
+        .get("node_alias")
+        .or_else(|| branch_trace.get("branch_alias"))
+        .or_else(|| branch_trace.get("node_id"))
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| "Branch".to_string())
+}
+
+fn route_trace_status(route_trace: &serde_json::Value) -> String {
+    route_trace
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("completed")
+        .to_string()
+}
+
+fn branch_trace_status(branch_trace: &serde_json::Value) -> String {
+    branch_trace
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("completed")
+        .to_string()
+}
+
+fn route_trace_metrics_payload(route_trace: &serde_json::Value) -> serde_json::Value {
+    route_trace
+        .get("metrics_payload")
+        .or_else(|| route_trace.get("usage"))
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
 fn callback_status(task: &domain::CallbackTaskRecord) -> &'static str {
     if task.response_payload.is_some() {
         "returned"
@@ -1273,6 +1516,120 @@ mod tests {
             content.content_kind == "tool_callback"
                 && content.payload["tool_call_id"] == json!("call-weather")
                 && content.payload["tool_result"]["content"] == json!("22c")
+        }));
+    }
+
+    #[test]
+    fn builder_projects_tool_route_fusion_and_branch_nodes() {
+        let flow_run_id = Uuid::now_v7();
+        let node_run_id = Uuid::now_v7();
+        let callback_task_id = Uuid::now_v7();
+        let now = OffsetDateTime::UNIX_EPOCH;
+        let detail = domain::ApplicationRunDetail {
+            flow_run: flow_run(flow_run_id, now),
+            node_runs: vec![domain::NodeRunRecord {
+                id: node_run_id,
+                flow_run_id,
+                node_id: "node-llm".to_string(),
+                node_type: "llm".to_string(),
+                node_alias: "Main LLM".to_string(),
+                status: domain::NodeRunStatus::Succeeded,
+                input_payload: json!({ "prompt": "review" }),
+                output_payload: json!({ "answer": "done" }),
+                error_payload: None,
+                metrics_payload: json!({}),
+                debug_payload: json!({
+                    "visible_internal_llm_tool_trace": [
+                        {
+                            "kind": "visible_internal_llm_tool_trace",
+                            "route_kind": "fusion",
+                            "tool_call_id": "call-review",
+                            "tool_name": "problem_review",
+                            "status": "succeeded",
+                            "route_model": "mimo-v2.5",
+                            "branch_traces": [
+                                {
+                                    "branch_ref": "panel-a",
+                                    "node_id": "node-panel-a",
+                                    "node_alias": "LLM2",
+                                    "node_type": "llm",
+                                    "status": "succeeded",
+                                    "output_summary": {
+                                        "preview": "panel A says strict"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }),
+                started_at: now,
+                finished_at: Some(now + time::Duration::seconds(2)),
+            }],
+            checkpoints: Vec::new(),
+            callback_tasks: vec![domain::CallbackTaskRecord {
+                id: callback_task_id,
+                flow_run_id,
+                node_run_id,
+                callback_kind: "llm_tool_calls".to_string(),
+                status: domain::CallbackTaskStatus::Completed,
+                request_payload: json!({
+                    "tool_calls": [
+                        { "id": "call-review", "name": "problem_review" }
+                    ]
+                }),
+                response_payload: Some(json!({
+                    "tool_results": [
+                        {
+                            "tool_call_id": "call-review",
+                            "content": "review complete"
+                        }
+                    ]
+                })),
+                external_ref_payload: None,
+                created_at: now + time::Duration::seconds(1),
+                completed_at: Some(now + time::Duration::seconds(2)),
+            }],
+            events: Vec::new(),
+            stitched_trace: Vec::new(),
+        };
+
+        let projection = build_application_run_trace_projection(&detail).unwrap();
+        let tool_callback = projection
+            .nodes
+            .iter()
+            .find(|node| node.node_kind == "tool_callback")
+            .expect("tool callback node should be projected");
+        let fusion = projection
+            .nodes
+            .iter()
+            .find(|node| node.node_kind == "fusion")
+            .expect("fusion route node should be projected");
+        let branch = projection
+            .nodes
+            .iter()
+            .find(|node| node.node_kind == "branch")
+            .expect("branch node should be projected");
+
+        assert!(tool_callback.has_children);
+        assert_eq!(tool_callback.child_count, 1);
+        assert_eq!(
+            fusion.parent_trace_node_id,
+            Some(tool_callback.trace_node_id)
+        );
+        assert!(fusion.has_children);
+        assert_eq!(fusion.child_count, 1);
+        assert_eq!(branch.parent_trace_node_id, Some(fusion.trace_node_id));
+        assert!(fusion.stable_locator.ends_with("/fusion:call-review"));
+        assert!(branch.stable_locator.ends_with("/branch:panel-a"));
+        assert!(projection.contents.iter().any(|content| {
+            content.trace_node_id == fusion.trace_node_id
+                && content.content_kind == "fusion"
+                && content.payload["route_model"] == json!("mimo-v2.5")
+        }));
+        assert!(projection.contents.iter().any(|content| {
+            content.trace_node_id == branch.trace_node_id
+                && content.content_kind == "branch"
+                && content.payload["output_summary"]["preview"] == json!("panel A says strict")
         }));
     }
 
