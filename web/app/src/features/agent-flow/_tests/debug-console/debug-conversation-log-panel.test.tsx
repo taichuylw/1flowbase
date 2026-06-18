@@ -817,7 +817,14 @@ describe('debug conversation log panel', () => {
     };
     const traceLoader = {
       loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
-      loadChildren: vi.fn().mockResolvedValue({ items: [childNode] }),
+      loadChildren: vi.fn().mockResolvedValue({
+        items: [childNode],
+        page_info: {
+          has_more: false,
+          next_cursor: null,
+          page_size: 20
+        }
+      }),
       loadContent: vi.fn().mockResolvedValue({
         trace_node_id: 'node_run:node-run-llm',
         node_kind: 'node_run',
@@ -876,7 +883,8 @@ describe('debug conversation log panel', () => {
     await waitFor(() =>
       expect(traceLoader.loadChildren).toHaveBeenCalledWith(
         'run-application-log',
-        'node_run:node-run-llm'
+        'node_run:node-run-llm',
+        undefined
       )
     );
     await waitFor(() =>
@@ -919,7 +927,14 @@ describe('debug conversation log panel', () => {
     };
     const traceLoader = {
       loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
-      loadChildren: vi.fn().mockResolvedValue({ items: [] }),
+      loadChildren: vi.fn().mockResolvedValue({
+        items: [],
+        page_info: {
+          has_more: false,
+          next_cursor: null,
+          page_size: 20
+        }
+      }),
       loadContent: vi.fn().mockResolvedValue({
         trace_node_id: 'node_run:node-run-llm',
         node_kind: 'node_run',

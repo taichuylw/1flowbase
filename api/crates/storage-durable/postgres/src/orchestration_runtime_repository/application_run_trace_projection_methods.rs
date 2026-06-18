@@ -204,23 +204,59 @@ impl PgControlPlaneStore {
             .collect()
     }
 
-    async fn list_application_run_trace_children(
+    async fn list_application_run_trace_children_page(
         &self,
-        flow_run_id: Uuid,
-        parent_trace_node_id: Uuid,
-    ) -> Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+        input: ListApplicationRunTraceChildrenPageInput,
+    ) -> Result<ListApplicationRunTraceChildrenPage> {
         let sql = trace_node_select_sql(
-            "where flow_run_id = $1 and parent_trace_node_id = $2 order by order_key asc, trace_node_id asc",
+            r#"
+            where flow_run_id = $1
+              and parent_trace_node_id = $2
+              and (
+                $3::text is null
+                or order_key > $3
+                or (order_key = $3 and trace_node_id > $4)
+              )
+            order by order_key asc, trace_node_id asc
+            limit $5
+            "#,
         );
+        let cursor_order_key = input.cursor.as_ref().map(|cursor| cursor.order_key.as_str());
+        let cursor_trace_node_id = input.cursor.as_ref().map(|cursor| cursor.trace_node_id);
         let rows = sqlx::query(&sql)
-        .bind(flow_run_id)
-        .bind(parent_trace_node_id)
-        .fetch_all(self.pool())
-        .await?;
+            .bind(input.flow_run_id)
+            .bind(input.parent_trace_node_id)
+            .bind(cursor_order_key)
+            .bind(cursor_trace_node_id)
+            .bind(input.page_size + 1)
+            .fetch_all(self.pool())
+            .await?;
 
-        rows.into_iter()
+        let mut items: Vec<domain::ApplicationRunTraceNodeRecord> = rows
+            .into_iter()
             .map(map_application_run_trace_node_record)
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+        let has_more = items.len() > input.page_size as usize;
+        if has_more {
+            items.truncate(input.page_size as usize);
+        }
+        let next_cursor = if has_more {
+            items
+                .last()
+                .map(|node| ApplicationRunTraceChildrenCursor {
+                    order_key: node.order_key.clone(),
+                    trace_node_id: node.trace_node_id,
+                })
+        } else {
+            None
+        };
+
+        Ok(ListApplicationRunTraceChildrenPage {
+            items,
+            has_more,
+            next_cursor,
+            page_size: input.page_size,
+        })
     }
 
     async fn get_application_run_trace_node(

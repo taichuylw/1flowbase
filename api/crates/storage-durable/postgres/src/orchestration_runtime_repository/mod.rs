@@ -19,15 +19,16 @@ use control_plane::{
         AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
         AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
         AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput,
-        AppendRuntimeSpanInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
-        CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
-        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRunTraceChildrenCursor,
+        AttachCompiledPlanToFlowRunInput, CompleteCallbackTaskInput, CompleteFlowRunInput,
+        CompleteNodeRunInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         DataModelSideEffectReceiptClaim, DebugVariableCacheEntry,
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
         FinishFlowRunCallbackResumeAttemptInput, GetApplicationRunMonitoringReportInput,
         GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        ListApplicationConversationRunsPageInput, ListApplicationRunsPageInput,
+        ListApplicationConversationRunsPageInput, ListApplicationRunTraceChildrenPage,
+        ListApplicationRunTraceChildrenPageInput, ListApplicationRunsPageInput,
         OrchestrationRuntimeRepository, RecordFlowRunCallbackResumeAttemptInput,
         RecordFlowRunCallbackResumeAttemptOutput, ReplaceApplicationRunTraceProjectionInput,
         UpdateCallbackTaskPayloadsInput, UpdateCheckpointPayloadsInput, UpdateFlowRunInput,
@@ -583,17 +584,11 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
             .await
     }
 
-    async fn list_application_run_trace_children(
+    async fn list_application_run_trace_children_page(
         &self,
-        flow_run_id: Uuid,
-        parent_trace_node_id: Uuid,
-    ) -> Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
-        PgControlPlaneStore::list_application_run_trace_children(
-            self,
-            flow_run_id,
-            parent_trace_node_id,
-        )
-        .await
+        input: ListApplicationRunTraceChildrenPageInput,
+    ) -> Result<ListApplicationRunTraceChildrenPage> {
+        PgControlPlaneStore::list_application_run_trace_children_page(self, input).await
     }
 
     async fn get_application_run_trace_node(

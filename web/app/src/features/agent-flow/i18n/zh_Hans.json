@@ -303,6 +303,7 @@
     "value_alt": "{{value1}}值 {{value2}}",
     "execution_cancel": "执行取消",
     "node_details_alt": "{{value1}} 节点详情",
+    "load_more_trace_children": "加载更多",
     "provider_tunable_parameters": "当前供应商没有可调参数。",
     "add_new_sorting_rule": "新增排序规则",
     "status": "状态",

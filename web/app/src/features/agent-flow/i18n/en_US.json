@@ -303,6 +303,7 @@
     "value_alt": "{{value1}} value {{value2}}",
     "execution_cancel": "Execution Cancel",
     "node_details_alt": "{{value1}} node details",
+    "load_more_trace_children": "Load more",
     "provider_tunable_parameters": "The current provider has no tunable parameters.",
     "add_new_sorting_rule": "Add a new sorting rule",
     "status": "Status",

@@ -359,6 +359,63 @@ fn parse_trace_projection_node_id(value: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(value).map_err(|_| ControlPlaneError::InvalidInput("trace_node_id").into())
 }
 
+const APPLICATION_RUN_TRACE_CHILDREN_DEFAULT_PAGE_SIZE: i64 = 20;
+const APPLICATION_RUN_TRACE_CHILDREN_MAX_PAGE_SIZE: i64 = 100;
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ApplicationRunTraceChildrenCursorPayload {
+    parent_trace_node_id: Uuid,
+    order_key: String,
+    trace_node_id: Uuid,
+}
+
+fn application_run_trace_children_page_size(page_size: Option<i64>) -> i64 {
+    page_size
+        .unwrap_or(APPLICATION_RUN_TRACE_CHILDREN_DEFAULT_PAGE_SIZE)
+        .clamp(1, APPLICATION_RUN_TRACE_CHILDREN_MAX_PAGE_SIZE)
+}
+
+fn parse_application_run_trace_children_cursor(
+    cursor: Option<&str>,
+    parent_trace_node_id: Uuid,
+) -> Result<Option<ApplicationRunTraceChildrenCursor>, ApiError> {
+    let Some(cursor) = cursor else {
+        return Ok(None);
+    };
+
+    let bytes = URL_SAFE_NO_PAD
+        .decode(cursor.as_bytes())
+        .map_err(|_| ControlPlaneError::InvalidInput("cursor"))?;
+    let payload: ApplicationRunTraceChildrenCursorPayload =
+        serde_json::from_slice(&bytes).map_err(|_| ControlPlaneError::InvalidInput("cursor"))?;
+
+    if payload.order_key.is_empty() {
+        return Err(ControlPlaneError::InvalidInput("cursor").into());
+    }
+    if payload.parent_trace_node_id != parent_trace_node_id {
+        return Err(ControlPlaneError::InvalidInput("cursor").into());
+    }
+
+    Ok(Some(ApplicationRunTraceChildrenCursor {
+        order_key: payload.order_key,
+        trace_node_id: payload.trace_node_id,
+    }))
+}
+
+fn encode_application_run_trace_children_cursor(
+    cursor: &ApplicationRunTraceChildrenCursor,
+    parent_trace_node_id: Uuid,
+) -> Result<String, ApiError> {
+    let payload = ApplicationRunTraceChildrenCursorPayload {
+        parent_trace_node_id,
+        order_key: cursor.order_key.clone(),
+        trace_node_id: cursor.trace_node_id,
+    };
+    let bytes = serde_json::to_vec(&payload).map_err(ApiError::from)?;
+
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
 fn to_trace_node_summary_from_projection(
     node: domain::ApplicationRunTraceNodeRecord,
 ) -> ApplicationRunTraceNodeSummaryResponse {
@@ -679,7 +736,9 @@ pub async fn get_application_run_trace_tree(
     params(
         ("id" = String, Path, description = "Application id"),
         ("run_id" = String, Path, description = "Flow run id"),
-        ("parent_trace_node_id" = String, Query, description = "Trace node id to expand")
+        ("parent_trace_node_id" = String, Query, description = "Trace node id to expand"),
+        ("page_size" = Option<i64>, Query, description = "Page size, defaults to 20 and maxes at 100"),
+        ("cursor" = Option<String>, Query, description = "Opaque cursor for the next children page")
     ),
     responses(
         (status = 200, body = ApplicationRunTraceNodeChildrenResponse),
@@ -698,15 +757,23 @@ pub async fn get_application_run_trace_node_children(
     ensure_application_visible(&state, context.user.id, id).await?;
     let status = ensure_application_run_trace_projection_status(&state, id, run_id).await?;
     let projection_status = to_trace_projection_status_response(&status);
+    let page_size = application_run_trace_children_page_size(query.page_size);
+    let parent_trace_node_id = parse_trace_projection_node_id(&query.parent_trace_node_id)?;
+    let cursor =
+        parse_application_run_trace_children_cursor(query.cursor.as_deref(), parent_trace_node_id)?;
     if !projection_is_succeeded(&status) {
         return Ok(Json(ApiSuccess::new(
             ApplicationRunTraceNodeChildrenResponse {
                 projection_status,
                 items: Vec::new(),
+                page_info: ApplicationRunTraceNodeChildrenPageInfoResponse {
+                    has_more: false,
+                    next_cursor: None,
+                    page_size,
+                },
             },
         )));
     }
-    let parent_trace_node_id = parse_trace_projection_node_id(&query.parent_trace_node_id)?;
     <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node(
         &state.store,
         run_id,
@@ -714,19 +781,34 @@ pub async fn get_application_run_trace_node_children(
     )
     .await?
     .ok_or(ControlPlaneError::NotFound("trace_node"))?;
-    let items =
-        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_trace_children(
+    let page = <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_trace_children_page(
             &state.store,
-            run_id,
-            parent_trace_node_id,
+            ListApplicationRunTraceChildrenPageInput {
+                flow_run_id: run_id,
+                parent_trace_node_id,
+                page_size,
+                cursor,
+            },
         )
-        .await?
+        .await?;
+    let next_cursor = page
+        .next_cursor
+        .as_ref()
+        .map(|cursor| encode_application_run_trace_children_cursor(cursor, parent_trace_node_id))
+        .transpose()?;
+    let items = page
+        .items
         .into_iter()
         .map(to_trace_node_summary_from_projection)
         .collect();
     let response = ApplicationRunTraceNodeChildrenResponse {
         projection_status,
         items,
+        page_info: ApplicationRunTraceNodeChildrenPageInfoResponse {
+            has_more: page.has_more,
+            next_cursor,
+            page_size: page.page_size,
+        },
     };
 
     Ok(Json(ApiSuccess::new(response)))

@@ -214,11 +214,21 @@ export function getConsoleApplicationRunTraceNodeChildren(
   applicationId: string,
   runId: string,
   parentTraceNodeId: string,
-  baseUrl?: string
+  baseUrl?: string,
+  query?: {
+    cursor?: string;
+    page_size?: number;
+  }
 ) {
   const searchParams = new URLSearchParams({
     parent_trace_node_id: parentTraceNodeId
   });
+  if (query?.cursor) {
+    searchParams.set('cursor', query.cursor);
+  }
+  if (query?.page_size) {
+    searchParams.set('page_size', String(query.page_size));
+  }
 
   return apiFetch<ConsoleApplicationRunTraceNodeChildren>({
     path:

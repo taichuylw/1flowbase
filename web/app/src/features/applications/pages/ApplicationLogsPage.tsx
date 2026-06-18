@@ -575,11 +575,12 @@ export function ApplicationLogsPage({
               traceLoader={{
                 loadTree: (runId) =>
                   fetchApplicationRunTraceTree(applicationId, runId),
-                loadChildren: (runId, traceNodeId) =>
+                loadChildren: (runId, traceNodeId, cursor) =>
                   fetchApplicationRunTraceNodeChildren(
                     applicationId,
                     runId,
-                    traceNodeId
+                    traceNodeId,
+                    cursor
                   ),
                 loadContent: (runId, traceNodeId) =>
                   fetchApplicationRunTraceNodeContent(

@@ -236,7 +236,15 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     };
     const traceResponses = [
       { projection_status: projectionStatus, nodes: [] },
-      { projection_status: projectionStatus, items: [] },
+      {
+        projection_status: projectionStatus,
+        items: [],
+        page_info: {
+          has_more: true,
+          next_cursor: 'cursor-page-2',
+          page_size: 20
+        }
+      },
       {
         trace_node_id: traceNodeId,
         node_kind: 'node_run',
@@ -281,11 +289,20 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         'app-1',
         'run-1',
         traceNodeId,
-        'http://127.0.0.1:7800'
+        'http://127.0.0.1:7800',
+        {
+          cursor: 'cursor-page-1',
+          page_size: 20
+        }
       )
     ).resolves.toEqual({
       projection_status: projectionStatus,
-      items: []
+      items: [],
+      page_info: {
+        has_more: true,
+        next_cursor: 'cursor-page-2',
+        page_size: 20
+      }
     });
     await expect(
       getConsoleApplicationRunTraceNodeContent(
@@ -338,7 +355,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes?parent_trace_node_id=${traceNodeId}`,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes?parent_trace_node_id=${traceNodeId}&cursor=cursor-page-1&page_size=20`,
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'

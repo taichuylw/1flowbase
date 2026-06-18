@@ -237,6 +237,204 @@ async fn application_runtime_routes_trace_tree_excludes_llm_tool_calls_as_trace_
 }
 
 #[tokio::test]
+async fn application_runtime_routes_trace_tree_paginates_high_fan_out_children() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+
+    let preview_payload =
+        start_llm_preview(&app, &cookie, &csrf, &application_id, "总结退款政策").await;
+    let flow_run_id = preview_payload["data"]["flow_run"]["id"].as_str().unwrap();
+    let node_run_id =
+        Uuid::parse_str(preview_payload["data"]["node_run"]["id"].as_str().unwrap()).unwrap();
+    let tool_calls = (0..25)
+        .map(|index| {
+            json!({
+                "id": format!("call-tool-{index:02}"),
+                "name": format!("tool_{index:02}")
+            })
+        })
+        .collect::<Vec<_>>();
+
+    <MainDurableStore as OrchestrationRuntimeRepository>::create_callback_task(
+        &state.store,
+        &CreateCallbackTaskInput {
+            flow_run_id: Uuid::parse_str(flow_run_id).unwrap(),
+            node_run_id,
+            callback_kind: "llm_tool_calls".to_string(),
+            request_payload: json!({ "tool_calls": tool_calls }),
+            external_ref_payload: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let trace_tree = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(trace_tree.status(), StatusCode::OK);
+    let trace_tree_body = to_bytes(trace_tree.into_body(), usize::MAX).await.unwrap();
+    let trace_tree_payload: Value = serde_json::from_slice(&trace_tree_body).unwrap();
+    let llm_trace_node_id = trace_tree_payload["data"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_id"] == json!("node-llm"))
+        .expect("LLM node should be present")["trace_node_id"]
+        .as_str()
+        .unwrap();
+
+    let children = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={llm_trace_node_id}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(children.status(), StatusCode::OK);
+    let children_body = to_bytes(children.into_body(), usize::MAX).await.unwrap();
+    let children_payload: Value = serde_json::from_slice(&children_body).unwrap();
+    let tools_trace_node_id = children_payload["data"]["items"][0]["trace_node_id"]
+        .as_str()
+        .unwrap();
+
+    let first_page = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tools_trace_node_id}&page_size=20"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first_page.status(), StatusCode::OK);
+    let first_page_body = to_bytes(first_page.into_body(), usize::MAX).await.unwrap();
+    let first_page_payload: Value = serde_json::from_slice(&first_page_body).unwrap();
+    assert_eq!(
+        first_page_payload["data"]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        20
+    );
+    assert_eq!(
+        first_page_payload["data"]["page_info"]["page_size"],
+        json!(20)
+    );
+    assert_eq!(
+        first_page_payload["data"]["page_info"]["has_more"],
+        json!(true)
+    );
+    let next_cursor = first_page_payload["data"]["page_info"]["next_cursor"]
+        .as_str()
+        .expect("first page should expose next cursor");
+
+    let second_page = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tools_trace_node_id}&page_size=20&cursor={next_cursor}"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_page.status(), StatusCode::OK);
+    let second_page_body = to_bytes(second_page.into_body(), usize::MAX).await.unwrap();
+    let second_page_payload: Value = serde_json::from_slice(&second_page_body).unwrap();
+    assert_eq!(
+        second_page_payload["data"]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        5
+    );
+    assert_eq!(
+        second_page_payload["data"]["page_info"]["has_more"],
+        json!(false)
+    );
+    assert_eq!(
+        second_page_payload["data"]["page_info"]["next_cursor"],
+        Value::Null
+    );
+
+    let invalid_cursor_page = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tools_trace_node_id}&page_size=20&cursor=not-a-valid-cursor"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(invalid_cursor_page.status(), StatusCode::BAD_REQUEST);
+    let invalid_cursor_body = to_bytes(invalid_cursor_page.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let invalid_cursor_payload: Value = serde_json::from_slice(&invalid_cursor_body).unwrap();
+    assert_eq!(invalid_cursor_payload["code"], json!("cursor"));
+
+    let oversized_page = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tools_trace_node_id}&page_size=500"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(oversized_page.status(), StatusCode::OK);
+    let oversized_page_body = to_bytes(oversized_page.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let oversized_page_payload: Value = serde_json::from_slice(&oversized_page_body).unwrap();
+    assert_eq!(
+        oversized_page_payload["data"]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        25
+    );
+    assert_eq!(
+        oversized_page_payload["data"]["page_info"]["page_size"],
+        json!(100)
+    );
+}
+
+#[tokio::test]
 async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_lazy_tool_detail() {
     let (state, _) = test_api_state_with_database_url().await;
     let app = crate::app_with_state_and_config(state.clone(), &test_config());

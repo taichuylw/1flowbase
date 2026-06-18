@@ -525,9 +525,16 @@ export interface ConsoleApplicationRunTraceTree {
   nodes: ConsoleApplicationRunTraceNodeSummary[];
 }
 
+export interface ConsoleApplicationRunTraceNodeChildrenPageInfo {
+  has_more: boolean;
+  next_cursor?: string | null;
+  page_size: number;
+}
+
 export interface ConsoleApplicationRunTraceNodeChildren {
   projection_status: ConsoleApplicationRunTraceProjectionStatus;
   items: ConsoleApplicationRunTraceNodeSummary[];
+  page_info: ConsoleApplicationRunTraceNodeChildrenPageInfo;
 }
 
 export interface ConsoleApplicationRunTraceNodeContent {

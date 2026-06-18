@@ -286,12 +286,22 @@ pub struct ApplicationRunTraceTreeResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ApplicationRunTraceNodeChildrenQuery {
     pub parent_trace_node_id: String,
+    pub page_size: Option<i64>,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeChildrenPageInfoResponse {
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+    pub page_size: i64,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunTraceNodeChildrenResponse {
     pub projection_status: ApplicationRunTraceProjectionStatusResponse,
     pub items: Vec<ApplicationRunTraceNodeSummaryResponse>,
+    pub page_info: ApplicationRunTraceNodeChildrenPageInfoResponse,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

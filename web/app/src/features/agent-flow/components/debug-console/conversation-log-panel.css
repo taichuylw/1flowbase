@@ -84,6 +84,11 @@
   border-radius: 8px;
 }
 
+.agent-flow-editor__conversation-log-load-more {
+  align-self: flex-start;
+  padding-inline: 0;
+}
+
 .agent-flow-editor__conversation-log-metadata,
 .agent-flow-editor__conversation-log-node-detail {
   display: flex;

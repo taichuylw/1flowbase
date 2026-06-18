@@ -123,17 +123,24 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
     assert_eq!(roots[0].stable_locator, "run:test/node:root");
     assert_eq!(roots[0].child_count, 1);
 
-    let children =
-        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_trace_children(
+    let children_page =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_trace_children_page(
             &store,
-            run.id,
-            root_trace_node_id,
+            control_plane::ports::ListApplicationRunTraceChildrenPageInput {
+                flow_run_id: run.id,
+                parent_trace_node_id: root_trace_node_id,
+                page_size: 20,
+                cursor: None,
+            },
         )
         .await
         .unwrap();
+    let children = children_page.items;
     assert_eq!(children.len(), 1);
     assert_eq!(children[0].trace_node_id, child_trace_node_id);
     assert_eq!(children[0].parent_trace_node_id, Some(root_trace_node_id));
+    assert!(!children_page.has_more);
+    assert!(children_page.next_cursor.is_none());
 
     let locator_match =
         <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_trace_node_by_locator(
@@ -177,6 +184,146 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
     assert!(index_names
         .iter()
         .any(|name| name == "application_run_trace_nodes_stable_locator_idx"));
+}
+
+#[tokio::test]
+async fn trace_projection_repository_paginates_children_by_stable_order() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-06-18 11:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+    let root_trace_node_id =
+        control_plane::orchestration_runtime::trace_projection::trace_node_id_for_locator(
+            run.id,
+            "run:test/node:root",
+        );
+    let mut nodes = vec![
+        control_plane::ports::ApplicationRunTraceNodeProjectionInput {
+            trace_node_id: root_trace_node_id,
+            parent_trace_node_id: None,
+            stable_locator: "run:test/node:root".to_string(),
+            node_kind: "node_run".to_string(),
+            owner_kind: Some("node_run".to_string()),
+            owner_id: Some("root-node-run".to_string()),
+            order_key: "000001".to_string(),
+            node_id: Some("node-root".to_string()),
+            node_type: Some("llm".to_string()),
+            node_alias: "Root LLM".to_string(),
+            status: "succeeded".to_string(),
+            started_at,
+            finished_at: Some(started_at + Duration::seconds(1)),
+            duration_ms: Some(1000),
+            metrics_payload: json!({}),
+            has_children: true,
+            child_count: 5,
+            has_content: false,
+            content_ref: None,
+        },
+    ];
+    for index in 0..5 {
+        let stable_locator = format!("run:test/node:root/tool:{index:02}");
+        nodes.push(control_plane::ports::ApplicationRunTraceNodeProjectionInput {
+            trace_node_id:
+                control_plane::orchestration_runtime::trace_projection::trace_node_id_for_locator(
+                    run.id,
+                    &stable_locator,
+                ),
+            parent_trace_node_id: Some(root_trace_node_id),
+            stable_locator,
+            node_kind: "tool_callback".to_string(),
+            owner_kind: Some("tool_call".to_string()),
+            owner_id: Some(format!("call-{index:02}")),
+            order_key: format!("000001/{index:06}"),
+            node_id: None,
+            node_type: Some("tool".to_string()),
+            node_alias: format!("tool_{index:02}"),
+            status: "succeeded".to_string(),
+            started_at: started_at + Duration::milliseconds(index * 100),
+            finished_at: Some(started_at + Duration::milliseconds(index * 100 + 50)),
+            duration_ms: Some(50),
+            metrics_payload: json!({}),
+            has_children: false,
+            child_count: 0,
+            has_content: false,
+            content_ref: None,
+        });
+    }
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::replace_application_run_trace_projection(
+        &store,
+        &control_plane::ports::ReplaceApplicationRunTraceProjectionInput {
+            flow_run_id: run.id,
+            projection_version: 1,
+            source_watermark: "node_runs:6/runtime_events:0".to_string(),
+            nodes,
+            contents: vec![],
+        },
+    )
+    .await
+    .unwrap();
+
+    let first_page =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_trace_children_page(
+            &store,
+            control_plane::ports::ListApplicationRunTraceChildrenPageInput {
+                flow_run_id: run.id,
+                parent_trace_node_id: root_trace_node_id,
+                page_size: 2,
+                cursor: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(first_page.items.len(), 2);
+    assert_eq!(first_page.items[0].node_alias, "tool_00");
+    assert_eq!(first_page.items[1].node_alias, "tool_01");
+    assert!(first_page.has_more);
+    assert!(first_page.next_cursor.is_some());
+
+    let second_page =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_trace_children_page(
+            &store,
+            control_plane::ports::ListApplicationRunTraceChildrenPageInput {
+                flow_run_id: run.id,
+                parent_trace_node_id: root_trace_node_id,
+                page_size: 2,
+                cursor: first_page.next_cursor,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_page.items.len(), 2);
+    assert_eq!(second_page.items[0].node_alias, "tool_02");
+    assert_eq!(second_page.items[1].node_alias, "tool_03");
+    assert!(second_page.has_more);
+
+    let last_page =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_trace_children_page(
+            &store,
+            control_plane::ports::ListApplicationRunTraceChildrenPageInput {
+                flow_run_id: run.id,
+                parent_trace_node_id: root_trace_node_id,
+                page_size: 2,
+                cursor: second_page.next_cursor,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(last_page.items.len(), 1);
+    assert_eq!(last_page.items[0].node_alias, "tool_04");
+    assert!(!last_page.has_more);
+    assert!(last_page.next_cursor.is_none());
 }
 
 #[tokio::test]

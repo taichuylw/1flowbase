@@ -23,7 +23,12 @@ vi.mock('@1flowbase/api-client', () => ({
   }),
   getConsoleApplicationRunTraceNodeChildren: vi.fn().mockResolvedValue({
     projection_status: traceProjectionStatus,
-    items: []
+    items: [],
+    page_info: {
+      has_more: false,
+      next_cursor: null,
+      page_size: 20
+    }
   }),
   getConsoleApplicationRunTraceNodeContent: vi.fn().mockResolvedValue({
     trace_node_id: '11111111-1111-4111-8111-111111111111',
@@ -383,7 +388,8 @@ describe('applications runtime api', () => {
       'app-1',
       'run-1',
       traceNodeId,
-      'http://127.0.0.1:7800'
+      'http://127.0.0.1:7800',
+      undefined
     );
     expect(getConsoleApplicationRunTraceNodeContent).toHaveBeenCalledWith(
       'app-1',

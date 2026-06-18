@@ -479,13 +479,15 @@ export function fetchApplicationRunOverview(
 export function fetchApplicationRunTraceNodeChildren(
   applicationId: string,
   runId: string,
-  traceNodeId: string
+  traceNodeId: string,
+  cursor?: string
 ) {
   return getConsoleApplicationRunTraceNodeChildren(
     applicationId,
     runId,
     traceNodeId,
-    getApplicationsApiBaseUrl()
+    getApplicationsApiBaseUrl(),
+    cursor ? { cursor } : undefined
   );
 }
 

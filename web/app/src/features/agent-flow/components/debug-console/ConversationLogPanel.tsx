@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Descriptions, Empty, Spin, Tabs, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Empty,
+  Spin,
+  Tabs,
+  Typography
+} from 'antd';
 
 import type {
   AgentFlowDebugMessage,
@@ -77,9 +85,16 @@ interface ConversationLogTraceTree {
   nodes: ConversationLogTraceNodeSummary[];
 }
 
+interface ConversationLogTraceNodeChildrenPageInfo {
+  has_more: boolean;
+  next_cursor?: string | null;
+  page_size: number;
+}
+
 interface ConversationLogTraceNodeChildren {
   projection_status?: ConversationLogTraceProjectionStatus;
   items: ConversationLogTraceNodeSummary[];
+  page_info: ConversationLogTraceNodeChildrenPageInfo;
 }
 
 interface ConversationLogTraceNodeContent {
@@ -122,7 +137,8 @@ export interface ConversationLogTraceLoader {
   loadTree: (runId: string) => Promise<ConversationLogTraceTree>;
   loadChildren: (
     runId: string,
-    traceNodeId: string
+    traceNodeId: string,
+    cursor?: string
   ) => Promise<ConversationLogTraceNodeChildren>;
   loadContent: (
     runId: string,
@@ -486,6 +502,29 @@ function traceProjectionStatusSucceeded(
   return !status || status.projection_status === 'succeeded';
 }
 
+function appendTraceChildrenPage(
+  current: ConversationLogTraceNodeSummary[],
+  nextPageItems: ConversationLogTraceNodeSummary[]
+) {
+  if (current.length === 0) {
+    return nextPageItems;
+  }
+
+  const seenTraceNodeIds = new Set(
+    current.map((childNode) => childNode.trace_node_id)
+  );
+  const next = [...current];
+
+  for (const childNode of nextPageItems) {
+    if (!seenTraceNodeIds.has(childNode.trace_node_id)) {
+      seenTraceNodeIds.add(childNode.trace_node_id);
+      next.push(childNode);
+    }
+  }
+
+  return next;
+}
+
 function traceProjectionStatusMessage(
   status: ConversationLogTraceProjectionStatus
 ) {
@@ -617,6 +656,15 @@ function LazyTraceNodeItem({
   traceLoader: ConversationLogTraceLoader;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [childNodes, setChildNodes] = useState<
+    ConversationLogTraceNodeSummary[]
+  >([]);
+  const [childPageInfo, setChildPageInfo] =
+    useState<ConversationLogTraceNodeChildrenPageInfo | null>(null);
+  const [childProjectionStatus, setChildProjectionStatus] =
+    useState<ConversationLogTraceProjectionStatus>();
+  const [loadingMoreChildren, setLoadingMoreChildren] = useState(false);
+  const [loadMoreChildrenFailed, setLoadMoreChildrenFailed] = useState(false);
   const fallbackItem = useMemo(() => mapTraceSummaryToTraceItem(node), [node]);
   const contentQuery = useQuery({
     enabled: expanded && node.has_content,
@@ -634,14 +682,61 @@ function LazyTraceNodeItem({
       runId,
       node.trace_node_id
     ],
-    queryFn: () => traceLoader.loadChildren(runId, node.trace_node_id)
+    queryFn: () =>
+      traceLoader.loadChildren(runId, node.trace_node_id, undefined)
   });
+  useEffect(() => {
+    setChildNodes([]);
+    setChildPageInfo(null);
+    setChildProjectionStatus(undefined);
+    setLoadingMoreChildren(false);
+    setLoadMoreChildrenFailed(false);
+  }, [runId, node.trace_node_id]);
+  useEffect(() => {
+    const childrenPage = childrenQuery.data;
+    if (!childrenPage) {
+      return;
+    }
+
+    setChildNodes(childrenPage.items);
+    setChildPageInfo(childrenPage.page_info);
+    setChildProjectionStatus(childrenPage.projection_status);
+  }, [childrenQuery.data]);
+  const loadMoreTraceChildren = useCallback(async () => {
+    const cursor = childPageInfo?.next_cursor;
+    if (!cursor || loadingMoreChildren) {
+      return;
+    }
+
+    setLoadingMoreChildren(true);
+    setLoadMoreChildrenFailed(false);
+    try {
+      const nextPage = await traceLoader.loadChildren(
+        runId,
+        node.trace_node_id,
+        cursor
+      );
+      setChildNodes((current) =>
+        appendTraceChildrenPage(current, nextPage.items)
+      );
+      setChildPageInfo(nextPage.page_info);
+      setChildProjectionStatus(nextPage.projection_status);
+    } catch {
+      setLoadMoreChildrenFailed(true);
+    } finally {
+      setLoadingMoreChildren(false);
+    }
+  }, [
+    childPageInfo?.next_cursor,
+    loadingMoreChildren,
+    node.trace_node_id,
+    runId,
+    traceLoader
+  ]);
   const item = useMemo(
     () => mapTraceContentToTraceItem(fallbackItem, contentQuery.data),
     [contentQuery.data, fallbackItem]
   );
-  const childNodes = childrenQuery.data?.items ?? [];
-  const childProjectionStatus = childrenQuery.data?.projection_status;
   const contentProjectionStatus = contentQuery.data?.projection_status;
   const loadToolCallbackDetail = traceLoader.loadToolCallbackDetail;
 
@@ -694,6 +789,26 @@ function LazyTraceNodeItem({
             runId={runId}
             traceLoader={traceLoader}
           />
+        ) : null}
+        {loadMoreChildrenFailed ? (
+          <Alert
+            message={i18nText('agentFlow', 'auto.loading_failed')}
+            showIcon
+            type="error"
+          />
+        ) : null}
+        {childPageInfo?.has_more ? (
+          <Button
+            className="agent-flow-editor__conversation-log-load-more"
+            loading={loadingMoreChildren}
+            size="small"
+            type="link"
+            onClick={() => {
+              void loadMoreTraceChildren();
+            }}
+          >
+            {i18nText('agentFlow', 'auto.load_more_trace_children')}
+          </Button>
         ) : null}
       </section>
     </DebugWorkflowNodeItem>

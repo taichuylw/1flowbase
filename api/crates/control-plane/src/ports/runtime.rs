@@ -544,6 +544,28 @@ pub struct ApplicationRunTraceNodeContentProjectionInput {
     pub source_refs: serde_json::Value,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationRunTraceChildrenCursor {
+    pub order_key: String,
+    pub trace_node_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct ListApplicationRunTraceChildrenPageInput {
+    pub flow_run_id: Uuid,
+    pub parent_trace_node_id: Uuid,
+    pub page_size: i64,
+    pub cursor: Option<ApplicationRunTraceChildrenCursor>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ListApplicationRunTraceChildrenPage {
+    pub items: Vec<domain::ApplicationRunTraceNodeRecord>,
+    pub has_more: bool,
+    pub next_cursor: Option<ApplicationRunTraceChildrenCursor>,
+    pub page_size: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct ReplaceApplicationRunTraceProjectionInput {
     pub flow_run_id: Uuid,
@@ -958,13 +980,12 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = flow_run_id;
         anyhow::bail!("list_application_run_trace_nodes_for_statistics not implemented")
     }
-    async fn list_application_run_trace_children(
+    async fn list_application_run_trace_children_page(
         &self,
-        flow_run_id: Uuid,
-        parent_trace_node_id: Uuid,
-    ) -> anyhow::Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
-        let _ = (flow_run_id, parent_trace_node_id);
-        anyhow::bail!("list_application_run_trace_children not implemented")
+        input: ListApplicationRunTraceChildrenPageInput,
+    ) -> anyhow::Result<ListApplicationRunTraceChildrenPage> {
+        let _ = input;
+        anyhow::bail!("list_application_run_trace_children_page not implemented")
     }
     async fn get_application_run_trace_node(
         &self,

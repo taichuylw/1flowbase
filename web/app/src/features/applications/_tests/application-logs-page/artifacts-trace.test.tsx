@@ -643,7 +643,12 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       runOverviewFromDetail(currentRunDetail)
     );
     runtimeApi.fetchApplicationRunTraceNodeChildren.mockResolvedValue({
-      items: []
+      items: [],
+      page_info: {
+        has_more: false,
+        next_cursor: null,
+        page_size: 20
+      }
     });
     runtimeApi.fetchApplicationRunTraceNodeContent.mockImplementation(
       async (_applicationId: string, _runId: string, traceNodeId: string) =>

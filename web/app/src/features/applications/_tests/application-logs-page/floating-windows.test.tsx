@@ -512,7 +512,12 @@ describe('ApplicationLogsPage - floating windows', () => {
       sampleRunOverview()
     );
     runtimeApi.fetchApplicationRunTraceNodeChildren.mockResolvedValue({
-      items: []
+      items: [],
+      page_info: {
+        has_more: false,
+        next_cursor: null,
+        page_size: 20
+      }
     });
     runtimeApi.fetchApplicationRunTraceNodeContent.mockResolvedValue(
       sampleTraceNodeContent()
