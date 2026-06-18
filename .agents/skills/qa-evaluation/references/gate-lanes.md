@@ -16,9 +16,10 @@
 
 - 目标是加快开发反馈，不用仓库级门禁惩罚局部开发。
 - 优先复用 `test-driven-development` 的红绿结果；只补当前改动直接相关证据。
+- 默认最多选择一个主验证命令和必要 smoke；同一 contract 已被 targeted test 覆盖时，不再为同一结论叠加运行态取证。
 - 样式、文案、布局微调默认不跑完整前端门禁；优先 `git diff --check`、截图、局部 page-debug 或定向 smoke。
 - 共享组件、公共 API、状态入口、契约、migration、权限或高 blast radius 才升级门禁。
-- 超过预算时停止，写 `未验证，不下确定结论`，不要继续叠重脚本。
+- 需要启动服务、运行 `api-debug`、跑 workspace 级 cargo / pnpm build，或累计超过 3 条重验证命令时，先说明新增证据收益和成本；没有用户明确授权就停止，写 `未验证，不下确定结论`，不要继续叠重脚本。
 
 ## PR Merge Gate
 
