@@ -304,15 +304,18 @@ function runtimeDetailPayloadHasValue(value: unknown): boolean {
 
 export function DebugWorkflowNodeDetailContent({
   item,
+  beforePayloadContent,
   onLoadArtifact,
   onLoadToolCallbackDetail
 }: {
   item: AgentFlowTraceItem;
+  beforePayloadContent?: ReactNode;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const debugPayload = stripLlmRoundsFromDebugPayload(item.debugPayload ?? {});
   const hasNodeDetail =
+    Boolean(beforePayloadContent) ||
     runtimeDetailPayloadHasValue(item.inputPayload) ||
     runtimeDetailPayloadHasValue(debugPayload) ||
     runtimeDetailPayloadHasValue(item.outputPayload) ||
@@ -343,8 +346,10 @@ export function DebugWorkflowNodeDetailContent({
           onLoadArtifact={onLoadArtifact}
         />
       ) : null}
+      {beforePayloadContent}
       <NodeRunPayloadSections
         debugPayload={debugPayload}
+        hideEmptyPayloads
         inputPayload={item.inputPayload}
         outputPayload={item.outputPayload}
         onLoadArtifact={onLoadArtifact}

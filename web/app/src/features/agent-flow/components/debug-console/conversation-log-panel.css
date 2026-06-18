@@ -113,6 +113,13 @@
   border-left: 1px solid #e6eaf1;
 }
 
+.agent-flow-editor__conversation-log-json-list
+  > .agent-flow-editor__conversation-log-node-list {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid #e6eaf1;
+}
+
 .agent-flow-editor__conversation-log-empty {
   padding: 24px 12px;
 }

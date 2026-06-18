@@ -167,40 +167,69 @@ function pickProcessPayload(debugPayload: unknown) {
   };
 }
 
+function runtimePayloadHasValue(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (typeof value === 'object') {
+    return Object.keys(value).length > 0;
+  }
+
+  return true;
+}
+
 export function NodeRunPayloadSections({
   inputPayload,
   debugPayload,
   outputPayload,
   includeDebugPayload = true,
+  hideEmptyPayloads = false,
   onLoadArtifact
 }: {
   inputPayload: unknown;
   debugPayload: unknown;
   outputPayload: unknown;
   includeDebugPayload?: boolean;
+  hideEmptyPayloads?: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
   const processPayload = pickProcessPayload(debugPayload);
+  const showInputPayload =
+    !hideEmptyPayloads || runtimePayloadHasValue(inputPayload);
+  const showDebugPayload =
+    includeDebugPayload &&
+    (!hideEmptyPayloads || runtimePayloadHasValue(processPayload));
+  const showOutputPayload =
+    !hideEmptyPayloads || runtimePayloadHasValue(outputPayload);
 
   return (
     <>
-      <RuntimeDebugPayloadBlock
-        payload={inputPayload}
-        title={i18nText("agentFlow", "auto.input")}
-        onLoadArtifact={onLoadArtifact}
-      />
-      {includeDebugPayload ? (
+      {showInputPayload ? (
+        <RuntimeDebugPayloadBlock
+          payload={inputPayload}
+          title={i18nText("agentFlow", "auto.input")}
+          onLoadArtifact={onLoadArtifact}
+        />
+      ) : null}
+      {showDebugPayload ? (
         <RuntimeDebugPayloadBlock
           payload={processPayload}
           title={i18nText("agentFlow", "auto.data_processing")}
           onLoadArtifact={onLoadArtifact}
         />
       ) : null}
-      <RuntimeDebugPayloadBlock
-        payload={outputPayload}
-        title={i18nText("agentFlow", "auto.outputs")}
-        onLoadArtifact={onLoadArtifact}
-      />
+      {showOutputPayload ? (
+        <RuntimeDebugPayloadBlock
+          payload={outputPayload}
+          title={i18nText("agentFlow", "auto.outputs")}
+          onLoadArtifact={onLoadArtifact}
+        />
+      ) : null}
     </>
   );
 }

@@ -457,6 +457,164 @@ function mapTraceSummaryToTraceItem(
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function payloadRecordField(
+  payload: Record<string, unknown>,
+  key: string
+): Record<string, unknown> {
+  const value = payload[key];
+
+  return isRecord(value) ? value : {};
+}
+
+function firstPayloadRecordField(
+  payload: Record<string, unknown>,
+  keys: string[]
+): Record<string, unknown> {
+  for (const key of keys) {
+    const value = payloadRecordField(payload, key);
+
+    if (Object.keys(value).length > 0) {
+      return value;
+    }
+  }
+
+  return {};
+}
+
+function payloadValueHasValue(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (typeof value === 'object') {
+    return Object.keys(value).length > 0;
+  }
+
+  return true;
+}
+
+function pickPayloadFields(
+  payload: Record<string, unknown>,
+  keys: string[]
+): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+
+  for (const key of keys) {
+    const value = payload[key];
+
+    if (payloadValueHasValue(value)) {
+      picked[key] = value;
+    }
+  }
+
+  return picked;
+}
+
+function omitPayloadFields(
+  payload: Record<string, unknown>,
+  keys: string[]
+): Record<string, unknown> {
+  const omitted = new Set(keys);
+  const next: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (!omitted.has(key) && payloadValueHasValue(value)) {
+      next[key] = value;
+    }
+  }
+
+  return next;
+}
+
+function mapToolCallbackPayloadToTraceItem(
+  fallback: AgentFlowTraceItem,
+  payload: Record<string, unknown>
+): AgentFlowTraceItem {
+  return {
+    ...fallback,
+    inputPayload: firstPayloadRecordField(payload, [
+      'request_payload',
+      'tool_call'
+    ]),
+    outputPayload: firstPayloadRecordField(payload, [
+      'parsed_result',
+      'tool_result',
+      'callback_payload'
+    ]),
+    debugPayload: pickPayloadFields(payload, [
+      'callback_task_id',
+      'tool_call_id',
+      'callback_status',
+      'execution_status',
+      'duration_ms',
+      'route_trace'
+    ])
+  };
+}
+
+function mapPayloadContentToTraceItem(
+  fallback: AgentFlowTraceItem,
+  content: ConversationLogTraceNodeContent
+): AgentFlowTraceItem {
+  const payload = content.payload;
+
+  if (!isRecord(payload)) {
+    return fallback;
+  }
+
+  if (content.node_kind === 'tool_callback') {
+    return mapToolCallbackPayloadToTraceItem(fallback, payload);
+  }
+
+  const inputPayload = payloadRecordField(payload, 'input_payload');
+  const outputPayload = payloadRecordField(payload, 'output_payload');
+  const debugPayload = payloadRecordField(payload, 'debug_payload');
+  const metricsPayload = payloadRecordField(payload, 'metrics_payload');
+  const errorPayload = payloadRecordField(payload, 'error_payload');
+  const hasStructuredPayload =
+    Object.keys(inputPayload).length > 0 ||
+    Object.keys(outputPayload).length > 0 ||
+    Object.keys(debugPayload).length > 0 ||
+    Object.keys(metricsPayload).length > 0 ||
+    Object.keys(errorPayload).length > 0;
+
+  if (!hasStructuredPayload) {
+    return {
+      ...fallback,
+      debugPayload: payload
+    };
+  }
+
+  return {
+    ...fallback,
+    inputPayload,
+    outputPayload,
+    errorPayload: Object.keys(errorPayload).length > 0 ? errorPayload : null,
+    metricsPayload:
+      Object.keys(metricsPayload).length > 0
+        ? metricsPayload
+        : fallback.metricsPayload,
+    debugPayload:
+      Object.keys(debugPayload).length > 0
+        ? debugPayload
+        : omitPayloadFields(payload, [
+            'input_payload',
+            'output_payload',
+            'error_payload',
+            'metrics_payload',
+            'debug_payload'
+          ])
+  };
+}
+
 function mapTraceContentToTraceItem(
   fallback: AgentFlowTraceItem,
   content: ConversationLogTraceNodeContent | undefined
@@ -464,12 +622,7 @@ function mapTraceContentToTraceItem(
   const nodeRun = content?.node_run;
 
   if (!nodeRun) {
-    return content?.payload
-      ? {
-          ...fallback,
-          debugPayload: content.payload
-        }
-      : fallback;
+    return content ? mapPayloadContentToTraceItem(fallback, content) : fallback;
   }
 
   return {
@@ -487,6 +640,10 @@ function mapTraceContentToTraceItem(
     metricsPayload: nodeRun.metrics_payload,
     debugPayload: nodeRun.debug_payload ?? {}
   };
+}
+
+function isToolGroupTraceNode(node: ConversationLogTraceNodeSummary) {
+  return node.node_kind === 'tool_group' || node.node_type === 'tools';
 }
 
 function traceItemDurationMs(startedAt: string, finishedAt: string | null) {
@@ -749,6 +906,21 @@ function LazyTraceNodeItem({
   );
   const contentProjectionStatus = contentQuery.data?.projection_status;
   const loadToolCallbackDetail = traceLoader.loadToolCallbackDetail;
+  const toolChildNodes = node.has_content
+    ? childNodes.filter(isToolGroupTraceNode)
+    : [];
+  const childNodesAfterContent = node.has_content
+    ? childNodes.filter((childNode) => !isToolGroupTraceNode(childNode))
+    : childNodes;
+  const toolChildrenBeforePayload =
+    toolChildNodes.length > 0 ? (
+      <LazyTraceNodeList
+        nodes={toolChildNodes}
+        onLoadArtifact={onLoadArtifact}
+        runId={runId}
+        traceLoader={traceLoader}
+      />
+    ) : null;
 
   return (
     <DebugWorkflowNodeItem
@@ -771,6 +943,7 @@ function LazyTraceNodeItem({
           ) : (
             <div className="agent-flow-editor__conversation-log-json-list">
               <DebugWorkflowNodeDetailContent
+                beforePayloadContent={toolChildrenBeforePayload}
                 item={item}
                 onLoadArtifact={onLoadArtifact}
                 onLoadToolCallbackDetail={
@@ -792,9 +965,9 @@ function LazyTraceNodeItem({
         !traceProjectionStatusSucceeded(childProjectionStatus) ? (
           <TraceProjectionStatusNotice status={childProjectionStatus} />
         ) : null}
-        {childNodes.length > 0 ? (
+        {childNodesAfterContent.length > 0 ? (
           <LazyTraceNodeList
-            nodes={childNodes}
+            nodes={childNodesAfterContent}
             onLoadArtifact={onLoadArtifact}
             runId={runId}
             traceLoader={traceLoader}
