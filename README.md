@@ -9,122 +9,117 @@
 </p>
 
 <p align="center">
-  <strong>💬 Community:</strong> <a href="docs/assets/community/wechat.jpg" target="_blank">WeChat</a> | <a href="docs/assets/community/taichuy_doc_wechat_office.png" target="_blank">WeChat Official Account</a> | <a href="https://x.com/Tacihu2021" target="_blank">Twitter</a>
+  <a href="https://github.com/taichuy/1flowbase/stargazers"><img src="https://img.shields.io/github/stars/taichuy/1flowbase?style=social" alt="GitHub stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/taichuy/1flowbase" alt="License"></a>
+  <img src="https://img.shields.io/badge/OpenAI-compatible-111827" alt="OpenAI compatible">
+  <img src="https://img.shields.io/badge/Claude-compatible-111827" alt="Claude compatible">
+  <img src="https://img.shields.io/badge/self--hosted-1flowbase-2563eb" alt="Self-hosted">
 </p>
 
+<p align="center">
+  <strong>Community:</strong>
+  <a href="docs/assets/community/wechat.jpg" target="_blank">WeChat</a> |
+  <a href="docs/assets/community/taichuy_doc_wechat_office.png" target="_blank">WeChat Official Account</a> |
+  <a href="https://x.com/Tacihu2021" target="_blank">Twitter</a>
+</p>
 
-> **Open-source virtual model gateway for local AI agent clients.**
-> **The first step to harness is to see the Agent's execution path clearly**
+> **Open-source virtual model gateway for Claude Code, Codex, OpenCode, Cline, Continue, and other local AI agent clients.**
 
-1flowbase lets you build multi-model workflows, publish them as OpenAI / Claude-compatible model endpoints, and inspect what happened behind each request: model calls, node inputs and outputs, tool callbacks, tokens, latency, failures, and cost.
+1flowbase lets you build multi-model workflows, publish them as OpenAI-compatible or Claude-compatible model endpoints, and inspect the execution trace behind every request.
 
-Use it to:
+Use it when a normal LLM gateway or model router is not enough:
 
-- compose multiple models, tools, verifiers, routers, and formatters into one workflow
-- expose that workflow through OpenAI Responses, OpenAI Chat Completions, or Claude-compatible Messages APIs
-- call the workflow from compatible local AI clients and SDKs that support custom model endpoints
-- debug execution node by node instead of only seeing the final answer
-- optimize cost with model cascading, fallback, verification, and formatting steps
-
-> LiteLLM routes models.  
-> 1flowbase composes models into workflow-backed virtual model endpoints.
+- give text-first coding models vision by mounting a multimodal model as a tool
+- publish Fusion-style multi-model review panels as one reusable model endpoint
+- turn model chains, tools, verifiers, fallbacks, and formatters into a virtual model
+- call that virtual model from Claude Code, Codex, OpenCode, Cline, Continue, SDKs, or any client that supports custom model endpoints
+- debug node inputs, outputs, tool callbacks, tokens, latency, failures, and cost instead of only seeing the final answer
 
 ```text
-Build workflow → Publish endpoint → Call from clients → Inspect trace / tokens / cost → Optimize
+Build workflow -> Publish virtual model -> Call from agent clients -> Inspect trace -> Optimize
 ```
+
+> LiteLLM, Portkey, Bifrost, and similar gateways help route model traffic.
+> 1flowbase helps compose several models and tools into a new observable virtual model endpoint.
 
 ---
 
-## Why?
+## What You Can Build Now
 
-Many AI tools only show the final response. A real AI request may include far more than the visible user message:
+### Claude Code vision for GLM-5.2, DeepSeek, and other text-first coding models
+
+Claude Code and other coding agents can receive screenshots, UI images, charts, and design references. Some strong coding models are still best used as text-first models in those client paths.
+
+1flowbase can intercept the image, call a vision model as a mounted tool, return structured visual context to the main coding model, and keep the whole trace visible.
+
+```text
+Claude Code
+  -> 1flowbase virtual model endpoint
+  -> GLM-5.2 / DeepSeek / other main coding model
+  -> mounted vision tool
+  -> GLM-5V-Turbo / Gemini / GPT vision / OCR model
+  -> structured visual result
+  -> final coding answer
+```
+
+Guide: [Make GLM-5.2 See Images in Claude Code with 1flowbase](https://github.com/taichuy/1flowbase/wiki/Make-GLM-5.2-See-Images-in-Claude-Code-with-1flowbase)
+
+### Fusion-style multi-model review endpoint
+
+OpenRouter Fusion made a useful pattern obvious: the next valuable model endpoint may be a compound workflow, not one larger model.
+
+1flowbase includes a `fusion` template that turns several branch models and one synthesis model into a publishable endpoint. Your agent client calls one model name; 1flowbase runs the model panel behind it and records every branch, token count, failure, and synthesis step.
+
+```text
+User request
+  -> Main LLM
+  -> fusion tool
+     -> Branch LLM A
+     -> Branch LLM B
+     -> Branch LLM C
+     -> Synthesis LLM
+  -> final answer
+```
+
+Guide: [Fusion-Style Workflows: Publish a Multi-Model Panel as an Observable Virtual Model](https://github.com/taichuy/1flowbase/wiki/Fusion-Style-Workflow)
+
+### Workflow-backed model APIs
+
+Build once, then expose the workflow through common model APIs:
+
+| Protocol | API path | Typical usage |
+|---|---:|---|
+| OpenAI Responses API | `/v1/responses` | newer OpenAI-style clients and application code |
+| OpenAI Chat Completions API | `/v1/chat/completions` | SDKs, coding tools, chat clients, application frameworks |
+| Claude-compatible Messages API | `/v1/messages` | Claude-compatible clients that support custom endpoints |
+
+---
+
+## Why 1flowbase
+
+Many AI tools only show the final response. A real agent request usually contains far more than the visible user message:
 
 ```text
 user input + system prompt + developer prompt + tool definitions + project context
-+ chat history + command outputs + intermediate model calls + verifier / formatter steps
++ chat history + command outputs + image/file references + intermediate model calls
++ verifier steps + formatter steps + fallback calls
 ```
 
-That hidden execution path affects token cost, latency, model behavior, failure rate, output quality, and unit economics.
+That hidden path controls quality, cost, latency, failure rate, and whether the agent can be trusted on long engineering tasks.
 
-A short input like `hi` can still become an expensive request once the surrounding context, tool schemas, history, and workflow steps are attached.
+1flowbase makes the path visible and programmable:
 
-1flowbase helps you see the workflow behind the request, then optimize it with real runtime data instead of guesswork.
-
----
-
-## What works today
-
-Current focus: **workflow-backed virtual model endpoints** and **execution visibility inside 1flowbase workflows**.
-
-Implemented:
-
-- visual workflow editor
-- multi-node workflow orchestration
-- virtual model endpoint publishing
-- OpenAI Responses API support
-- OpenAI Chat Completions API support
-- Claude-compatible Messages API support
-- streaming response support
-- basic execution logs
-- tool callback traces inside 1flowbase workflows
-- application-level token statistics
-- prompt and model configuration version history
-
-In progress:
-
-- deeper local agent conversation collection
-- session search and playback
-- Token Bill of Materials: system prompts, tool definitions, history, command outputs, and node-level sources
-- abnormal cost detection
-- Recall Pack export
-- more Claude Code / Codex / aionui templates
-- MCP-aware plugin nodes and tool-call source attribution
-
-> Note: 1flowbase is not currently positioned as an MCP server or MCP gateway. MCP-aware capabilities are on the roadmap. The current product focuses on publishing compatible model endpoints and tracing 1flowbase workflow execution.
-
----
-
-## How it works
-
-### 1. Build a workflow
-
-```text
-Vision Model → Small Model → Strong Reasoning Model → Verifier → Formatter
-```
-
-### 2. Publish it as a model endpoint
-
-```text
-/v1/responses
-/v1/chat/completions
-/v1/messages
-```
-
-### 3. Call it from existing clients
-
-To the client, it looks like a normal model. To you, it is an observable and tunable workflow.
-
-### 4. Inspect the execution
-
-```text
-Request
-  → workflow node inputs
-  → model calls
-  → tool callbacks
-  → node outputs
-  → token usage / latency / errors
-  → final response
-```
-
-### 5. Optimize and reuse
-
-Compress prompts, split long context, move simple steps to cheaper models, add verifiers / formatters, add fallback strategies, then publish the optimized workflow as a reusable virtual model.
+- **Compose** multiple models, tools, verifiers, routers, and formatters
+- **Publish** the workflow as a normal OpenAI-compatible or Claude-compatible model
+- **Observe** node inputs, outputs, tool callbacks, tokens, latency, errors, and cost
+- **Optimize** expensive requests with model cascading, selective vision calls, fallbacks, and review panels
+- **Reuse** working workflows as named virtual models for local agent clients and application code
 
 ---
 
 ## Quick Start
 
-### One-click Docker deployment
+### One-command Docker bootstrap
 
 The script checks whether Docker / Compose is available, pulls the `docker/` directory, and copies `docker/.env.example` to `docker/.env`.
 
@@ -192,13 +187,19 @@ node scripts/node/dev-up.js restart
 
 See [scripts/README.md](scripts/README.md) for more options.
 
+### Ask a coding agent to set it up
+
+```text
+Clone https://github.com/taichuy/1flowbase, follow the README quick start, then help me publish a workflow as an OpenAI-compatible or Claude-compatible virtual model endpoint.
+```
+
 ---
 
-## Feature preview
+## Feature Preview
 
 ### Build multi-model workflows
 
-Create workflows with multiple models, tools, verifiers, and formatter nodes.
+Create workflows with multiple models, tools, verifiers, branch models, and formatter nodes.
 
 ![Workflow Editor Preview](docs/assets/workflow_editor_preview.jpeg)
 
@@ -214,15 +215,15 @@ Create workflows with multiple models, tools, verifiers, and formatter nodes.
 
 ![Custom Model Settings](docs/assets/custom_model_settings.jpeg)
 
-### Use in compatible local AI clients
+### Use in local AI agent clients
 
 Call a published workflow from compatible clients that support custom model endpoints.
 
 ![Claude Code Terminal Usage](docs/assets/claude_code_terminal_usage.png)
 
-### View execution logs
+### Inspect execution logs
 
-Inspect model requests, node inputs and outputs, tool callbacks, response content, latency, and errors.
+Trace model requests, node inputs and outputs, tool callbacks, response content, latency, and errors.
 
 ![Detailed Execution Logs](docs/assets/detailed_execution_logs.jpeg)
 
@@ -236,56 +237,59 @@ Inspect model requests, node inputs and outputs, tool callbacks, response conten
 
 ---
 
-## Protocol compatibility
+## Common Use Cases
 
-| Protocol | API path | Typical usage |
-|---|---:|---|
-| OpenAI Responses API | `/v1/responses` | newer OpenAI-style clients and application code |
-| OpenAI Chat Completions API | `/v1/chat/completions` | SDKs, coding tools, chat clients, application frameworks |
-| Claude-compatible Messages API | `/v1/messages` | Claude-compatible clients that support custom endpoints |
-
-Build one workflow, then expose it through multiple protocols.
-
----
-
-## Typical use cases
-
-### Add vision or OCR before a text model
+### Make a text coding model understand screenshots
 
 ```text
-Image / screenshot / PDF → Vision or OCR node → structured text context → strong text model → verifier → final answer
+Screenshot / UI mockup / chart
+  -> vision tool
+  -> structured visual context
+  -> strong coding model
+  -> patch, plan, or explanation
 ```
+
+Useful for UI reconstruction, frontend debugging, visual regression analysis, chart reading, PDF page understanding, and design-to-code workflows.
+
+### Build a Fusion-style reviewer
+
+```text
+Architecture proposal
+  -> cheap broad reviewer
+  -> strong reasoning reviewer
+  -> provider-diverse reviewer
+  -> synthesis model
+  -> final recommendation
+```
+
+Useful for architecture review, research synthesis, code review, document review, and high-stakes agent decisions.
 
 ### Control cost with model cascading
 
 ```text
-Simple classification → small model
-Formatting → small model
-Complex reasoning → strong model
-Final verification → verifier node
+Simple classification -> small model
+Formatting -> small model
+Complex reasoning -> strong model
+Final verification -> verifier node
 ```
 
 ### Guarantee output structure
 
-Use verifiers, JSON schema validation, and formatter nodes before returning the final result. This is useful for JSON outputs, API responses, tool call parameters, code patches, document generation, and automated task results.
+Use verifiers, JSON Schema validation, and formatter nodes before returning the final result. This is useful for JSON outputs, API responses, tool call parameters, code patches, document generation, and automated task results.
 
-### Build a programmable upstream model for coding agents
+### Build a programmable upstream model for agents
 
 ```text
-Code generation → test / lint check → reviewer node → fix node → final patch
+Code generation -> test / lint check -> reviewer node -> fix node -> final patch
 ```
 
-Existing clients call one model name, while 1flowbase runs the workflow behind it.
-
-### Debug workflow execution
-
-Use execution logs and traces to answer which node failed, which model call was slow, which step used the most tokens, which tool callback returned unexpected output, and which verifier or formatter changed the final response.
+The client calls one model name while 1flowbase runs your workflow behind it.
 
 ---
 
-## How 1flowbase differs
+## How 1flowbase Differs
 
-1flowbase is not just a model proxy and not just a generic workflow canvas.
+1flowbase is not only a model proxy and not only a generic workflow canvas.
 
 It focuses on one gap:
 
@@ -293,10 +297,10 @@ It focuses on one gap:
 
 | Tool category | What it usually does | How 1flowbase is different |
 |---|---|---|
-| Model router / LLM gateway | routes one request to one provider or model | composes multiple model and tool nodes into one workflow-backed virtual model |
+| LLM gateway / model router | routes one request to one provider or model | composes multiple model and tool nodes into one workflow-backed virtual model |
 | AI workflow builder | builds an AI app or workflow | exposes the workflow as OpenAI / Claude-compatible model APIs |
 | Agent framework | helps developers code agent graphs | provides a visual runtime, protocol publishing, and execution logs |
-| Cost tracker | shows token or spend totals | connects cost to workflow nodes, model calls, and execution traces |
+| Observability / cost tracker | shows token or spend totals | connects cost to workflow nodes, model calls, tool callbacks, and trace logs |
 
 ```text
 Model routers choose a model.
@@ -305,7 +309,47 @@ Model routers choose a model.
 
 ---
 
-## Transparency and security
+## Current Status
+
+### Implemented
+
+- [x] visual workflow editor
+- [x] multi-node workflow orchestration
+- [x] virtual model endpoint publishing
+- [x] OpenAI Responses protocol support
+- [x] OpenAI Chat Completions protocol support
+- [x] Claude-compatible Messages protocol support
+- [x] streaming response support
+- [x] mounted LLM tools for multimodal and branch-model workflows
+- [x] `fusion` workflow template
+- [x] execution logs
+- [x] tool callback traces inside 1flowbase workflows
+- [x] application-level token consumption statistics
+- [x] prompt and model configuration version history
+
+### Enhancing
+
+- [ ] deeper local agent conversation collection
+- [ ] session search and playback
+- [ ] Token Bill of Materials by prompt, history, tool definitions, command outputs, media inputs, and nodes
+- [ ] abnormal cost detection and optimization suggestions
+- [ ] session export and Recall Pack generation
+- [ ] more Claude Code / Codex / OpenCode / Cline / Continue templates
+- [ ] MCP-aware plugin nodes and tool-call source attribution
+
+### Planned
+
+- [ ] low-code application building platform for AI organizations
+- [ ] team workspace and multi-tenant management
+- [ ] permissions, approval, audit, and cost governance
+- [ ] support for more local AI agent clients
+- [ ] template market and workflow recipe ecosystem
+
+> Note: 1flowbase is not currently positioned as an MCP server or MCP gateway. MCP-aware capabilities are on the roadmap. The current product focuses on publishing compatible model endpoints and tracing 1flowbase workflow execution.
+
+---
+
+## Transparency and Security
 
 1flowbase is designed for transparent, self-hosted AI workflow execution.
 
@@ -323,43 +367,15 @@ Recommended principles:
 
 ---
 
-## Roadmap
+## Guides
 
-### Implemented
-
-- [x] visual workflow editor
-- [x] multiple built-in node types
-- [x] virtual model endpoint publishing
-- [x] OpenAI Responses protocol support
-- [x] OpenAI Chat Completions protocol support
-- [x] Claude-compatible Messages protocol support
-- [x] streaming response support
-- [x] basic execution logs
-- [x] tool callback traces inside 1flowbase workflows
-- [x] application-level token consumption statistics
-- [x] prompt and model configuration version history
-
-### Enhancing
-
-- [ ] enhanced local agent conversation collection
-- [ ] Token Bill of Materials by prompt, history, tool definitions, command outputs, and nodes
-- [ ] agent session search and playback
-- [ ] session export and Recall Pack generation
-- [ ] abnormal cost detection and optimization suggestions
-- [ ] more Claude Code / Codex / aionui usage templates
-- [ ] MCP-aware plugin nodes and tool-call source attribution
-
-### Planned
-
-- [ ] low-code application building platform for AI organizations
-- [ ] team workspace and multi-tenant management
-- [ ] permissions, approval, audit, and cost governance
-- [ ] support for more local AI agent clients
-- [ ] template market and workflow recipe ecosystem
+- [Make GLM-5.2 See Images in Claude Code with 1flowbase](https://github.com/taichuy/1flowbase/wiki/Make-GLM-5.2-See-Images-in-Claude-Code-with-1flowbase)
+- [Fusion-Style Workflows: Publish a Multi-Model Panel as an Observable Virtual Model](https://github.com/taichuy/1flowbase/wiki/Fusion-Style-Workflow)
+- [1flowbase Wiki](https://github.com/taichuy/1flowbase/wiki)
 
 ---
 
-## Repo layout
+## Repo Layout
 
 ```text
 web/          Frontend root, powered by pnpm + Turbo
@@ -391,13 +407,13 @@ Project guidelines:
 
 ## Friend Links
 
-[Linux.do](https://linux.do/) — Learn AI, on L Station.  
-[Aionui](https://github.com/iOfficeAI/AionUi) — Remotely control AI to work via mobile phone, a lifesaver for token-dependent patients.  
-[OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) — Office suite designed for AI agents.  
-[deepseek-pp](https://github.com/zhu1090093659/deepseek-pp) — DeepSeek web chat browser extension.  
-[MuseAI](https://github.com/yejiming/MuseAI) — Local AI companion, text adventure, and story immersion app.  
-[FrontAgent](https://github.com/FrontAgent/FrontAgent) — AI Agent system designed specifically for front-end engineering.  
-[RedBox](https://github.com/Jamailar/RedBox) — Localized AI creative workbench for Xiaohongshu creators.
+- [Linux.do](https://linux.do/) - Learn AI, on L Station.
+- [Aionui](https://github.com/iOfficeAI/AionUi) - Remotely control AI to work via mobile phone.
+- [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) - Office suite designed for AI agents.
+- [deepseek-pp](https://github.com/zhu1090093659/deepseek-pp) - DeepSeek web chat browser extension.
+- [MuseAI](https://github.com/yejiming/MuseAI) - Local AI companion, text adventure, and story immersion app.
+- [FrontAgent](https://github.com/FrontAgent/FrontAgent) - AI Agent system designed specifically for front-end engineering.
+- [RedBox](https://github.com/Jamailar/RedBox) - Localized AI creative workbench for Xiaohongshu creators.
 
 ---
 
@@ -429,7 +445,7 @@ This project is licensed under [Apache-2.0](LICENSE).
 
 <div align="center">
 
-**If you want to build workflow-backed virtual models and see what happened behind each request, give 1flowbase a star.**
+**If you want local AI agents to call observable multi-model virtual models, give 1flowbase a star.**
 
 [Report Bug](https://github.com/taichuy/1flowbase/issues) · [Request Feature](https://github.com/taichuy/1flowbase/issues)
 
