@@ -491,6 +491,7 @@ export interface ConsoleApplicationRunTraceNodeSummary {
   duration_ms?: number | null;
   metrics_payload: Record<string, unknown>;
   has_children: boolean;
+  child_count: number;
   has_content: boolean;
 }
 
@@ -538,6 +539,7 @@ export interface ConsoleApplicationRunTraceNodeContent {
   flow_run?: ConsoleFlowRunDetail | null;
   checkpoints: ConsoleRunCheckpoint[];
   events: ConsoleRunEvent[];
+  payload?: Record<string, unknown> | null;
 }
 
 export interface ConsoleApplicationRunTraceToolCallbackContent {

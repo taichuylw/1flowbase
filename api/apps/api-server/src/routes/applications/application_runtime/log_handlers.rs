@@ -389,6 +389,7 @@ fn to_trace_node_summary_from_projection(
         duration_ms: node.duration_ms,
         metrics_payload: node.metrics_payload,
         has_children: node.has_children,
+        child_count: node.child_count,
         has_content: node.has_content,
     }
 }
@@ -501,6 +502,7 @@ fn trace_projection_node_content_response(
         flow_run,
         checkpoints,
         events,
+        payload: Some(content.payload),
     })
 }
 
@@ -765,6 +767,7 @@ pub async fn get_application_run_trace_node_content(
             flow_run: None,
             checkpoints: Vec::new(),
             events: Vec::new(),
+            payload: None,
         })));
     }
     let node = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node(

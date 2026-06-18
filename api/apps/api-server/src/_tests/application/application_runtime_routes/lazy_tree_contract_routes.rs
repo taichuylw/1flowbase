@@ -508,6 +508,34 @@ async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_la
     assert_eq!(route_child_items[0]["has_content"], json!(true));
     let fusion_trace_node_id = route_child_items[0]["trace_node_id"].as_str().unwrap();
 
+    let fusion_content = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{fusion_trace_node_id}/content"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fusion_content.status(), StatusCode::OK);
+    let fusion_content_body = to_bytes(fusion_content.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let fusion_content_payload: Value = serde_json::from_slice(&fusion_content_body).unwrap();
+    assert_eq!(fusion_content_payload["data"]["node_kind"], json!("fusion"));
+    assert_eq!(
+        fusion_content_payload["data"]["payload"]["route_kind"],
+        json!("fusion")
+    );
+    assert_eq!(
+        fusion_content_payload["data"]["payload"]["branch_traces"][0]["node_alias"],
+        json!("Refund Panel")
+    );
+
     let branch_children = app
         .clone()
         .oneshot(
@@ -533,6 +561,31 @@ async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_la
     assert_eq!(branch_child_items[0]["has_children"], json!(false));
     assert_eq!(branch_child_items[0]["child_count"], json!(0));
     assert_eq!(branch_child_items[0]["has_content"], json!(true));
+    let branch_trace_node_id = branch_child_items[0]["trace_node_id"].as_str().unwrap();
+
+    let branch_content = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{branch_trace_node_id}/content"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(branch_content.status(), StatusCode::OK);
+    let branch_content_body = to_bytes(branch_content.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let branch_content_payload: Value = serde_json::from_slice(&branch_content_body).unwrap();
+    assert_eq!(branch_content_payload["data"]["node_kind"], json!("branch"));
+    assert_eq!(
+        branch_content_payload["data"]["payload"]["output_payload"]["text"],
+        json!("refund panel says 30 days")
+    );
 
     let content = app
         .clone()

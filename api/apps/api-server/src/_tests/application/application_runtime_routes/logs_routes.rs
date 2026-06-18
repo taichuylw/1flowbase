@@ -511,14 +511,11 @@ async fn application_runtime_routes_log_trace_tree_loads_summary_children_and_co
         content_payload["data"]["node_run"]["output_payload"]["text"],
         json!("reply:总结退款政策")
     );
-    assert_eq!(
-        content_payload["data"]["events"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|event| event["node_run_id"] == json!(node_run_id.to_string())),
-        true
-    );
+    assert!(content_payload["data"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|event| event["node_run_id"] == json!(node_run_id.to_string())));
 }
 
 #[tokio::test]

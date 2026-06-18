@@ -32,6 +32,7 @@ interface ConversationLogTraceNodeSummary {
   duration_ms?: number | null;
   metrics_payload?: Record<string, unknown>;
   has_children: boolean;
+  child_count?: number;
   has_content: boolean;
 }
 
@@ -86,6 +87,7 @@ interface ConversationLogTraceNodeContent {
   node_kind: string;
   projection_status?: ConversationLogTraceProjectionStatus;
   node_run?: ConversationLogNodeRunContent | null;
+  payload?: Record<string, unknown> | null;
 }
 
 interface ConversationLogRunOverview {
@@ -442,7 +444,12 @@ function mapTraceContentToTraceItem(
   const nodeRun = content?.node_run;
 
   if (!nodeRun) {
-    return fallback;
+    return content?.payload
+      ? {
+          ...fallback,
+          debugPayload: content.payload
+        }
+      : fallback;
   }
 
   return {

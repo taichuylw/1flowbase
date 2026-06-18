@@ -253,6 +253,7 @@ pub struct ApplicationRunTraceNodeSummaryResponse {
     pub duration_ms: Option<i64>,
     pub metrics_payload: serde_json::Value,
     pub has_children: bool,
+    pub child_count: i64,
     pub has_content: bool,
 }
 
@@ -303,6 +304,7 @@ pub struct ApplicationRunTraceNodeContentResponse {
     pub flow_run: Option<FlowRunResponse>,
     pub checkpoints: Vec<CheckpointResponse>,
     pub events: Vec<RunEventResponse>,
+    pub payload: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
