@@ -89,74 +89,25 @@ Build the workflow once, then expose it through common model APIs:
 
 ---
 
-## Try It In 3 Minutes
+## Installation or Upgrade
 
-The Docker path is for trying and self-hosting 1flowbase. It does **not** require Node.js or Rust.
-
-### Requirements
-
-- Docker installed and running: [Get Docker](https://docs.docker.com/get-started/get-docker/)
-- Docker Compose plugin or `docker-compose`: [Compose install guide](https://docs.docker.com/compose/install/)
-- Supported Docker server platform: `linux/amd64` or `linux/arm64`
-- Network access to GitHub and GHCR to download the Docker files and images
-
-Platform install shortcuts:
-
-- Desktop users: [Docker Desktop](https://docs.docker.com/desktop/)
-- Linux servers: [Docker Engine](https://docs.docker.com/engine/install/)
-
-### Guided local start
-
-This command downloads the `docker/` directory, creates `docker/.env`, lets you review configuration, pulls images, and starts the stack.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --pull --start
-```
-
-PowerShell:
-
-```powershell
-$script = irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1
-& ([scriptblock]::Create($script)) -Pull -Start
-```
-
-Open after startup:
-
-```text
-http://127.0.0.1:3100
-```
-
-The initial root account and password are printed by the script and stored in `docker/.env` as `BOOTSTRAP_ROOT_ACCOUNT` and `BOOTSTRAP_ROOT_PASSWORD`. The template starts with `root / change-me-root-password`; change it before any public deployment.
-
-### Non-interactive local trial
-
-For a quick local-only trial, use the template defaults and start immediately:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --non-interactive --pull --start
-```
-
-PowerShell:
-
-```powershell
-$script = irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1
-& ([scriptblock]::Create($script)) -Pull -Start -NonInteractive
-```
-
-Do not expose a non-interactive default install to the public internet before changing secrets in `docker/.env`.
-
-### Manual Docker start
-
-If you prefer explicit steps:
+Linux/macOS:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
-cd docker
-docker compose pull
-docker compose up -d
 ```
 
-See [docker/README.md](docker/README.md) for Docker configuration, image tags, ports, persistence paths, and local image builds.
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+```
+
+Windows CMD:
+
+```cmd
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
+```
 
 ---
 

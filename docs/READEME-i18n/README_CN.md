@@ -89,74 +89,25 @@ Claude Code
 
 ---
 
-## 3 分钟试用
+## 安装或升级
 
-Docker 路径适合试用和自托管 1flowbase。它**不需要**安装 Node.js 或 Rust。
-
-### 环境要求
-
-- 已安装并启动 Docker：[Get Docker](https://docs.docker.com/get-started/get-docker/)
-- Docker Compose 插件或 `docker-compose`：[Compose 安装指南](https://docs.docker.com/compose/install/)
-- 支持的 Docker server 平台：`linux/amd64` 或 `linux/arm64`
-- 可以访问 GitHub 和 GHCR，用于下载 Docker 文件和镜像
-
-平台安装入口：
-
-- 桌面用户：[Docker Desktop](https://docs.docker.com/desktop/)
-- Linux 服务器：[Docker Engine](https://docs.docker.com/engine/install/)
-
-### 引导式本地启动
-
-这个命令会下载 `docker/` 目录，创建 `docker/.env`，让你检查配置，拉取镜像，并启动服务。
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --pull --start
-```
-
-PowerShell：
-
-```powershell
-$script = irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1
-& ([scriptblock]::Create($script)) -Pull -Start
-```
-
-启动后打开：
-
-```text
-http://127.0.0.1:3100
-```
-
-初始 root 账号和密码会由脚本输出，并保存在 `docker/.env` 的 `BOOTSTRAP_ROOT_ACCOUNT` 和 `BOOTSTRAP_ROOT_PASSWORD` 中。模板默认值是 `root / change-me-root-password`；公开部署前必须修改。
-
-### 非交互本地试用
-
-只想快速在本机跑起来，可以使用模板默认值并立即启动：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh -s -- --non-interactive --pull --start
-```
-
-PowerShell：
-
-```powershell
-$script = irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1
-& ([scriptblock]::Create($script)) -Pull -Start -NonInteractive
-```
-
-非交互默认安装只适合本地试用。公开暴露服务前，先修改 `docker/.env` 中的密钥和密码。
-
-### 手动 Docker 启动
-
-如果你更喜欢显式步骤：
+Linux/macOS：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/shell/docker-deploy.sh | sh
-cd docker
-docker compose pull
-docker compose up -d
 ```
 
-Docker 配置、镜像 tag、端口、持久化路径和本地镜像构建请看 [docker/README.md](../../docker/README.md)。
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex
+```
+
+Windows CMD：
+
+```cmd
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taichuy/1flowbase/main/scripts/powershell/docker-deploy.ps1 | iex"
+```
 
 ---
 
