@@ -547,6 +547,16 @@ export interface ConsoleApplicationRunTraceNodeContent {
   payload?: Record<string, unknown> | null;
 }
 
+export interface ConsoleApplicationRunTraceNodeDetail {
+  trace_node_id: string;
+  node_kind: ConsoleApplicationRunTraceNodeKind;
+  projection_status: ConsoleApplicationRunTraceProjectionStatus;
+  detail_ref_id: string;
+  detail_kind: string;
+  source_refs: unknown;
+  payload: Record<string, unknown>;
+}
+
 export interface ConsoleApplicationRunTraceToolCallbackContent {
   trace_node_id: string;
   tool_call_id: string;

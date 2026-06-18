@@ -5,6 +5,25 @@ use control_plane::ports::{
 };
 use storage_durable::MainDurableStore;
 
+async fn get_console_json(app: &axum::Router, cookie: &str, uri: String) -> Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(uri)
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+
+    serde_json::from_slice(&body).unwrap()
+}
+
 #[tokio::test]
 async fn application_runtime_routes_start_node_preview_and_query_logs() {
     let (state, _) = test_api_state_with_database_url().await;
@@ -1103,24 +1122,83 @@ async fn application_runtime_routes_trace_tree_content_exposes_visible_internal_
         "trace node summary must not include heavy debug payload"
     );
 
-    let content = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{root_trace_node_id}/content"
-                ))
-                .header("cookie", &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
+    let content_payload = get_console_json(
+        &app,
+        &cookie,
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{root_trace_node_id}/content"
+        ),
+    )
+    .await;
+    assert!(
+        content_payload["data"]["payload"].get("node_run").is_none(),
+        "trace node content should advertise detail refs instead of materializing node_run"
+    );
+    let node_run_detail_ref_id = content_payload["data"]["detail_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|detail_ref| detail_ref["detail_kind"] == json!("node_run"))
+        .expect("node_run detail ref should be present")["detail_ref_id"]
+        .as_str()
         .unwrap();
-    assert_eq!(content.status(), StatusCode::OK);
-    let content_body = to_bytes(content.into_body(), usize::MAX).await.unwrap();
-    let content_payload: Value = serde_json::from_slice(&content_body).unwrap();
-    let llm_debug_payload = content_payload["data"]["node_run"]["debug_payload"].clone();
-    let trace = &llm_debug_payload["visible_internal_llm_tool_trace"][0];
+    let node_run_detail_payload = get_console_json(
+        &app,
+        &cookie,
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{root_trace_node_id}/details/{node_run_detail_ref_id}"
+        ),
+    )
+    .await;
+    assert!(
+        node_run_detail_payload["data"]["payload"]["node_run"]["debug_payload"]
+            .get("visible_internal_llm_tool_trace")
+            .is_none(),
+        "visible internal tool trace should be represented by lazy tool children"
+    );
+
+    let root_children_payload = get_console_json(
+        &app,
+        &cookie,
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={root_trace_node_id}"
+        ),
+    )
+    .await;
+    let tool_group_id = root_children_payload["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_kind"] == json!("tool_group"))
+        .expect("visible internal route trace should synthesize a tools group")["trace_node_id"]
+        .as_str()
+        .unwrap();
+    let tool_children_payload = get_console_json(
+        &app,
+        &cookie,
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes?parent_trace_node_id={tool_group_id}"
+        ),
+    )
+    .await;
+    let tool_trace_node_id = tool_children_payload["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_alias"] == json!("image_llm"))
+        .expect("visible internal route trace should expose the tool callback node")
+        ["trace_node_id"]
+        .as_str()
+        .unwrap();
+    let tool_content_payload = get_console_json(
+        &app,
+        &cookie,
+        format!(
+            "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{tool_trace_node_id}/content"
+        ),
+    )
+    .await;
+    let trace = &tool_content_payload["data"]["payload"]["route_trace"];
     assert_eq!(trace["kind"], json!("visible_internal_llm_tool_trace"));
     assert_eq!(trace["tool_name"], json!("image_llm"));
     assert_eq!(trace["status"], json!("succeeded"));
@@ -1461,7 +1539,7 @@ async fn application_runtime_routes_trace_tree_stitches_prior_claude_code_tool_r
     let run_a_node_content_payload: Value =
         serde_json::from_slice(&run_a_node_content_body).unwrap();
     assert_eq!(
-        run_a_node_content_payload["data"]["flow_run"]["id"],
+        run_a_node_content_payload["data"]["payload"]["id"],
         json!(run_a_id)
     );
 }

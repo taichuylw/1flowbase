@@ -498,6 +498,25 @@ impl PgControlPlaneStore {
         row.map(map_application_run_trace_node_content_record)
             .transpose()
     }
+
+    async fn list_application_run_trace_node_run_details(
+        &self,
+        flow_run_id: Uuid,
+        node_run_ids: Vec<Uuid>,
+    ) -> Result<Vec<domain::NodeRunRecord>> {
+        let mut node_runs = Vec::with_capacity(node_run_ids.len());
+
+        for node_run_id in node_run_ids {
+            let Some(node_run) = fetch_node_run(self, node_run_id).await? else {
+                continue;
+            };
+            if node_run.flow_run_id == flow_run_id {
+                node_runs.push(node_run);
+            }
+        }
+
+        Ok(node_runs)
+    }
 }
 
 async fn upsert_application_run_trace_projection_status_in_tx(

@@ -638,6 +638,19 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
         .await
     }
 
+    async fn list_application_run_trace_node_run_details(
+        &self,
+        flow_run_id: Uuid,
+        node_run_ids: Vec<Uuid>,
+    ) -> Result<Vec<domain::NodeRunRecord>> {
+        PgControlPlaneStore::list_application_run_trace_node_run_details(
+            self,
+            flow_run_id,
+            node_run_ids,
+        )
+        .await
+    }
+
     async fn get_latest_node_run(
         &self,
         application_id: Uuid,

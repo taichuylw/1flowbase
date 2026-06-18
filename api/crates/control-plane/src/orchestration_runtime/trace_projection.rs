@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 3;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 4;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -1098,6 +1098,16 @@ fn merge_node_run_group(node_runs: &[domain::NodeRunRecord]) -> domain::NodeRunR
     merged
 }
 
+pub fn merge_trace_node_run_detail(
+    node_runs: &[domain::NodeRunRecord],
+) -> Option<domain::NodeRunRecord> {
+    if node_runs.is_empty() {
+        return None;
+    }
+
+    Some(merge_node_run_group(node_runs))
+}
+
 fn callback_tasks_for_node_run_ids(
     detail: &domain::ApplicationRunDetail,
     node_run_ids: &HashSet<Uuid>,
@@ -1156,6 +1166,9 @@ fn tool_calls_from_node_runs(node_runs: &[domain::NodeRunRecord]) -> Vec<serde_j
         for tool_call in tool_calls_from_node_payload(&node_run.output_payload)
             .into_iter()
             .chain(tool_calls_from_node_debug_payload(&node_run.debug_payload))
+            .chain(tool_calls_from_visible_internal_route_traces(
+                &node_run.debug_payload,
+            ))
         {
             let tool_call_id = tool_call
                 .get("id")
@@ -1199,6 +1212,45 @@ fn tool_calls_from_node_debug_payload(payload: &serde_json::Value) -> Vec<serde_
         .filter_map(serde_json::Value::as_array)
         .flatten()
         .cloned()
+        .collect()
+}
+
+fn tool_calls_from_visible_internal_route_traces(
+    payload: &serde_json::Value,
+) -> Vec<serde_json::Value> {
+    payload
+        .get("visible_internal_llm_tool_trace")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|trace| {
+            let tool_call_id = trace
+                .get("tool_call_id")
+                .or_else(|| trace.get("id"))
+                .or_else(|| trace.get("call_id"))
+                .and_then(serde_json::Value::as_str)?;
+            let mut tool_call = serde_json::Map::new();
+            tool_call.insert("id".to_string(), serde_json::json!(tool_call_id));
+            tool_call.insert("tool_call_id".to_string(), serde_json::json!(tool_call_id));
+            if let Some(tool_name) = trace
+                .get("tool_name")
+                .or_else(|| trace.get("name"))
+                .or_else(|| trace.get("route_alias"))
+                .or_else(|| trace.get("fusion_alias"))
+                .and_then(serde_json::Value::as_str)
+            {
+                tool_call.insert("name".to_string(), serde_json::json!(tool_name));
+            }
+            if let Some(arguments) = trace.get("arguments") {
+                tool_call.insert("arguments".to_string(), arguments.clone());
+            }
+            tool_call.insert(
+                "source_kind".to_string(),
+                serde_json::json!("visible_internal_llm_tool_trace"),
+            );
+
+            Some(serde_json::Value::Object(tool_call))
+        })
         .collect()
 }
 
@@ -1470,18 +1522,21 @@ fn node_run_group_content(
         .collect::<Vec<_>>();
     let detail_refs = serde_json::json!([
         {
+            "detail_ref_id": "node_run",
             "detail_kind": "node_run",
             "source_kind": "node_run",
             "source_locator": primary_node_run.id,
             "count": node_runs.len()
         },
         {
+            "detail_ref_id": "checkpoints",
             "detail_kind": "checkpoints",
             "source_kind": "flow_run_checkpoints",
             "source_locator": trace_node_id,
             "count": checkpoints.len()
         },
         {
+            "detail_ref_id": "events",
             "detail_kind": "events",
             "source_kind": "flow_run_events",
             "source_locator": trace_node_id,

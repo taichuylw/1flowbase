@@ -10,6 +10,7 @@ import type {
   ConsoleApplicationRuntimeActivity,
   ConsoleApplicationRunTraceNodeChildren,
   ConsoleApplicationRunTraceNodeContent,
+  ConsoleApplicationRunTraceNodeDetail,
   ConsoleApplicationRunTraceToolCallbackContent,
   ConsoleApplicationRunTraceTree,
   ConsoleApplicationRunResumeTimeline,
@@ -246,6 +247,22 @@ export function getConsoleApplicationRunTraceNodeContent(
 ) {
   return apiFetch<ConsoleApplicationRunTraceNodeContent>({
     path: `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree/nodes/${encodeURIComponent(traceNodeId)}/content`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceNodeDetail(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  detailRefId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunTraceNodeDetail>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}` +
+      `/trace-tree/nodes/${encodeURIComponent(traceNodeId)}` +
+      `/details/${encodeURIComponent(detailRefId)}`,
     baseUrl
   });
 }

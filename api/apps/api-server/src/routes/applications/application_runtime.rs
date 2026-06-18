@@ -15,8 +15,8 @@ use control_plane::{
         debug_stream_events, fail_runtime_event_stream_if_missing_terminal,
         spawn_runtime_debug_event_persister,
         trace_projection::{
-            build_application_run_trace_projection, projection_status_needs_lazy_rebuild,
-            APPLICATION_RUN_TRACE_PROJECTION_VERSION,
+            build_application_run_trace_projection, merge_trace_node_run_detail,
+            projection_status_needs_lazy_rebuild, APPLICATION_RUN_TRACE_PROJECTION_VERSION,
         },
         wait_for_runtime_debug_event_persister, CancelFlowRunCommand, CompleteCallbackTaskCommand,
         ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
@@ -152,6 +152,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/content",
             get(get_application_run_trace_node_content),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/details/:detail_ref_id",
+            get(get_application_run_trace_node_detail),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/tool-callbacks/:tool_call_id/content",

@@ -828,27 +828,51 @@ describe('debug conversation log panel', () => {
       loadContent: vi.fn().mockResolvedValue({
         trace_node_id: 'node_run:node-run-llm',
         node_kind: 'node_run',
-        node_run: {
-          id: 'node-run-llm',
-          node_id: 'node-llm',
-          node_type: 'llm',
-          node_alias: 'LLM',
-          status: 'succeeded',
-          input_payload: {
-            prompt: '总结退款政策'
-          },
-          output_payload: {
-            answer: '退款政策摘要'
-          },
-          error_payload: null,
-          metrics_payload: {
-            total_tokens: 154
-          },
-          debug_payload: {
-            provider: 'deepseek'
-          },
-          started_at: '2026-04-25T10:00:01Z',
-          finished_at: '2026-04-25T10:00:05Z'
+        content_kind: 'node_run',
+        payload: {
+          payload_index: {
+            node_run_count: 1,
+            checkpoint_count: 0,
+            event_count: 0
+          }
+        },
+        detail_refs: [
+          {
+            detail_ref_id: 'node_run',
+            detail_kind: 'node_run',
+            source_kind: 'node_run',
+            source_locator: 'node-run-llm',
+            count: 1
+          }
+        ]
+      }),
+      loadDetail: vi.fn().mockResolvedValue({
+        trace_node_id: 'node_run:node-run-llm',
+        detail_ref_id: 'node_run',
+        detail_kind: 'node_run',
+        payload: {
+          node_run: {
+            id: 'node-run-llm',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            node_alias: 'LLM',
+            status: 'succeeded',
+            input_payload: {
+              prompt: '总结退款政策'
+            },
+            output_payload: {
+              answer: '退款政策摘要'
+            },
+            error_payload: null,
+            metrics_payload: {
+              total_tokens: 154
+            },
+            debug_payload: {
+              provider: 'deepseek'
+            },
+            started_at: '2026-04-25T10:00:01Z',
+            finished_at: '2026-04-25T10:00:05Z'
+          }
         }
       })
     };
@@ -893,6 +917,13 @@ describe('debug conversation log panel', () => {
         'node_run:node-run-llm'
       )
     );
+    await waitFor(() =>
+      expect(traceLoader.loadDetail).toHaveBeenCalledWith(
+        'run-application-log',
+        'node_run:node-run-llm',
+        'node_run'
+      )
+    );
     const nodeDetail = await screen.findByRole('region', {
       name: 'LLM 节点详情'
     });
@@ -922,52 +953,138 @@ describe('debug conversation log panel', () => {
       finished_at: '2026-04-25T10:00:05Z',
       duration_ms: 4000,
       metrics_payload: {},
+      has_children: true,
+      has_content: true
+    };
+    const toolsNode = {
+      trace_node_id: 'tool_group:node-run-llm',
+      node_kind: 'tool_group',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tools',
+      node_alias: 'Tools',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1234,
+      metrics_payload: {},
+      has_children: true,
+      has_content: false
+    };
+    const toolCallbackNode = {
+      trace_node_id: 'tool_callback:call-refund-policy',
+      node_kind: 'tool_callback',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tool',
+      node_alias: 'refund_policy_lookup',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1234,
+      metrics_payload: {},
       has_children: false,
       has_content: true
     };
     const traceLoader = {
       loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
-      loadChildren: vi.fn().mockResolvedValue({
-        items: [],
-        page_info: {
-          has_more: false,
-          next_cursor: null,
-          page_size: 20
-        }
-      }),
-      loadContent: vi.fn().mockResolvedValue({
-        trace_node_id: 'node_run:node-run-llm',
-        node_kind: 'node_run',
-        node_run: {
-          id: 'node-run-llm',
-          node_id: 'node-llm',
-          node_type: 'llm',
-          node_alias: 'LLM',
-          status: 'succeeded',
-          input_payload: {
-            prompt: '总结退款政策'
-          },
-          output_payload: {
-            answer: '退款政策摘要'
-          },
-          error_payload: null,
-          metrics_payload: {},
-          debug_payload: {
-            tool_callbacks: [
-              {
+      loadChildren: vi
+        .fn()
+        .mockImplementation(
+          async (
+            _runId: string,
+            parentTraceNodeId: string,
+            _cursor?: string
+          ) => ({
+            items:
+              parentTraceNodeId === rootNode.trace_node_id
+                ? [toolsNode]
+                : parentTraceNodeId === toolsNode.trace_node_id
+                  ? [toolCallbackNode]
+                  : [],
+            page_info: {
+              has_more: false,
+              next_cursor: null,
+              page_size: 20
+            }
+          })
+        ),
+      loadContent: vi
+        .fn()
+        .mockImplementation(async (_runId: string, traceNodeId: string) => {
+          if (traceNodeId === toolCallbackNode.trace_node_id) {
+            return {
+              trace_node_id: toolCallbackNode.trace_node_id,
+              node_kind: 'tool_callback',
+              content_kind: 'tool_callback',
+              payload: {
                 id: 'call-refund-policy',
                 name: 'refund_policy_lookup',
                 callback_status: 'returned',
                 execution_status: 'succeeded',
-                request_round_index: 0,
-                result_round_index: 1,
-                duration_ms: 1234,
-                detail_ref: 'call-refund-policy'
+                request_payload: {
+                  arguments: {
+                    topic: 'refund'
+                  }
+                },
+                callback_payload: {
+                  content: '30 days refund window'
+                },
+                parsed_result: {
+                  content: '30 days refund window'
+                },
+                duration_ms: 1234
+              }
+            };
+          }
+
+          return {
+            trace_node_id: 'node_run:node-run-llm',
+            node_kind: 'node_run',
+            content_kind: 'node_run',
+            payload: {
+              payload_index: {
+                node_run_count: 1,
+                checkpoint_count: 0,
+                event_count: 0
+              }
+            },
+            detail_refs: [
+              {
+                detail_ref_id: 'node_run',
+                detail_kind: 'node_run',
+                source_kind: 'node_run',
+                source_locator: 'node-run-llm',
+                count: 1
               }
             ]
-          },
-          started_at: '2026-04-25T10:00:01Z',
-          finished_at: '2026-04-25T10:00:05Z'
+          };
+        }),
+      loadDetail: vi.fn().mockResolvedValue({
+        trace_node_id: 'node_run:node-run-llm',
+        detail_ref_id: 'node_run',
+        detail_kind: 'node_run',
+        payload: {
+          node_run: {
+            id: 'node-run-llm',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            node_alias: 'LLM',
+            status: 'succeeded',
+            input_payload: {
+              prompt: '总结退款政策'
+            },
+            output_payload: {
+              answer: '退款政策摘要'
+            },
+            error_payload: null,
+            metrics_payload: {},
+            debug_payload: {
+              provider: 'deepseek'
+            },
+            started_at: '2026-04-25T10:00:01Z',
+            finished_at: '2026-04-25T10:00:05Z'
+          }
         }
       }),
       loadToolCallbackDetail: vi.fn().mockResolvedValue({
@@ -1015,35 +1132,53 @@ describe('debug conversation log panel', () => {
     const nodeDetail = await screen.findByRole('region', {
       name: 'LLM 节点详情'
     });
-    const toolsNode = await within(nodeDetail).findByRole('button', {
-      name: /工具.*1 次工具回调/
+    const toolsButton = await within(nodeDetail).findByRole('button', {
+      name: /Tools/
     });
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
+    expect(toolsButton).toHaveAttribute('aria-expanded', 'false');
 
     expect(traceLoader.loadToolCallbackDetail).not.toHaveBeenCalled();
-    const toolCallback = within(nodeDetail).getByRole('button', {
+    expect(traceLoader.loadContent).not.toHaveBeenCalledWith(
+      'run-application-log',
+      'tool_callback:call-refund-policy'
+    );
+
+    fireEvent.click(toolsButton);
+    await waitFor(() =>
+      expect(traceLoader.loadChildren).toHaveBeenCalledWith(
+        'run-application-log',
+        'tool_group:node-run-llm',
+        undefined
+      )
+    );
+    const toolCallback = await within(nodeDetail).findByRole('button', {
       name: /refund_policy_lookup/
     });
     expect(toolCallback).toHaveTextContent('1.23 s');
     expect(
-      within(nodeDetail).queryByLabelText('工具调用 JSON')
+      within(nodeDetail).queryByRole('region', {
+        name: /refund_policy_lookup 节点详情/
+      })
     ).not.toBeInTheDocument();
 
     fireEvent.click(toolCallback);
 
     await waitFor(() =>
-      expect(traceLoader.loadToolCallbackDetail).toHaveBeenCalledWith(
+      expect(traceLoader.loadContent).toHaveBeenCalledWith(
         'run-application-log',
-        'node_run:node-run-llm',
-        'call-refund-policy'
+        'tool_callback:call-refund-policy'
       )
     );
-    expect(
-      await within(nodeDetail).findByLabelText('工具调用 JSON')
-    ).toHaveTextContent('refund');
-    expect(
-      within(nodeDetail).getByLabelText('完整回调 JSON')
-    ).toHaveTextContent('30 days refund window');
+    const toolDetail = await within(nodeDetail).findByRole('region', {
+      name: /refund_policy_lookup 节点详情/
+    });
+    expect(within(toolDetail).getByLabelText('输入 JSON')).toHaveTextContent(
+      'refund'
+    );
+    expect(within(toolDetail).getByLabelText('输出 JSON')).toHaveTextContent(
+      '30 days refund window'
+    );
+    expect(traceLoader.loadToolCallbackDetail).not.toHaveBeenCalled();
   });
 
   test('shows clickable trace nodes and reuses node run detail sections', () => {

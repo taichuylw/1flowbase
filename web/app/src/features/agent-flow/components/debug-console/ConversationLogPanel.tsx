@@ -94,6 +94,16 @@ interface ConversationLogTraceNodeContent {
   payload?: Record<string, unknown> | null;
 }
 
+interface ConversationLogTraceNodeDetail {
+  trace_node_id: string;
+  node_kind: string;
+  projection_status?: ConversationLogTraceProjectionStatus;
+  detail_ref_id: string;
+  detail_kind: string;
+  source_refs?: unknown;
+  payload: Record<string, unknown>;
+}
+
 interface ConversationLogRunOverview {
   run: {
     id: string;
@@ -133,6 +143,11 @@ export interface ConversationLogTraceLoader {
     runId: string,
     traceNodeId: string
   ) => Promise<ConversationLogTraceNodeContent>;
+  loadDetail?: (
+    runId: string,
+    traceNodeId: string,
+    detailRefId: string
+  ) => Promise<ConversationLogTraceNodeDetail>;
   loadToolCallbackDetail?: (
     runId: string,
     traceNodeId: string,
@@ -448,6 +463,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function recordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function firstStringField(
+  record: Record<string, unknown>,
+  keys: string[]
+): string | null {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 function payloadRecordField(
   payload: Record<string, unknown>,
   key: string
@@ -602,11 +636,72 @@ function mapPayloadContentToTraceItem(
   };
 }
 
+function findNodeRunDetailRefId(
+  content: ConversationLogTraceNodeContent | undefined
+) {
+  if (!content || content.node_kind !== 'node_run') {
+    return null;
+  }
+
+  for (const detailRef of recordArray(content.detail_refs)) {
+    if (firstStringField(detailRef, ['detail_kind']) !== 'node_run') {
+      continue;
+    }
+
+    return firstStringField(detailRef, ['detail_ref_id']);
+  }
+
+  return null;
+}
+
+function mapNodeRunRecordToTraceItem(
+  fallback: AgentFlowTraceItem,
+  nodeRun: Record<string, unknown>
+): AgentFlowTraceItem {
+  const inputPayload = payloadRecordField(nodeRun, 'input_payload');
+  const outputPayload = payloadRecordField(nodeRun, 'output_payload');
+  const debugPayload = payloadRecordField(nodeRun, 'debug_payload');
+  const metricsPayload = payloadRecordField(nodeRun, 'metrics_payload');
+  const errorPayload = payloadRecordField(nodeRun, 'error_payload');
+
+  return {
+    ...fallback,
+    inputPayload,
+    outputPayload,
+    errorPayload: Object.keys(errorPayload).length > 0 ? errorPayload : null,
+    metricsPayload:
+      Object.keys(metricsPayload).length > 0
+        ? metricsPayload
+        : fallback.metricsPayload,
+    debugPayload
+  };
+}
+
+function mapDetailContentToTraceItem(
+  fallback: AgentFlowTraceItem,
+  detail: ConversationLogTraceNodeDetail | undefined
+): AgentFlowTraceItem {
+  if (!detail || detail.detail_kind !== 'node_run') {
+    return fallback;
+  }
+
+  const nodeRun = payloadRecordField(detail.payload, 'node_run');
+
+  if (Object.keys(nodeRun).length === 0) {
+    return fallback;
+  }
+
+  return mapNodeRunRecordToTraceItem(fallback, nodeRun);
+}
+
 function mapTraceContentToTraceItem(
   fallback: AgentFlowTraceItem,
-  content: ConversationLogTraceNodeContent | undefined
+  content: ConversationLogTraceNodeContent | undefined,
+  detail?: ConversationLogTraceNodeDetail
 ): AgentFlowTraceItem {
-  return content ? mapPayloadContentToTraceItem(fallback, content) : fallback;
+  const contentItem = content ? mapPayloadContentToTraceItem(fallback, content) : fallback;
+
+  return mapDetailContentToTraceItem(contentItem, detail);
 }
 
 function isToolGroupTraceNode(node: ConversationLogTraceNodeSummary) {
@@ -796,6 +891,31 @@ function LazyTraceNodeItem({
     refetchOnWindowFocus: false,
     staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
   });
+  const nodeRunDetailRefId = useMemo(
+    () => findNodeRunDetailRefId(contentQuery.data),
+    [contentQuery.data]
+  );
+  const nodeRunDetailQuery = useQuery({
+    enabled:
+      expanded &&
+      Boolean(nodeRunDetailRefId) &&
+      Boolean(traceLoader.loadDetail),
+    queryKey: [
+      'conversation-log-trace-node-detail',
+      runId,
+      node.trace_node_id,
+      nodeRunDetailRefId
+    ],
+    queryFn: () => {
+      if (!traceLoader.loadDetail || !nodeRunDetailRefId) {
+        throw new Error('trace_node_detail_loader_unavailable');
+      }
+
+      return traceLoader.loadDetail(runId, node.trace_node_id, nodeRunDetailRefId);
+    },
+    refetchOnWindowFocus: false,
+    staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
+  });
   const childrenQuery = useQuery({
     enabled: expanded && node.has_children,
     queryKey: [
@@ -857,10 +977,16 @@ function LazyTraceNodeItem({
     traceLoader
   ]);
   const item = useMemo(
-    () => mapTraceContentToTraceItem(fallbackItem, contentQuery.data),
-    [contentQuery.data, fallbackItem]
+    () =>
+      mapTraceContentToTraceItem(
+        fallbackItem,
+        contentQuery.data,
+        nodeRunDetailQuery.data
+      ),
+    [contentQuery.data, fallbackItem, nodeRunDetailQuery.data]
   );
   const contentProjectionStatus = contentQuery.data?.projection_status;
+  const contentLoading = contentQuery.isLoading || nodeRunDetailQuery.isLoading;
   const loadToolCallbackDetail = traceLoader.loadToolCallbackDetail;
   const toolChildNodes = node.has_content
     ? childNodes.filter(isToolGroupTraceNode)
@@ -891,7 +1017,7 @@ function LazyTraceNodeItem({
         className="agent-flow-editor__conversation-log-node-detail"
       >
         {node.has_content ? (
-          contentQuery.isLoading ? (
+          contentLoading ? (
             <Spin />
           ) : contentProjectionStatus &&
             !traceProjectionStatusSucceeded(contentProjectionStatus) ? (

@@ -1029,6 +1029,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = (flow_run_id, trace_node_id);
         anyhow::bail!("get_application_run_trace_node_content not implemented")
     }
+    async fn list_application_run_trace_node_run_details(
+        &self,
+        flow_run_id: Uuid,
+        node_run_ids: Vec<Uuid>,
+    ) -> anyhow::Result<Vec<domain::NodeRunRecord>> {
+        let _ = (flow_run_id, node_run_ids);
+        anyhow::bail!("list_application_run_trace_node_run_details not implemented")
+    }
     async fn get_latest_node_run(
         &self,
         application_id: Uuid,

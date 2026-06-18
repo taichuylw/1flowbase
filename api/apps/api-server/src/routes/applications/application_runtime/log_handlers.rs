@@ -525,6 +525,70 @@ fn trace_node_content_raw_payload_response(mut payload: serde_json::Value) -> Op
     }
 }
 
+fn trace_node_content_detail_refs(payload: &serde_json::Value) -> Vec<serde_json::Value> {
+    payload
+        .get("detail_refs")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn trace_node_content_detail_ref(
+    payload: &serde_json::Value,
+    detail_ref_id: &str,
+) -> Option<serde_json::Value> {
+    trace_node_content_detail_refs(payload)
+        .into_iter()
+        .find(|detail_ref| {
+            detail_ref
+                .get("detail_ref_id")
+                .and_then(serde_json::Value::as_str)
+                == Some(detail_ref_id)
+        })
+}
+
+fn trace_node_content_node_run_ids(payload: &serde_json::Value) -> Result<Vec<Uuid>, ApiError> {
+    let values = payload
+        .get("payload_index")
+        .and_then(|payload_index| payload_index.get("node_run_ids"))
+        .and_then(serde_json::Value::as_array)
+        .ok_or(ControlPlaneError::Conflict("trace_node_detail_ref"))?;
+    let mut node_run_ids = Vec::with_capacity(values.len());
+
+    for value in values {
+        let Some(id) = value.as_str() else {
+            return Err(ControlPlaneError::Conflict("trace_node_detail_ref").into());
+        };
+        node_run_ids.push(
+            Uuid::parse_str(id)
+                .map_err(|_| ControlPlaneError::Conflict("trace_node_detail_ref"))?,
+        );
+    }
+
+    Ok(node_run_ids)
+}
+
+fn strip_projected_tool_debug_payloads(mut node_run: domain::NodeRunRecord) -> domain::NodeRunRecord {
+    if let Some(debug_payload) = node_run.debug_payload.as_object_mut() {
+        for key in [
+            "llm_rounds",
+            "tool_callbacks",
+            "visible_internal_llm_tool_trace",
+            "visible_internal_llm_tool_events",
+        ] {
+            debug_payload.remove(key);
+        }
+    }
+
+    node_run
+}
+
+fn trace_node_run_detail_payload(node_run: domain::NodeRunRecord) -> serde_json::Value {
+    serde_json::json!({
+        "node_run": to_node_run_response(strip_projected_tool_debug_payloads(node_run))
+    })
+}
+
 async fn find_trace_projection_tool_callback_node(
     state: &Arc<ApiState>,
     flow_run_id: Uuid,
@@ -836,6 +900,96 @@ pub async fn get_application_run_trace_node_content(
         .await?
         .ok_or(ControlPlaneError::NotFound("trace_node_content"))?;
     let response = trace_projection_node_content_response(node, content, projection_status)?;
+
+    Ok(Json(ApiSuccess::new(response)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/details/{detail_ref_id}",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("trace_node_id" = String, Path, description = "Trace node id that owns the detail ref"),
+        ("detail_ref_id" = String, Path, description = "Detail ref id from node content")
+    ),
+    responses(
+        (status = 200, body = ApplicationRunTraceNodeDetailResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_application_run_trace_node_detail(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id, trace_node_id, detail_ref_id)): Path<(Uuid, Uuid, String, String)>,
+) -> Result<Json<ApiSuccess<ApplicationRunTraceNodeDetailResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    let status = ensure_application_run_trace_projection_status(&state, id, run_id).await?;
+    let projection_status = to_trace_projection_status_response(&status);
+    let trace_node_uuid = parse_trace_projection_node_id(&trace_node_id)?;
+    if !projection_is_succeeded(&status) {
+        return Ok(Json(ApiSuccess::new(
+            ApplicationRunTraceNodeDetailResponse {
+                trace_node_id,
+                node_kind: "trace_projection".to_string(),
+                projection_status,
+                detail_ref_id,
+                detail_kind: "trace_projection".to_string(),
+                source_refs: serde_json::Value::Array(Vec::new()),
+                payload: serde_json::json!({}),
+            },
+        )));
+    }
+    let node = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node(
+        &state.store,
+        run_id,
+        trace_node_uuid,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("trace_node"))?;
+    let content =
+        <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node_content(
+            &state.store,
+            run_id,
+            trace_node_uuid,
+        )
+        .await?
+        .ok_or(ControlPlaneError::NotFound("trace_node_content"))?;
+    let detail_ref = trace_node_content_detail_ref(&content.payload, &detail_ref_id)
+        .ok_or(ControlPlaneError::NotFound("trace_node_detail_ref"))?;
+    let detail_kind = detail_ref
+        .get("detail_kind")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(ControlPlaneError::Conflict("trace_node_detail_ref"))?
+        .to_string();
+    let payload = match detail_kind.as_str() {
+        "node_run" => {
+            let node_run_ids = trace_node_content_node_run_ids(&content.payload)?;
+            let node_runs =
+                <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_trace_node_run_details(
+                    &state.store,
+                    run_id,
+                    node_run_ids,
+                )
+                .await?;
+            let node_run = merge_trace_node_run_detail(&node_runs)
+                .ok_or(ControlPlaneError::NotFound("node_run"))?;
+            trace_node_run_detail_payload(node_run)
+        }
+        _ => return Err(ControlPlaneError::NotFound("trace_node_detail_ref").into()),
+    };
+    let response = ApplicationRunTraceNodeDetailResponse {
+        trace_node_id,
+        node_kind: node.node_kind,
+        projection_status,
+        detail_ref_id,
+        detail_kind,
+        source_refs: serde_json::Value::Array(vec![detail_ref]),
+        payload,
+    };
 
     Ok(Json(ApiSuccess::new(response)))
 }

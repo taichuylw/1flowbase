@@ -316,6 +316,17 @@ pub struct ApplicationRunTraceNodeContentResponse {
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceNodeDetailResponse {
+    pub trace_node_id: String,
+    pub node_kind: String,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
+    pub detail_ref_id: String,
+    pub detail_kind: String,
+    pub source_refs: serde_json::Value,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApplicationRunTraceToolCallbackContentResponse {
     pub trace_node_id: String,
     pub tool_call_id: String,
