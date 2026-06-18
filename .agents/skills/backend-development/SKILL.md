@@ -69,7 +69,8 @@ description: "Use for 1flowbase backend implementation in api/: building, fixing
 
 - 交付时写清修改的 route / service / repository / domain / adapter 边界。
 - Rust 后端实现完成前按 `references/rust-backend-practices.md` 的 completion self-check 自检；不能保证的项标为风险或待办。
-- 验证命令按当前变更 blast radius 选择最小证据链；需要正式 QA 结论时移交 `qa-evaluation`。
+- 当前本地开发分支的验证命令按变更 blast radius 选择最小结果证据链；workspace 级 cargo / clippy / full test / coverage / repo gate 默认归 beta / CI / 专门质量工作区。
+- 需要正式 QA 结论、合并基线或全局质量门禁时移交 `qa-evaluation`，不要在实现期自动叠重门禁。
 
 ## Common Mistakes
 

@@ -120,7 +120,7 @@ Forbidden:
 - 接口边界：method / path / plane、DTO 字段原名、status、response / error shape。
 - 认证与状态：session、CSRF、ACL、`workspace/system`、过期 / 禁用 / 缺失等异常状态。
 - 结果正确性：需要改变或读取的领域状态、返回值是否正确、是否过期、是否可见。
-- 验收证据：先定义必须证明的行为、状态和接口 contract；再说明哪些用 TDD 锁住，哪些用接口 / mock / fixture / 质量门禁在 QA 阶段验证。`api-debug` 只在需要真实运行态接口取证时作为候选工具，不写成默认验收步骤。
+- 验收证据：先定义必须证明的行为、状态和接口 contract；再说明哪些用 TDD 锁住，哪些用接口 / mock / fixture / 质量门禁在 QA 阶段验证。重验证、workspace 级 build/test/clippy、服务重启和 `api-debug` 的收益、成本、是否本地执行必须在这里前置说明；`api-debug` 只在需要真实运行态接口取证时作为候选工具，不写成默认验收步骤。
 
 这里不写测试代码步骤、不指定实现细节；测试写法交给 `test-driven-development`，项目体检和质量门禁交给 `qa-evaluation`。
 
