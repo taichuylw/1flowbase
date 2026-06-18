@@ -541,11 +541,9 @@ export interface ConsoleApplicationRunTraceNodeContent {
   trace_node_id: string;
   node_kind: ConsoleApplicationRunTraceNodeKind;
   projection_status: ConsoleApplicationRunTraceProjectionStatus;
-  node_run?: ConsoleNodeRunDetail | null;
-  callback_task?: ConsoleCallbackTask | null;
-  flow_run?: ConsoleFlowRunDetail | null;
-  checkpoints: ConsoleRunCheckpoint[];
-  events: ConsoleRunEvent[];
+  content_kind: string;
+  source_refs: unknown;
+  detail_refs: unknown;
   payload?: Record<string, unknown> | null;
 }
 

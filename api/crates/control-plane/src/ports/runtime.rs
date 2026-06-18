@@ -567,6 +567,16 @@ pub struct ListApplicationRunTraceChildrenPage {
 }
 
 #[derive(Debug, Clone)]
+pub struct ApplicationRunTraceProjectionStatistics {
+    pub total_tokens: Option<i64>,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub input_cache_hit_tokens: Option<i64>,
+    pub unique_node_count: i64,
+    pub tool_callback_count: i64,
+}
+
+#[derive(Debug, Clone)]
 pub struct ReplaceApplicationRunTraceProjectionInput {
     pub flow_run_id: Uuid,
     pub projection_version: i32,
@@ -944,6 +954,14 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = (application_id, flow_run_id);
         anyhow::bail!("get_application_run_trace_projection_source not implemented")
     }
+    async fn get_application_run_trace_projection_source_watermark(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Option<String>> {
+        let _ = (application_id, flow_run_id);
+        anyhow::bail!("get_application_run_trace_projection_source_watermark not implemented")
+    }
     async fn replace_application_run_trace_projection(
         &self,
         input: &ReplaceApplicationRunTraceProjectionInput,
@@ -973,12 +991,12 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = flow_run_id;
         anyhow::bail!("list_application_run_trace_roots not implemented")
     }
-    async fn list_application_run_trace_nodes_for_statistics(
+    async fn get_application_run_trace_statistics(
         &self,
         flow_run_id: Uuid,
-    ) -> anyhow::Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+    ) -> anyhow::Result<ApplicationRunTraceProjectionStatistics> {
         let _ = flow_run_id;
-        anyhow::bail!("list_application_run_trace_nodes_for_statistics not implemented")
+        anyhow::bail!("get_application_run_trace_statistics not implemented")
     }
     async fn list_application_run_trace_children_page(
         &self,

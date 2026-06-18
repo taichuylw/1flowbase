@@ -46,21 +46,6 @@ interface ConversationLogTraceNodeSummary {
   has_content: boolean;
 }
 
-interface ConversationLogNodeRunContent {
-  id: string;
-  node_id: string;
-  node_type: string;
-  node_alias: string;
-  status: string;
-  input_payload: Record<string, unknown>;
-  output_payload: Record<string, unknown>;
-  error_payload: Record<string, unknown> | null;
-  metrics_payload: Record<string, unknown>;
-  debug_payload?: Record<string, unknown>;
-  started_at: string;
-  finished_at: string | null;
-}
-
 interface ConversationLogTraceProjectionStatus {
   projection_status:
     | 'pending'
@@ -103,7 +88,9 @@ interface ConversationLogTraceNodeContent {
   trace_node_id: string;
   node_kind: string;
   projection_status?: ConversationLogTraceProjectionStatus;
-  node_run?: ConversationLogNodeRunContent | null;
+  content_kind?: string;
+  source_refs?: unknown;
+  detail_refs?: unknown;
   payload?: Record<string, unknown> | null;
 }
 
@@ -619,42 +606,11 @@ function mapTraceContentToTraceItem(
   fallback: AgentFlowTraceItem,
   content: ConversationLogTraceNodeContent | undefined
 ): AgentFlowTraceItem {
-  const nodeRun = content?.node_run;
-
-  if (!nodeRun) {
-    return content ? mapPayloadContentToTraceItem(fallback, content) : fallback;
-  }
-
-  return {
-    nodeId: nodeRun.node_id,
-    nodeRunId: nodeRun.id,
-    nodeAlias: nodeRun.node_alias,
-    nodeType: nodeRun.node_type,
-    status: nodeRun.status,
-    startedAt: nodeRun.started_at,
-    finishedAt: nodeRun.finished_at,
-    durationMs: traceItemDurationMs(nodeRun.started_at, nodeRun.finished_at),
-    inputPayload: nodeRun.input_payload,
-    outputPayload: nodeRun.output_payload,
-    errorPayload: nodeRun.error_payload,
-    metricsPayload: nodeRun.metrics_payload,
-    debugPayload: nodeRun.debug_payload ?? {}
-  };
+  return content ? mapPayloadContentToTraceItem(fallback, content) : fallback;
 }
 
 function isToolGroupTraceNode(node: ConversationLogTraceNodeSummary) {
   return node.node_kind === 'tool_group' || node.node_type === 'tools';
-}
-
-function traceItemDurationMs(startedAt: string, finishedAt: string | null) {
-  if (!finishedAt) {
-    return null;
-  }
-
-  return Math.max(
-    new Date(finishedAt).getTime() - new Date(startedAt).getTime(),
-    0
-  );
 }
 
 function traceProjectionStatusSucceeded(

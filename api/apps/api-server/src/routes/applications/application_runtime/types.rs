@@ -309,11 +309,9 @@ pub struct ApplicationRunTraceNodeContentResponse {
     pub trace_node_id: String,
     pub node_kind: String,
     pub projection_status: ApplicationRunTraceProjectionStatusResponse,
-    pub node_run: Option<NodeRunResponse>,
-    pub callback_task: Option<CallbackTaskResponse>,
-    pub flow_run: Option<FlowRunResponse>,
-    pub checkpoints: Vec<CheckpointResponse>,
-    pub events: Vec<RunEventResponse>,
+    pub content_kind: String,
+    pub source_refs: serde_json::Value,
+    pub detail_refs: serde_json::Value,
     pub payload: Option<serde_json::Value>,
 }
 

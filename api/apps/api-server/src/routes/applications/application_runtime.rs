@@ -16,16 +16,16 @@ use control_plane::{
         spawn_runtime_debug_event_persister,
         trace_projection::{
             build_application_run_trace_projection, projection_status_needs_lazy_rebuild,
-            trace_projection_source_watermark, APPLICATION_RUN_TRACE_PROJECTION_VERSION,
+            APPLICATION_RUN_TRACE_PROJECTION_VERSION,
         },
         wait_for_runtime_debug_event_persister, CancelFlowRunCommand, CompleteCallbackTaskCommand,
         ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
         ResumeFlowRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
     },
     ports::{
-        ApplicationRunTraceChildrenCursor, ListApplicationConversationRunsPageInput,
-        ListApplicationRunTraceChildrenPageInput, OrchestrationRuntimeRepository,
-        RuntimeEventStreamPolicy,
+        ApplicationRunTraceChildrenCursor, ApplicationRunTraceProjectionStatistics,
+        ListApplicationConversationRunsPageInput, ListApplicationRunTraceChildrenPageInput,
+        OrchestrationRuntimeRepository, RuntimeEventStreamPolicy,
     },
 };
 use serde::{Deserialize, Serialize};

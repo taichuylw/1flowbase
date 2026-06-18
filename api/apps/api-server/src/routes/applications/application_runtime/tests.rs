@@ -234,6 +234,16 @@ fn trace_tree_endpoints_read_projection_without_full_detail_fallback() {
     .contains("list_application_run_trace_roots"));
     assert!(application_trace_tree_endpoint_source(
         log_endpoint_source,
+        "get_application_run_trace_tree"
+    )
+    .contains("get_application_run_trace_statistics"));
+    assert!(!application_trace_tree_endpoint_source(
+        log_endpoint_source,
+        "get_application_run_trace_tree"
+    )
+    .contains("list_application_run_trace_nodes_for_statistics"));
+    assert!(application_trace_tree_endpoint_source(
+        log_endpoint_source,
         "get_application_run_trace_node_children"
     )
     .contains("list_application_run_trace_children"));
@@ -257,14 +267,140 @@ fn trace_tree_endpoints_read_projection_without_full_detail_fallback() {
     );
 }
 
+#[test]
+fn trace_projection_status_ensure_checks_lightweight_watermark_before_full_source() {
+    let function_source = application_runtime_function_source(
+        include_str!("log_handlers.rs"),
+        "async fn ensure_application_run_trace_projection_status",
+    );
+    let watermark_query = function_source
+        .find("get_application_run_trace_projection_source_watermark")
+        .expect("trace projection ensure must read a lightweight source watermark");
+    let full_source_query = function_source
+        .find("get_application_run_trace_projection_source(")
+        .expect("trace projection ensure may read the full source only for rebuild");
+
+    assert!(
+        watermark_query < full_source_query,
+        "trace projection ensure must decide unchanged succeeded projections before loading the full detail source"
+    );
+}
+
+#[test]
+fn trace_node_content_response_serializes_refs_without_heavy_containers() {
+    let trace_node_id = Uuid::now_v7();
+    let flow_run_id = Uuid::now_v7();
+    let now = OffsetDateTime::UNIX_EPOCH;
+    let response = trace_projection_node_content_response(
+        domain::ApplicationRunTraceNodeRecord {
+            trace_node_id,
+            flow_run_id,
+            parent_trace_node_id: None,
+            stable_locator: format!("run:{flow_run_id}/node:{}", Uuid::now_v7()),
+            node_kind: "node_run".to_string(),
+            owner_kind: Some("node_run".to_string()),
+            owner_id: Some(Uuid::now_v7().to_string()),
+            order_key: "000001".to_string(),
+            node_id: Some("node-llm".to_string()),
+            node_type: Some("llm".to_string()),
+            node_alias: "LLM".to_string(),
+            status: "succeeded".to_string(),
+            started_at: now,
+            finished_at: Some(now),
+            duration_ms: Some(0),
+            metrics_payload: serde_json::json!({}),
+            has_children: false,
+            child_count: 0,
+            has_content: true,
+            content_ref: None,
+            projection_version: APPLICATION_RUN_TRACE_PROJECTION_VERSION,
+            source_watermark: "source:1".to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+        domain::ApplicationRunTraceNodeContentRecord {
+            trace_node_id,
+            content_kind: "node_run".to_string(),
+            payload: serde_json::json!({
+                "payload_index": {
+                    "node_run_count": 1,
+                    "checkpoint_count": 1,
+                    "event_count": 1
+                },
+                "detail_refs": [
+                    {
+                        "detail_kind": "node_run",
+                        "source_kind": "node_run",
+                        "source_locator": "node-run-1",
+                        "count": 1
+                    }
+                ]
+            }),
+            source_refs: serde_json::json!([
+                {
+                    "source_kind": "node_run",
+                    "source_locator": "node-run-1"
+                }
+            ]),
+            created_at: now,
+            updated_at: now,
+        },
+        ApplicationRunTraceProjectionStatusResponse {
+            projection_status: "succeeded".to_string(),
+            projection_version: APPLICATION_RUN_TRACE_PROJECTION_VERSION,
+            source_watermark: "source:1".to_string(),
+            attempt_count: 1,
+            last_attempt_at: Some(format_time(now)),
+            last_success_at: Some(format_time(now)),
+            last_error_code: None,
+            last_error_stage: None,
+            last_error_source_kind: None,
+            last_error_source_locator: None,
+            last_error_ref: None,
+            retriable: false,
+        },
+    )
+    .expect("trace node content response should serialize");
+    let serialized = serde_json::to_value(response).expect("response should be JSON");
+    let data = serialized
+        .as_object()
+        .expect("trace node content response should be an object");
+
+    assert!(!data.contains_key("node_run"));
+    assert!(!data.contains_key("checkpoints"));
+    assert!(!data.contains_key("events"));
+    assert_eq!(serialized["content_kind"], serde_json::json!("node_run"));
+    assert_eq!(
+        serialized["payload"]["payload_index"]["node_run_count"],
+        serde_json::json!(1)
+    );
+    assert_eq!(
+        serialized["detail_refs"][0]["detail_kind"],
+        serde_json::json!("node_run")
+    );
+    assert_eq!(
+        serialized["source_refs"][0]["source_kind"],
+        serde_json::json!("node_run")
+    );
+}
+
 fn application_trace_tree_endpoint_source<'a>(
     log_endpoint_source: &'a str,
     function_name: &str,
 ) -> &'a str {
-    let start_marker = format!("pub async fn {function_name}");
+    application_runtime_function_source(
+        log_endpoint_source,
+        &format!("pub async fn {function_name}"),
+    )
+}
+
+fn application_runtime_function_source<'a>(
+    log_endpoint_source: &'a str,
+    function_marker: &str,
+) -> &'a str {
     let start = log_endpoint_source
-        .find(&start_marker)
-        .unwrap_or_else(|| panic!("{function_name} source exists"));
+        .find(function_marker)
+        .unwrap_or_else(|| panic!("{function_marker} source exists"));
     let remaining_source = &log_endpoint_source[start..];
     let end = remaining_source
         .find("\n#[utoipa::path(")

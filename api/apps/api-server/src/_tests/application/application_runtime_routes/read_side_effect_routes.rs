@@ -360,12 +360,65 @@ async fn application_runtime_routes_trace_tree_and_node_last_run_do_not_material
         .as_str()
         .unwrap()
         .to_string();
+    let trace_node_content_uri = format!(
+        "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree/nodes/{trace_node_id}/content"
+    );
+    let trace_node_content = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(trace_node_content_uri.as_str())
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let trace_node_content_status = trace_node_content.status();
+    let trace_node_content_body = to_bytes(trace_node_content.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        trace_node_content_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&trace_node_content_body)
+    );
+    let trace_node_content_payload: Value =
+        serde_json::from_slice(&trace_node_content_body).unwrap();
+    let trace_node_content_data = trace_node_content_payload["data"]
+        .as_object()
+        .expect("trace node content data is an object");
+    assert!(
+        !trace_node_content_data.contains_key("node_run"),
+        "trace node content must not return the full node_run container by default"
+    );
+    assert!(
+        !trace_node_content_data.contains_key("checkpoints"),
+        "trace node content must not return checkpoints by default"
+    );
+    assert!(
+        !trace_node_content_data.contains_key("events"),
+        "trace node content must not return events by default"
+    );
+    assert_eq!(
+        trace_node_content_payload["data"]["content_kind"],
+        json!("node_run")
+    );
+    assert_eq!(
+        trace_node_content_payload["data"]["payload"]["payload_index"]["node_run_count"],
+        json!(1)
+    );
+    assert!(trace_node_content_payload["data"]["source_refs"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+    assert!(trace_node_content_payload["data"]["detail_refs"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
 
     for uri in [
         trace_tree_uri,
-        format!(
-            "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/trace-tree/nodes/{trace_node_id}/content"
-        ),
+        trace_node_content_uri,
         format!(
             "/api/console/applications/{application_id}/logs/runs/{flow_run_id_string}/nodes/node-llm"
         ),
