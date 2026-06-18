@@ -1012,6 +1012,222 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     );
   }, 20_000);
 
+  test('renders lazy trace tools from children when node content omits tool index', async () => {
+    const detail = sampleRunDetail();
+    const llmNodeRun = detail.node_runs[0]!;
+    currentRunDetail = {
+      ...detail,
+      node_runs: [
+        {
+          ...llmNodeRun,
+          debug_payload: {
+            llm_rounds: [
+              {
+                round_index: 0,
+                assistant: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      id: 'call-refund-policy',
+                      name: 'refund_policy_lookup'
+                    }
+                  ]
+                }
+              }
+            ],
+            tool_callbacks: [
+              {
+                id: 'call-refund-policy',
+                name: 'refund_policy_lookup'
+              }
+            ],
+            debug_summary: {
+              kept: true
+            }
+          }
+        }
+      ]
+    };
+    const llmTraceNodeId = 'trace-node-llm';
+    const toolsTraceNodeId = 'trace-node-tools';
+    const toolCallbackTraceNodeId = 'trace-node-tool-refund-policy';
+    runtimeApi.fetchApplicationRunTraceTree.mockResolvedValue({
+      nodes: [
+        {
+          trace_node_id: llmTraceNodeId,
+          stable_locator: 'run:run-1/node:node-run-1',
+          node_kind: 'node_run',
+          node_run_id: 'node-run-1',
+          node_id: 'node-llm',
+          node_type: 'llm',
+          node_alias: 'LLM',
+          status: 'succeeded',
+          started_at: '2026-04-17T09:00:00Z',
+          finished_at: '2026-04-17T09:00:01Z',
+          duration_ms: 1000,
+          metrics_payload: {},
+          has_children: true,
+          child_count: 1,
+          has_content: true
+        }
+      ]
+    });
+    runtimeApi.fetchApplicationRunTraceNodeContent.mockResolvedValue({
+      trace_node_id: llmTraceNodeId,
+      node_kind: 'node_run',
+      node_run: {
+        ...llmNodeRun,
+        debug_payload: {
+          debug_summary: {
+            kept: true
+          }
+        }
+      },
+      callback_task: null,
+      flow_run: null,
+      checkpoints: [],
+      events: [],
+      payload: {
+        node_run: {
+          ...llmNodeRun,
+          debug_payload: {
+            debug_summary: {
+              kept: true
+            }
+          }
+        }
+      }
+    });
+    runtimeApi.fetchApplicationRunTraceNodeChildren.mockImplementation(
+      async (_applicationId: string, _runId: string, traceNodeId: string) => {
+        if (traceNodeId === llmTraceNodeId) {
+          return {
+            items: [
+              {
+                trace_node_id: toolsTraceNodeId,
+                stable_locator: 'run:run-1/node:node-run-1/tools',
+                node_kind: 'tool_group',
+                node_run_id: null,
+                node_id: null,
+                node_type: 'tools',
+                node_alias: 'Tools',
+                status: 'completed',
+                started_at: '2026-04-17T09:00:00Z',
+                finished_at: '2026-04-17T09:00:01Z',
+                duration_ms: null,
+                metrics_payload: {},
+                has_children: true,
+                child_count: 1,
+                has_content: false
+              }
+            ],
+            page_info: {
+              has_more: false,
+              next_cursor: null,
+              page_size: 20
+            }
+          };
+        }
+
+        if (traceNodeId === toolsTraceNodeId) {
+          return {
+            items: [
+              {
+                trace_node_id: toolCallbackTraceNodeId,
+                stable_locator:
+                  'run:run-1/node:node-run-1/tools/tool:call-refund-policy',
+                node_kind: 'tool_callback',
+                node_run_id: null,
+                node_id: null,
+                node_type: 'tool',
+                node_alias: 'refund_policy_lookup',
+                status: 'completed',
+                started_at: '2026-04-17T09:00:00Z',
+                finished_at: '2026-04-17T09:00:01Z',
+                duration_ms: 1000,
+                metrics_payload: {},
+                has_children: false,
+                child_count: 0,
+                has_content: true
+              }
+            ],
+            page_info: {
+              has_more: false,
+              next_cursor: null,
+              page_size: 20
+            }
+          };
+        }
+
+        return {
+          items: [],
+          page_info: {
+            has_more: false,
+            next_cursor: null,
+            page_size: 20
+          }
+        };
+      }
+    );
+
+    render(
+      <AppProviders>
+        <ApplicationLogsPage applicationId="app-1" />
+      </AppProviders>
+    );
+
+    expect(await screen.findByText('run-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
+
+    const openLogButton = lastElement(
+      await screen.findAllByRole(
+        'button',
+        { name: '查看对话日志' },
+        { timeout: 8_000 }
+      ),
+      'expected conversation log button'
+    );
+    fireEvent.click(openLogButton);
+
+    const logPanel = await screen.findByRole('complementary', {
+      name: '对话日志'
+    });
+    fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
+
+    const llmTraceNode = await within(logPanel).findByRole('button', {
+      name: /LLM/
+    });
+    fireEvent.click(llmTraceNode);
+    const nodeDetail = await openLazyLlmNodeDetail(logPanel);
+
+    await waitFor(() =>
+      expect(runtimeApi.fetchApplicationRunTraceNodeContent).toHaveBeenCalled()
+    );
+    expect(
+      within(nodeDetail).queryByRole('button', {
+        name: /工具 .*工具回调/
+      })
+    ).not.toBeInTheDocument();
+
+    const toolsGroupNode = await within(nodeDetail).findByRole('button', {
+      name: /Tools/
+    });
+    expect(toolsGroupNode).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toolsGroupNode);
+
+    expect(
+      await within(nodeDetail).findByRole('button', {
+        name: /refund_policy_lookup/
+      })
+    ).toBeInTheDocument();
+    expect(
+      runtimeApi.fetchApplicationRunTraceNodeChildren
+    ).toHaveBeenCalledWith('app-1', 'run-1', llmTraceNodeId, undefined);
+    expect(
+      runtimeApi.fetchApplicationRunTraceNodeChildren
+    ).toHaveBeenCalledWith('app-1', 'run-1', toolsTraceNodeId, undefined);
+  }, 20_000);
+
   test('groups repeated LLM tool callbacks under Tools from application logs', async () => {
     const detail = sampleRunDetail();
     const llmNodeRun = detail.node_runs[0]!;

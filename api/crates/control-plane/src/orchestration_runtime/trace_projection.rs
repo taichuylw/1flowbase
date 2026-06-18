@@ -1072,6 +1072,19 @@ fn merge_node_run_group(node_runs: &[domain::NodeRunRecord]) -> domain::NodeRunR
     merged
 }
 
+fn trace_node_content_debug_payload_without_tool_index(
+    debug_payload: serde_json::Value,
+) -> serde_json::Value {
+    let serde_json::Value::Object(mut object) = debug_payload else {
+        return debug_payload;
+    };
+
+    object.remove("llm_rounds");
+    object.remove("tool_callbacks");
+
+    serde_json::Value::Object(object)
+}
+
 fn callback_tasks_for_node_run_ids(
     detail: &domain::ApplicationRunDetail,
     node_run_ids: &HashSet<Uuid>,
@@ -1354,7 +1367,9 @@ fn node_run_group_content(
         .iter()
         .map(|node_run| node_run.id)
         .collect::<HashSet<_>>();
-    let merged_node_run = merge_node_run_group(node_runs);
+    let mut merged_node_run = merge_node_run_group(node_runs);
+    merged_node_run.debug_payload =
+        trace_node_content_debug_payload_without_tool_index(merged_node_run.debug_payload);
     let checkpoints: Vec<&domain::CheckpointRecord> = detail
         .checkpoints
         .iter()
@@ -1463,7 +1478,30 @@ mod tests {
                 output_payload: json!({ "answer": "done" }),
                 error_payload: None,
                 metrics_payload: json!({ "usage": { "total_tokens": 12 } }),
-                debug_payload: json!({}),
+                debug_payload: json!({
+                    "tool_callbacks": [
+                        {
+                            "id": "call-weather",
+                            "name": "weather"
+                        }
+                    ],
+                    "llm_rounds": [
+                        {
+                            "round_index": 0,
+                            "assistant": {
+                                "tool_calls": [
+                                    {
+                                        "id": "call-weather",
+                                        "name": "weather"
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "debug_summary": {
+                        "kept": true
+                    }
+                }),
                 started_at: now,
                 finished_at: Some(now + time::Duration::seconds(2)),
             }],
@@ -1512,6 +1550,18 @@ mod tests {
             &format!("run:{flow_run_id}/node:{node_run_id}/tools/tool:call-weather").as_str()
         ));
         assert_eq!(projection.contents.len(), 2);
+        let node_run_content = projection
+            .contents
+            .iter()
+            .find(|content| content.content_kind == "node_run")
+            .expect("node run content should be projected");
+        let projected_debug_payload = &node_run_content.payload["node_run"]["debug_payload"];
+        assert!(projected_debug_payload.get("tool_callbacks").is_none());
+        assert!(projected_debug_payload.get("llm_rounds").is_none());
+        assert_eq!(
+            projected_debug_payload["debug_summary"]["kept"],
+            json!(true)
+        );
         assert!(projection.contents.iter().any(|content| {
             content.content_kind == "tool_callback"
                 && content.payload["tool_call_id"] == json!("call-weather")

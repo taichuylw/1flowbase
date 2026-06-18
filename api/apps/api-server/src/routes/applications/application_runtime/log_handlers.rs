@@ -501,34 +501,46 @@ fn trace_projection_node_content_response(
     content: domain::ApplicationRunTraceNodeContentRecord,
     projection_status: ApplicationRunTraceProjectionStatusResponse,
 ) -> Result<ApplicationRunTraceNodeContentResponse, ApiError> {
-    let node_run = content
-        .payload
+    let content_kind = content.content_kind;
+    let mut payload = content.payload;
+    let node_run = payload
         .get("node_run")
         .cloned()
         .map(serde_json::from_value::<domain::NodeRunRecord>)
         .transpose()
         .map_err(|_| ControlPlaneError::Conflict("trace_node_content"))?
-        .map(to_node_run_response);
-    let callback_task = if content.content_kind == "callback_task" {
+        .map(|node_run| {
+            let node_run = trace_node_content_node_run_without_tool_index(node_run);
+            if let Some(payload_object) = payload.as_object_mut() {
+                payload_object.insert(
+                    "node_run".to_string(),
+                    serde_json::to_value(&node_run)
+                        .map_err(|_| ControlPlaneError::Conflict("trace_node_content"))?,
+                );
+            }
+
+            Ok::<_, ControlPlaneError>(to_node_run_response(node_run))
+        })
+        .transpose()?;
+    let callback_task = if content_kind == "callback_task" {
         Some(
-            serde_json::from_value::<domain::CallbackTaskRecord>(content.payload.clone())
+            serde_json::from_value::<domain::CallbackTaskRecord>(payload.clone())
                 .map_err(|_| ControlPlaneError::Conflict("trace_node_content"))
                 .map(to_callback_task_response)?,
         )
     } else {
         None
     };
-    let flow_run = if content.content_kind == "stitched_run" {
+    let flow_run = if content_kind == "stitched_run" {
         Some(
-            serde_json::from_value::<domain::FlowRunRecord>(content.payload.clone())
+            serde_json::from_value::<domain::FlowRunRecord>(payload.clone())
                 .map_err(|_| ControlPlaneError::Conflict("trace_node_content"))
                 .map(to_flow_run_response)?,
         )
     } else {
         None
     };
-    let checkpoints = content
-        .payload
+    let checkpoints = payload
         .get("checkpoints")
         .cloned()
         .map(serde_json::from_value::<Vec<domain::CheckpointRecord>>)
@@ -538,8 +550,7 @@ fn trace_projection_node_content_response(
         .into_iter()
         .map(to_checkpoint_response)
         .collect();
-    let events = content
-        .payload
+    let events = payload
         .get("events")
         .cloned()
         .map(serde_json::from_value::<Vec<domain::RunEventRecord>>)
@@ -559,8 +570,29 @@ fn trace_projection_node_content_response(
         flow_run,
         checkpoints,
         events,
-        payload: Some(content.payload),
+        payload: Some(payload),
     })
+}
+
+fn trace_node_content_node_run_without_tool_index(
+    mut node_run: domain::NodeRunRecord,
+) -> domain::NodeRunRecord {
+    node_run.debug_payload =
+        trace_node_content_debug_payload_without_tool_index(node_run.debug_payload);
+    node_run
+}
+
+fn trace_node_content_debug_payload_without_tool_index(
+    debug_payload: serde_json::Value,
+) -> serde_json::Value {
+    let serde_json::Value::Object(mut object) = debug_payload else {
+        return debug_payload;
+    };
+
+    object.remove("llm_rounds");
+    object.remove("tool_callbacks");
+
+    serde_json::Value::Object(object)
 }
 
 async fn find_trace_projection_tool_callback_node(

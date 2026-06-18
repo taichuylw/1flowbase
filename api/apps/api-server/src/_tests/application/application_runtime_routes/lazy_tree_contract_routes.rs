@@ -435,7 +435,8 @@ async fn application_runtime_routes_trace_tree_paginates_high_fan_out_children()
 }
 
 #[tokio::test]
-async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_lazy_tool_detail() {
+async fn application_runtime_routes_trace_node_content_excludes_tool_index_and_keeps_lazy_tool_detail(
+) {
     let (state, _) = test_api_state_with_database_url().await;
     let app = crate::app_with_state_and_config(state.clone(), &test_config());
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
@@ -470,6 +471,14 @@ async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_la
                 }
             }),
             debug_payload: json!({
+                "tool_callbacks": [
+                    {
+                        "id": "call-refund-policy",
+                        "name": "refund_policy_lookup",
+                        "callback_status": "returned",
+                        "execution_status": "succeeded"
+                    }
+                ],
                 "llm_rounds": [
                     {
                         "round_index": 0,
@@ -801,12 +810,19 @@ async fn application_runtime_routes_trace_node_content_exposes_tool_index_and_la
     assert_eq!(content.status(), StatusCode::OK);
     let content_body = to_bytes(content.into_body(), usize::MAX).await.unwrap();
     let content_payload: Value = serde_json::from_slice(&content_body).unwrap();
-    assert!(
-        content_payload["data"]["node_run"]["debug_payload"]
-            .get("tool_callbacks")
-            .is_none(),
-        "tool callback summaries should be loaded through projection children"
-    );
+    for debug_payload in [
+        &content_payload["data"]["node_run"]["debug_payload"],
+        &content_payload["data"]["payload"]["node_run"]["debug_payload"],
+    ] {
+        assert!(
+            debug_payload.get("tool_callbacks").is_none(),
+            "tool callback summaries should be loaded through projection children"
+        );
+        assert!(
+            debug_payload.get("llm_rounds").is_none(),
+            "LLM rounds can regenerate the tool list and must stay out of trace node content"
+        );
+    }
 
     let detail = app
         .clone()
@@ -1028,11 +1044,12 @@ async fn application_runtime_routes_trace_tree_groups_repeated_llm_node_runs_at_
     assert_eq!(content.status(), StatusCode::OK);
     let content_body = to_bytes(content.into_body(), usize::MAX).await.unwrap();
     let content_payload: Value = serde_json::from_slice(&content_body).unwrap();
-    let rounds = content_payload["data"]["node_run"]["debug_payload"]["llm_rounds"]
-        .as_array()
-        .unwrap();
-
-    assert_eq!(rounds.len(), 2);
+    assert!(
+        content_payload["data"]["node_run"]["debug_payload"]
+            .get("llm_rounds")
+            .is_none(),
+        "grouped LLM rounds can regenerate tool lists and stay behind children"
+    );
     assert!(
         content_payload["data"]["node_run"]["debug_payload"]
             .get("tool_callbacks")
