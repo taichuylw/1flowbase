@@ -38,7 +38,7 @@ Agent 客户端 -> 一个虚拟模型接口 -> 你的工作流 -> Trace / Token 
 | 排查 Agent 回答为什么慢、贵或错 | 查看工作流节点、模型调用、工具回调、Token、延迟和错误 |
 | 在现有客户端里复用更好的模型链 | 发布为 OpenAI 兼容或 Claude 兼容模型 API |
 
-![工作流编辑器预览](../assets/workflow_editor_preview.jpeg)
+![工作流编辑器预览](../assets/workflow_editor_preview_tool.png)
 
 ---
 
