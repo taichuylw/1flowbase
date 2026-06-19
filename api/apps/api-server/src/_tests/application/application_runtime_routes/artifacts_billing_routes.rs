@@ -656,26 +656,18 @@ async fn application_runtime_routes_flow_output_offloads_answer_field_without_co
         .expect("answer node should be present")["trace_node_id"]
         .as_str()
         .expect("answer trace node id should exist");
-    let answer_node_content = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree/nodes/{answer_trace_node_id}/content"
-                ))
-                .header("cookie", &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(answer_node_content.status(), StatusCode::OK);
-    let answer_node_content_body = to_bytes(answer_node_content.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let answer_node_content_payload: Value =
-        serde_json::from_slice(&answer_node_content_body).unwrap();
-    let answer_node_output = &answer_node_content_payload["data"]["node_run"]["output_payload"];
+    let answer_node_detail_payload = load_trace_node_detail_payload_for_kind(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        answer_trace_node_id,
+        "node_run",
+    )
+    .await
+    .expect("answer trace node should advertise a node_run detail ref");
+    let answer_node_output =
+        &answer_node_detail_payload["data"]["payload"]["node_run"]["output_payload"];
     assert_eq!(
         answer_node_output["answer"]["__runtime_debug_artifact"],
         true
@@ -733,6 +725,35 @@ async fn application_runtime_routes_waiting_run_detail_reads_persisted_llm_round
     let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
     wait_for_flow_run_status_in_database(&pool, flow_run_id, "waiting_human").await;
 
+    wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
+    let llm_last_run = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/nodes/node-llm"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(llm_last_run.status(), StatusCode::OK);
+    let llm_last_run_body = to_bytes(llm_last_run.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let llm_last_run_payload: Value = serde_json::from_slice(&llm_last_run_body).unwrap();
+    let llm_rounds = &llm_last_run_payload["data"]["node_run"]["debug_payload"]["llm_rounds"];
+    assert_eq!(llm_rounds["__runtime_debug_artifact"], Value::Null);
+
+    let llm_rounds = llm_rounds.as_array().unwrap();
+    assert!(!llm_rounds.is_empty());
+    assert!(llm_rounds[0]["assistant"]["content"]
+        .as_str()
+        .unwrap()
+        .contains("请总结退款政策"));
+
     let detail =
         wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
     let llm_trace_node_id = detail["nodes"]
@@ -743,29 +764,17 @@ async fn application_runtime_routes_waiting_run_detail_reads_persisted_llm_round
         .expect("waiting run detail should include the LLM trace node")["trace_node_id"]
         .as_str()
         .expect("LLM trace node id should exist");
-    let llm_content = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree/nodes/{llm_trace_node_id}/content"
-                ))
-                .header("cookie", &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(llm_content.status(), StatusCode::OK);
-    let llm_content_body = to_bytes(llm_content.into_body(), usize::MAX).await.unwrap();
-    let llm_content_payload: Value = serde_json::from_slice(&llm_content_body).unwrap();
-    let llm_rounds = &llm_content_payload["data"]["node_run"]["debug_payload"]["llm_rounds"];
-    assert_eq!(llm_rounds["__runtime_debug_artifact"], Value::Null);
-
-    let llm_rounds = llm_rounds.as_array().unwrap();
-    assert!(!llm_rounds.is_empty());
-    assert!(llm_rounds[0]["assistant"]["content"]
-        .as_str()
-        .unwrap()
-        .contains("请总结退款政策"));
+    let llm_detail_payload = load_trace_node_detail_payload_for_kind(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        llm_trace_node_id,
+        "node_run",
+    )
+    .await
+    .expect("LLM trace node should advertise a node_run detail ref");
+    let llm_rounds =
+        &llm_detail_payload["data"]["payload"]["node_run"]["debug_payload"]["llm_rounds"];
+    assert_eq!(llm_rounds, &Value::Null);
 }

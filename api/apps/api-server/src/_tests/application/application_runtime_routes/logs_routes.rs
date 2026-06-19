@@ -526,11 +526,35 @@ async fn application_runtime_routes_log_trace_tree_loads_summary_children_and_co
     assert_eq!(content.status(), StatusCode::OK);
     let content_body = to_bytes(content.into_body(), usize::MAX).await.unwrap();
     let content_payload: Value = serde_json::from_slice(&content_body).unwrap();
+    assert!(
+        content_payload["data"]["payload"].get("node_run").is_none(),
+        "trace node content should advertise detail refs instead of materializing node_run"
+    );
+    let node_run_detail_payload = load_trace_node_detail_payload_for_kind(
+        &app,
+        &cookie,
+        &application_id,
+        &flow_run_id,
+        root_trace_node_id,
+        "node_run",
+    )
+    .await
+    .expect("root trace node should advertise a node_run detail ref");
     assert_eq!(
-        content_payload["data"]["node_run"]["output_payload"]["text"],
+        node_run_detail_payload["data"]["payload"]["node_run"]["output_payload"]["text"],
         json!("reply:总结退款政策")
     );
-    assert!(content_payload["data"]["events"]
+    let events_detail_payload = load_trace_node_detail_payload_for_kind(
+        &app,
+        &cookie,
+        &application_id,
+        &flow_run_id,
+        root_trace_node_id,
+        "events",
+    )
+    .await
+    .expect("root trace node should advertise an events detail ref");
+    assert!(events_detail_payload["data"]["payload"]["events"]
         .as_array()
         .unwrap()
         .iter()

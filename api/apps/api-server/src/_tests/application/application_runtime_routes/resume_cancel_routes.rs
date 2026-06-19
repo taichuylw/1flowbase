@@ -66,23 +66,21 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
         let Some(trace_node_id) = trace_node["trace_node_id"].as_str() else {
             continue;
         };
-        let content = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(format!(
-                        "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/content"
-                    ))
-                    .header("cookie", &cookie)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(content.status(), StatusCode::OK);
-        let content_body = to_bytes(content.into_body(), usize::MAX).await.unwrap();
-        let content_payload: Value = serde_json::from_slice(&content_body).unwrap();
-        if let Some(value) = content_payload["data"]["checkpoints"][0]["id"].as_str() {
+        let Some(checkpoint_detail_payload) = load_trace_node_detail_payload_for_kind(
+            &app,
+            &cookie,
+            &application_id,
+            run_id,
+            trace_node_id,
+            "checkpoints",
+        )
+        .await
+        else {
+            continue;
+        };
+        if let Some(value) =
+            checkpoint_detail_payload["data"]["payload"]["checkpoints"][0]["id"].as_str()
+        {
             checkpoint_id = Some(value.to_string());
             break;
         }

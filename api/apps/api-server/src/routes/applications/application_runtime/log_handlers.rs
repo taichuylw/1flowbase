@@ -996,6 +996,56 @@ pub async fn get_application_run_trace_node_detail(
             .await?;
             trace_node_run_detail_payload(node_run)
         }
+        "checkpoints" => {
+            let node_run_ids = trace_node_content_node_run_ids(&content.payload)?
+                .into_iter()
+                .collect::<HashSet<_>>();
+            let detail =
+                <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+                    &state.store,
+                    id,
+                    run_id,
+                )
+                .await?
+                .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+            let checkpoints = detail
+                .checkpoints
+                .into_iter()
+                .filter(|checkpoint| {
+                    checkpoint
+                        .node_run_id
+                        .is_some_and(|node_run_id| node_run_ids.contains(&node_run_id))
+                })
+                .map(to_checkpoint_response)
+                .collect::<Vec<_>>();
+
+            serde_json::json!({ "checkpoints": checkpoints })
+        }
+        "events" => {
+            let node_run_ids = trace_node_content_node_run_ids(&content.payload)?
+                .into_iter()
+                .collect::<HashSet<_>>();
+            let detail =
+                <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+                    &state.store,
+                    id,
+                    run_id,
+                )
+                .await?
+                .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+            let events = detail
+                .events
+                .into_iter()
+                .filter(|event| {
+                    event
+                        .node_run_id
+                        .is_some_and(|node_run_id| node_run_ids.contains(&node_run_id))
+                })
+                .map(to_run_event_response)
+                .collect::<Vec<_>>();
+
+            serde_json::json!({ "events": events })
+        }
         _ => return Err(ControlPlaneError::NotFound("trace_node_detail_ref").into()),
     };
     let response = ApplicationRunTraceNodeDetailResponse {
