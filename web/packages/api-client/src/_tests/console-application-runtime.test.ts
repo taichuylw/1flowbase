@@ -250,11 +250,10 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         trace_node_id: traceNodeId,
         node_kind: 'node_run',
         projection_status: projectionStatus,
-        node_run: null,
-        callback_task: null,
-        flow_run: null,
-        checkpoints: [],
-        events: []
+        content_kind: 'node_run',
+        source_refs: [],
+        detail_refs: [],
+        payload: {}
       },
       {
         trace_node_id: traceNodeId,
@@ -329,11 +328,10 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       trace_node_id: traceNodeId,
       node_kind: 'node_run',
       projection_status: projectionStatus,
-      node_run: null,
-      callback_task: null,
-      flow_run: null,
-      checkpoints: [],
-      events: []
+      content_kind: 'node_run',
+      source_refs: [],
+      detail_refs: [],
+      payload: {}
     });
     await expect(
       getConsoleApplicationRunTraceToolCallbackContent(

@@ -384,6 +384,21 @@ fn trace_node_content_response_serializes_refs_without_heavy_containers() {
     );
 }
 
+#[test]
+fn trace_node_content_raw_payload_keeps_empty_payload_as_object() {
+    let payload = trace_node_content_raw_payload_response(serde_json::json!({
+        "node_run": {
+            "id": "node-run-1"
+        },
+        "checkpoints": [],
+        "events": [],
+        "detail_refs": [],
+        "source_refs": []
+    }));
+
+    assert_eq!(payload, serde_json::json!({}));
+}
+
 fn application_trace_tree_endpoint_source<'a>(
     log_endpoint_source: &'a str,
     function_name: &str,

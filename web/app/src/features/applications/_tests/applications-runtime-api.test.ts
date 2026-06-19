@@ -34,11 +34,10 @@ vi.mock('@1flowbase/api-client', () => ({
     trace_node_id: '11111111-1111-4111-8111-111111111111',
     node_kind: 'node_run',
     projection_status: traceProjectionStatus,
-    node_run: null,
-    callback_task: null,
-    flow_run: null,
-    checkpoints: [],
-    events: []
+    content_kind: 'node_run',
+    source_refs: [],
+    detail_refs: [],
+    payload: {}
   }),
   getConsoleApplicationRunResumeTimeline: vi.fn().mockResolvedValue({
     flow_run: { id: 'run-1' },

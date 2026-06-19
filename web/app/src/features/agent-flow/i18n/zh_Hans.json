@@ -622,7 +622,6 @@
     "variable_assignment_target_invalid": "变量赋值目标无效",
     "variable_assignment_target_must_be_defined_conversation": "变量赋值只能写入已定义的会话变量。",
     "node_configuration_shown_here": "节点配置将在这里展示",
-    "node_detail_summary_only": "仅有摘要，节点详情未生成",
     "next_step": "下一步",
     "terminating_debug_run": "正在终止调试运行",
     "not_configured": "{{value1}} 未配置",

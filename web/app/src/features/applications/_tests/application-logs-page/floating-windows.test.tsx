@@ -447,14 +447,23 @@ function sampleRunOverview() {
 }
 
 function sampleTraceNodeContent() {
+  const detail = sampleRunDetail();
+  const nodeRun = detail.node_runs[0];
+
   return {
     trace_node_id: 'node_run:node-run-1',
     node_kind: 'node_run',
-    node_run: sampleRunDetail().node_runs[0],
-    callback_task: null,
-    flow_run: null,
-    checkpoints: [],
-    events: sampleRunDetail().events
+    content_kind: 'node_run',
+    source_refs: [],
+    detail_refs: [],
+    payload: {
+      input_payload: nodeRun.input_payload,
+      output_payload: nodeRun.output_payload,
+      error_payload: nodeRun.error_payload,
+      metrics_payload: nodeRun.metrics_payload,
+      debug_payload: nodeRun.debug_payload,
+      events: detail.events
+    }
   };
 }
 
@@ -747,9 +756,9 @@ describe('ApplicationLogsPage - floating windows', () => {
       'true'
     );
     expect(runtimeApi.fetchApplicationRunTraceTree).not.toHaveBeenCalled();
-    expect(await within(logPanel).findByLabelText('输出 JSON')).toHaveTextContent(
-      '退款政策摘要'
-    );
+    expect(
+      await within(logPanel).findByLabelText('输出 JSON')
+    ).toHaveTextContent('退款政策摘要');
     expect(within(logPanel).getByText('协议')).toBeInTheDocument();
     expect(within(logPanel).queryByText('节点数')).not.toBeInTheDocument();
 

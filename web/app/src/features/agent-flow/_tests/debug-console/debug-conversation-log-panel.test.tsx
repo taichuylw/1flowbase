@@ -940,6 +940,65 @@ describe('debug conversation log panel', () => {
     );
   });
 
+  test('keeps empty input processing and output sections for summary-only trace nodes', async () => {
+    const rootNode = {
+      trace_node_id: 'tool_group:node-run-empty',
+      node_kind: 'tool_group',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tools',
+      node_alias: 'Tools',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:02Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: false,
+      child_count: 0,
+      has_content: false
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi.fn(),
+      loadContent: vi.fn()
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-empty-trace-node',
+          role: 'assistant',
+          content: '空 trace 节点',
+          status: 'completed',
+          runId: 'run-empty-trace-node',
+          detailRunId: 'run-empty-trace-node',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    const toolsTraceNode = await screen.findByRole('button', { name: /Tools/ });
+    fireEvent.click(toolsTraceNode);
+
+    const nodeDetail = await screen.findByRole('region', {
+      name: 'Tools 节点详情'
+    });
+    expect(within(nodeDetail).getByLabelText('输入 JSON')).toHaveTextContent(
+      '{}'
+    );
+    expect(
+      within(nodeDetail).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('{}');
+    expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
+      '{}'
+    );
+    expect(traceLoader.loadContent).not.toHaveBeenCalled();
+  });
+
   test('loads lazy trace tool details only when a tool callback expands', async () => {
     const rootNode = {
       trace_node_id: 'node_run:node-run-llm',
@@ -1179,7 +1238,7 @@ describe('debug conversation log panel', () => {
       '30 days refund window'
     );
     expect(traceLoader.loadToolCallbackDetail).not.toHaveBeenCalled();
-  });
+  }, 10_000);
 
   test('shows clickable trace nodes and reuses node run detail sections', () => {
     renderConsole();
@@ -1301,7 +1360,7 @@ describe('debug conversation log panel', () => {
       });
   }, 10_000);
 
-  test('shows a summary-only state instead of empty JSON for route branch nodes without detail', () => {
+  test('shows empty detail sections for route branch nodes without detail', () => {
     renderConsole({
       messages: [
         {
@@ -1331,16 +1390,15 @@ describe('debug conversation log panel', () => {
     const branchNode = within(panel).getByTestId('debug-llm-route-branch-node');
     fireEvent.click(within(branchNode).getByRole('button', { name: /LLM2/ }));
 
-    expect(branchNode).toHaveTextContent('仅有摘要，节点详情未生成');
+    expect(within(branchNode).getByLabelText('输入 JSON')).toHaveTextContent(
+      '{}'
+    );
     expect(
-      within(branchNode).queryByLabelText('输入 JSON')
-    ).not.toBeInTheDocument();
-    expect(
-      within(branchNode).queryByLabelText('数据处理 JSON')
-    ).not.toBeInTheDocument();
-    expect(
-      within(branchNode).queryByLabelText('输出 JSON')
-    ).not.toBeInTheDocument();
+      within(branchNode).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('{}');
+    expect(within(branchNode).getByLabelText('输出 JSON')).toHaveTextContent(
+      '{}'
+    );
   }, 10_000);
 
   test('shows fusion branch LLM tokens from metrics payload and reuses node detail sections', () => {

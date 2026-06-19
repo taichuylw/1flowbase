@@ -312,7 +312,7 @@ pub struct ApplicationRunTraceNodeContentResponse {
     pub content_kind: String,
     pub source_refs: serde_json::Value,
     pub detail_refs: serde_json::Value,
-    pub payload: Option<serde_json::Value>,
+    pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

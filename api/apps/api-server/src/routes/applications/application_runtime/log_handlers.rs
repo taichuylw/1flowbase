@@ -507,9 +507,9 @@ fn trace_projection_node_content_response(
     })
 }
 
-fn trace_node_content_raw_payload_response(mut payload: serde_json::Value) -> Option<serde_json::Value> {
+fn trace_node_content_raw_payload_response(mut payload: serde_json::Value) -> serde_json::Value {
     let Some(payload_object) = payload.as_object_mut() else {
-        return Some(payload);
+        return payload;
     };
 
     payload_object.remove("node_run");
@@ -519,9 +519,9 @@ fn trace_node_content_raw_payload_response(mut payload: serde_json::Value) -> Op
     payload_object.remove("detail_refs");
 
     if payload_object.is_empty() {
-        None
+        serde_json::json!({})
     } else {
-        Some(payload)
+        payload
     }
 }
 
@@ -881,7 +881,7 @@ pub async fn get_application_run_trace_node_content(
             content_kind: "trace_projection".to_string(),
             source_refs: serde_json::Value::Array(Vec::new()),
             detail_refs: serde_json::Value::Array(Vec::new()),
-            payload: None,
+            payload: serde_json::json!({}),
         })));
     }
     let node = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_trace_node(

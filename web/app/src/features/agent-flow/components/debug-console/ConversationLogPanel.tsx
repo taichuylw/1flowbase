@@ -91,7 +91,7 @@ interface ConversationLogTraceNodeContent {
   content_kind?: string;
   source_refs?: unknown;
   detail_refs?: unknown;
-  payload?: Record<string, unknown> | null;
+  payload: Record<string, unknown>;
 }
 
 interface ConversationLogTraceNodeDetail {
@@ -598,12 +598,16 @@ function mapPayloadContentToTraceItem(
   if (content.node_kind === 'fusion' || content.node_kind === 'route') {
     const metricsPayload = payloadRecordField(payload, 'metrics_payload');
     const usage = payloadRecordField(payload, 'usage');
-    const effectiveMetrics = Object.keys(metricsPayload).length > 0 ? metricsPayload : usage;
+    const effectiveMetrics =
+      Object.keys(metricsPayload).length > 0 ? metricsPayload : usage;
 
     return {
       ...fallback,
       inputPayload: {},
-      outputPayload: Object.keys(effectiveMetrics).length > 0 ? { usage: effectiveMetrics } : {},
+      outputPayload:
+        Object.keys(effectiveMetrics).length > 0
+          ? { usage: effectiveMetrics }
+          : {},
       debugPayload: payload,
       metricsPayload: effectiveMetrics
     };
@@ -620,7 +624,10 @@ function mapPayloadContentToTraceItem(
       inputPayload: Object.keys(inputPayload).length > 0 ? inputPayload : {},
       outputPayload: Object.keys(outputPayload).length > 0 ? outputPayload : {},
       debugPayload: Object.keys(debugPayload).length > 0 ? debugPayload : {},
-      metricsPayload: Object.keys(metricsPayload).length > 0 ? metricsPayload : fallback.metricsPayload
+      metricsPayload:
+        Object.keys(metricsPayload).length > 0
+          ? metricsPayload
+          : fallback.metricsPayload
     };
   }
 
@@ -730,13 +737,11 @@ function mapTraceContentToTraceItem(
   content: ConversationLogTraceNodeContent | undefined,
   detail?: ConversationLogTraceNodeDetail
 ): AgentFlowTraceItem {
-  const contentItem = content ? mapPayloadContentToTraceItem(fallback, content) : fallback;
+  const contentItem = content
+    ? mapPayloadContentToTraceItem(fallback, content)
+    : fallback;
 
   return mapDetailContentToTraceItem(contentItem, detail);
-}
-
-function isToolGroupTraceNode(node: ConversationLogTraceNodeSummary) {
-  return node.node_kind === 'tool_group' || node.node_type === 'tools';
 }
 
 function traceProjectionStatusSucceeded(
@@ -942,7 +947,11 @@ function LazyTraceNodeItem({
         throw new Error('trace_node_detail_loader_unavailable');
       }
 
-      return traceLoader.loadDetail(runId, node.trace_node_id, nodeRunDetailRefId);
+      return traceLoader.loadDetail(
+        runId,
+        node.trace_node_id,
+        nodeRunDetailRefId
+      );
     },
     refetchOnWindowFocus: false,
     staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
@@ -1019,16 +1028,10 @@ function LazyTraceNodeItem({
   const contentProjectionStatus = contentQuery.data?.projection_status;
   const contentLoading = contentQuery.isLoading || nodeRunDetailQuery.isLoading;
   const loadToolCallbackDetail = traceLoader.loadToolCallbackDetail;
-  const toolChildNodes = node.has_content
-    ? childNodes.filter(isToolGroupTraceNode)
-    : [];
-  const childNodesAfterContent = node.has_content
-    ? childNodes.filter((childNode) => !isToolGroupTraceNode(childNode))
-    : childNodes;
-  const toolChildrenBeforePayload =
-    toolChildNodes.length > 0 ? (
+  const childNodesBeforePayload =
+    childNodes.length > 0 ? (
       <LazyTraceNodeList
-        nodes={toolChildNodes}
+        nodes={childNodes}
         onLoadArtifact={onLoadArtifact}
         runId={runId}
         traceLoader={traceLoader}
@@ -1047,44 +1050,34 @@ function LazyTraceNodeItem({
         })}
         className="agent-flow-editor__conversation-log-node-detail"
       >
-        {node.has_content ? (
-          contentLoading ? (
-            <Spin />
-          ) : contentProjectionStatus &&
-            !traceProjectionStatusSucceeded(contentProjectionStatus) ? (
-            <TraceProjectionStatusNotice status={contentProjectionStatus} />
-          ) : (
-            <div className="agent-flow-editor__conversation-log-json-list">
-              <DebugWorkflowNodeDetailContent
-                beforePayloadContent={toolChildrenBeforePayload}
-                item={item}
-                onLoadArtifact={onLoadArtifact}
-                onLoadToolCallbackDetail={
-                  loadToolCallbackDetail
-                    ? (toolCallId) =>
-                        loadToolCallbackDetail(
-                          runId,
-                          node.trace_node_id,
-                          toolCallId
-                        )
-                    : undefined
-                }
-              />
-            </div>
-          )
-        ) : null}
+        {contentLoading ? (
+          <Spin />
+        ) : contentProjectionStatus &&
+          !traceProjectionStatusSucceeded(contentProjectionStatus) ? (
+          <TraceProjectionStatusNotice status={contentProjectionStatus} />
+        ) : (
+          <div className="agent-flow-editor__conversation-log-json-list">
+            <DebugWorkflowNodeDetailContent
+              beforePayloadContent={childNodesBeforePayload}
+              item={item}
+              onLoadArtifact={onLoadArtifact}
+              onLoadToolCallbackDetail={
+                loadToolCallbackDetail
+                  ? (toolCallId) =>
+                      loadToolCallbackDetail(
+                        runId,
+                        node.trace_node_id,
+                        toolCallId
+                      )
+                  : undefined
+              }
+            />
+          </div>
+        )}
         {childrenQuery.isLoading ? <Spin /> : null}
         {childProjectionStatus &&
         !traceProjectionStatusSucceeded(childProjectionStatus) ? (
           <TraceProjectionStatusNotice status={childProjectionStatus} />
-        ) : null}
-        {childNodesAfterContent.length > 0 ? (
-          <LazyTraceNodeList
-            nodes={childNodesAfterContent}
-            onLoadArtifact={onLoadArtifact}
-            runId={runId}
-            traceLoader={traceLoader}
-          />
         ) : null}
         {loadMoreChildrenFailed ? (
           <Alert

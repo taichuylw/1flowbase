@@ -622,7 +622,6 @@
     "variable_assignment_target_invalid": "Variable assignment target is invalid",
     "variable_assignment_target_must_be_defined_conversation": "Variable assignment can only write defined conversation variables.",
     "node_configuration_shown_here": "The node configuration will be shown here",
-    "node_detail_summary_only": "Summary only. Node details were not generated.",
     "next_step": "Next step",
     "terminating_debug_run": "Terminating debug run",
     "not_configured": "{{value1}} not configured",

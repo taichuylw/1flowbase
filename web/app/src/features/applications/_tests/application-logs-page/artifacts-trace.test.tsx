@@ -557,7 +557,10 @@ function traceNodeRunGroupFromDetail(
   const nodeRunId = traceNodeId.startsWith('node_run:')
     ? traceNodeId.slice('node_run:'.length)
     : traceNodeId;
-  return [allNodeRuns.find((candidate) => candidate.id === nodeRunId) ?? detail.node_runs[0]!];
+  return [
+    allNodeRuns.find((candidate) => candidate.id === nodeRunId) ??
+      detail.node_runs[0]!
+  ];
 }
 
 function traceNodeContentFromDetail(
@@ -579,16 +582,25 @@ function traceNodeContentFromDetail(
   return {
     trace_node_id: `node_run:${nodeRun.id}`,
     node_kind: 'node_run',
-    node_run: nodeRun,
-    callback_task: null,
-    flow_run: null,
-    checkpoints: checkpoints.filter(
-      (checkpoint) =>
-        checkpoint.node_run_id !== null && nodeRunIds.has(checkpoint.node_run_id)
-    ),
-    events: events.filter(
-      (event) => event.node_run_id !== null && nodeRunIds.has(event.node_run_id)
-    )
+    content_kind: 'node_run',
+    source_refs: [],
+    detail_refs: [],
+    payload: {
+      input_payload: nodeRun.input_payload,
+      output_payload: nodeRun.output_payload,
+      error_payload: nodeRun.error_payload,
+      metrics_payload: nodeRun.metrics_payload,
+      debug_payload: nodeRun.debug_payload,
+      checkpoints: checkpoints.filter(
+        (checkpoint) =>
+          checkpoint.node_run_id !== null &&
+          nodeRunIds.has(checkpoint.node_run_id)
+      ),
+      events: events.filter(
+        (event) =>
+          event.node_run_id !== null && nodeRunIds.has(event.node_run_id)
+      )
+    }
   };
 }
 
@@ -781,7 +793,9 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     );
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
-    fireEvent.click(await within(logPanel).findByRole('button', { name: /LLM/ }));
+    fireEvent.click(
+      await within(logPanel).findByRole('button', { name: /LLM/ })
+    );
     const nodeDetail = await openLazyLlmNodeDetail(logPanel);
     await waitFor(() =>
       expect(runtimeApi.fetchApplicationRunTraceNodeContent).toHaveBeenCalled()
@@ -965,13 +979,11 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     expect(await screen.findByText('run-2')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '查看运行详情' }));
     await waitFor(() =>
-      expect(runtimeApi.fetchApplicationRunConversationMessages).toHaveBeenCalledWith(
-        'app-1',
-        'run-2',
-        {
-          limit: 5
-        }
-      )
+      expect(
+        runtimeApi.fetchApplicationRunConversationMessages
+      ).toHaveBeenCalledWith('app-1', 'run-2', {
+        limit: 5
+      })
     );
 
     const conversationMessages = await screen.findByTestId(
@@ -1048,9 +1060,9 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         }
       ]
     };
-    const llmTraceNodeId = 'trace-node-llm';
-    const toolsTraceNodeId = 'trace-node-tools';
-    const toolCallbackTraceNodeId = 'trace-node-tool-refund-policy';
+    const llmTraceNodeId = 'trace-node-llm-lazy-tools';
+    const toolsTraceNodeId = 'trace-node-tools-lazy-tools';
+    const toolCallbackTraceNodeId = 'trace-node-tool-refund-policy-lazy-tools';
     runtimeApi.fetchApplicationRunTraceTree.mockResolvedValue({
       nodes: [
         {
@@ -1075,25 +1087,17 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     runtimeApi.fetchApplicationRunTraceNodeContent.mockResolvedValue({
       trace_node_id: llmTraceNodeId,
       node_kind: 'node_run',
-      node_run: {
-        ...llmNodeRun,
+      content_kind: 'node_run',
+      source_refs: [],
+      detail_refs: [],
+      payload: {
+        input_payload: llmNodeRun.input_payload,
+        output_payload: llmNodeRun.output_payload,
+        error_payload: llmNodeRun.error_payload,
+        metrics_payload: llmNodeRun.metrics_payload,
         debug_payload: {
           debug_summary: {
             kept: true
-          }
-        }
-      },
-      callback_task: null,
-      flow_run: null,
-      checkpoints: [],
-      events: [],
-      payload: {
-        node_run: {
-          ...llmNodeRun,
-          debug_payload: {
-            debug_summary: {
-              kept: true
-            }
           }
         }
       }

@@ -286,22 +286,6 @@ function routeBranchNodeKey(
   );
 }
 
-function runtimeDetailPayloadHasValue(value: unknown): boolean {
-  if (value === null || value === undefined) {
-    return false;
-  }
-
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-
-  if (typeof value === 'object') {
-    return Object.keys(value).length > 0;
-  }
-
-  return true;
-}
-
 export function DebugWorkflowNodeDetailContent({
   item,
   beforePayloadContent,
@@ -314,24 +298,6 @@ export function DebugWorkflowNodeDetailContent({
   onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const debugPayload = stripLlmRoundsFromDebugPayload(item.debugPayload ?? {});
-  const hasNodeDetail =
-    Boolean(beforePayloadContent) ||
-    runtimeDetailPayloadHasValue(item.inputPayload) ||
-    runtimeDetailPayloadHasValue(debugPayload) ||
-    runtimeDetailPayloadHasValue(item.outputPayload) ||
-    Boolean(item.answerSnapshot) ||
-    collectLlmToolCallbacksFromDebugPayloads([item.debugPayload]).length > 0;
-
-  if (!hasNodeDetail) {
-    return (
-      <Typography.Text
-        className="agent-flow-editor__debug-workflow-node-missing-detail"
-        type="secondary"
-      >
-        {i18nText('agentFlow', 'auto.node_detail_summary_only')}
-      </Typography.Text>
-    );
-  }
 
   return (
     <>
@@ -349,7 +315,6 @@ export function DebugWorkflowNodeDetailContent({
       {beforePayloadContent}
       <NodeRunPayloadSections
         debugPayload={debugPayload}
-        hideEmptyPayloads
         inputPayload={item.inputPayload}
         outputPayload={item.outputPayload}
         onLoadArtifact={onLoadArtifact}

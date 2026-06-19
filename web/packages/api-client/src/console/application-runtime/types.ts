@@ -544,7 +544,7 @@ export interface ConsoleApplicationRunTraceNodeContent {
   content_kind: string;
   source_refs: unknown;
   detail_refs: unknown;
-  payload?: Record<string, unknown> | null;
+  payload: Record<string, unknown>;
 }
 
 export interface ConsoleApplicationRunTraceNodeDetail {
