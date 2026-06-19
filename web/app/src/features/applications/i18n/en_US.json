@@ -119,7 +119,6 @@
     "session": "session",
     "copy_id": "Copy ID",
     "created_at": "creation time",
-    "no_output_yet": "No output yet",
     "selector_pattern_invalid": "Can only contain letters, numbers, underscores, dots, and hyphens",
     "search_applications": "Search apps",
     "api_key_copied": "API Key copied",

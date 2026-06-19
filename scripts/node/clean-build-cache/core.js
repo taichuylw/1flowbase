@@ -18,7 +18,7 @@ function getRepoRoot() {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(`用法：node scripts/node/clean-build-cache.js [all|backend|frontend] [选项]
+  writeStdout(`用法：node scripts/node/clean-build-cache/cli.js [all|backend|frontend] [选项]
 
 默认范围：all，真实删除后端和前端构建缓存。
 真实清理前会先停止 api-server 与 plugin-runner；dry-run 不停止进程、不删除文件。

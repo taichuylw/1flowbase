@@ -566,6 +566,7 @@ export function ApplicationLogsPage({
         >
           <div className="application-logs-page__conversation-log-panel">
             <ConversationLogPanel
+              defaultTraceToolsExpanded
               message={openConversationLogMessage}
               onClose={() => {
                 setOpenConversationLogMessage(null);

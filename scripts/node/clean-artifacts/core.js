@@ -42,7 +42,7 @@ function getRepoRoot() {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(`用法：node scripts/node/clean-artifacts.js [profile] [--apply]
+  writeStdout(`用法：node scripts/node/clean-artifacts/cli.js [profile] [--apply]
 
 默认 profile：status，仅打印关键临时产物体积，不删除文件。
 

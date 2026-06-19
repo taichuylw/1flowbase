@@ -322,7 +322,7 @@ describe('NodeInspector core', () => {
     expect(
       internalLlmSwitch.compareDocumentPosition(toolModeSelect) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     fireEvent.click(saveToolButton);
 
     await waitFor(() => {
@@ -421,7 +421,7 @@ describe('NodeInspector core', () => {
     expect(
       internalLlmSwitch.compareDocumentPosition(toolModeSelect) &
         Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       within(dialog).queryByRole('switch', { name: '开放外部工具' })
     ).not.toBeInTheDocument();

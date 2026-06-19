@@ -334,7 +334,6 @@
     "turn_off_system_variables": "关闭系统变量",
     "none": "无",
     "return_main_canvas": "返回主画布",
-    "route_trace": "route",
     "please_complete_first": "请先完善 {{value1}}。",
     "array_object": "数组对象 {{value1}}",
     "parameters": "参数",

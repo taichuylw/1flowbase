@@ -334,7 +334,6 @@
     "turn_off_system_variables": "Turn off system variables",
     "none": "None",
     "return_main_canvas": "Return to main canvas",
-    "route_trace": "route",
     "please_complete_first": "Please complete {{value1}} first.",
     "array_object": "Array object {{value1}}",
     "parameters": "parameters",

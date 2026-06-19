@@ -15,7 +15,7 @@
     "coverage:frontend": "../scripts/node/cli/exec-with-real-node.sh ../scripts/node/verify-coverage.js frontend",
     "verify:full": "../scripts/node/cli/exec-with-real-node.sh ../scripts/node/test-frontend.js full",
     "runtime-gate": "../scripts/node/cli/exec-with-real-node.sh ../scripts/node/cli/runtime-gate.js",
-    "style-boundary:all-pages": "../scripts/node/cli/exec-with-real-node.sh ../scripts/node/check-style-boundary.js all-pages",
+    "style-boundary:all-pages": "../scripts/node/cli/exec-with-real-node.sh ../scripts/node/check-style-boundary/cli.js all-pages",
     "format": "prettier --check .",
     "format:write": "prettier --write ."
   },

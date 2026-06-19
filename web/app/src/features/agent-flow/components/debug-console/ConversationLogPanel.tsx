@@ -17,10 +17,7 @@ import {
   Typography
 } from 'antd';
 
-import type {
-  AgentFlowDebugMessage,
-  AgentFlowTraceItem
-} from '../../api/runtime';
+import type { AgentFlowDebugMessage } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
 import { NodeRunPayloadSections } from '../detail/last-run/NodeRunPayloadSections';
 import type { RuntimeDebugArtifactBatchLoader } from '../detail/last-run/runtime-debug-payload';
@@ -38,140 +35,31 @@ import {
 import './conversation-log-panel.css';
 import { formatDateTime, formatNumber } from '../../../../shared/i18n/format';
 import { i18nText } from '../../../../shared/i18n/text';
+import type {
+  ConversationLogOverviewLoader,
+  ConversationLogRunOverview,
+  ConversationLogTraceLoader,
+  ConversationLogTraceNodeChildrenPageInfo,
+  ConversationLogTraceNodeContent,
+  ConversationLogTraceNodeDetail,
+  ConversationLogTraceNodeSummary,
+  ConversationLogTraceProjectionStatus
+} from './conversation-log-trace-model';
+import {
+  findNodeRunDetailRefId,
+  isToolModeTraceNode,
+  mapTraceContentToTraceItem,
+  mapTraceSummaryToTraceItem,
+  traceItemWithToolMode,
+  traceProjectionStatusSucceeded,
+  toolModeFromTraceNodes
+} from './conversation-log-trace-model';
+export type {
+  ConversationLogOverviewLoader,
+  ConversationLogTraceLoader
+} from './conversation-log-trace-model';
 
 const CONVERSATION_LOG_QUERY_STALE_TIME_MS = 60_000;
-
-interface ConversationLogTraceNodeSummary {
-  trace_node_id: string;
-  stable_locator?: string;
-  node_kind: string;
-  node_run_id?: string | null;
-  node_id?: string | null;
-  node_type?: string | null;
-  node_mode?: string | null;
-  node_alias: string;
-  status: string;
-  started_at: string;
-  finished_at?: string | null;
-  duration_ms?: number | null;
-  metrics_payload?: Record<string, unknown>;
-  has_children: boolean;
-  child_count?: number;
-  has_content: boolean;
-}
-
-interface ConversationLogTraceProjectionStatus {
-  projection_status:
-    | 'pending'
-    | 'running'
-    | 'succeeded'
-    | 'failed'
-    | 'stale'
-    | 'partial';
-  projection_version: number;
-  source_watermark: string;
-  attempt_count: number;
-  last_attempt_at?: string | null;
-  last_success_at?: string | null;
-  last_error_code?: string | null;
-  last_error_stage?: string | null;
-  last_error_source_kind?: string | null;
-  last_error_source_locator?: string | null;
-  last_error_ref?: string | null;
-  retriable: boolean;
-}
-
-interface ConversationLogTraceTree {
-  projection_status?: ConversationLogTraceProjectionStatus;
-  nodes: ConversationLogTraceNodeSummary[];
-}
-
-interface ConversationLogTraceNodeChildrenPageInfo {
-  has_more: boolean;
-  next_cursor?: string | null;
-  page_size: number;
-}
-
-interface ConversationLogTraceNodeChildren {
-  projection_status?: ConversationLogTraceProjectionStatus;
-  items: ConversationLogTraceNodeSummary[];
-  page_info: ConversationLogTraceNodeChildrenPageInfo;
-}
-
-interface ConversationLogTraceNodeContent {
-  trace_node_id: string;
-  node_kind: string;
-  projection_status?: ConversationLogTraceProjectionStatus;
-  content_kind?: string;
-  source_refs?: unknown;
-  detail_refs?: unknown;
-  payload: Record<string, unknown>;
-}
-
-interface ConversationLogTraceNodeDetail {
-  trace_node_id: string;
-  node_kind: string;
-  projection_status?: ConversationLogTraceProjectionStatus;
-  detail_ref_id: string;
-  detail_kind: string;
-  source_refs?: unknown;
-  payload: Record<string, unknown>;
-}
-
-interface ConversationLogRunOverview {
-  run: {
-    id: string;
-    status?: string;
-    compatibility_mode?: string | null;
-    started_at?: string | null;
-    finished_at?: string | null;
-  };
-  statistics?: {
-    total_tokens?: number | null;
-    unique_node_count?: number | null;
-    tool_callback_count?: number | null;
-  };
-  flow_run: {
-    id: string;
-    status: string;
-    input_payload: Record<string, unknown>;
-    output_payload: Record<string, unknown>;
-    error_payload?: Record<string, unknown> | null;
-    started_at: string;
-    finished_at?: string | null;
-  };
-  answer_snapshot?: {
-    text: string;
-    output_payload: Record<string, unknown>;
-  } | null;
-}
-
-export interface ConversationLogTraceLoader {
-  loadTree: (runId: string) => Promise<ConversationLogTraceTree>;
-  loadChildren: (
-    runId: string,
-    traceNodeId: string,
-    cursor?: string
-  ) => Promise<ConversationLogTraceNodeChildren>;
-  loadContent: (
-    runId: string,
-    traceNodeId: string
-  ) => Promise<ConversationLogTraceNodeContent>;
-  loadDetail?: (
-    runId: string,
-    traceNodeId: string,
-    detailRefId: string
-  ) => Promise<ConversationLogTraceNodeDetail>;
-  loadToolCallbackDetail?: (
-    runId: string,
-    traceNodeId: string,
-    toolCallId: string
-  ) => Promise<unknown>;
-}
-
-export interface ConversationLogOverviewLoader {
-  loadOverview: (runId: string) => Promise<ConversationLogRunOverview>;
-}
 
 function buildDetailInput(message: AgentFlowDebugMessage) {
   const firstTraceItem = message.traceSummary[0];
@@ -433,11 +321,13 @@ function ConversationLogDetail({
 }
 
 function ConversationTrace({
+  defaultToolsExpanded,
   message,
   onLoadArtifact,
   onLoadArtifacts,
   traceLoader
 }: {
+  defaultToolsExpanded: boolean;
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
@@ -449,6 +339,7 @@ function ConversationTrace({
     return (
       <LazyConversationTrace
         key={`${message.id}:${traceRunId}`}
+        defaultToolsExpanded={defaultToolsExpanded}
         onLoadArtifact={onLoadArtifact}
         onLoadArtifacts={onLoadArtifacts}
         runId={traceRunId}
@@ -465,349 +356,6 @@ function ConversationTrace({
       onLoadArtifacts={onLoadArtifacts}
     />
   );
-}
-
-function mapTraceSummaryToTraceItem(
-  summary: ConversationLogTraceNodeSummary
-): AgentFlowTraceItem {
-  const debugPayload =
-    summary.node_type === 'tool' && summary.node_mode
-      ? { tool_mode: summary.node_mode }
-      : {};
-
-  return {
-    nodeId: summary.node_id ?? summary.trace_node_id,
-    nodeRunId: summary.node_run_id ?? summary.trace_node_id,
-    nodeAlias: summary.node_alias,
-    nodeType: summary.node_type ?? summary.node_kind,
-    status: summary.status,
-    startedAt: summary.started_at,
-    finishedAt: summary.finished_at ?? null,
-    durationMs: summary.duration_ms ?? null,
-    inputPayload: {},
-    outputPayload: {},
-    errorPayload: null,
-    metricsPayload: summary.metrics_payload ?? {},
-    debugPayload
-  };
-}
-
-function isToolModeTraceNode(node: ConversationLogTraceNodeSummary) {
-  return node.node_kind === 'fusion' || node.node_kind === 'route';
-}
-
-function toolModeFromTraceNodes(nodes: ConversationLogTraceNodeSummary[]) {
-  const toolModeNode = nodes.find(isToolModeTraceNode);
-
-  return toolModeNode?.node_kind ?? null;
-}
-
-function traceItemWithToolMode(
-  item: AgentFlowTraceItem,
-  toolMode: string | null
-): AgentFlowTraceItem {
-  if (item.nodeType !== 'tool' || !toolMode) {
-    return item;
-  }
-
-  return {
-    ...item,
-    debugPayload: {
-      ...(item.debugPayload ?? {}),
-      tool_mode: toolMode
-    }
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function recordArray(value: unknown): Record<string, unknown>[] {
-  return Array.isArray(value) ? value.filter(isRecord) : [];
-}
-
-function firstStringField(
-  record: Record<string, unknown>,
-  keys: string[]
-): string | null {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function payloadRecordField(
-  payload: Record<string, unknown>,
-  key: string
-): Record<string, unknown> {
-  const value = payload[key];
-
-  return isRecord(value) ? value : {};
-}
-
-function firstPayloadRecordField(
-  payload: Record<string, unknown>,
-  keys: string[]
-): Record<string, unknown> {
-  for (const key of keys) {
-    const value = payloadRecordField(payload, key);
-
-    if (Object.keys(value).length > 0) {
-      return value;
-    }
-  }
-
-  return {};
-}
-
-function payloadValueHasValue(value: unknown): boolean {
-  if (value === null || value === undefined) {
-    return false;
-  }
-
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-
-  if (typeof value === 'object') {
-    return Object.keys(value).length > 0;
-  }
-
-  return true;
-}
-
-function pickPayloadFields(
-  payload: Record<string, unknown>,
-  keys: string[]
-): Record<string, unknown> {
-  const picked: Record<string, unknown> = {};
-
-  for (const key of keys) {
-    const value = payload[key];
-
-    if (payloadValueHasValue(value)) {
-      picked[key] = value;
-    }
-  }
-
-  return picked;
-}
-
-function omitPayloadFields(
-  payload: Record<string, unknown>,
-  keys: string[]
-): Record<string, unknown> {
-  const omitted = new Set(keys);
-  const next: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(payload)) {
-    if (!omitted.has(key) && payloadValueHasValue(value)) {
-      next[key] = value;
-    }
-  }
-
-  return next;
-}
-
-function mapToolCallbackPayloadToTraceItem(
-  fallback: AgentFlowTraceItem,
-  payload: Record<string, unknown>
-): AgentFlowTraceItem {
-  return {
-    ...fallback,
-    inputPayload: firstPayloadRecordField(payload, [
-      'request_payload',
-      'tool_call'
-    ]),
-    outputPayload: firstPayloadRecordField(payload, [
-      'parsed_result',
-      'tool_result',
-      'callback_payload'
-    ]),
-    debugPayload: pickPayloadFields(payload, [
-      'callback_task_id',
-      'tool_call_id',
-      'callback_status',
-      'execution_status',
-      'duration_ms',
-      'route_trace'
-    ])
-  };
-}
-
-function mapPayloadContentToTraceItem(
-  fallback: AgentFlowTraceItem,
-  content: ConversationLogTraceNodeContent
-): AgentFlowTraceItem {
-  const payload = content.payload;
-
-  if (!isRecord(payload)) {
-    return fallback;
-  }
-
-  if (content.node_kind === 'tool_callback') {
-    return mapToolCallbackPayloadToTraceItem(fallback, payload);
-  }
-
-  if (content.node_kind === 'fusion' || content.node_kind === 'route') {
-    const metricsPayload = payloadRecordField(payload, 'metrics_payload');
-    const usage = payloadRecordField(payload, 'usage');
-    const effectiveMetrics =
-      Object.keys(metricsPayload).length > 0 ? metricsPayload : usage;
-
-    return {
-      ...fallback,
-      inputPayload: {},
-      outputPayload:
-        Object.keys(effectiveMetrics).length > 0
-          ? { usage: effectiveMetrics }
-          : {},
-      debugPayload: payload,
-      metricsPayload: effectiveMetrics
-    };
-  }
-
-  if (content.node_kind === 'branch') {
-    const inputPayload = payloadRecordField(payload, 'input_payload');
-    const outputPayload = payloadRecordField(payload, 'output_payload');
-    const debugPayload = payloadRecordField(payload, 'debug_payload');
-    const metricsPayload = payloadRecordField(payload, 'metrics_payload');
-
-    return {
-      ...fallback,
-      inputPayload: Object.keys(inputPayload).length > 0 ? inputPayload : {},
-      outputPayload: Object.keys(outputPayload).length > 0 ? outputPayload : {},
-      debugPayload: Object.keys(debugPayload).length > 0 ? debugPayload : {},
-      metricsPayload:
-        Object.keys(metricsPayload).length > 0
-          ? metricsPayload
-          : fallback.metricsPayload
-    };
-  }
-
-  const inputPayload = payloadRecordField(payload, 'input_payload');
-  const outputPayload = payloadRecordField(payload, 'output_payload');
-  const debugPayload = payloadRecordField(payload, 'debug_payload');
-  const metricsPayload = payloadRecordField(payload, 'metrics_payload');
-  const errorPayload = payloadRecordField(payload, 'error_payload');
-  const hasStructuredPayload =
-    Object.keys(inputPayload).length > 0 ||
-    Object.keys(outputPayload).length > 0 ||
-    Object.keys(debugPayload).length > 0 ||
-    Object.keys(metricsPayload).length > 0 ||
-    Object.keys(errorPayload).length > 0;
-
-  if (!hasStructuredPayload) {
-    return {
-      ...fallback,
-      inputPayload: {},
-      outputPayload: {},
-      debugPayload: payload
-    };
-  }
-
-  return {
-    ...fallback,
-    inputPayload,
-    outputPayload,
-    errorPayload: Object.keys(errorPayload).length > 0 ? errorPayload : null,
-    metricsPayload:
-      Object.keys(metricsPayload).length > 0
-        ? metricsPayload
-        : fallback.metricsPayload,
-    debugPayload:
-      Object.keys(debugPayload).length > 0
-        ? debugPayload
-        : omitPayloadFields(payload, [
-            'input_payload',
-            'output_payload',
-            'error_payload',
-            'metrics_payload',
-            'debug_payload'
-          ])
-  };
-}
-
-function findNodeRunDetailRefId(
-  content: ConversationLogTraceNodeContent | undefined
-) {
-  if (!content || content.node_kind !== 'node_run') {
-    return null;
-  }
-
-  for (const detailRef of recordArray(content.detail_refs)) {
-    if (firstStringField(detailRef, ['detail_kind']) !== 'node_run') {
-      continue;
-    }
-
-    return firstStringField(detailRef, ['detail_ref_id']);
-  }
-
-  return null;
-}
-
-function mapNodeRunRecordToTraceItem(
-  fallback: AgentFlowTraceItem,
-  nodeRun: Record<string, unknown>
-): AgentFlowTraceItem {
-  const inputPayload = payloadRecordField(nodeRun, 'input_payload');
-  const outputPayload = payloadRecordField(nodeRun, 'output_payload');
-  const debugPayload = payloadRecordField(nodeRun, 'debug_payload');
-  const metricsPayload = payloadRecordField(nodeRun, 'metrics_payload');
-  const errorPayload = payloadRecordField(nodeRun, 'error_payload');
-
-  return {
-    ...fallback,
-    inputPayload,
-    outputPayload,
-    errorPayload: Object.keys(errorPayload).length > 0 ? errorPayload : null,
-    metricsPayload:
-      Object.keys(metricsPayload).length > 0
-        ? metricsPayload
-        : fallback.metricsPayload,
-    debugPayload
-  };
-}
-
-function mapDetailContentToTraceItem(
-  fallback: AgentFlowTraceItem,
-  detail: ConversationLogTraceNodeDetail | undefined
-): AgentFlowTraceItem {
-  if (!detail || detail.detail_kind !== 'node_run') {
-    return fallback;
-  }
-
-  const nodeRun = payloadRecordField(detail.payload, 'node_run');
-
-  if (Object.keys(nodeRun).length === 0) {
-    return fallback;
-  }
-
-  return mapNodeRunRecordToTraceItem(fallback, nodeRun);
-}
-
-function mapTraceContentToTraceItem(
-  fallback: AgentFlowTraceItem,
-  content: ConversationLogTraceNodeContent | undefined,
-  detail?: ConversationLogTraceNodeDetail
-): AgentFlowTraceItem {
-  const contentItem = content
-    ? mapPayloadContentToTraceItem(fallback, content)
-    : fallback;
-
-  return mapDetailContentToTraceItem(contentItem, detail);
-}
-
-function traceProjectionStatusSucceeded(
-  status: ConversationLogTraceProjectionStatus | undefined
-) {
-  return !status || status.projection_status === 'succeeded';
 }
 
 const initialLazyTraceChildrenState =
@@ -852,11 +400,13 @@ function TraceProjectionStatusNotice({
 }
 
 function LazyConversationTrace({
+  defaultToolsExpanded,
   onLoadArtifact,
   onLoadArtifacts,
   runId,
   traceLoader
 }: {
+  defaultToolsExpanded: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   runId: string;
@@ -902,6 +452,7 @@ function LazyConversationTrace({
   return (
     <div className="agent-flow-editor__conversation-log-trace">
       <LazyTraceNodeList
+        defaultToolsExpanded={defaultToolsExpanded}
         nodes={nodes}
         onLoadArtifact={onLoadArtifact}
         onLoadArtifacts={onLoadArtifacts}
@@ -913,12 +464,14 @@ function LazyConversationTrace({
 }
 
 function LazyTraceNodeList({
+  defaultToolsExpanded,
   nodes,
   onLoadArtifact,
   onLoadArtifacts,
   runId,
   traceLoader
 }: {
+  defaultToolsExpanded: boolean;
   nodes: ConversationLogTraceNodeSummary[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
@@ -933,6 +486,7 @@ function LazyTraceNodeList({
       {nodes.map((node) => (
         <LazyTraceNodeItem
           key={`${runId}:${node.trace_node_id}`}
+          defaultToolsExpanded={defaultToolsExpanded}
           node={node}
           onLoadArtifact={onLoadArtifact}
           onLoadArtifacts={onLoadArtifacts}
@@ -945,12 +499,14 @@ function LazyTraceNodeList({
 }
 
 function FlattenedToolModeTraceNodeChildren({
+  defaultToolsExpanded,
   nodes,
   onLoadArtifact,
   onLoadArtifacts,
   runId,
   traceLoader
 }: {
+  defaultToolsExpanded: boolean;
   nodes: ConversationLogTraceNodeSummary[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
@@ -966,6 +522,7 @@ function FlattenedToolModeTraceNodeChildren({
       {nodes.map((node) => (
         <FlattenedToolModeTraceNodeChild
           key={node.trace_node_id}
+          defaultToolsExpanded={defaultToolsExpanded}
           node={node}
           onLoadArtifact={onLoadArtifact}
           onLoadArtifacts={onLoadArtifacts}
@@ -978,12 +535,14 @@ function FlattenedToolModeTraceNodeChildren({
 }
 
 function FlattenedToolModeTraceNodeChild({
+  defaultToolsExpanded,
   node,
   onLoadArtifact,
   onLoadArtifacts,
   runId,
   traceLoader
 }: {
+  defaultToolsExpanded: boolean;
   node: ConversationLogTraceNodeSummary;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
@@ -1024,6 +583,7 @@ function FlattenedToolModeTraceNodeChild({
       ) : null}
       {childNodes.length > 0 ? (
         <LazyTraceNodeList
+          defaultToolsExpanded={defaultToolsExpanded}
           nodes={childNodes}
           onLoadArtifact={onLoadArtifact}
           onLoadArtifacts={onLoadArtifacts}
@@ -1036,26 +596,28 @@ function FlattenedToolModeTraceNodeChild({
 }
 
 function LazyTraceNodeItem({
+  defaultToolsExpanded,
   node,
   onLoadArtifact,
   onLoadArtifacts,
   runId,
   traceLoader
 }: {
+  defaultToolsExpanded: boolean;
   node: ConversationLogTraceNodeSummary;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
+  const isToolGroupNode =
+    node.node_kind === 'tool_group' || node.node_type === 'tools';
   const [expanded, setExpanded] = useState(false);
   const [childrenState, dispatchChildrenState] = useReducer(
     lazyTraceChildrenReducer,
     initialLazyTraceChildrenState
   );
   const fallbackItem = useMemo(() => mapTraceSummaryToTraceItem(node), [node]);
-  const isToolGroupNode =
-    node.node_kind === 'tool_group' || node.node_type === 'tools';
   const contentQuery = useQuery({
     enabled: expanded && node.has_content && !isToolGroupNode,
     queryKey: [
@@ -1177,6 +739,7 @@ function LazyTraceNodeItem({
     visibleChildNodes.length > 0 || toolModeNodes.length > 0 ? (
       <>
         <FlattenedToolModeTraceNodeChildren
+          defaultToolsExpanded={defaultToolsExpanded}
           nodes={toolModeNodes}
           onLoadArtifact={onLoadArtifact}
           onLoadArtifacts={onLoadArtifacts}
@@ -1185,6 +748,7 @@ function LazyTraceNodeItem({
         />
         {visibleChildNodes.length > 0 ? (
           <LazyTraceNodeList
+            defaultToolsExpanded={defaultToolsExpanded}
             nodes={visibleChildNodes}
             onLoadArtifact={onLoadArtifact}
             onLoadArtifacts={onLoadArtifacts}
@@ -1252,6 +816,7 @@ function LazyTraceNodeItem({
             <div className="agent-flow-editor__conversation-log-json-list">
               <DebugWorkflowNodeDetailContent
                 beforePayloadContent={childNodesBeforePayload}
+                defaultToolsExpanded={defaultToolsExpanded}
                 item={item}
                 onLoadArtifact={onLoadArtifact}
                 onLoadArtifacts={onLoadArtifacts}
@@ -1395,6 +960,7 @@ function useConversationLogArtifactLoader(
 }
 
 export function ConversationLogPanel({
+  defaultTraceToolsExpanded = false,
   message,
   onClose,
   onLoadArtifact,
@@ -1402,6 +968,7 @@ export function ConversationLogPanel({
   overviewLoader,
   traceLoader
 }: {
+  defaultTraceToolsExpanded?: boolean;
   message: AgentFlowDebugMessage;
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
@@ -1445,6 +1012,7 @@ export function ConversationLogPanel({
             children:
               activeTabKey === 'trace' ? (
                 <ConversationTrace
+                  defaultToolsExpanded={defaultTraceToolsExpanded}
                   message={message}
                   onLoadArtifact={loadArtifact}
                   onLoadArtifacts={onLoadArtifacts}

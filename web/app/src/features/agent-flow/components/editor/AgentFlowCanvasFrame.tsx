@@ -51,12 +51,7 @@ import {
   fetchModelProviderOptions,
   modelProviderOptionsQueryKey
 } from '../../api/model-provider-options';
-import {
-  NODE_DETAIL_DEFAULT_WIDTH,
-  NODE_DETAIL_MIN_CANVAS_WIDTH,
-  clampNodeDetailWidth,
-  getNodeDetailLayout
-} from '../../lib/detail-panel-width';
+import { clampNodeDetailWidth } from '../../lib/detail-panel-width';
 import { validateDocument } from '../../lib/validate-document';
 import { buildNodePickerOptions } from '../../lib/plugin-node-definitions';
 import { useAuthStore } from '../../../../state/auth-store';
@@ -88,30 +83,23 @@ import { SystemVariablesPanel } from './SystemVariablesPanel';
 import { i18nText } from '../../../../shared/i18n/text';
 import { downloadTemplateFile } from '../../../applications/lib/template-download';
 import {
-  CONVERSATION_LOG_MIN_WIDTH,
   CONVERSATION_LOG_DEFAULT_WIDTH,
   DEBUG_CONSOLE_DEFAULT_WIDTH,
   DEBUG_CONSOLE_GAP,
-  DEBUG_CONSOLE_MIN_WIDTH,
   ENVIRONMENT_VARIABLES_DOCK_WIDTH,
-  HISTORY_DOCK_MIN_WIDTH,
   HISTORY_DOCK_WIDTH,
   SYSTEM_VARIABLES_DOCK_WIDTH,
-  VARIABLE_CACHE_BOTTOM_GAP,
   VARIABLE_CACHE_DEFAULT_HEIGHT,
   VARIABLE_CACHE_DEFAULT_SIDEBAR_WIDTH,
-  VARIABLE_CACHE_MAX_TOP_GAP,
-  VARIABLE_CACHE_MIN_DETAIL_WIDTH,
-  VARIABLE_CACHE_MIN_HEIGHT,
-  VARIABLE_CACHE_MIN_SIDEBAR_WIDTH,
-  VARIABLES_DOCK_MIN_WIDTH
-} from './canvas-frame-layout';
-import { createCanvasFrameResizeHandlers } from './canvas-frame-resize-handlers';
+  VARIABLE_CACHE_MIN_SIDEBAR_WIDTH
+} from './canvas-frame/layout';
+import { deriveCanvasFrameLayout } from './canvas-frame/derived-layout';
+import { createCanvasFrameResizeHandlers } from './canvas-frame/resize-handlers';
 import {
   countIssuesByNodeId,
   getDocumentWithLatestViewport
-} from './canvas-frame-document';
-import type { AgentFlowCanvasFrameProps } from './canvas-frame-types';
+} from './canvas-frame/document';
+import type { AgentFlowCanvasFrameProps } from './canvas-frame/types';
 
 type NodePreviewAction = 'run' | 'debug';
 
@@ -572,109 +560,43 @@ export function AgentFlowCanvasFrame({
 
   useEditorShortcuts();
 
-  const canvasFrameWidth =
-    bodyWidth || NODE_DETAIL_DEFAULT_WIDTH + NODE_DETAIL_MIN_CANVAS_WIDTH;
-  const maxDebugConsoleWidth = Math.max(
-    canvasFrameWidth -
-      (selectedNodeId ? nodeDetailWidth : 0) -
-      NODE_DETAIL_MIN_CANVAS_WIDTH,
-    DEBUG_CONSOLE_MIN_WIDTH
-  );
-  const boundedDebugConsoleWidth = Math.min(
-    Math.max(debugConsoleWidth, DEBUG_CONSOLE_MIN_WIDTH),
-    maxDebugConsoleWidth
-  );
-  const conversationLogOpen =
-    debugConsoleOpen && conversationLogMessage !== null;
-  const maxConversationLogWidth = Math.max(
-    canvasFrameWidth -
-      boundedDebugConsoleWidth -
-      DEBUG_CONSOLE_GAP -
-      (selectedNodeId ? nodeDetailWidth + DEBUG_CONSOLE_GAP : 0) -
-      NODE_DETAIL_MIN_CANVAS_WIDTH,
-    CONVERSATION_LOG_MIN_WIDTH
-  );
-  const boundedConversationLogWidth = Math.min(
-    Math.max(conversationLogWidth, CONVERSATION_LOG_MIN_WIDTH),
-    maxConversationLogWidth
-  );
-  const variablesDockOpen =
-    systemVariablesOpen ||
-    environmentVariablesOpen ||
-    conversationVariablesOpen;
-  const maxVariablesDockWidth = Math.max(
-    canvasFrameWidth -
-      (selectedNodeId ? nodeDetailWidth : 0) -
-      NODE_DETAIL_MIN_CANVAS_WIDTH,
-    VARIABLES_DOCK_MIN_WIDTH
-  );
-  const rawVariablesDockWidth = conversationVariablesOpen
-    ? conversationVariablesDockWidth
-    : environmentVariablesOpen
-      ? environmentVariablesDockWidth
-      : systemVariablesDockWidth;
-  const boundedVariablesDockWidth = Math.min(
-    Math.max(rawVariablesDockWidth, VARIABLES_DOCK_MIN_WIDTH),
-    maxVariablesDockWidth
-  );
-  const maxHistoryDockWidth = Math.max(
-    canvasFrameWidth -
-      (selectedNodeId ? nodeDetailWidth : 0) -
-      NODE_DETAIL_MIN_CANVAS_WIDTH,
-    HISTORY_DOCK_MIN_WIDTH
-  );
-  const boundedHistoryDockWidth = Math.min(
-    Math.max(historyDockWidth, HISTORY_DOCK_MIN_WIDTH),
-    maxHistoryDockWidth
-  );
-  const sideDockOccupiedWidth = debugConsoleOpen
-    ? boundedDebugConsoleWidth +
-      DEBUG_CONSOLE_GAP +
-      (conversationLogOpen
-        ? boundedConversationLogWidth + DEBUG_CONSOLE_GAP
-        : 0)
-    : variablesDockOpen
-      ? boundedVariablesDockWidth + DEBUG_CONSOLE_GAP
-      : historyOpen
-        ? boundedHistoryDockWidth + DEBUG_CONSOLE_GAP
-        : 0;
-  const detailContainerWidth = canvasFrameWidth - sideDockOccupiedWidth;
-  const boundedNodeDetailWidth = clampNodeDetailWidth(
+  const {
+    boundedConversationLogWidth,
+    boundedDebugConsoleWidth,
+    boundedHistoryDockWidth,
+    boundedNodeDetailWidth,
+    boundedVariableCacheHeight,
+    boundedVariableCacheSidebarWidth,
+    boundedVariablesDockWidth,
+    canvasFrameWidth,
+    conversationLogOpen,
+    detailContainerWidth,
+    nodeDetailLayout,
+    sideDockOccupiedWidth,
+    variableCacheMaxHeight,
+    variableCacheRightOffset,
+    variableCacheSidebarMaxWidth,
+    variablesDockOpen
+  } = deriveCanvasFrameLayout({
+    bodyHeight,
+    bodyWidth,
+    conversationLogMessageOpen: conversationLogMessage !== null,
+    conversationLogWidth,
+    conversationVariablesDockWidth,
+    conversationVariablesOpen,
+    debugConsoleOpen,
+    debugConsoleWidth,
+    environmentVariablesDockWidth,
+    environmentVariablesOpen,
+    historyDockWidth,
+    historyOpen,
     nodeDetailWidth,
-    detailContainerWidth
-  );
-  const nodeDetailLayout = getNodeDetailLayout(boundedNodeDetailWidth);
-  const nodeDetailOccupiedWidth = selectedNodeId
-    ? boundedNodeDetailWidth + DEBUG_CONSOLE_GAP
-    : 0;
-  const variableCacheRightOffset =
-    16 + nodeDetailOccupiedWidth + sideDockOccupiedWidth;
-  const variableCacheCenterLeft = Math.max(
-    120,
-    (canvasFrameWidth - variableCacheRightOffset) / 2
-  );
-  const variableCacheMaxHeight = Math.max(
-    VARIABLE_CACHE_MIN_HEIGHT,
-    (bodyHeight || VARIABLE_CACHE_DEFAULT_HEIGHT + VARIABLE_CACHE_MAX_TOP_GAP) -
-      VARIABLE_CACHE_MAX_TOP_GAP -
-      VARIABLE_CACHE_BOTTOM_GAP
-  );
-  const boundedVariableCacheHeight = Math.min(
-    Math.max(variableCacheHeight, VARIABLE_CACHE_MIN_HEIGHT),
-    variableCacheMaxHeight
-  );
-  const variableCachePanelInnerWidth = Math.max(
-    canvasFrameWidth - variableCacheRightOffset - 32,
-    VARIABLE_CACHE_MIN_DETAIL_WIDTH + VARIABLE_CACHE_MIN_SIDEBAR_WIDTH
-  );
-  const variableCacheSidebarMaxWidth = Math.max(
-    variableCachePanelInnerWidth - VARIABLE_CACHE_MIN_DETAIL_WIDTH,
-    VARIABLE_CACHE_MIN_SIDEBAR_WIDTH
-  );
-  const boundedVariableCacheSidebarWidth = Math.max(
-    VARIABLE_CACHE_MIN_SIDEBAR_WIDTH,
-    Math.min(variableCacheSidebarWidth, variableCacheSidebarMaxWidth)
-  );
+    selectedNodeId,
+    systemVariablesDockWidth,
+    systemVariablesOpen,
+    variableCacheHeight,
+    variableCacheSidebarWidth
+  });
 
   const {
     handleConversationLogResizeStart,

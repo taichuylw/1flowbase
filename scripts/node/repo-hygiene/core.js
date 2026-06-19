@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const REPORT_FILE = 'repo-hygiene.json';
@@ -616,8 +617,35 @@ function loadFileContents(files) {
   }));
 }
 
-function collectLocalArtifactFindings(files) {
+function collectTrackedFiles(repoRoot) {
+  const result = spawnSync('git', ['-C', repoRoot, 'ls-files', '-z', '--', ...ROOT_ENTRIES], {
+    encoding: 'utf8',
+    maxBuffer: 8 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+
+  if (result.error || result.status !== 0) {
+    return null;
+  }
+
+  return new Set(
+    result.stdout
+      .split('\0')
+      .filter(Boolean)
+      .map(normalizePath)
+  );
+}
+
+function shouldReportTrackedArtifact(relativePath, trackedFiles) {
+  return trackedFiles === null || trackedFiles.has(relativePath);
+}
+
+function collectLocalArtifactFindings(files, { trackedFiles = null } = {}) {
   return files.flatMap(({ relativePath }) => {
+    if (!shouldReportTrackedArtifact(relativePath, trackedFiles)) {
+      return [];
+    }
+
     if (LOCAL_ENV_ARTIFACT_PATTERN.test(relativePath)) {
       return [createFinding({
         rule: 'tracked-env-artifact',
@@ -646,12 +674,15 @@ function collectLocalArtifactFindings(files) {
   });
 }
 
-function collectRepoHygieneFindings({ repoRoot = getRepoRoot() } = {}) {
+function collectRepoHygieneFindings({
+  repoRoot = getRepoRoot(),
+  trackedFiles = collectTrackedFiles(repoRoot),
+} = {}) {
   const files = collectSourceFiles(repoRoot);
   const fileContents = loadFileContents(files);
   const findings = [];
 
-  findings.push(...collectLocalArtifactFindings(files));
+  findings.push(...collectLocalArtifactFindings(files, { trackedFiles }));
 
   for (const fileContent of fileContents) {
     findings.push(...scanSourceFile(fileContent));
@@ -787,6 +818,7 @@ module.exports = {
   collectDuplicateTestTitleFindings,
   collectRepoHygieneFindings,
   collectSourceFiles,
+  collectTrackedFiles,
   loadTrackedWarnings,
   main,
   parseRepoHygieneCliArgs,

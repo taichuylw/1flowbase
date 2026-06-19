@@ -146,27 +146,27 @@ CI 组合入口，当前执行 `verify-repo`、`verify-backend-consistency` 与 
 
 ## Frontend Tooling
 
-### `node scripts/node/check-style-boundary.js <component|page|file|all-pages> [target]`
+### `node scripts/node/check-style-boundary/cli.js <component|page|file|all-pages> [target]`
 
 检查样式影响边界。
 
 ```bash
-node scripts/node/check-style-boundary.js component component.account-popup
-node scripts/node/check-style-boundary.js page page.home
-node scripts/node/check-style-boundary.js file web/app/src/styles/global.css
-node scripts/node/check-style-boundary.js all-pages
+node scripts/node/check-style-boundary/cli.js component component.account-popup
+node scripts/node/check-style-boundary/cli.js page page.home
+node scripts/node/check-style-boundary/cli.js file web/app/src/styles/global.css
+node scripts/node/check-style-boundary/cli.js all-pages
 ```
 
 脚本会按需确保前端开发服务可用，并通过 Playwright 读取样式边界场景。
 
-### `node scripts/node/page-debug.js [snapshot|open|login] <route-or-url> [选项]`
+### `node scripts/node/page-debug/cli.js [snapshot|open|login] <route-or-url> [选项]`
 
 页面调试和取证脚本。
 
 ```bash
-node scripts/node/page-debug.js /workspace
-node scripts/node/page-debug.js open /workspace --headless false
-node scripts/node/page-debug.js login --account <account> --password <password>
+node scripts/node/page-debug/cli.js /workspace
+node scripts/node/page-debug/cli.js open /workspace --headless false
+node scripts/node/page-debug/cli.js login --account <account> --password <password>
 ```
 
 默认产物写入 `tmp/page-debug/<timestamp>/`，包括截图、控制台日志、元数据和 DOM snapshot。
@@ -289,30 +289,30 @@ node scripts/node/cli/bump-version.js --to 0.3.0
 - 不修改插件 manifest、Docker env 文件或第三方镜像 tag。
 - `--to <x.y.z>` 不能和 `0`、`1`、`2`、`patch`、`minor`、`major` 同时使用。
 
-### `node scripts/node/cli/verify-container-version.js <component> <vX.Y.Z>`
+### `node scripts/node/container-image-security/verify-version.js <component> <vX.Y.Z>`
 
 校验容器镜像 tag 是否和组件 manifest 版本一致。
 
 ```bash
-node scripts/node/cli/verify-container-version.js print-tag web
-node scripts/node/cli/verify-container-version.js web v0.3.0
-node scripts/node/cli/verify-container-version.js api-server v0.3.0
-node scripts/node/cli/verify-container-version.js plugin-runner v0.3.0
+node scripts/node/container-image-security/verify-version.js print-tag web
+node scripts/node/container-image-security/verify-version.js web v0.3.0
+node scripts/node/container-image-security/verify-version.js api-server v0.3.0
+node scripts/node/container-image-security/verify-version.js plugin-runner v0.3.0
 ```
 
 支持组件：`web`、`api-server`、`plugin-runner`。
 
 ## Plugin CLI
 
-### `node scripts/node/plugin.js <command> [options]`
+### `node scripts/node/plugin/cli.js <command> [options]`
 
 宿主侧插件脚手架和打包工具。
 
 ```bash
-node scripts/node/plugin.js init <plugin-path>
-node scripts/node/plugin.js demo init <plugin-path>
-node scripts/node/plugin.js demo dev <plugin-path> --port 4310
-node scripts/node/plugin.js package <plugin-path> --out ./dist
+node scripts/node/plugin/cli.js init <plugin-path>
+node scripts/node/plugin/cli.js demo init <plugin-path>
+node scripts/node/plugin/cli.js demo dev <plugin-path> --port 4310
+node scripts/node/plugin/cli.js package <plugin-path> --out ./dist
 ```
 
 说明：
@@ -327,15 +327,15 @@ node scripts/node/plugin.js package <plugin-path> --out ./dist
 
 ## Artifact Cleanup
 
-### `node scripts/node/clean-build-cache.js [all|backend|frontend] [选项]`
+### `node scripts/node/clean-build-cache/cli.js [all|backend|frontend] [选项]`
 
 停止 `api-server` 与 `plugin-runner`，然后清理本地构建缓存。默认范围是 `all`，会真实删除。
 
 ```bash
-node scripts/node/clean-build-cache.js --dry-run
-node scripts/node/clean-build-cache.js
-node scripts/node/clean-build-cache.js --backend-only
-node scripts/node/clean-build-cache.js --frontend-only
+node scripts/node/clean-build-cache/cli.js --dry-run
+node scripts/node/clean-build-cache/cli.js
+node scripts/node/clean-build-cache/cli.js --backend-only
+node scripts/node/clean-build-cache/cli.js --frontend-only
 ```
 
 范围：
@@ -345,17 +345,17 @@ node scripts/node/clean-build-cache.js --frontend-only
 - `frontend` / `--frontend-only`: 仅清理前端构建缓存。
 - `--dry-run`: 只打印将要清理的路径，不停止进程、不删除文件。
 
-### `node scripts/node/clean-artifacts.js [profile] [--apply]`
+### `node scripts/node/clean-artifacts/cli.js [profile] [--apply]`
 
 查看或清理本地临时产物。默认 profile 是 `status`，只打印体积，不删除。
 
 ```bash
-node scripts/node/clean-artifacts.js
-node scripts/node/clean-artifacts.js light
-node scripts/node/clean-artifacts.js light --apply
-node scripts/node/clean-artifacts.js backend-cache --apply
-node scripts/node/clean-artifacts.js all --apply
-node scripts/node/clean-artifacts.js deep --apply
+node scripts/node/clean-artifacts/cli.js
+node scripts/node/clean-artifacts/cli.js light
+node scripts/node/clean-artifacts/cli.js light --apply
+node scripts/node/clean-artifacts/cli.js backend-cache --apply
+node scripts/node/clean-artifacts/cli.js all --apply
+node scripts/node/clean-artifacts/cli.js deep --apply
 ```
 
 profile：
