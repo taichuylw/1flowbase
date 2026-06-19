@@ -179,6 +179,10 @@ export type ApplicationRunSortField =
 export type ApplicationRunSortOrder = 'asc' | 'desc';
 export type ApplicationRunCacheMode = 'default' | 'refresh';
 
+const TRACE_NODE_ARTIFACT_PREVIEW_AUTO_QUERY = {
+  artifact_preview: 'auto'
+} as const;
+
 export interface FetchApplicationRunMonitoringReportInput {
   timeRangeDays?: number | null;
   bucket?: ApplicationRunMonitoringBucket;
@@ -503,7 +507,8 @@ export function fetchApplicationRunTraceNodeContent(
     applicationId,
     runId,
     traceNodeId,
-    getApplicationsApiBaseUrl()
+    getApplicationsApiBaseUrl(),
+    TRACE_NODE_ARTIFACT_PREVIEW_AUTO_QUERY
   );
 }
 
@@ -518,7 +523,8 @@ export function fetchApplicationRunTraceNodeDetail(
     runId,
     traceNodeId,
     detailRefId,
-    getApplicationsApiBaseUrl()
+    getApplicationsApiBaseUrl(),
+    TRACE_NODE_ARTIFACT_PREVIEW_AUTO_QUERY
   );
 }
 

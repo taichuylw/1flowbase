@@ -54,12 +54,31 @@ async fn load_trace_node_content_payload(
     flow_run_id: &str,
     trace_node_id: &str,
 ) -> Value {
+    load_trace_node_content_payload_with_query(
+        app,
+        cookie,
+        application_id,
+        flow_run_id,
+        trace_node_id,
+        "",
+    )
+    .await
+}
+
+async fn load_trace_node_content_payload_with_query(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    flow_run_id: &str,
+    trace_node_id: &str,
+    query: &str,
+) -> Value {
     let content = app
         .clone()
         .oneshot(
             Request::builder()
                 .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{trace_node_id}/content"
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{trace_node_id}/content{query}"
                 ))
                 .header("cookie", cookie)
                 .body(Body::empty())
@@ -135,12 +154,33 @@ async fn load_trace_node_detail_payload(
     trace_node_id: &str,
     detail_ref_id: &str,
 ) -> Value {
+    load_trace_node_detail_payload_with_query(
+        app,
+        cookie,
+        application_id,
+        flow_run_id,
+        trace_node_id,
+        detail_ref_id,
+        "",
+    )
+    .await
+}
+
+async fn load_trace_node_detail_payload_with_query(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    flow_run_id: &str,
+    trace_node_id: &str,
+    detail_ref_id: &str,
+    query: &str,
+) -> Value {
     let detail = app
         .clone()
         .oneshot(
             Request::builder()
                 .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{trace_node_id}/details/{detail_ref_id}"
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree/nodes/{trace_node_id}/details/{detail_ref_id}{query}"
                 ))
                 .header("cookie", cookie)
                 .body(Body::empty())
@@ -545,6 +585,7 @@ async fn application_runtime_routes_trace_node_detail_offloads_provider_events()
             })
         })
         .collect();
+    let provider_raw_response = "raw-provider-response-".repeat(180);
 
     <MainDurableStore as OrchestrationRuntimeRepository>::update_node_run(
         &state.store,
@@ -558,7 +599,8 @@ async fn application_runtime_routes_trace_node_detail_offloads_provider_events()
             metrics_payload: json!({}),
             debug_payload: json!({
                 "provider": "deepseek",
-                "provider_events": provider_events.clone()
+                "provider_events": provider_events.clone(),
+                "provider_raw_response": provider_raw_response.clone()
             }),
             finished_at: Some(time::OffsetDateTime::now_utc()),
         },
@@ -575,7 +617,7 @@ async fn application_runtime_routes_trace_node_detail_offloads_provider_events()
         .expect("LLM node should be present")["trace_node_id"]
         .as_str()
         .unwrap();
-    let node_run = load_trace_node_node_run_detail_payload(
+    let content_payload = load_trace_node_content_payload(
         &app,
         &cookie,
         &application_id,
@@ -583,6 +625,45 @@ async fn application_runtime_routes_trace_node_detail_offloads_provider_events()
         llm_trace_node_id,
     )
     .await;
+    let detail_ref_id = content_payload["data"]["detail_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|detail_ref| detail_ref["detail_kind"] == json!("node_run"))
+        .expect("node_run detail ref should be advertised")["detail_ref_id"]
+        .as_str()
+        .expect("node_run detail ref id should be a string");
+    let raw_detail_payload = load_trace_node_detail_payload(
+        &app,
+        &cookie,
+        &application_id,
+        flow_run_id,
+        llm_trace_node_id,
+        detail_ref_id,
+    )
+    .await;
+    let raw_node_run = &raw_detail_payload["data"]["payload"]["node_run"];
+    assert_eq!(
+        raw_node_run["debug_payload"]["provider_events"],
+        json!(provider_events),
+        "trace node detail should return raw debug fields unless artifact_preview is requested"
+    );
+    assert_eq!(
+        raw_node_run["debug_payload"]["provider_raw_response"],
+        json!(provider_raw_response)
+    );
+
+    let auto_detail_payload = load_trace_node_detail_payload_with_query(
+        &app,
+        &cookie,
+        &application_id,
+        flow_run_id,
+        llm_trace_node_id,
+        detail_ref_id,
+        "?artifact_preview=auto",
+    )
+    .await;
+    let node_run = &auto_detail_payload["data"]["payload"]["node_run"];
     let provider_events_preview = &node_run["debug_payload"]["provider_events"];
 
     assert_eq!(
@@ -603,6 +684,31 @@ async fn application_runtime_routes_trace_node_detail_offloads_provider_events()
             > provider_events_preview["preview_size_bytes"]
                 .as_i64()
                 .unwrap()
+    );
+
+    let targeted_detail_payload = load_trace_node_detail_payload_with_query(
+        &app,
+        &cookie,
+        &application_id,
+        flow_run_id,
+        llm_trace_node_id,
+        detail_ref_id,
+        "?artifact_preview_field=node_run.debug_payload.provider_events",
+    )
+    .await;
+    let targeted_node_run = &targeted_detail_payload["data"]["payload"]["node_run"];
+    assert_eq!(
+        targeted_node_run["debug_payload"]["provider_events"]["__runtime_debug_artifact"],
+        json!(true)
+    );
+    assert_eq!(
+        targeted_node_run["debug_payload"]["provider_events"]["field_path"],
+        json!(["node_run", "debug_payload", "provider_events"])
+    );
+    assert_eq!(
+        targeted_node_run["debug_payload"]["provider_raw_response"],
+        json!(provider_raw_response),
+        "artifact_preview_field must not materialize sibling fields"
     );
 
     let artifact_ref = provider_events_preview["artifact_ref"]
@@ -684,6 +790,8 @@ async fn application_runtime_routes_trace_node_content_offloads_route_provider_e
             })
         })
         .collect();
+    let route_raw_response = "route-raw-response-".repeat(180);
+    let route_output_text = "route-output-text-".repeat(180);
 
     <MainDurableStore as OrchestrationRuntimeRepository>::update_node_run(
         &state.store,
@@ -711,10 +819,11 @@ async fn application_runtime_routes_trace_node_content_offloads_route_provider_e
                                 "node_alias": "LLM2",
                                 "status": "succeeded",
                                 "output_payload": {
-                                    "text": "评审完成"
+                                    "text": route_output_text.clone()
                                 },
                                 "debug_payload": {
-                                    "provider_events": provider_events.clone()
+                                    "provider_events": provider_events.clone(),
+                                    "provider_raw_response": route_raw_response.clone()
                                 }
                             }
                         ]
@@ -781,12 +890,35 @@ async fn application_runtime_routes_trace_node_content_offloads_route_provider_e
         .as_str()
         .expect("branch trace node id should exist");
 
-    let branch_content = load_trace_node_content_payload(
+    let raw_branch_content = load_trace_node_content_payload(
         &app,
         &cookie,
         &application_id,
         flow_run_id,
         branch_trace_node_id,
+    )
+    .await;
+    assert_eq!(
+        raw_branch_content["data"]["payload"]["debug_payload"]["provider_events"],
+        json!(provider_events),
+        "trace node content should return raw payload fields unless artifact_preview is requested"
+    );
+    assert_eq!(
+        raw_branch_content["data"]["payload"]["debug_payload"]["provider_raw_response"],
+        json!(route_raw_response)
+    );
+    assert_eq!(
+        raw_branch_content["data"]["payload"]["output_payload"]["text"],
+        json!(route_output_text)
+    );
+
+    let branch_content = load_trace_node_content_payload_with_query(
+        &app,
+        &cookie,
+        &application_id,
+        flow_run_id,
+        branch_trace_node_id,
+        "?artifact_preview=auto",
     )
     .await;
     let provider_events_preview =
@@ -799,6 +931,39 @@ async fn application_runtime_routes_trace_node_content_offloads_route_provider_e
     assert_eq!(
         provider_events_preview["field_path"],
         json!(["debug_payload", "provider_events"])
+    );
+
+    let targeted_branch_content = load_trace_node_content_payload_with_query(
+        &app,
+        &cookie,
+        &application_id,
+        flow_run_id,
+        branch_trace_node_id,
+        "?artifact_preview_field=debug_payload.provider_events&artifact_preview_field=output_payload",
+    )
+    .await;
+    assert_eq!(
+        targeted_branch_content["data"]["payload"]["debug_payload"]["provider_events"]
+            ["__runtime_debug_artifact"],
+        json!(true)
+    );
+    assert_eq!(
+        targeted_branch_content["data"]["payload"]["debug_payload"]["provider_events"]
+            ["field_path"],
+        json!(["debug_payload", "provider_events"])
+    );
+    assert_eq!(
+        targeted_branch_content["data"]["payload"]["debug_payload"]["provider_raw_response"],
+        json!(route_raw_response),
+        "artifact_preview_field must leave non-selected siblings raw"
+    );
+    assert_eq!(
+        targeted_branch_content["data"]["payload"]["output_payload"]["__runtime_debug_artifact"],
+        json!(true)
+    );
+    assert_eq!(
+        targeted_branch_content["data"]["payload"]["output_payload"]["field_path"],
+        json!(["output_payload"])
     );
 
     let artifact_ref = provider_events_preview["artifact_ref"]

@@ -371,7 +371,10 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         'app-1',
         'run-1',
         traceNodeId,
-        'http://127.0.0.1:7800'
+        'http://127.0.0.1:7800',
+        {
+          artifact_preview: 'auto'
+        }
       )
     ).resolves.toEqual({
       trace_node_id: traceNodeId,
@@ -404,7 +407,14 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
         'run-1',
         traceNodeId,
         'node_run',
-        'http://127.0.0.1:7800'
+        'http://127.0.0.1:7800',
+        {
+          artifact_preview: 'auto',
+          artifact_preview_field: [
+            'node_run.debug_payload.llm_rounds',
+            'node_run.output_payload'
+          ]
+        }
       )
     ).resolves.toEqual({
       trace_node_id: traceNodeId,
@@ -445,7 +455,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/content`,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/content?artifact_preview=auto`,
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
@@ -461,7 +471,7 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
-      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/details/node_run`,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/details/node_run?artifact_preview=auto&artifact_preview_field=node_run.debug_payload.llm_rounds&artifact_preview_field=node_run.output_payload`,
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'

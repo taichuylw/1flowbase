@@ -619,6 +619,56 @@ async fn find_trace_projection_tool_callback_node(
     Err(ControlPlaneError::NotFound("tool_callback").into())
 }
 
+fn parse_trace_node_artifact_preview_field_path(value: &str) -> Option<Vec<String>> {
+    let field_path = value
+        .split('.')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+
+    if field_path.is_empty() {
+        None
+    } else {
+        Some(field_path)
+    }
+}
+
+fn trace_node_artifact_preview_request(
+    raw_query: Option<&str>,
+) -> Option<RuntimeDebugArtifactPreviewRequest> {
+    let raw_query = raw_query?;
+    let mut auto_requested = false;
+    let mut field_paths: Vec<Vec<String>> = Vec::new();
+
+    for (key, value) in form_urlencoded::parse(raw_query.as_bytes()) {
+        match key.as_ref() {
+            "artifact_preview" if value.as_ref() == "auto" => {
+                auto_requested = true;
+            }
+            "artifact_preview_field" => {
+                if let Some(field_path) = parse_trace_node_artifact_preview_field_path(&value) {
+                    if !field_paths
+                        .iter()
+                        .any(|existing_path| existing_path == &field_path)
+                    {
+                        field_paths.push(field_path);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if !field_paths.is_empty() {
+        Some(RuntimeDebugArtifactPreviewRequest::Fields(field_paths))
+    } else if auto_requested {
+        Some(RuntimeDebugArtifactPreviewRequest::Auto)
+    } else {
+        None
+    }
+}
+
 fn answer_snapshot_for_log_overview(
     detail: &domain::ApplicationRunDetail,
 ) -> Option<AnswerSnapshotResponse> {
@@ -855,7 +905,9 @@ pub async fn get_application_run_trace_node_children(
     params(
         ("id" = String, Path, description = "Application id"),
         ("run_id" = String, Path, description = "Flow run id"),
-        ("trace_node_id" = String, Path, description = "Trace node id to load")
+        ("trace_node_id" = String, Path, description = "Trace node id to load"),
+        ("artifact_preview" = Option<String>, Query, description = "Set to auto to materialize runtime debug artifact previews"),
+        ("artifact_preview_field" = Option<Vec<String>>, Query, description = "Repeated dot-separated response payload field paths to preview")
     ),
     responses(
         (status = 200, body = ApplicationRunTraceNodeContentResponse),
@@ -868,6 +920,7 @@ pub async fn get_application_run_trace_node_content(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path((id, run_id, trace_node_id)): Path<(Uuid, Uuid, String)>,
+    RawQuery(raw_query): RawQuery,
 ) -> Result<Json<ApiSuccess<ApplicationRunTraceNodeContentResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     ensure_application_visible(&state, context.user.id, id).await?;
@@ -900,14 +953,20 @@ pub async fn get_application_run_trace_node_content(
         )
         .await?
         .ok_or(ControlPlaneError::NotFound("trace_node_content"))?;
-    let content = offload_trace_node_content_artifacts(
-        state.clone(),
-        context.actor.current_workspace_id,
-        id,
-        run_id,
-        content,
-    )
-    .await?;
+    let content =
+        if let Some(preview_request) = trace_node_artifact_preview_request(raw_query.as_deref()) {
+            offload_trace_node_content_artifacts(
+                state.clone(),
+                context.actor.current_workspace_id,
+                id,
+                run_id,
+                content,
+                preview_request,
+            )
+            .await?
+        } else {
+            content
+        };
     let response = trace_projection_node_content_response(node, content, projection_status)?;
 
     Ok(Json(ApiSuccess::new(response)))
@@ -920,7 +979,9 @@ pub async fn get_application_run_trace_node_content(
         ("id" = String, Path, description = "Application id"),
         ("run_id" = String, Path, description = "Flow run id"),
         ("trace_node_id" = String, Path, description = "Trace node id that owns the detail ref"),
-        ("detail_ref_id" = String, Path, description = "Detail ref id from node content")
+        ("detail_ref_id" = String, Path, description = "Detail ref id from node content"),
+        ("artifact_preview" = Option<String>, Query, description = "Set to auto to materialize runtime debug artifact previews"),
+        ("artifact_preview_field" = Option<Vec<String>>, Query, description = "Repeated dot-separated response payload field paths to preview")
     ),
     responses(
         (status = 200, body = ApplicationRunTraceNodeDetailResponse),
@@ -933,6 +994,7 @@ pub async fn get_application_run_trace_node_detail(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path((id, run_id, trace_node_id, detail_ref_id)): Path<(Uuid, Uuid, String, String)>,
+    RawQuery(raw_query): RawQuery,
 ) -> Result<Json<ApiSuccess<ApplicationRunTraceNodeDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     ensure_application_visible(&state, context.user.id, id).await?;
@@ -974,6 +1036,7 @@ pub async fn get_application_run_trace_node_detail(
         .and_then(serde_json::Value::as_str)
         .ok_or(ControlPlaneError::Conflict("trace_node_detail_ref"))?
         .to_string();
+    let preview_request = trace_node_artifact_preview_request(raw_query.as_deref());
     let payload = match detail_kind.as_str() {
         "node_run" => {
             let node_run_ids = trace_node_content_node_run_ids(&content.payload)?;
@@ -986,14 +1049,19 @@ pub async fn get_application_run_trace_node_detail(
                 .await?;
             let node_run = merge_trace_node_run_detail(&node_runs)
                 .ok_or(ControlPlaneError::NotFound("node_run"))?;
-            let node_run = offload_trace_node_run_detail_artifacts(
-                state.clone(),
-                context.actor.current_workspace_id,
-                id,
-                run_id,
-                node_run,
-            )
-            .await?;
+            let node_run = if let Some(preview_request) = preview_request {
+                offload_trace_node_run_detail_artifacts(
+                    state.clone(),
+                    context.actor.current_workspace_id,
+                    id,
+                    run_id,
+                    node_run,
+                    preview_request,
+                )
+                .await?
+            } else {
+                node_run
+            };
             trace_node_run_detail_payload(node_run)
         }
         "checkpoints" => {

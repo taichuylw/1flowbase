@@ -76,6 +76,7 @@ dependencies = [
  "domain",
  "ed25519-dalek",
  "flate2",
+ "form_urlencoded",
  "observability",
  "plugin-framework",
  "plugin-runner",

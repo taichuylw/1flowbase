@@ -39,6 +39,15 @@ vi.mock('@1flowbase/api-client', () => ({
     detail_refs: [],
     payload: {}
   }),
+  getConsoleApplicationRunTraceNodeDetail: vi.fn().mockResolvedValue({
+    trace_node_id: '11111111-1111-4111-8111-111111111111',
+    node_kind: 'node_run',
+    projection_status: traceProjectionStatus,
+    detail_ref_id: 'node_run',
+    detail_kind: 'node_run',
+    source_refs: [],
+    payload: {}
+  }),
   getConsoleApplicationRunResumeTimeline: vi.fn().mockResolvedValue({
     flow_run: { id: 'run-1' },
     callback_tasks: [],
@@ -221,6 +230,7 @@ import {
   getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRunTraceNodeChildren,
   getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceNodeDetail,
   getConsoleApplicationRunTraceTree,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRuns,
@@ -243,6 +253,7 @@ import {
   fetchApplicationRunResumeTimeline,
   fetchApplicationRunTraceNodeChildren,
   fetchApplicationRunTraceNodeContent,
+  fetchApplicationRunTraceNodeDetail,
   fetchApplicationRunTraceTree,
   fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
@@ -357,6 +368,12 @@ describe('applications runtime api', () => {
     await fetchApplicationRunTraceTree('app-1', 'run-1');
     await fetchApplicationRunTraceNodeChildren('app-1', 'run-1', traceNodeId);
     await fetchApplicationRunTraceNodeContent('app-1', 'run-1', traceNodeId);
+    await fetchApplicationRunTraceNodeDetail(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'node_run'
+    );
     await fetchApplicationRunResumeTimeline('app-1', 'run-1');
     await fetchApplicationRunMonitoringReport('app-1', {
       timeRangeDays: 28,
@@ -394,7 +411,20 @@ describe('applications runtime api', () => {
       'app-1',
       'run-1',
       traceNodeId,
-      'http://127.0.0.1:7800'
+      'http://127.0.0.1:7800',
+      {
+        artifact_preview: 'auto'
+      }
+    );
+    expect(getConsoleApplicationRunTraceNodeDetail).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'node_run',
+      'http://127.0.0.1:7800',
+      {
+        artifact_preview: 'auto'
+      }
     );
     expect(getConsoleApplicationRunResumeTimeline).toHaveBeenCalledWith(
       'app-1',

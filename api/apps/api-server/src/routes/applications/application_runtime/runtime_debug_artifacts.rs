@@ -50,6 +50,32 @@ struct RuntimeDebugArtifactScope {
     run_event_id: Option<Uuid>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuntimeDebugArtifactPreviewRequest {
+    Auto,
+    Fields(Vec<Vec<String>>),
+}
+
+impl RuntimeDebugArtifactPreviewRequest {
+    fn should_preview_field(&self, field_path: &[String]) -> bool {
+        match self {
+            Self::Auto => true,
+            Self::Fields(field_paths) => field_paths
+                .iter()
+                .any(|selected_path| selected_path.as_slice() == field_path),
+        }
+    }
+
+    fn should_descend_into_field(&self, field_path: &[String]) -> bool {
+        match self {
+            Self::Auto => true,
+            Self::Fields(field_paths) => field_paths
+                .iter()
+                .any(|selected_path| selected_path.starts_with(field_path)),
+        }
+    }
+}
+
 struct RuntimeDebugArtifactWriter {
     state: Arc<ApiState>,
     storage: domain::FileStorageRecord,
@@ -198,6 +224,10 @@ fn attach_inline_route_traces(callbacks: &mut [LlmToolCallbackArtifact], debug_p
 
 fn is_llm_rounds_field_path(field_path: &[String]) -> bool {
     field_path.len() == 1 && field_path[0] == "llm_rounds"
+}
+
+fn is_llm_rounds_leaf_field_path(field_path: &[String]) -> bool {
+    field_path.last().is_some_and(|key| key == "llm_rounds")
 }
 
 fn is_tool_calls_field_path(field_path: &[String]) -> bool {
@@ -1106,6 +1136,86 @@ impl RuntimeDebugArtifactWriter {
             }
         })
     }
+
+    fn offload_selected_payload_fields<'a>(
+        &'a self,
+        scope: &'a RuntimeDebugArtifactScope,
+        artifact_kind: &'a str,
+        value: Value,
+        field_path: Vec<String>,
+        preview_request: &'a RuntimeDebugArtifactPreviewRequest,
+    ) -> RuntimeDebugArtifactOffloadFuture<'a> {
+        Box::pin(async move {
+            if is_runtime_debug_artifact_payload(&value) {
+                if is_llm_rounds_leaf_field_path(&field_path) {
+                    return self.enrich_existing_llm_rounds_preview(scope, value).await;
+                }
+
+                return Ok((value, false));
+            }
+
+            if !preview_request.should_descend_into_field(&field_path) {
+                return Ok((value, false));
+            }
+
+            if should_keep_runtime_payload_field_inline(&field_path) {
+                return Ok((value, false));
+            }
+
+            if preview_request.should_preview_field(&field_path) {
+                let full_value = value.clone();
+                let (payload, changed) = self.offload_value(scope, artifact_kind, value).await?;
+                let payload = if changed {
+                    with_debug_artifact_field_path(payload, &field_path)
+                } else {
+                    payload
+                };
+                let payload = if changed && is_tool_calls_field_path(&field_path) {
+                    with_array_item_count(payload, &full_value, "tool_call_count")
+                } else {
+                    payload
+                };
+                let payload = if changed && is_llm_rounds_leaf_field_path(&field_path) {
+                    self.with_llm_tool_callback_index(scope, payload, &full_value)
+                        .await?
+                } else {
+                    payload
+                };
+                if !changed && is_llm_rounds_leaf_field_path(&field_path) {
+                    let (payload, runtime_facts_changed) = with_llm_tool_callback_runtime_facts(
+                        payload,
+                        &self.llm_tool_callback_runtime_facts,
+                    );
+                    return Ok((payload, runtime_facts_changed));
+                }
+                return Ok((payload, changed));
+            }
+
+            match value {
+                Value::Object(object) => {
+                    let mut changed = false;
+                    let mut next = Map::with_capacity(object.len());
+                    for (key, child) in object {
+                        let mut child_path = field_path.clone();
+                        child_path.push(key.clone());
+                        let (child, child_changed) = self
+                            .offload_selected_payload_fields(
+                                scope,
+                                artifact_kind,
+                                child,
+                                child_path,
+                                preview_request,
+                            )
+                            .await?;
+                        changed |= child_changed;
+                        next.insert(key, child);
+                    }
+                    Ok((Value::Object(next), changed))
+                }
+                value => Ok((value, false)),
+            }
+        })
+    }
 }
 
 pub async fn offload_application_run_detail_artifacts(
@@ -1393,6 +1503,7 @@ pub async fn offload_trace_node_run_detail_artifacts(
     application_id: Uuid,
     flow_run_id: Uuid,
     mut node_run: domain::NodeRunRecord,
+    preview_request: RuntimeDebugArtifactPreviewRequest,
 ) -> Result<domain::NodeRunRecord, ApiError> {
     let writer = RuntimeDebugArtifactWriter::new(state).await?;
     let node_scope = RuntimeDebugArtifactScope {
@@ -1402,47 +1513,121 @@ pub async fn offload_trace_node_run_detail_artifacts(
         node_run_id: Some(node_run.id),
         run_event_id: None,
     };
-    let (input_payload, input_changed) = writer
-        .offload_payload_fields(
-            &node_scope,
-            "node_input_payload",
-            node_run.input_payload.clone(),
-            Vec::new(),
-        )
-        .await?;
-    let (output_payload, output_changed) = writer
-        .offload_payload_fields(
-            &node_scope,
-            "node_output_payload",
-            node_run.output_payload.clone(),
-            Vec::new(),
-        )
-        .await?;
-    let (error_payload, error_changed) = match node_run.error_payload.clone() {
-        Some(error_payload) => {
-            let (payload, changed) = writer
+    let (input_payload, input_changed) = match &preview_request {
+        RuntimeDebugArtifactPreviewRequest::Auto => {
+            writer
                 .offload_payload_fields(
                     &node_scope,
-                    "node_error_payload",
-                    error_payload,
+                    "node_input_payload",
+                    node_run.input_payload.clone(),
                     Vec::new(),
                 )
-                .await?;
-            (Some(payload), changed)
+                .await?
         }
+        RuntimeDebugArtifactPreviewRequest::Fields(_) => {
+            writer
+                .offload_selected_payload_fields(
+                    &node_scope,
+                    "node_input_payload",
+                    node_run.input_payload.clone(),
+                    vec!["node_run".to_string(), "input_payload".to_string()],
+                    &preview_request,
+                )
+                .await?
+        }
+    };
+    let (output_payload, output_changed) = match &preview_request {
+        RuntimeDebugArtifactPreviewRequest::Auto => {
+            writer
+                .offload_payload_fields(
+                    &node_scope,
+                    "node_output_payload",
+                    node_run.output_payload.clone(),
+                    Vec::new(),
+                )
+                .await?
+        }
+        RuntimeDebugArtifactPreviewRequest::Fields(_) => {
+            writer
+                .offload_selected_payload_fields(
+                    &node_scope,
+                    "node_output_payload",
+                    node_run.output_payload.clone(),
+                    vec!["node_run".to_string(), "output_payload".to_string()],
+                    &preview_request,
+                )
+                .await?
+        }
+    };
+    let (error_payload, error_changed) = match node_run.error_payload.clone() {
+        Some(error_payload) => match &preview_request {
+            RuntimeDebugArtifactPreviewRequest::Auto => {
+                let (payload, changed) = writer
+                    .offload_payload_fields(
+                        &node_scope,
+                        "node_error_payload",
+                        error_payload,
+                        Vec::new(),
+                    )
+                    .await?;
+                (Some(payload), changed)
+            }
+            RuntimeDebugArtifactPreviewRequest::Fields(_) => {
+                let (payload, changed) = writer
+                    .offload_selected_payload_fields(
+                        &node_scope,
+                        "node_error_payload",
+                        error_payload,
+                        vec!["node_run".to_string(), "error_payload".to_string()],
+                        &preview_request,
+                    )
+                    .await?;
+                (Some(payload), changed)
+            }
+        },
         None => (None, false),
     };
-    let (metrics_payload, metrics_changed) = writer
-        .offload_payload_fields(
-            &node_scope,
-            "node_metrics_payload",
-            node_run.metrics_payload.clone(),
-            Vec::new(),
-        )
-        .await?;
-    let (debug_payload, debug_changed) = writer
-        .offload_node_debug_payload(&node_scope, node_run.debug_payload.clone())
-        .await?;
+    let (metrics_payload, metrics_changed) = match &preview_request {
+        RuntimeDebugArtifactPreviewRequest::Auto => {
+            writer
+                .offload_payload_fields(
+                    &node_scope,
+                    "node_metrics_payload",
+                    node_run.metrics_payload.clone(),
+                    Vec::new(),
+                )
+                .await?
+        }
+        RuntimeDebugArtifactPreviewRequest::Fields(_) => {
+            writer
+                .offload_selected_payload_fields(
+                    &node_scope,
+                    "node_metrics_payload",
+                    node_run.metrics_payload.clone(),
+                    vec!["node_run".to_string(), "metrics_payload".to_string()],
+                    &preview_request,
+                )
+                .await?
+        }
+    };
+    let (debug_payload, debug_changed) = match &preview_request {
+        RuntimeDebugArtifactPreviewRequest::Auto => {
+            writer
+                .offload_node_debug_payload(&node_scope, node_run.debug_payload.clone())
+                .await?
+        }
+        RuntimeDebugArtifactPreviewRequest::Fields(_) => {
+            writer
+                .offload_selected_payload_fields(
+                    &node_scope,
+                    "node_debug_payload",
+                    node_run.debug_payload.clone(),
+                    vec!["node_run".to_string(), "debug_payload".to_string()],
+                    &preview_request,
+                )
+                .await?
+        }
+    };
 
     if input_changed || output_changed || error_changed || metrics_changed || debug_changed {
         node_run.input_payload = input_payload;
@@ -1461,6 +1646,7 @@ pub async fn offload_trace_node_content_artifacts(
     application_id: Uuid,
     flow_run_id: Uuid,
     mut content: domain::ApplicationRunTraceNodeContentRecord,
+    preview_request: RuntimeDebugArtifactPreviewRequest,
 ) -> Result<domain::ApplicationRunTraceNodeContentRecord, ApiError> {
     if !matches!(
         content.content_kind.as_str(),
@@ -1477,14 +1663,29 @@ pub async fn offload_trace_node_content_artifacts(
         node_run_id: None,
         run_event_id: None,
     };
-    let (payload, changed) = writer
-        .offload_payload_fields(
-            &scope,
-            "trace_node_content_payload",
-            content.payload.clone(),
-            Vec::new(),
-        )
-        .await?;
+    let (payload, changed) = match &preview_request {
+        RuntimeDebugArtifactPreviewRequest::Auto => {
+            writer
+                .offload_payload_fields(
+                    &scope,
+                    "trace_node_content_payload",
+                    content.payload.clone(),
+                    Vec::new(),
+                )
+                .await?
+        }
+        RuntimeDebugArtifactPreviewRequest::Fields(_) => {
+            writer
+                .offload_selected_payload_fields(
+                    &scope,
+                    "trace_node_content_payload",
+                    content.payload.clone(),
+                    Vec::new(),
+                    &preview_request,
+                )
+                .await?
+        }
+    };
 
     if changed {
         content.payload = payload;
