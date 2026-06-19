@@ -77,14 +77,14 @@ jobs:
               image_tag="${{ inputs.image_tag }}"
             fi
           else
-            image_tag="$(node scripts/node/cli/verify-container-version.js print-tag web)"
+            image_tag="$(node scripts/node/container-image-security/verify-version.js print-tag web)"
             before_sha="${{ github.event.before }}"
             zero_sha="0000000000000000000000000000000000000000"
 
             if [[ "$before_sha" != "$zero_sha" ]] \
               && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
               && git cat-file -e "$before_sha:web/app/package.json" 2>/dev/null; then
-              if old_version="$(git show "$before_sha:web/app/package.json" | node scripts/node/cli/verify-container-version.js read-stdin-version web)"; then
+              if old_version="$(git show "$before_sha:web/app/package.json" | node scripts/node/container-image-security/verify-version.js read-stdin-version web)"; then
                 old_tag="v${old_version}"
               fi
             fi
@@ -129,14 +129,14 @@ jobs:
               image_tag="${{ inputs.image_tag }}"
             fi
           else
-            image_tag="$(node scripts/node/cli/verify-container-version.js print-tag api-server)"
+            image_tag="$(node scripts/node/container-image-security/verify-version.js print-tag api-server)"
             before_sha="${{ github.event.before }}"
             zero_sha="0000000000000000000000000000000000000000"
 
             if [[ "$before_sha" != "$zero_sha" ]] \
               && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
               && git cat-file -e "$before_sha:api/apps/api-server/Cargo.toml" 2>/dev/null; then
-              if old_version="$(git show "$before_sha:api/apps/api-server/Cargo.toml" | node scripts/node/cli/verify-container-version.js read-stdin-version api-server)"; then
+              if old_version="$(git show "$before_sha:api/apps/api-server/Cargo.toml" | node scripts/node/container-image-security/verify-version.js read-stdin-version api-server)"; then
                 old_tag="v${old_version}"
               fi
             fi
@@ -181,14 +181,14 @@ jobs:
               image_tag="${{ inputs.image_tag }}"
             fi
           else
-            image_tag="$(node scripts/node/cli/verify-container-version.js print-tag plugin-runner)"
+            image_tag="$(node scripts/node/container-image-security/verify-version.js print-tag plugin-runner)"
             before_sha="${{ github.event.before }}"
             zero_sha="0000000000000000000000000000000000000000"
 
             if [[ "$before_sha" != "$zero_sha" ]] \
               && git cat-file -e "$before_sha^{commit}" 2>/dev/null \
               && git cat-file -e "$before_sha:api/apps/plugin-runner/Cargo.toml" 2>/dev/null; then
-              if old_version="$(git show "$before_sha:api/apps/plugin-runner/Cargo.toml" | node scripts/node/cli/verify-container-version.js read-stdin-version plugin-runner)"; then
+              if old_version="$(git show "$before_sha:api/apps/plugin-runner/Cargo.toml" | node scripts/node/container-image-security/verify-version.js read-stdin-version plugin-runner)"; then
                 old_tag="v${old_version}"
               fi
             fi
@@ -290,7 +290,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate web version
-        run: node scripts/node/cli/verify-container-version.js web ${{ needs.select-web.outputs.image_tag }}
+        run: node scripts/node/container-image-security/verify-version.js web ${{ needs.select-web.outputs.image_tag }}
 
       - name: Download web dist artifacts
         uses: actions/download-artifact@v8
@@ -497,7 +497,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate api-server version
-        run: node scripts/node/cli/verify-container-version.js api-server ${{ needs.select-api-server.outputs.image_tag }}
+        run: node scripts/node/container-image-security/verify-version.js api-server ${{ needs.select-api-server.outputs.image_tag }}
 
       - name: Download api-server binary artifacts
         uses: actions/download-artifact@v8
@@ -699,7 +699,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate plugin-runner version
-        run: node scripts/node/cli/verify-container-version.js plugin-runner ${{ needs.select-plugin-runner.outputs.image_tag }}
+        run: node scripts/node/container-image-security/verify-version.js plugin-runner ${{ needs.select-plugin-runner.outputs.image_tag }}
 
       - name: Download plugin-runner binary artifacts
         uses: actions/download-artifact@v8

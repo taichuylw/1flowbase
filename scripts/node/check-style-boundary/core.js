@@ -67,13 +67,13 @@ function parseCliArgs(argv) {
 }
 
 function usage() {
-  process.stdout.write(`用法：node scripts/node/check-style-boundary.js <component|page|file|all-pages> [target]
+  process.stdout.write(`用法：node scripts/node/check-style-boundary/cli.js <component|page|file|all-pages> [target]
 
 示例：
-  node scripts/node/check-style-boundary.js component component.account-popup
-  node scripts/node/check-style-boundary.js page page.home
-  node scripts/node/check-style-boundary.js file web/app/src/styles/global.css
-  node scripts/node/check-style-boundary.js all-pages
+  node scripts/node/check-style-boundary/cli.js component component.account-popup
+  node scripts/node/check-style-boundary/cli.js page page.home
+  node scripts/node/check-style-boundary/cli.js file web/app/src/styles/global.css
+  node scripts/node/check-style-boundary/cli.js all-pages
 `);
 }
 

@@ -17,7 +17,7 @@ function getRepoRoot() {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(`用法：node scripts/node/dev-db-maintenance.js [test-schemas|backups] [选项]
+  writeStdout(`用法：node scripts/node/dev-db-maintenance/cli.js [test-schemas|backups] [选项]
 
 默认命令：test-schemas
 

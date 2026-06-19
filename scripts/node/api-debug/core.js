@@ -385,11 +385,11 @@ function redactSensitiveHeaders(headers) {
 }
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
-  writeStdout(`用法：node scripts/node/api-debug.js [METHOD] <api-path-or-url> [options]
+  writeStdout(`用法：node scripts/node/api-debug/cli.js [METHOD] <api-path-or-url> [options]
 
 示例：
-  node scripts/node/api-debug.js /api/console/me
-  node scripts/node/api-debug.js POST /api/console/widgets --body '{"name":"demo"}' --expect-status 201
+  node scripts/node/api-debug/cli.js /api/console/me
+  node scripts/node/api-debug/cli.js POST /api/console/widgets --body '{"name":"demo"}' --expect-status 201
   node scripts/node/tooling.js api-debug GET /api/console/me --print-body
 
 认证：

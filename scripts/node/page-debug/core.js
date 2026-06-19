@@ -398,7 +398,7 @@ async function runPageDebug(options, deps = {}) {
 async function main(argv = process.argv.slice(2)) {
   const options = parseCliArgs(argv);
   if (options.help) {
-    process.stdout.write('用法：node scripts/node/page-debug.js [snapshot|open|login] <route-or-url>\n');
+    process.stdout.write('用法：node scripts/node/page-debug/cli.js [snapshot|open|login] <route-or-url>\n');
     return 0;
   }
 

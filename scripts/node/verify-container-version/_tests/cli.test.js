@@ -9,8 +9,8 @@ const scriptPath = path.join(
   repoRoot,
   "scripts",
   "node",
-  "cli",
-  "verify-container-version.js",
+  "container-image-security",
+  "verify-version.js",
 );
 
 test("print-tag reads the web component manifest from the repository root", () => {

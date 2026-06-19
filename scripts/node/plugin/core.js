@@ -13,7 +13,7 @@ const {
 const { createPluginPackage } = require('./package.js');
 
 function usage() {
-  process.stdout.write(`用法：node scripts/node/plugin.js <command> [options]
+  process.stdout.write(`用法：node scripts/node/plugin/cli.js <command> [options]
 
 命令：
   init [plugin-path]
@@ -41,11 +41,11 @@ function usage() {
   -h, --help           查看帮助
 
 示例：
-  node scripts/node/plugin.js init ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible
-  node scripts/node/plugin.js demo init ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible
-  node scripts/node/plugin.js demo dev ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible --port 4310
-  node scripts/node/plugin.js package ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible --out ./dist
-  node scripts/node/plugin.js package ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible --out ./dist --signing-key-pem-file ./official-plugin-signing-key.pem --signing-key-id official-key-2026-04
+  node scripts/node/plugin/cli.js init ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible
+  node scripts/node/plugin/cli.js demo init ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible
+  node scripts/node/plugin/cli.js demo dev ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible --port 4310
+  node scripts/node/plugin/cli.js package ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible --out ./dist
+  node scripts/node/plugin/cli.js package ../1flowbase-official-plugins/runtime-extensions/model-providers/openai_compatible --out ./dist --signing-key-pem-file ./official-plugin-signing-key.pem --signing-key-id official-key-2026-04
 `);
 }
 
