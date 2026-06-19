@@ -978,6 +978,14 @@ pub async fn get_application_run_trace_node_detail(
                 .await?;
             let node_run = merge_trace_node_run_detail(&node_runs)
                 .ok_or(ControlPlaneError::NotFound("node_run"))?;
+            let node_run = offload_trace_node_run_detail_artifacts(
+                state.clone(),
+                context.actor.current_workspace_id,
+                id,
+                run_id,
+                node_run,
+            )
+            .await?;
             trace_node_run_detail_payload(node_run)
         }
         _ => return Err(ControlPlaneError::NotFound("trace_node_detail_ref").into()),

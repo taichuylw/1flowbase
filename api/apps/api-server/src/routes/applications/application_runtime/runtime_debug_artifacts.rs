@@ -1387,6 +1387,74 @@ pub async fn offload_application_run_detail_artifacts(
     Ok(detail)
 }
 
+pub async fn offload_trace_node_run_detail_artifacts(
+    state: Arc<ApiState>,
+    workspace_id: Uuid,
+    application_id: Uuid,
+    flow_run_id: Uuid,
+    mut node_run: domain::NodeRunRecord,
+) -> Result<domain::NodeRunRecord, ApiError> {
+    let writer = RuntimeDebugArtifactWriter::new(state).await?;
+    let node_scope = RuntimeDebugArtifactScope {
+        workspace_id,
+        application_id,
+        flow_run_id: Some(flow_run_id),
+        node_run_id: Some(node_run.id),
+        run_event_id: None,
+    };
+    let (input_payload, input_changed) = writer
+        .offload_payload_fields(
+            &node_scope,
+            "node_input_payload",
+            node_run.input_payload.clone(),
+            Vec::new(),
+        )
+        .await?;
+    let (output_payload, output_changed) = writer
+        .offload_payload_fields(
+            &node_scope,
+            "node_output_payload",
+            node_run.output_payload.clone(),
+            Vec::new(),
+        )
+        .await?;
+    let (error_payload, error_changed) = match node_run.error_payload.clone() {
+        Some(error_payload) => {
+            let (payload, changed) = writer
+                .offload_payload_fields(
+                    &node_scope,
+                    "node_error_payload",
+                    error_payload,
+                    Vec::new(),
+                )
+                .await?;
+            (Some(payload), changed)
+        }
+        None => (None, false),
+    };
+    let (metrics_payload, metrics_changed) = writer
+        .offload_payload_fields(
+            &node_scope,
+            "node_metrics_payload",
+            node_run.metrics_payload.clone(),
+            Vec::new(),
+        )
+        .await?;
+    let (debug_payload, debug_changed) = writer
+        .offload_node_debug_payload(&node_scope, node_run.debug_payload.clone())
+        .await?;
+
+    if input_changed || output_changed || error_changed || metrics_changed || debug_changed {
+        node_run.input_payload = input_payload;
+        node_run.output_payload = output_payload;
+        node_run.error_payload = error_payload;
+        node_run.metrics_payload = metrics_payload;
+        node_run.debug_payload = debug_payload;
+    }
+
+    Ok(node_run)
+}
+
 pub fn enrich_application_run_detail_visible_internal_llm_route_traces(
     mut detail: domain::ApplicationRunDetail,
     runtime_events: &[domain::RuntimeEventRecord],

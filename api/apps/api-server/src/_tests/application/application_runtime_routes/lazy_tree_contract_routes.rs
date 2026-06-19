@@ -74,6 +74,32 @@ async fn load_trace_node_content_payload(
     serde_json::from_slice(&body).unwrap()
 }
 
+async fn load_trace_tree_payload(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    flow_run_id: &str,
+) -> Value {
+    let trace_tree = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{flow_run_id}/trace-tree"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = trace_tree.status();
+    let body = to_bytes(trace_tree.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+
+    serde_json::from_slice(&body).unwrap()
+}
+
 async fn load_trace_node_detail_payload(
     app: &axum::Router,
     cookie: &str,
@@ -467,6 +493,145 @@ async fn application_runtime_routes_trace_node_detail_ref_loads_node_run_payload
     assert!(
         detail_payload["data"]["payload"].get("events").is_none(),
         "node_run detail ref must not smuggle event details"
+    );
+}
+
+#[tokio::test]
+async fn application_runtime_routes_trace_node_detail_offloads_provider_events() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+
+    let preview_payload =
+        start_llm_preview(&app, &cookie, &csrf, &application_id, "总结退款政策").await;
+    let flow_run_id = preview_payload["data"]["flow_run"]["id"].as_str().unwrap();
+    let node_run_id =
+        Uuid::parse_str(preview_payload["data"]["node_run"]["id"].as_str().unwrap()).unwrap();
+    let provider_events: Vec<_> = (0..240)
+        .map(|index| {
+            json!({
+                "type": "text_delta",
+                "delta": format!("chunk-{index}-{}", "x".repeat(40))
+            })
+        })
+        .collect();
+
+    <MainDurableStore as OrchestrationRuntimeRepository>::update_node_run(
+        &state.store,
+        &UpdateNodeRunInput {
+            node_run_id,
+            status: domain::NodeRunStatus::Succeeded,
+            output_payload: json!({
+                "answer": "退款政策摘要"
+            }),
+            error_payload: None,
+            metrics_payload: json!({}),
+            debug_payload: json!({
+                "provider": "deepseek",
+                "provider_events": provider_events.clone()
+            }),
+            finished_at: Some(time::OffsetDateTime::now_utc()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let trace_tree = load_trace_tree_payload(&app, &cookie, &application_id, flow_run_id).await;
+    let llm_trace_node_id = trace_tree["data"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_id"] == json!("node-llm"))
+        .expect("LLM node should be present")["trace_node_id"]
+        .as_str()
+        .unwrap();
+    let node_run = load_trace_node_node_run_detail_payload(
+        &app,
+        &cookie,
+        &application_id,
+        flow_run_id,
+        llm_trace_node_id,
+    )
+    .await;
+    let provider_events_preview = &node_run["debug_payload"]["provider_events"];
+
+    assert_eq!(
+        provider_events_preview["__runtime_debug_artifact"],
+        json!(true)
+    );
+    assert_eq!(provider_events_preview["artifact_scope"], json!("field"));
+    assert_eq!(
+        provider_events_preview["field_path"],
+        json!(["provider_events"])
+    );
+    assert!(provider_events_preview["artifact_ref"].is_string());
+    assert!(provider_events_preview["preview"].is_string());
+    assert!(
+        provider_events_preview["original_size_bytes"]
+            .as_i64()
+            .unwrap()
+            > provider_events_preview["preview_size_bytes"]
+                .as_i64()
+                .unwrap()
+    );
+
+    let artifact_ref = provider_events_preview["artifact_ref"]
+        .as_str()
+        .expect("provider_events artifact ref should exist");
+    let batch_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "artifact_refs": [artifact_ref, artifact_ref]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let batch_status = batch_response.status();
+    let batch_body = to_bytes(batch_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        batch_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&batch_body)
+    );
+    let batch_payload: Value = serde_json::from_slice(&batch_body).unwrap();
+    let artifacts = batch_payload["data"]["artifacts"]
+        .as_array()
+        .expect("batch resolve should return artifacts");
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(artifacts[0]["artifact_ref"], json!(artifact_ref));
+    assert_eq!(artifacts[0]["value"], json!(provider_events));
+
+    let stored_node_runs =
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_trace_node_run_details(
+            &state.store,
+            Uuid::parse_str(flow_run_id).unwrap(),
+            vec![node_run_id],
+        )
+        .await
+        .unwrap();
+    let stored_debug_payload = &stored_node_runs[0].debug_payload;
+    assert!(
+        stored_debug_payload["provider_events"].is_array(),
+        "trace detail response compression must not rewrite the stored node_run debug payload"
     );
 }
 
