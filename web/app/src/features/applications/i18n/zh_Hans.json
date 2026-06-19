@@ -119,7 +119,6 @@
     "session": "会话",
     "copy_id": "复制 ID",
     "created_at": "创建时间",
-    "no_output_yet": "暂无输出",
     "selector_pattern_invalid": "只能包含字母、数字、下划线、点和连字符",
     "search_applications": "搜索应用",
     "api_key_copied": "API Key 已复制",

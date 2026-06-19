@@ -64,5 +64,101 @@
     "file": "scripts/node",
     "issue": "#901",
     "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "test-file-size-pressure",
+    "file": "api/apps/api-server/src/_tests/application/application_runtime_routes/lazy_tree_contract_routes.rs",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "api/apps/api-server/src/routes/applications/application_runtime/log_handlers.rs",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "api/apps/api-server/src/routes/applications/application_runtime/runtime_debug_artifacts/visible_internal_llm_route_traces.rs",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "api/crates/control-plane/src/orchestration_runtime/trace_projection.rs",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "api/crates/control-plane/src/ports/runtime.rs",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "test-file-size-pressure",
+    "file": "scripts/node/dev-up/_tests/core.test.js",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "scripts/node/verify/index.js",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "test-file-size-pressure",
+    "file": "web/app/src/features/agent-flow/_tests/debug-console/debug-conversation-log-panel.test.tsx",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "web/app/src/features/agent-flow/components/debug-console/ConversationLogPanel.tsx",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "web/app/src/features/agent-flow/components/editor/AgentFlowCanvasFrame.tsx",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "test-file-size-pressure",
+    "file": "web/app/src/features/applications/_tests/application-logs-page/artifacts-trace.test.tsx",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "test-file-size-pressure",
+    "file": "web/app/src/features/applications/_tests/application-logs-page/floating-windows.test.tsx",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "file-size-pressure",
+    "file": "web/app/src/style-boundary/scene-fixtures.ts",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "directory-pressure",
+    "file": "api/apps/api-server/src",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "directory-pressure",
+    "file": "api/crates/control-plane/src/orchestration_runtime",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
+  },
+  {
+    "rule": "directory-pressure",
+    "file": "scripts/node/cli",
+    "issue": "#901",
+    "reason": "Tracked as mechanical repo-hygiene pressure after quality gate triage."
   }
 ]

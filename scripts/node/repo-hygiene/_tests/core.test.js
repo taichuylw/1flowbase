@@ -271,7 +271,7 @@ test('collectRepoHygieneFindings skips unreadable runtime artifact directories',
   assert.equal(restored, true);
 });
 
-test('collectRepoHygieneFindings reports local env generated and scratch artifacts', () => {
+test('collectRepoHygieneFindings reports tracked env generated and scratch artifacts', () => {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-repo-hygiene-artifacts-'));
   writeFile(
     repoRoot,
@@ -281,7 +281,35 @@ test('collectRepoHygieneFindings reports local env generated and scratch artifac
   writeFile(repoRoot, 'test_dir.txt', 'scratch\n');
   writeFile(repoRoot, 'web/app/tsconfig.tsbuildinfo', '{}\n');
 
-  const findings = collectRepoHygieneFindings({ repoRoot });
+  const untrackedFindings = collectRepoHygieneFindings({
+    repoRoot,
+    trackedFiles: new Set(),
+  });
+
+  assert.equal(
+    untrackedFindings.some((finding) => finding.rule === 'tracked-env-artifact'
+      && finding.file === 'docker/middleware.env'),
+    false
+  );
+  assert.equal(
+    untrackedFindings.some((finding) => finding.rule === 'tracked-build-artifact'
+      && finding.file === 'web/app/tsconfig.tsbuildinfo'),
+    false
+  );
+  assert.equal(
+    untrackedFindings.some((finding) => finding.rule === 'root-scratch-artifact'
+      && finding.file === 'test_dir.txt'),
+    false
+  );
+
+  const findings = collectRepoHygieneFindings({
+    repoRoot,
+    trackedFiles: new Set([
+      'docker/middleware.env',
+      'test_dir.txt',
+      'web/app/tsconfig.tsbuildinfo',
+    ]),
+  });
 
   assert.equal(
     findings.some((finding) => finding.rule === 'tracked-env-artifact'
