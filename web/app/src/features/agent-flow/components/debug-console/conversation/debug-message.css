@@ -294,10 +294,14 @@
 
 .agent-flow-editor__debug-workflow-node-mode {
   flex: 0 0 auto;
-  margin-inline-end: 0;
-  max-width: clamp(4rem, 22cqw, 7rem);
+  max-width: clamp(3rem, 18cqw, 6rem);
   overflow: hidden;
+  color: #ffad00;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-flow-editor__debug-workflow-node-detail {

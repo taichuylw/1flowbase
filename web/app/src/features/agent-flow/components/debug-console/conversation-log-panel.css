@@ -113,6 +113,19 @@
   border-left: 1px solid #e6eaf1;
 }
 
+.agent-flow-editor__conversation-log-node-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px 30px;
+}
+
+.agent-flow-editor__conversation-log-node-group
+  > .agent-flow-editor__conversation-log-node-list {
+  padding-left: 8px;
+  border-left: 1px solid #e6eaf1;
+}
+
 .agent-flow-editor__conversation-log-json-list
   > .agent-flow-editor__conversation-log-node-list {
   margin-left: 8px;

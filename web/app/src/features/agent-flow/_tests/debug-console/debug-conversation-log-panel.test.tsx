@@ -940,7 +940,7 @@ describe('debug conversation log panel', () => {
     );
   });
 
-  test('keeps empty input processing and output sections for summary-only trace nodes', async () => {
+  test('renders summary-only tool group trace nodes as pure collapsible groups', async () => {
     const rootNode = {
       trace_node_id: 'tool_group:node-run-empty',
       node_kind: 'tool_group',
@@ -983,19 +983,25 @@ describe('debug conversation log panel', () => {
     fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
     const toolsTraceNode = await screen.findByRole('button', { name: /Tools/ });
     fireEvent.click(toolsTraceNode);
+    const toolsTraceItem = toolsTraceNode.closest(
+      '[data-testid="debug-workflow-node-item"]'
+    );
 
-    const nodeDetail = await screen.findByRole('region', {
-      name: 'Tools 节点详情'
-    });
-    expect(within(nodeDetail).getByLabelText('输入 JSON')).toHaveTextContent(
-      '{}'
-    );
+    expect(toolsTraceItem).not.toBeNull();
     expect(
-      within(nodeDetail).getByLabelText('数据处理 JSON')
-    ).toHaveTextContent('{}');
-    expect(within(nodeDetail).getByLabelText('输出 JSON')).toHaveTextContent(
-      '{}'
-    );
+      screen.queryByRole('region', {
+        name: 'Tools 节点详情'
+      })
+    ).not.toBeInTheDocument();
+    expect(
+      within(toolsTraceItem as HTMLElement).queryByLabelText('输入 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      within(toolsTraceItem as HTMLElement).queryByLabelText('数据处理 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      within(toolsTraceItem as HTMLElement).queryByLabelText('输出 JSON')
+    ).not.toBeInTheDocument();
     expect(traceLoader.loadContent).not.toHaveBeenCalled();
   });
 
@@ -1228,11 +1234,21 @@ describe('debug conversation log panel', () => {
         undefined
       )
     );
+    expect(
+      within(nodeDetail).queryByRole('region', {
+        name: 'Tools 节点详情'
+      })
+    ).not.toBeInTheDocument();
     const toolCallback = await within(nodeDetail).findByRole('button', {
       name: /refund_policy_lookup/
     });
     expect(toolCallback).toHaveTextContent('1.23 s');
     expect(toolCallback).toHaveTextContent('fusion');
+    const toolMode = toolCallback.querySelector(
+      '.agent-flow-editor__debug-workflow-node-mode'
+    );
+    expect(toolMode).toHaveTextContent('fusion');
+    expect(toolMode).not.toHaveClass('ant-tag');
     expect(
       within(nodeDetail).queryByRole('region', {
         name: /refund_policy_lookup 节点详情/

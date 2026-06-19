@@ -207,9 +207,9 @@ export function DebugWorkflowNodeRow({ item }: { item: AgentFlowTraceItem }) {
         <span className="agent-flow-editor__debug-workflow-node-title">
           <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
           {toolMode ? (
-            <Tag className="agent-flow-editor__debug-workflow-node-mode">
+            <span className="agent-flow-editor__debug-workflow-node-mode">
               {toolMode}
-            </Tag>
+            </span>
           ) : null}
         </span>
         <Typography.Text

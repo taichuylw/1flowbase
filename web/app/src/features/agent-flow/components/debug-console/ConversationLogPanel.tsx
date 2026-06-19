@@ -1034,8 +1034,10 @@ function LazyTraceNodeItem({
   const [loadingMoreChildren, setLoadingMoreChildren] = useState(false);
   const [loadMoreChildrenFailed, setLoadMoreChildrenFailed] = useState(false);
   const fallbackItem = useMemo(() => mapTraceSummaryToTraceItem(node), [node]);
+  const isToolGroupNode =
+    node.node_kind === 'tool_group' || node.node_type === 'tools';
   const contentQuery = useQuery({
-    enabled: expanded && node.has_content,
+    enabled: expanded && node.has_content && !isToolGroupNode,
     queryKey: [
       'conversation-log-trace-node-content',
       runId,
@@ -1182,6 +1184,35 @@ function LazyTraceNodeItem({
         ) : null}
       </>
     ) : null;
+  const childLoadStatusContent = (
+    <>
+      {childrenQuery.isLoading ? <Spin /> : null}
+      {childProjectionStatus &&
+      !traceProjectionStatusSucceeded(childProjectionStatus) ? (
+        <TraceProjectionStatusNotice status={childProjectionStatus} />
+      ) : null}
+      {loadMoreChildrenFailed ? (
+        <Alert
+          message={i18nText('agentFlow', 'auto.loading_failed')}
+          showIcon
+          type="error"
+        />
+      ) : null}
+    </>
+  );
+  const loadMoreChildrenButton = childPageInfo?.has_more ? (
+    <Button
+      className="agent-flow-editor__conversation-log-load-more"
+      loading={loadingMoreChildren}
+      size="small"
+      type="link"
+      onClick={() => {
+        void loadMoreTraceChildren();
+      }}
+    >
+      {i18nText('agentFlow', 'auto.load_more_trace_children')}
+    </Button>
+  ) : null;
 
   return (
     <DebugWorkflowNodeItem
@@ -1189,62 +1220,47 @@ function LazyTraceNodeItem({
       item={item}
       onToggle={() => setExpanded((current) => !current)}
     >
-      <section
-        aria-label={i18nText('agentFlow', 'auto.node_details_alt', {
-          value1: nodeDisplayName(fallbackItem)
-        })}
-        className="agent-flow-editor__conversation-log-node-detail"
-      >
-        {contentLoading ? (
-          <Spin />
-        ) : contentProjectionStatus &&
-          !traceProjectionStatusSucceeded(contentProjectionStatus) ? (
-          <TraceProjectionStatusNotice status={contentProjectionStatus} />
-        ) : (
-          <div className="agent-flow-editor__conversation-log-json-list">
-            <DebugWorkflowNodeDetailContent
-              beforePayloadContent={childNodesBeforePayload}
-              item={item}
-              onLoadArtifact={onLoadArtifact}
-              onLoadToolCallbackDetail={
-                loadToolCallbackDetail
-                  ? (toolCallId) =>
-                      loadToolCallbackDetail(
-                        runId,
-                        node.trace_node_id,
-                        toolCallId
-                      )
-                  : undefined
-              }
-            />
-          </div>
-        )}
-        {childrenQuery.isLoading ? <Spin /> : null}
-        {childProjectionStatus &&
-        !traceProjectionStatusSucceeded(childProjectionStatus) ? (
-          <TraceProjectionStatusNotice status={childProjectionStatus} />
-        ) : null}
-        {loadMoreChildrenFailed ? (
-          <Alert
-            message={i18nText('agentFlow', 'auto.loading_failed')}
-            showIcon
-            type="error"
-          />
-        ) : null}
-        {childPageInfo?.has_more ? (
-          <Button
-            className="agent-flow-editor__conversation-log-load-more"
-            loading={loadingMoreChildren}
-            size="small"
-            type="link"
-            onClick={() => {
-              void loadMoreTraceChildren();
-            }}
-          >
-            {i18nText('agentFlow', 'auto.load_more_trace_children')}
-          </Button>
-        ) : null}
-      </section>
+      {isToolGroupNode ? (
+        <div className="agent-flow-editor__conversation-log-node-group">
+          {childLoadStatusContent}
+          {childNodesBeforePayload}
+          {loadMoreChildrenButton}
+        </div>
+      ) : (
+        <section
+          aria-label={i18nText('agentFlow', 'auto.node_details_alt', {
+            value1: nodeDisplayName(fallbackItem)
+          })}
+          className="agent-flow-editor__conversation-log-node-detail"
+        >
+          {contentLoading ? (
+            <Spin />
+          ) : contentProjectionStatus &&
+            !traceProjectionStatusSucceeded(contentProjectionStatus) ? (
+            <TraceProjectionStatusNotice status={contentProjectionStatus} />
+          ) : (
+            <div className="agent-flow-editor__conversation-log-json-list">
+              <DebugWorkflowNodeDetailContent
+                beforePayloadContent={childNodesBeforePayload}
+                item={item}
+                onLoadArtifact={onLoadArtifact}
+                onLoadToolCallbackDetail={
+                  loadToolCallbackDetail
+                    ? (toolCallId) =>
+                        loadToolCallbackDetail(
+                          runId,
+                          node.trace_node_id,
+                          toolCallId
+                        )
+                    : undefined
+                }
+              />
+            </div>
+          )}
+          {childLoadStatusContent}
+          {loadMoreChildrenButton}
+        </section>
+      )}
     </DebugWorkflowNodeItem>
   );
 }
