@@ -1,7 +1,7 @@
 # 1flowbase
 
 <p align="center">
-  <img src="docs/assets/logo_index_cn.png" alt="1flowbase Logo">
+  <img src="docs/assets/logo_index_en.png" alt="1flowbase Logo">
 </p>
 
 <p align="center">
@@ -38,7 +38,7 @@ Agent client -> one virtual model endpoint -> your workflow -> trace / tokens / 
 | debug why an agent answer was slow, expensive, or wrong | inspect workflow nodes, model calls, tool callbacks, token usage, latency, and errors |
 | reuse a better model chain from existing clients | publish the workflow as OpenAI-compatible or Claude-compatible model APIs |
 
-![Workflow Editor Preview](docs/assets/workflow_editor_preview.jpeg)
+![Workflow Editor Preview](docs/assets/workflow_editor_preview_tool.png)
 
 ---
 
