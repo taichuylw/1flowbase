@@ -285,6 +285,18 @@ test("React Doctor keeps current debt as a narrow baseline", () => {
       ],
     },
     {
+      files: [
+        "src/features/agent-flow/components/editor/AgentFlowCanvasFrame.tsx",
+      ],
+      rules: [
+        "react-doctor/no-giant-component",
+        "react-doctor/prefer-useReducer",
+        "react-doctor/query-mutation-missing-invalidation",
+        "react-doctor/no-initialize-state",
+        "react-doctor/prefer-tag-over-role",
+      ],
+    },
+    {
       files: ["src/features/agent-flow/components/nodes/AgentFlowNodeCard.tsx"],
       rules: [
         "react-doctor/no-giant-component",

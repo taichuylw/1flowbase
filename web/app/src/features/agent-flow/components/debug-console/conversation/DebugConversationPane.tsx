@@ -6,7 +6,7 @@ import type {
   AgentFlowRunContext
 } from '../../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../../hooks/runtime/useAgentFlowDebugSession';
-import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/NodeRunIOCard';
+import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/runtime-debug-payload';
 import { DebugAssistantMessage } from './DebugAssistantMessage';
 import { DebugComposer } from './DebugComposer';
 import { DebugMarkdownContent } from './DebugMarkdownContent';

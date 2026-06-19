@@ -118,7 +118,7 @@ describe('debug preview responsive layout CSS', () => {
     );
 
     expect(nodeMain).toMatch(/display:\s*inline-flex/);
-    expect(nodeMain).toMatch(/align-items:\s*baseline/);
+    expect(nodeMain).toMatch(/align-items:\s*center/);
     expect(nodeMain).not.toMatch(/display:\s*grid/);
   });
 

@@ -9,7 +9,7 @@ import { App, Button, Space, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../../api/runtime';
-import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/NodeRunIOCard';
+import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/runtime-debug-payload';
 import { parseAssistantContent } from '../../../lib/debug-console/assistant-content';
 import { copyTextToClipboard } from '../../../../../shared/ui/clipboard/copy-text';
 import { DebugMarkdownContent } from './DebugMarkdownContent';

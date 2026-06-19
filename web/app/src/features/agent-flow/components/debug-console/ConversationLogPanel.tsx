@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState
+} from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -15,16 +22,19 @@ import type {
   AgentFlowTraceItem
 } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
-import {
-  NodeRunPayloadSections,
-  type RuntimeDebugArtifactBatchLoader
-} from '../detail/last-run/NodeRunIOCard';
+import { NodeRunPayloadSections } from '../detail/last-run/NodeRunPayloadSections';
+import type { RuntimeDebugArtifactBatchLoader } from '../detail/last-run/runtime-debug-payload';
 import { DebugWorkflowNodeItem } from './conversation/DebugWorkflowNodeRow';
 import { DebugWorkflowNodeDetailContent } from './conversation/LlmToolTraceTree';
 import {
   groupTraceItemsForDisplay,
   nodeDisplayName
 } from './conversation/debug-workflow-trace-utils';
+import {
+  appendTraceChildrenPage,
+  createInitialLazyTraceChildrenState,
+  lazyTraceChildrenReducer
+} from './lazy-trace-children-state';
 import './conversation-log-panel.css';
 import { formatDateTime, formatNumber } from '../../../../shared/i18n/format';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -800,28 +810,12 @@ function traceProjectionStatusSucceeded(
   return !status || status.projection_status === 'succeeded';
 }
 
-function appendTraceChildrenPage(
-  current: ConversationLogTraceNodeSummary[],
-  nextPageItems: ConversationLogTraceNodeSummary[]
-) {
-  if (current.length === 0) {
-    return nextPageItems;
-  }
-
-  const seenTraceNodeIds = new Set(
-    current.map((childNode) => childNode.trace_node_id)
-  );
-  const next = [...current];
-
-  for (const childNode of nextPageItems) {
-    if (!seenTraceNodeIds.has(childNode.trace_node_id)) {
-      seenTraceNodeIds.add(childNode.trace_node_id);
-      next.push(childNode);
-    }
-  }
-
-  return next;
-}
+const initialLazyTraceChildrenState =
+  createInitialLazyTraceChildrenState<
+    ConversationLogTraceNodeSummary,
+    ConversationLogTraceNodeChildrenPageInfo,
+    ConversationLogTraceProjectionStatus
+  >();
 
 function traceProjectionStatusMessage(
   status: ConversationLogTraceProjectionStatus
@@ -938,7 +932,7 @@ function LazyTraceNodeList({
     >
       {nodes.map((node) => (
         <LazyTraceNodeItem
-          key={node.trace_node_id}
+          key={`${runId}:${node.trace_node_id}`}
           node={node}
           onLoadArtifact={onLoadArtifact}
           onLoadArtifacts={onLoadArtifacts}
@@ -1055,15 +1049,10 @@ function LazyTraceNodeItem({
   traceLoader: ConversationLogTraceLoader;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [childNodes, setChildNodes] = useState<
-    ConversationLogTraceNodeSummary[]
-  >([]);
-  const [childPageInfo, setChildPageInfo] =
-    useState<ConversationLogTraceNodeChildrenPageInfo | null>(null);
-  const [childProjectionStatus, setChildProjectionStatus] =
-    useState<ConversationLogTraceProjectionStatus>();
-  const [loadingMoreChildren, setLoadingMoreChildren] = useState(false);
-  const [loadMoreChildrenFailed, setLoadMoreChildrenFailed] = useState(false);
+  const [childrenState, dispatchChildrenState] = useReducer(
+    lazyTraceChildrenReducer,
+    initialLazyTraceChildrenState
+  );
   const fallbackItem = useMemo(() => mapTraceSummaryToTraceItem(node), [node]);
   const isToolGroupNode =
     node.node_kind === 'tool_group' || node.node_type === 'tools';
@@ -1119,50 +1108,38 @@ function LazyTraceNodeItem({
     refetchOnWindowFocus: false,
     staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
   });
-  useEffect(() => {
-    setChildNodes([]);
-    setChildPageInfo(null);
-    setChildProjectionStatus(undefined);
-    setLoadingMoreChildren(false);
-    setLoadMoreChildrenFailed(false);
-  }, [runId, node.trace_node_id]);
-  useEffect(() => {
-    const childrenPage = childrenQuery.data;
-    if (!childrenPage) {
-      return;
-    }
-
-    setChildNodes(childrenPage.items);
-    setChildPageInfo(childrenPage.page_info);
-    setChildProjectionStatus(childrenPage.projection_status);
-  }, [childrenQuery.data]);
+  const childNodes = useMemo(
+    () =>
+      appendTraceChildrenPage(
+        childrenQuery.data?.items ?? [],
+        childrenState.additionalNodes
+      ),
+    [childrenState.additionalNodes, childrenQuery.data?.items]
+  );
+  const childPageInfo =
+    childrenState.pageInfo ?? childrenQuery.data?.page_info ?? null;
+  const childProjectionStatus =
+    childrenState.projectionStatus ?? childrenQuery.data?.projection_status;
   const loadMoreTraceChildren = useCallback(async () => {
     const cursor = childPageInfo?.next_cursor;
-    if (!cursor || loadingMoreChildren) {
+    if (!cursor || childrenState.loadingMore) {
       return;
     }
 
-    setLoadingMoreChildren(true);
-    setLoadMoreChildrenFailed(false);
+    dispatchChildrenState({ type: 'load_more_started' });
     try {
       const nextPage = await traceLoader.loadChildren(
         runId,
         node.trace_node_id,
         cursor
       );
-      setChildNodes((current) =>
-        appendTraceChildrenPage(current, nextPage.items)
-      );
-      setChildPageInfo(nextPage.page_info);
-      setChildProjectionStatus(nextPage.projection_status);
+      dispatchChildrenState({ type: 'load_more_succeeded', page: nextPage });
     } catch {
-      setLoadMoreChildrenFailed(true);
-    } finally {
-      setLoadingMoreChildren(false);
+      dispatchChildrenState({ type: 'load_more_failed' });
     }
   }, [
     childPageInfo?.next_cursor,
-    loadingMoreChildren,
+    childrenState.loadingMore,
     node.trace_node_id,
     runId,
     traceLoader
@@ -1224,7 +1201,7 @@ function LazyTraceNodeItem({
       !traceProjectionStatusSucceeded(childProjectionStatus) ? (
         <TraceProjectionStatusNotice status={childProjectionStatus} />
       ) : null}
-      {loadMoreChildrenFailed ? (
+      {childrenState.loadMoreFailed ? (
         <Alert
           message={i18nText('agentFlow', 'auto.loading_failed')}
           showIcon
@@ -1236,7 +1213,7 @@ function LazyTraceNodeItem({
   const loadMoreChildrenButton = childPageInfo?.has_more ? (
     <Button
       className="agent-flow-editor__conversation-log-load-more"
-      loading={loadingMoreChildren}
+      loading={childrenState.loadingMore}
       size="small"
       type="link"
       onClick={() => {

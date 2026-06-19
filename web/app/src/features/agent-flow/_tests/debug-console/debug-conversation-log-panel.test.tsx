@@ -49,6 +49,16 @@ function renderWithQueryClient(children: ReactNode) {
   );
 }
 
+function expandToolsNode(container: HTMLElement, name: RegExp) {
+  const toolsNode = within(container).getByRole('button', { name });
+
+  expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(toolsNode);
+  expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
+
+  return toolsNode;
+}
+
 const assistantMessage: AgentFlowDebugMessage = {
   id: 'assistant-1',
   role: 'assistant',
@@ -983,24 +993,21 @@ describe('debug conversation log panel', () => {
     fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
     const toolsTraceNode = await screen.findByRole('button', { name: /Tools/ });
     fireEvent.click(toolsTraceNode);
-    const toolsTraceItem = toolsTraceNode.closest(
-      '[data-testid="debug-workflow-node-item"]'
-    );
+    const toolsTraceItem = screen.getByTestId('debug-workflow-node-item');
 
-    expect(toolsTraceItem).not.toBeNull();
     expect(
       screen.queryByRole('region', {
         name: 'Tools 节点详情'
       })
     ).not.toBeInTheDocument();
     expect(
-      within(toolsTraceItem as HTMLElement).queryByLabelText('输入 JSON')
+      within(toolsTraceItem).queryByLabelText('输入 JSON')
     ).not.toBeInTheDocument();
     expect(
-      within(toolsTraceItem as HTMLElement).queryByLabelText('数据处理 JSON')
+      within(toolsTraceItem).queryByLabelText('数据处理 JSON')
     ).not.toBeInTheDocument();
     expect(
-      within(toolsTraceItem as HTMLElement).queryByLabelText('输出 JSON')
+      within(toolsTraceItem).queryByLabelText('输出 JSON')
     ).not.toBeInTheDocument();
     expect(traceLoader.loadContent).not.toHaveBeenCalled();
   });
@@ -1074,8 +1081,7 @@ describe('debug conversation log panel', () => {
         .mockImplementation(
           async (
             _runId: string,
-            parentTraceNodeId: string,
-            _cursor?: string
+            parentTraceNodeId: string
           ) => ({
             items:
               parentTraceNodeId === rootNode.trace_node_id
@@ -1244,8 +1250,8 @@ describe('debug conversation log panel', () => {
     });
     expect(toolCallback).toHaveTextContent('1.23 s');
     expect(toolCallback).toHaveTextContent('fusion');
-    const toolMode = toolCallback.querySelector(
-      '.agent-flow-editor__debug-workflow-node-mode'
+    const toolMode = within(toolCallback).getByTestId(
+      'debug-workflow-node-mode'
     );
     expect(toolMode).toHaveTextContent('fusion');
     expect(toolMode).not.toHaveClass('ant-tag');
@@ -1349,10 +1355,7 @@ describe('debug conversation log panel', () => {
       within(nodeDetail).queryByText('Tool Callback #1')
     ).not.toBeInTheDocument();
 
-    const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /工具.*1 次工具回调/
-    });
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
+    expandToolsNode(nodeDetail, /工具.*1 次工具回调/);
     expect(
       within(nodeDetail).queryByText('temperature')
     ).not.toBeInTheDocument();
@@ -1421,9 +1424,7 @@ describe('debug conversation log panel', () => {
     const panel = screen.getByRole('complementary', { name: '对话日志' });
     fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
     fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
-    expect(
-      within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
-    ).toHaveAttribute('aria-expanded', 'true');
+    expandToolsNode(panel, /工具.*1 次工具回调/);
     fireEvent.click(
       within(panel).getByRole('button', { name: /fusion_review/ })
     );
@@ -1465,9 +1466,7 @@ describe('debug conversation log panel', () => {
     const panel = screen.getByRole('complementary', { name: '对话日志' });
     fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
     fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
-    expect(
-      within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
-    ).toHaveAttribute('aria-expanded', 'true');
+    expandToolsNode(panel, /工具.*1 次工具回调/);
     fireEvent.click(
       within(panel).getByRole('button', { name: /fusion_review/ })
     );
@@ -1524,10 +1523,7 @@ describe('debug conversation log panel', () => {
     const nodeDetail = within(panel).getByRole('region', {
       name: 'LLM 节点详情'
     });
-    const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /工具.*2 次工具回调/
-    });
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
+    expandToolsNode(nodeDetail, /工具.*2 次工具回调/);
 
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
@@ -1627,10 +1623,7 @@ describe('debug conversation log panel', () => {
     const nodeDetail = within(panel).getByRole('region', {
       name: 'LLM 节点详情'
     });
-    const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /工具.*1 次工具回调/
-    });
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
+    expandToolsNode(nodeDetail, /工具.*1 次工具回调/);
 
     expect(
       within(nodeDetail).queryByRole('button', { name: '加载完整工具' })

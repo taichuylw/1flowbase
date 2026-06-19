@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import { App, Button, Typography } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 
 import { useContainerNavigation } from '../../hooks/interactions/use-container-navigation';
 import { useDraftSync } from '../../hooks/interactions/use-draft-sync';
@@ -109,10 +115,14 @@ import type { AgentFlowCanvasFrameProps } from './canvas-frame-types';
 
 type NodePreviewAction = 'run' | 'debug';
 
+const EMPTY_ENVIRONMENT_VARIABLES: NonNullable<
+  AgentFlowCanvasFrameProps['initialEnvironmentVariables']
+> = [];
+
 export function AgentFlowCanvasFrame({
   applicationId,
   applicationName,
-  initialEnvironmentVariables = [],
+  initialEnvironmentVariables = EMPTY_ENVIRONMENT_VARIABLES,
   nodeContributions,
   saveDraftOverride,
   restoreVersionOverride
@@ -202,9 +212,18 @@ export function AgentFlowCanvasFrame({
   const [conversationVariablesDockWidth, setConversationVariablesDockWidth] =
     useState(ENVIRONMENT_VARIABLES_DOCK_WIDTH);
   const [historyDockWidth, setHistoryDockWidth] = useState(HISTORY_DOCK_WIDTH);
+  const environmentVariablesSourceRef = useRef(
+    initialEnvironmentVariables
+  );
   const [environmentVariables, setEnvironmentVariables] = useState<
     AgentFlowEnvironmentVariable[]
-  >(initialEnvironmentVariables);
+  >(
+    initialEnvironmentVariables
+  );
+  if (environmentVariablesSourceRef.current !== initialEnvironmentVariables) {
+    environmentVariablesSourceRef.current = initialEnvironmentVariables;
+    setEnvironmentVariables(initialEnvironmentVariables);
+  }
   const conversationVariables = useMemo(
     () => listConversationVariables(workingDocument),
     [workingDocument]
@@ -310,9 +329,6 @@ export function AgentFlowCanvasFrame({
     }
   });
 
-  useEffect(() => {
-    setEnvironmentVariables(initialEnvironmentVariables);
-  }, [initialEnvironmentVariables]);
   const navigation = useContainerNavigation();
   const draftSync = useDraftSync({
     applicationId,
@@ -340,6 +356,9 @@ export function AgentFlowCanvasFrame({
       ) ?? null,
     [conversationLogMessageId, debugSession.messages]
   );
+  if (conversationLogMessageId && !conversationLogMessage) {
+    setConversationLogMessageId(null);
+  }
   const issues = useMemo(
     () =>
       validateDocument(
@@ -502,14 +521,6 @@ export function AgentFlowCanvasFrame({
     stopConversationLogResizeRef.current?.();
     setConversationLogMessageId(null);
   }, [debugConsoleOpen]);
-
-  useEffect(() => {
-    if (!conversationLogMessageId || conversationLogMessage) {
-      return;
-    }
-
-    setConversationLogMessageId(null);
-  }, [conversationLogMessage, conversationLogMessageId]);
 
   useEffect(() => {
     if (conversationLogMessage) {
@@ -735,6 +746,21 @@ export function AgentFlowCanvasFrame({
         : current
     );
     debugSession.setVariableCacheValue(key, value);
+  }
+
+  function handleNodeDetailResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return;
+    }
+
+    event.preventDefault();
+    const direction = event.key === 'ArrowLeft' ? 1 : -1;
+    setPanelState({
+      nodeDetailWidth: clampNodeDetailWidth(
+        boundedNodeDetailWidth + direction * 24,
+        detailContainerWidth
+      )
+    });
   }
 
   function buildNodeDebugRuntimeVariableCache(): NodeDebugPreviewVariableCache {
@@ -1043,8 +1069,10 @@ export function AgentFlowCanvasFrame({
               )}
               aria-orientation="vertical"
               className="agent-flow-editor__detail-resize-handle"
+              onKeyDown={handleNodeDetailResizeKeyDown}
               onMouseDown={handleNodeDetailResizeStart}
               role="separator"
+              tabIndex={0}
             />
             <NodeDetailPanel
               activeRunId={debugSession.activeRunId}

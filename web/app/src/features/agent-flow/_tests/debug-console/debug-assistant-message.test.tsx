@@ -97,9 +97,7 @@ describe('DebugAssistantMessage', () => {
     expect(screen.getByRole('region', { name: '工作流' })).toBeInTheDocument();
     expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
     expect(screen.getAllByText('LLM').length).toBeGreaterThan(0);
-    expect(
-      screen.getByRole('img', { name: 'llm 节点类型' })
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('llm 节点类型')).toBeInTheDocument();
 
     const workflowToggle = screen.getByRole('button', { name: /工作流/ });
     expect(workflowToggle).toHaveAttribute('aria-expanded', 'true');

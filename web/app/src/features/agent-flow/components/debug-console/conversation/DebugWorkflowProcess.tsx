@@ -3,7 +3,7 @@ import { DownOutlined, RightOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
-import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/NodeRunIOCard';
+import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/runtime-debug-payload';
 import { DebugWorkflowNodeItem, StatusIcon } from './DebugWorkflowNodeRow';
 import { DebugWorkflowNodeDetailContent } from './LlmToolTraceTree';
 import { groupTraceItemsForDisplay } from './debug-workflow-trace-utils';

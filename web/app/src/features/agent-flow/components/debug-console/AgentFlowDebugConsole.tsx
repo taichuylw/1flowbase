@@ -9,7 +9,7 @@ import type {
 } from '../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../hooks/runtime/useAgentFlowDebugSession';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
-import type { RuntimeDebugArtifactBatchLoader } from '../detail/last-run/NodeRunIOCard';
+import type { RuntimeDebugArtifactBatchLoader } from '../detail/last-run/runtime-debug-payload';
 import { ConversationLogPanel } from './ConversationLogPanel';
 import { DebugConversationPane } from './conversation/DebugConversationPane';
 import { i18nText } from '../../../../shared/i18n/text';

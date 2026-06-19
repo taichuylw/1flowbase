@@ -10,11 +10,11 @@ import {
 } from 'react';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
+import { NodeRunPayloadSections } from '../../detail/last-run/NodeRunPayloadSections';
 import {
-  NodeRunPayloadSections,
   RuntimeDebugPayloadBlock,
   type RuntimeDebugArtifactBatchLoader
-} from '../../detail/last-run/NodeRunIOCard';
+} from '../../detail/last-run/runtime-debug-payload';
 import { AnswerSnapshotTrace } from './AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem } from './DebugWorkflowNodeRow';
 import {
@@ -579,7 +579,7 @@ interface LlmToolTraceTreeState {
 }
 
 const INITIAL_LLM_TOOL_TRACE_TREE_STATE: LlmToolTraceTreeState = {
-  toolsExpanded: true,
+  toolsExpanded: false,
   expandedToolKey: null,
   loadedToolCallbacks: {},
   loadingToolKey: null,
@@ -826,6 +826,7 @@ function LlmToolTraceTreeContent({
       className="agent-flow-editor__debug-llm-tools"
     >
       <button
+        aria-label={`${i18nText('agentFlow', 'auto.tools')} ${summaryText}`}
         aria-expanded={traceTreeState.toolsExpanded}
         className="agent-flow-editor__debug-llm-tools-trigger"
         onClick={handleToggleTools}

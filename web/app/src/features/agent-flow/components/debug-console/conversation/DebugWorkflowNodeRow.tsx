@@ -187,7 +187,6 @@ export function NodeTypeIcon({ nodeType }: { nodeType: string }) {
         value1: nodeType
       })}
       className="agent-flow-editor__debug-workflow-node-icon"
-      role="img"
     >
       {getAgentFlowNodeTypeIcon(nodeType)}
     </span>
@@ -207,7 +206,10 @@ export function DebugWorkflowNodeRow({ item }: { item: AgentFlowTraceItem }) {
         <span className="agent-flow-editor__debug-workflow-node-title">
           <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
           {toolMode ? (
-            <span className="agent-flow-editor__debug-workflow-node-mode">
+            <span
+              className="agent-flow-editor__debug-workflow-node-mode"
+              data-testid="debug-workflow-node-mode"
+            >
               {toolMode}
             </span>
           ) : null}

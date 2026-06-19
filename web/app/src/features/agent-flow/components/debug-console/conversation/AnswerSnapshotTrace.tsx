@@ -10,7 +10,7 @@ import type { AgentFlowAnswerSnapshot } from '../../../api/runtime';
 import {
   RuntimeDebugPayloadBlock,
   type RuntimeDebugArtifactBatchLoader
-} from '../../detail/last-run/NodeRunIOCard';
+} from '../../detail/last-run/runtime-debug-payload';
 
 function snapshotPayload(snapshot: AgentFlowAnswerSnapshot) {
   return Object.keys(snapshot.outputPayload).length > 0
