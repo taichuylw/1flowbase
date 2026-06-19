@@ -459,6 +459,33 @@ function mapTraceSummaryToTraceItem(
   };
 }
 
+function isToolModeTraceNode(node: ConversationLogTraceNodeSummary) {
+  return node.node_kind === 'fusion' || node.node_kind === 'route';
+}
+
+function toolModeFromTraceNodes(nodes: ConversationLogTraceNodeSummary[]) {
+  const toolModeNode = nodes.find(isToolModeTraceNode);
+
+  return toolModeNode?.node_kind ?? null;
+}
+
+function traceItemWithToolMode(
+  item: AgentFlowTraceItem,
+  toolMode: string | null
+): AgentFlowTraceItem {
+  if (item.nodeType !== 'tool' || !toolMode) {
+    return item;
+  }
+
+  return {
+    ...item,
+    debugPayload: {
+      ...(item.debugPayload ?? {}),
+      tool_mode: toolMode
+    }
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -894,6 +921,91 @@ function LazyTraceNodeList({
   );
 }
 
+function FlattenedToolModeTraceNodeChildren({
+  nodes,
+  onLoadArtifact,
+  runId,
+  traceLoader
+}: {
+  nodes: ConversationLogTraceNodeSummary[];
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  runId: string;
+  traceLoader: ConversationLogTraceLoader;
+}) {
+  if (nodes.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {nodes.map((node) => (
+        <FlattenedToolModeTraceNodeChild
+          key={node.trace_node_id}
+          node={node}
+          onLoadArtifact={onLoadArtifact}
+          runId={runId}
+          traceLoader={traceLoader}
+        />
+      ))}
+    </>
+  );
+}
+
+function FlattenedToolModeTraceNodeChild({
+  node,
+  onLoadArtifact,
+  runId,
+  traceLoader
+}: {
+  node: ConversationLogTraceNodeSummary;
+  onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  runId: string;
+  traceLoader: ConversationLogTraceLoader;
+}) {
+  const childrenQuery = useQuery({
+    enabled: node.has_children,
+    queryKey: [
+      'conversation-log-trace-node-children',
+      runId,
+      node.trace_node_id
+    ],
+    queryFn: () => traceLoader.loadChildren(runId, node.trace_node_id, undefined),
+    refetchOnWindowFocus: false,
+    staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
+  });
+  const childProjectionStatus = childrenQuery.data?.projection_status;
+  const childNodes = childrenQuery.data?.items ?? [];
+
+  if (!node.has_children) {
+    return null;
+  }
+
+  return (
+    <>
+      {childrenQuery.isLoading ? <Spin /> : null}
+      {childrenQuery.isError ? (
+        <Alert
+          message={i18nText('agentFlow', 'auto.loading_failed')}
+          showIcon
+          type="error"
+        />
+      ) : null}
+      {childProjectionStatus &&
+      !traceProjectionStatusSucceeded(childProjectionStatus) ? (
+        <TraceProjectionStatusNotice status={childProjectionStatus} />
+      ) : null}
+      {childNodes.length > 0 ? (
+        <LazyTraceNodeList
+          nodes={childNodes}
+          onLoadArtifact={onLoadArtifact}
+          runId={runId}
+          traceLoader={traceLoader}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function LazyTraceNodeItem({
   node,
   onLoadArtifact,
@@ -1016,26 +1128,53 @@ function LazyTraceNodeItem({
     runId,
     traceLoader
   ]);
+  const toolModeNodes = useMemo(
+    () =>
+      node.node_kind === 'tool_callback'
+        ? childNodes.filter(isToolModeTraceNode)
+        : [],
+    [childNodes, node.node_kind]
+  );
+  const visibleChildNodes = useMemo(
+    () =>
+      node.node_kind === 'tool_callback'
+        ? childNodes.filter((childNode) => !isToolModeTraceNode(childNode))
+        : childNodes,
+    [childNodes, node.node_kind]
+  );
   const item = useMemo(
     () =>
-      mapTraceContentToTraceItem(
-        fallbackItem,
-        contentQuery.data,
-        nodeRunDetailQuery.data
+      traceItemWithToolMode(
+        mapTraceContentToTraceItem(
+          fallbackItem,
+          contentQuery.data,
+          nodeRunDetailQuery.data
+        ),
+        toolModeFromTraceNodes(childNodes)
       ),
-    [contentQuery.data, fallbackItem, nodeRunDetailQuery.data]
+    [childNodes, contentQuery.data, fallbackItem, nodeRunDetailQuery.data]
   );
   const contentProjectionStatus = contentQuery.data?.projection_status;
   const contentLoading = contentQuery.isLoading || nodeRunDetailQuery.isLoading;
   const loadToolCallbackDetail = traceLoader.loadToolCallbackDetail;
   const childNodesBeforePayload =
-    childNodes.length > 0 ? (
-      <LazyTraceNodeList
-        nodes={childNodes}
-        onLoadArtifact={onLoadArtifact}
-        runId={runId}
-        traceLoader={traceLoader}
-      />
+    visibleChildNodes.length > 0 || toolModeNodes.length > 0 ? (
+      <>
+        <FlattenedToolModeTraceNodeChildren
+          nodes={toolModeNodes}
+          onLoadArtifact={onLoadArtifact}
+          runId={runId}
+          traceLoader={traceLoader}
+        />
+        {visibleChildNodes.length > 0 ? (
+          <LazyTraceNodeList
+            nodes={visibleChildNodes}
+            onLoadArtifact={onLoadArtifact}
+            runId={runId}
+            traceLoader={traceLoader}
+          />
+        ) : null}
+      </>
     ) : null;
 
   return (

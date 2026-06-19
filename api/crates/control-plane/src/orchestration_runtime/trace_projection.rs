@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 5;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 6;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -549,13 +549,15 @@ impl TraceProjectionBuilder {
         let stable_locator = format!("{parent_stable_locator}/tool:{tool_call_id}");
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
         let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
-        let metrics_payload = tool_callback_metrics_payload(tool_call, None, route_trace.as_ref());
+        let tool_result = tool_result_for_call_from_node_runs(parent_node_runs, &tool_call_id);
+        let metrics_payload =
+            tool_callback_metrics_payload(tool_call, tool_result.as_ref(), route_trace.as_ref());
         let payload = tool_callback_content_payload(
             None,
             &tool_call_id,
             &tool_name,
             tool_call,
-            None,
+            tool_result.as_ref(),
             route_trace.as_ref(),
         );
         let has_route_child = route_trace.is_some();
@@ -1268,14 +1270,51 @@ fn tool_result_for_call(
         .and_then(|items| {
             items
                 .iter()
-                .find(|item| {
-                    item.get("tool_call_id")
-                        .or_else(|| item.get("id"))
-                        .and_then(serde_json::Value::as_str)
-                        == Some(tool_call_id)
-                })
+                .find(|item| tool_payload_matches_call_id(item, tool_call_id))
                 .cloned()
         })
+}
+
+fn tool_result_for_call_from_node_runs(
+    node_runs: &[domain::NodeRunRecord],
+    tool_call_id: &str,
+) -> Option<serde_json::Value> {
+    node_runs.iter().rev().find_map(|node_run| {
+        tool_result_for_call_from_debug_payload(&node_run.debug_payload, tool_call_id)
+    })
+}
+
+fn tool_result_for_call_from_debug_payload(
+    debug_payload: &serde_json::Value,
+    tool_call_id: &str,
+) -> Option<serde_json::Value> {
+    let rounds = debug_payload.get("llm_rounds")?.as_array()?;
+
+    for round in rounds.iter().rev() {
+        let Some(tool_results) = round
+            .get("tool_results")
+            .and_then(serde_json::Value::as_array)
+        else {
+            continue;
+        };
+
+        for tool_result in tool_results.iter().rev() {
+            if tool_payload_matches_call_id(tool_result, tool_call_id) {
+                return Some(tool_result.clone());
+            }
+        }
+    }
+
+    None
+}
+
+fn tool_payload_matches_call_id(payload: &serde_json::Value, tool_call_id: &str) -> bool {
+    payload
+        .get("tool_call_id")
+        .or_else(|| payload.get("id"))
+        .or_else(|| payload.get("call_id"))
+        .and_then(serde_json::Value::as_str)
+        == Some(tool_call_id)
 }
 
 fn route_trace_for_tool_call(
@@ -1291,12 +1330,7 @@ fn route_trace_for_tool_call(
                 .and_then(serde_json::Value::as_array)
         })
         .flatten()
-        .find(|trace| {
-            trace
-                .get("tool_call_id")
-                .and_then(serde_json::Value::as_str)
-                == Some(tool_call_id)
-        })
+        .find(|trace| tool_payload_matches_call_id(trace, tool_call_id))
         .cloned()
 }
 
@@ -1466,13 +1500,20 @@ fn tool_callback_content_payload(
     let result_context_usage = tool_result
         .and_then(|result| result.get("result_context_usage"))
         .cloned();
+    let callback_status = task.map(callback_status).unwrap_or_else(|| {
+        if tool_result.is_some() {
+            "returned"
+        } else {
+            "waiting_callback"
+        }
+    });
 
     serde_json::json!({
         "id": tool_call_id,
         "name": tool_name,
         "callback_task_id": task.map(|task| task.id),
         "tool_call_id": tool_call_id,
-        "callback_status": task.map(callback_status).unwrap_or("waiting_callback"),
+        "callback_status": callback_status,
         "execution_status": tool_result_execution_status(tool_result),
         "request_payload": tool_call,
         "callback_payload": tool_result,
@@ -2167,6 +2208,13 @@ mod tests {
         assert_eq!(fusion.node_kind, "fusion");
         assert_eq!(fusion.child_count, 4);
         assert_eq!(branch_count, 4);
+        assert!(projection.contents.iter().any(|content| {
+            content.trace_node_id == problem_review.trace_node_id
+                && content.content_kind == "tool_callback"
+                && content.payload["callback_status"] == json!("returned")
+                && content.payload["parsed_result"]["content"] == json!("problem review result")
+                && content.payload["tool_result"]["content"] == json!("problem review result")
+        }));
     }
 
     #[test]

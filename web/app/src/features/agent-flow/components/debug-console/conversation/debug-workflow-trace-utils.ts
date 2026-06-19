@@ -20,6 +20,14 @@ export function nodeDisplayName(item: AgentFlowTraceItem) {
     return i18nText('agentFlow', 'auto.reply_directly');
   }
 
+  if (item.nodeType === 'fusion') {
+    return i18nText('agentFlow', 'auto.tool_mode_fusion');
+  }
+
+  if (item.nodeType === 'route') {
+    return i18nText('agentFlow', 'auto.tool_mode_agent');
+  }
+
   return item.nodeAlias;
 }
 

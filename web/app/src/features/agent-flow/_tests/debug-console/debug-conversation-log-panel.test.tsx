@@ -1042,8 +1042,23 @@ describe('debug conversation log panel', () => {
       finished_at: '2026-04-25T10:00:03Z',
       duration_ms: 1234,
       metrics_payload: {},
-      has_children: false,
+      has_children: true,
       has_content: true
+    };
+    const fusionNode = {
+      trace_node_id: 'fusion:call-refund-policy',
+      node_kind: 'fusion',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'fusion',
+      node_alias: 'refund_policy_lookup',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1234,
+      metrics_payload: {},
+      has_children: false,
+      has_content: false
     };
     const traceLoader = {
       loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
@@ -1060,6 +1075,8 @@ describe('debug conversation log panel', () => {
                 ? [toolsNode]
                 : parentTraceNodeId === toolsNode.trace_node_id
                   ? [toolCallbackNode]
+                  : parentTraceNodeId === toolCallbackNode.trace_node_id
+                    ? [fusionNode]
                   : [],
             page_info: {
               has_more: false,
@@ -1231,6 +1248,12 @@ describe('debug conversation log panel', () => {
     const toolDetail = await within(nodeDetail).findByRole('region', {
       name: /refund_policy_lookup 节点详情/
     });
+    await waitFor(() => expect(toolCallback).toHaveTextContent('fusion'));
+    expect(
+      within(toolDetail).queryByRole('button', {
+        name: /fusion/
+      })
+    ).not.toBeInTheDocument();
     expect(within(toolDetail).getByLabelText('输入 JSON')).toHaveTextContent(
       'refund'
     );
@@ -1388,6 +1411,9 @@ describe('debug conversation log panel', () => {
     );
 
     const branchNode = within(panel).getByTestId('debug-llm-route-branch-node');
+    expect(
+      within(panel).queryByTestId('debug-llm-route-node')
+    ).not.toBeInTheDocument();
     fireEvent.click(within(branchNode).getByRole('button', { name: /LLM2/ }));
 
     expect(within(branchNode).getByLabelText('输入 JSON')).toHaveTextContent(

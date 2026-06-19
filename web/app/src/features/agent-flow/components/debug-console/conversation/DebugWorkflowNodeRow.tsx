@@ -58,6 +58,36 @@ function readTotalTokens(payload: unknown) {
   return typeof totalTokens === 'number' ? totalTokens : null;
 }
 
+function readToolMode(item: AgentFlowTraceItem) {
+  if (item.nodeType !== 'tool') {
+    return null;
+  }
+
+  const debugPayload = readRecord(item.debugPayload);
+  if (!debugPayload) {
+    return null;
+  }
+
+  const toolMode = debugPayload.tool_mode;
+  if (toolMode === 'fusion') {
+    return i18nText('agentFlow', 'auto.tool_mode_fusion');
+  }
+  if (toolMode === 'route') {
+    return i18nText('agentFlow', 'auto.tool_mode_agent');
+  }
+
+  const routeTrace = readRecord(debugPayload.route_trace);
+  const routeKind = routeTrace?.route_kind;
+  if (routeKind === 'fusion') {
+    return i18nText('agentFlow', 'auto.tool_mode_fusion');
+  }
+  if (routeKind === 'route') {
+    return i18nText('agentFlow', 'auto.tool_mode_agent');
+  }
+
+  return null;
+}
+
 function metricText(item: AgentFlowTraceItem) {
   const tokens =
     readTotalTokens(item.metricsPayload) ?? readTotalTokens(item.outputPayload);
@@ -165,6 +195,8 @@ export function NodeTypeIcon({ nodeType }: { nodeType: string }) {
 }
 
 export function DebugWorkflowNodeRow({ item }: { item: AgentFlowTraceItem }) {
+  const toolMode = readToolMode(item);
+
   return (
     <span
       className="agent-flow-editor__debug-workflow-row"
@@ -172,7 +204,14 @@ export function DebugWorkflowNodeRow({ item }: { item: AgentFlowTraceItem }) {
     >
       <NodeTypeIcon nodeType={item.nodeType} />
       <span className="agent-flow-editor__debug-workflow-node-main">
-        <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
+        <span className="agent-flow-editor__debug-workflow-node-title">
+          <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
+          {toolMode ? (
+            <Tag className="agent-flow-editor__debug-workflow-node-mode">
+              {toolMode}
+            </Tag>
+          ) : null}
+        </span>
         <Typography.Text
           className="agent-flow-editor__debug-workflow-metric"
           type="secondary"

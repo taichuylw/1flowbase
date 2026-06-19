@@ -135,86 +135,10 @@ function LlmToolInlineMetrics({ callback }: { callback: LlmToolCallback }) {
   );
 }
 
-function routeNodeStatus(callback: LlmToolCallback) {
-  const traceStatus = callback.routeTrace?.status;
-
-  if (traceStatus) {
-    switch (traceStatus) {
-      case 'succeeded':
-      case 'returned_to_main':
-      case 'route_completed':
-        return 'succeeded';
-      case 'failed':
-        return 'failed';
-      case 'cancelled':
-      case 'canceled':
-        return 'cancelled';
-      case 'waiting_callback':
-        return 'waiting_callback';
-      default:
-        return traceStatus;
-    }
-  }
-
-  switch (callback.executionStatus) {
-    case 'succeeded':
-      return 'succeeded';
-    case 'failed':
-    case 'timed_out':
-      return 'failed';
-    case 'cancelled':
-      return 'cancelled';
-    default:
-      return callback.callbackStatus === 'returned'
-        ? 'succeeded'
-        : 'waiting_callback';
-  }
-}
-
-function routeNodeAlias(routeTrace: LlmToolRouteTraceSummary) {
-  return routeTrace.routeNodeAlias ?? 'LLM';
-}
-
 function routeTraceLabel(routeTrace: LlmToolRouteTraceSummary) {
   return routeTrace.routeKind === 'fusion'
-    ? 'fusion'
-    : i18nText('agentFlow', 'auto.route_trace');
-}
-
-function routeNodeOutputPayload(callback: LlmToolCallback) {
-  if (callback.call_usage) {
-    return {
-      usage: callback.call_usage
-    };
-  }
-
-  return {};
-}
-
-function buildRouteTraceItem(callback: LlmToolCallback): AgentFlowTraceItem {
-  const routeTrace = callback.routeTrace;
-
-  return {
-    nodeId:
-      routeTrace?.routeNodeId ??
-      routeTrace?.targetNodeId ??
-      `${callback.id}:route`,
-    nodeRunId: routeTrace?.detailArtifactRef ?? `${callback.id}:route`,
-    nodeAlias: routeTrace ? routeNodeAlias(routeTrace) : 'LLM',
-    nodeType: 'llm',
-    status: routeNodeStatus(callback),
-    startedAt: '',
-    finishedAt: callback.callbackStatus === 'returned' ? '' : null,
-    durationMs: callback.duration_ms,
-    inputPayload: {},
-    outputPayload: routeNodeOutputPayload(callback),
-    errorPayload:
-      callback.executionStatus === 'failed'
-        ? (callback.parsedResult ?? {})
-        : null,
-    metricsPayload: {},
-    debugPayload: routeTrace?.rawPayload ?? {}
-  };
+    ? i18nText('agentFlow', 'auto.tool_mode_fusion')
+    : i18nText('agentFlow', 'auto.tool_mode_agent');
 }
 
 function branchNodeStatus(branch: LlmToolRouteBranchSummary) {
@@ -358,12 +282,6 @@ function LlmToolRouteBranchNode({
   );
 }
 
-function routeTraceStatusText(callback: LlmToolCallback) {
-  return executionStatusLabel(
-    routeNodeStatus(callback) === 'failed' ? 'failed' : 'succeeded'
-  );
-}
-
 function LlmToolRouteNode({
   callback,
   onLoadArtifact
@@ -371,7 +289,6 @@ function LlmToolRouteNode({
   callback: LlmToolCallback;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
 }) {
-  const [expanded, setExpanded] = useState(true);
   const [routeTraceLoadState, dispatchRouteTraceLoad] = useReducer(
     routeTraceLoadReducer,
     INITIAL_ROUTE_TRACE_LOAD_STATE
@@ -388,7 +305,6 @@ function LlmToolRouteNode({
 
   useEffect(() => {
     if (
-      !expanded ||
       routeKind !== 'fusion' ||
       !detailArtifactRef ||
       !hasArtifactLoader ||
@@ -428,7 +344,6 @@ function LlmToolRouteNode({
     };
   }, [
     detailArtifactRef,
-    expanded,
     hasArtifactLoader,
     routeKind,
     routeTraceLoadState.loadFailed,
@@ -445,99 +360,36 @@ function LlmToolRouteNode({
     branchTraces.length > 0 ? branchTraces : routeTrace.branchSummaries;
   const routeTraceTitle = routeTraceLabel(routeTrace);
 
-  if (routeTrace.routeKind === 'fusion') {
-    return (
-      <div
-        className="agent-flow-editor__debug-llm-route-node"
-        data-testid="debug-llm-route-node"
-      >
-        <button
-          aria-expanded={expanded}
-          className="agent-flow-editor__debug-llm-route-group-trigger"
-          onClick={() => setExpanded((current) => !current)}
-          type="button"
-        >
-          <span className="agent-flow-editor__debug-llm-route-group-main">
-            <Typography.Text strong>{routeTraceTitle}</Typography.Text>
-            <Typography.Text type="secondary">
-              {routeTraceStatusText(callback)}
-            </Typography.Text>
-          </span>
-          <Tag className="agent-flow-editor__debug-llm-tool-route-tag">
-            {routeTraceTitle}
-          </Tag>
-          {expanded ? (
-            <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
-          ) : (
-            <RightOutlined className="agent-flow-editor__debug-workflow-collapse" />
-          )}
-        </button>
-        {expanded ? (
-          <div className="agent-flow-editor__debug-llm-route-node-detail">
-            {routeTraceLoadState.loading ? (
-              <Tag color="processing">
-                {i18nText('agentFlow', 'auto.loading')}
-              </Tag>
-            ) : null}
-            {routeTraceLoadState.loadFailed ? (
-              <Tag color="error">
-                {i18nText('agentFlow', 'auto.loading_failed')}
-              </Tag>
-            ) : null}
-            {branchNodes.length > 0 ? (
-              <div className="agent-flow-editor__debug-llm-route-branch-list">
-                {branchNodes.map((branch, index) => (
-                  <LlmToolRouteBranchNode
-                    key={routeBranchNodeKey(callback, branch)}
-                    branch={branch}
-                    callback={callback}
-                    index={index}
-                    onLoadArtifact={onLoadArtifact}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  const routeTraceItem = buildRouteTraceItem(callback);
-
   return (
-    <div
-      className="agent-flow-editor__debug-llm-route-node"
-      data-testid="debug-llm-route-node"
-    >
-      <DebugWorkflowNodeItem
-        expanded={expanded}
-        item={routeTraceItem}
-        onToggle={() => setExpanded((current) => !current)}
-      >
-        <div className="agent-flow-editor__debug-workflow-node-detail agent-flow-editor__debug-llm-route-node-detail">
-          {branchNodes.length > 0 ? (
-            <div className="agent-flow-editor__debug-llm-route-branch-list">
-              {branchNodes.map((branch, index) => (
-                <LlmToolRouteBranchNode
-                  key={routeBranchNodeKey(callback, branch)}
-                  branch={branch}
-                  callback={callback}
-                  index={index}
-                  onLoadArtifact={onLoadArtifact}
-                />
-              ))}
-            </div>
-          ) : null}
-          <RuntimeDebugPayloadBlock
-            height="11rem"
-            payload={sourceRouteTrace.rawPayload}
-            title={routeTraceTitle}
-            onLoadArtifact={onLoadArtifact}
-          />
+    <>
+      {routeTraceLoadState.loading ? (
+        <Tag color="processing">{i18nText('agentFlow', 'auto.loading')}</Tag>
+      ) : null}
+      {routeTraceLoadState.loadFailed ? (
+        <Tag color="error">{i18nText('agentFlow', 'auto.loading_failed')}</Tag>
+      ) : null}
+      {branchNodes.length > 0 ? (
+        <div className="agent-flow-editor__debug-llm-route-branch-list">
+          {branchNodes.map((branch, index) => (
+            <LlmToolRouteBranchNode
+              key={routeBranchNodeKey(callback, branch)}
+              branch={branch}
+              callback={callback}
+              index={index}
+              onLoadArtifact={onLoadArtifact}
+            />
+          ))}
         </div>
-      </DebugWorkflowNodeItem>
-    </div>
+      ) : null}
+      {routeTrace.routeKind === 'fusion' ? null : (
+        <RuntimeDebugPayloadBlock
+          height="11rem"
+          payload={sourceRouteTrace.rawPayload}
+          title={routeTraceTitle}
+          onLoadArtifact={onLoadArtifact}
+        />
+      )}
+    </>
   );
 }
 
