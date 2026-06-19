@@ -45,6 +45,7 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
                     order_key: "000001".to_string(),
                     node_id: Some("node-root".to_string()),
                     node_type: Some("llm".to_string()),
+                    node_mode: None,
                     node_alias: "Root LLM".to_string(),
                     status: "succeeded".to_string(),
                     started_at,
@@ -66,6 +67,7 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
                     order_key: "000001/000001".to_string(),
                     node_id: None,
                     node_type: Some("tool".to_string()),
+                    node_mode: Some("route".to_string()),
                     node_alias: "weather".to_string(),
                     status: "succeeded".to_string(),
                     started_at: started_at + Duration::milliseconds(100),
@@ -139,6 +141,7 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
     assert_eq!(children.len(), 1);
     assert_eq!(children[0].trace_node_id, child_trace_node_id);
     assert_eq!(children[0].parent_trace_node_id, Some(root_trace_node_id));
+    assert_eq!(children[0].node_mode.as_deref(), Some("route"));
     assert!(!children_page.has_more);
     assert!(children_page.next_cursor.is_none());
 
@@ -219,6 +222,7 @@ async fn trace_projection_repository_paginates_children_by_stable_order() {
             order_key: "000001".to_string(),
             node_id: Some("node-root".to_string()),
             node_type: Some("llm".to_string()),
+            node_mode: None,
             node_alias: "Root LLM".to_string(),
             status: "succeeded".to_string(),
             started_at,
@@ -247,6 +251,7 @@ async fn trace_projection_repository_paginates_children_by_stable_order() {
             order_key: format!("000001/{index:06}"),
             node_id: None,
             node_type: Some("tool".to_string()),
+            node_mode: None,
             node_alias: format!("tool_{index:02}"),
             status: "succeeded".to_string(),
             started_at: started_at + Duration::milliseconds(index * 100),

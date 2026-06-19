@@ -380,6 +380,7 @@ pub struct ApplicationRunTraceNodeRecord {
     pub order_key: String,
     pub node_id: Option<String>,
     pub node_type: Option<String>,
+    pub node_mode: Option<String>,
     pub node_alias: String,
     pub status: String,
     pub started_at: OffsetDateTime,

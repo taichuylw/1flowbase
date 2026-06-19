@@ -35,6 +35,7 @@ interface ConversationLogTraceNodeSummary {
   node_run_id?: string | null;
   node_id?: string | null;
   node_type?: string | null;
+  node_mode?: string | null;
   node_alias: string;
   status: string;
   started_at: string;
@@ -442,6 +443,11 @@ function ConversationTrace({
 function mapTraceSummaryToTraceItem(
   summary: ConversationLogTraceNodeSummary
 ): AgentFlowTraceItem {
+  const debugPayload =
+    summary.node_type === 'tool' && summary.node_mode
+      ? { tool_mode: summary.node_mode }
+      : {};
+
   return {
     nodeId: summary.node_id ?? summary.trace_node_id,
     nodeRunId: summary.node_run_id ?? summary.trace_node_id,
@@ -455,7 +461,7 @@ function mapTraceSummaryToTraceItem(
     outputPayload: {},
     errorPayload: null,
     metricsPayload: summary.metrics_payload ?? {},
-    debugPayload: {}
+    debugPayload
   };
 }
 

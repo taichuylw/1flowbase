@@ -158,6 +158,7 @@ impl PgControlPlaneStore {
                     order_key,
                     node_id,
                     node_type,
+                    node_mode,
                     node_alias,
                     status,
                     started_at,
@@ -172,7 +173,7 @@ impl PgControlPlaneStore {
                     source_watermark
                 ) values (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                    $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+                    $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
                 )
                 "#,
             )
@@ -186,6 +187,7 @@ impl PgControlPlaneStore {
             .bind(&node.order_key)
             .bind(&node.node_id)
             .bind(&node.node_type)
+            .bind(&node.node_mode)
             .bind(&node.node_alias)
             .bind(&node.status)
             .bind(node.started_at)
@@ -607,6 +609,7 @@ fn trace_node_select_sql(predicate: &str) -> String {
             order_key,
             node_id,
             node_type,
+            node_mode,
             node_alias,
             status,
             started_at,
@@ -674,6 +677,7 @@ fn map_application_run_trace_node_record(
         order_key: row.get("order_key"),
         node_id: row.get("node_id"),
         node_type: row.get("node_type"),
+        node_mode: row.get("node_mode"),
         node_alias: row.get("node_alias"),
         status: row.get("status"),
         started_at: row.get("started_at"),

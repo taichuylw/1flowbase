@@ -448,6 +448,7 @@ fn to_trace_node_summary_from_projection(
             .flatten(),
         node_id: node.node_id,
         node_type: node.node_type,
+        node_mode: node.node_mode,
         node_alias: node.node_alias,
         status,
         started_at: format_time(node.started_at),

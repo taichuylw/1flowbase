@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 6;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 7;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -251,6 +251,7 @@ impl TraceProjectionBuilder {
             order_key: order_key.clone(),
             node_id: Some(first_node_run.node_id.clone()),
             node_type: Some(first_node_run.node_type.clone()),
+            node_mode: None,
             node_alias: first_node_run.node_alias.clone(),
             status: summary_node_run.status.as_str().to_string(),
             started_at: first_node_run.started_at,
@@ -355,6 +356,7 @@ impl TraceProjectionBuilder {
             order_key: order_key.clone(),
             node_id: None,
             node_type: Some("tools".to_string()),
+            node_mode: None,
             node_alias: "Tools".to_string(),
             status: tool_group_status(tool_tasks),
             started_at: tool_tasks
@@ -424,6 +426,9 @@ impl TraceProjectionBuilder {
         let route_trace = route_trace_for_tool_call(parent_node_runs, &tool_call_id);
         let metrics_payload =
             tool_callback_metrics_payload(tool_call, tool_result.as_ref(), route_trace.as_ref());
+        let node_mode = route_trace
+            .as_ref()
+            .map(|trace| route_trace_node_kind(trace).to_string());
         let payload = tool_callback_content_payload(
             Some(task),
             &tool_call_id,
@@ -444,6 +449,7 @@ impl TraceProjectionBuilder {
             order_key: order_key.clone(),
             node_id: None,
             node_type: Some("tool".to_string()),
+            node_mode,
             node_alias: tool_name,
             status: callback_task_trace_node_status(task),
             started_at: task.created_at,
@@ -501,6 +507,7 @@ impl TraceProjectionBuilder {
             order_key: order_key.clone(),
             node_id: None,
             node_type: Some("tools".to_string()),
+            node_mode: None,
             node_alias: "Tools".to_string(),
             status: trace_node_group_status(parent_node_runs)
                 .as_str()
@@ -552,6 +559,9 @@ impl TraceProjectionBuilder {
         let tool_result = tool_result_for_call_from_node_runs(parent_node_runs, &tool_call_id);
         let metrics_payload =
             tool_callback_metrics_payload(tool_call, tool_result.as_ref(), route_trace.as_ref());
+        let node_mode = route_trace
+            .as_ref()
+            .map(|trace| route_trace_node_kind(trace).to_string());
         let payload = tool_callback_content_payload(
             None,
             &tool_call_id,
@@ -572,6 +582,7 @@ impl TraceProjectionBuilder {
             order_key: order_key.clone(),
             node_id: None,
             node_type: Some("tool".to_string()),
+            node_mode,
             node_alias: tool_name,
             status: trace_node_group_status(parent_node_runs)
                 .as_str()
@@ -639,6 +650,7 @@ impl TraceProjectionBuilder {
                 .and_then(serde_json::Value::as_str)
                 .map(ToOwned::to_owned),
             node_type: Some(node_kind.clone()),
+            node_mode: None,
             node_alias: route_trace_node_alias(route_trace, &node_kind),
             status: route_trace_status(route_trace),
             started_at,
@@ -705,6 +717,7 @@ impl TraceProjectionBuilder {
                 .and_then(serde_json::Value::as_str)
                 .map(ToOwned::to_owned)
                 .or_else(|| Some("branch".to_string())),
+            node_mode: None,
             node_alias: branch_trace_node_alias(branch_trace),
             status: branch_trace_status(branch_trace),
             started_at,
@@ -750,6 +763,7 @@ impl TraceProjectionBuilder {
             order_key,
             node_id: None,
             node_type: Some(task.callback_kind.clone()),
+            node_mode: None,
             node_alias: task.callback_kind.clone(),
             status: callback_task_trace_node_status(task),
             started_at: task.created_at,
@@ -794,6 +808,7 @@ impl TraceProjectionBuilder {
             order_key: order_key.clone(),
             node_id: None,
             node_type: Some("stitched_context".to_string()),
+            node_mode: None,
             node_alias: "Stitched context".to_string(),
             status: "succeeded".to_string(),
             started_at: stitched_trace
@@ -846,6 +861,7 @@ impl TraceProjectionBuilder {
             order_key,
             node_id: None,
             node_type: Some("flow_run".to_string()),
+            node_mode: None,
             node_alias: source_run.title.clone(),
             status: source_run.status.as_str().to_string(),
             started_at: source_run.started_at,
@@ -2205,6 +2221,7 @@ mod tests {
         assert_eq!(tool_callbacks.len(), 6);
         assert!(problem_review.has_children);
         assert_eq!(problem_review.child_count, 1);
+        assert_eq!(problem_review.node_mode.as_deref(), Some("fusion"));
         assert_eq!(fusion.node_kind, "fusion");
         assert_eq!(fusion.child_count, 4);
         assert_eq!(branch_count, 4);

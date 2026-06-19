@@ -1036,6 +1036,7 @@ describe('debug conversation log panel', () => {
       node_run_id: null,
       node_id: null,
       node_type: 'tool',
+      node_mode: 'fusion',
       node_alias: 'refund_policy_lookup',
       status: 'succeeded',
       started_at: '2026-04-25T10:00:02Z',
@@ -1231,6 +1232,7 @@ describe('debug conversation log panel', () => {
       name: /refund_policy_lookup/
     });
     expect(toolCallback).toHaveTextContent('1.23 s');
+    expect(toolCallback).toHaveTextContent('fusion');
     expect(
       within(nodeDetail).queryByRole('region', {
         name: /refund_policy_lookup 节点详情/

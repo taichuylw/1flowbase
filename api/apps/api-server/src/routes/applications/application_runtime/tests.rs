@@ -303,6 +303,7 @@ fn trace_node_content_response_serializes_refs_without_heavy_containers() {
             order_key: "000001".to_string(),
             node_id: Some("node-llm".to_string()),
             node_type: Some("llm".to_string()),
+            node_mode: None,
             node_alias: "LLM".to_string(),
             status: "succeeded".to_string(),
             started_at: now,

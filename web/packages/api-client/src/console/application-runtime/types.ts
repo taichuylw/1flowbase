@@ -484,6 +484,7 @@ export interface ConsoleApplicationRunTraceNodeSummary {
   callback_task_id?: string | null;
   node_id?: string | null;
   node_type?: string | null;
+  node_mode?: string | null;
   node_alias: string;
   status: string;
   started_at: string;
