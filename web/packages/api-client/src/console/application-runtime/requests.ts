@@ -24,6 +24,26 @@ import type {
   UpsertConsoleDebugVariableCacheEntryInput
 } from './types';
 
+export interface ConsoleApplicationRunTraceNodeArtifactPreviewQuery {
+  artifact_preview?: 'auto';
+  artifact_preview_field?: string[];
+}
+
+function traceNodeArtifactPreviewQueryString(
+  query?: ConsoleApplicationRunTraceNodeArtifactPreviewQuery
+) {
+  const searchParams = new URLSearchParams();
+  if (query?.artifact_preview) {
+    searchParams.set('artifact_preview', query.artifact_preview);
+  }
+  for (const fieldPath of query?.artifact_preview_field ?? []) {
+    searchParams.append('artifact_preview_field', fieldPath);
+  }
+
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : '';
+}
+
 export function startConsoleNodeDebugPreview(
   applicationId: string,
   nodeId: string,
@@ -244,10 +264,14 @@ export function getConsoleApplicationRunTraceNodeContent(
   applicationId: string,
   runId: string,
   traceNodeId: string,
-  baseUrl?: string
+  baseUrl?: string,
+  query?: ConsoleApplicationRunTraceNodeArtifactPreviewQuery
 ) {
   return apiFetch<ConsoleApplicationRunTraceNodeContent>({
-    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree/nodes/${encodeURIComponent(traceNodeId)}/content`,
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}` +
+      `/trace-tree/nodes/${encodeURIComponent(traceNodeId)}/content` +
+      traceNodeArtifactPreviewQueryString(query),
     baseUrl
   });
 }
@@ -257,13 +281,15 @@ export function getConsoleApplicationRunTraceNodeDetail(
   runId: string,
   traceNodeId: string,
   detailRefId: string,
-  baseUrl?: string
+  baseUrl?: string,
+  query?: ConsoleApplicationRunTraceNodeArtifactPreviewQuery
 ) {
   return apiFetch<ConsoleApplicationRunTraceNodeDetail>({
     path:
       `/api/console/applications/${applicationId}/logs/runs/${runId}` +
       `/trace-tree/nodes/${encodeURIComponent(traceNodeId)}` +
-      `/details/${encodeURIComponent(detailRefId)}`,
+      `/details/${encodeURIComponent(detailRefId)}` +
+      traceNodeArtifactPreviewQueryString(query),
     baseUrl
   });
 }

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, convert::Infallible, future::Future, sync::Arc};
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query, RawQuery, State},
     http::{HeaderMap, StatusCode},
     response::sse::{Event, KeepAlive, Sse},
     routing::{get, post, put},
@@ -64,6 +64,7 @@ use runtime_debug_artifacts::{
     enrich_node_last_run_visible_internal_llm_route_traces, load_runtime_debug_artifact_json_value,
     load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
     offload_trace_node_content_artifacts, offload_trace_node_run_detail_artifacts,
+    RuntimeDebugArtifactPreviewRequest,
 };
 
 fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
