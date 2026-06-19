@@ -900,6 +900,14 @@ pub async fn get_application_run_trace_node_content(
         )
         .await?
         .ok_or(ControlPlaneError::NotFound("trace_node_content"))?;
+    let content = offload_trace_node_content_artifacts(
+        state.clone(),
+        context.actor.current_workspace_id,
+        id,
+        run_id,
+        content,
+    )
+    .await?;
     let response = trace_projection_node_content_response(node, content, projection_status)?;
 
     Ok(Json(ApiSuccess::new(response)))

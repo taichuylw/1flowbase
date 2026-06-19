@@ -1455,6 +1455,44 @@ pub async fn offload_trace_node_run_detail_artifacts(
     Ok(node_run)
 }
 
+pub async fn offload_trace_node_content_artifacts(
+    state: Arc<ApiState>,
+    workspace_id: Uuid,
+    application_id: Uuid,
+    flow_run_id: Uuid,
+    mut content: domain::ApplicationRunTraceNodeContentRecord,
+) -> Result<domain::ApplicationRunTraceNodeContentRecord, ApiError> {
+    if !matches!(
+        content.content_kind.as_str(),
+        "tool_callback" | "fusion" | "route" | "branch" | "callback_task"
+    ) {
+        return Ok(content);
+    }
+
+    let writer = RuntimeDebugArtifactWriter::new(state).await?;
+    let scope = RuntimeDebugArtifactScope {
+        workspace_id,
+        application_id,
+        flow_run_id: Some(flow_run_id),
+        node_run_id: None,
+        run_event_id: None,
+    };
+    let (payload, changed) = writer
+        .offload_payload_fields(
+            &scope,
+            "trace_node_content_payload",
+            content.payload.clone(),
+            Vec::new(),
+        )
+        .await?;
+
+    if changed {
+        content.payload = payload;
+    }
+
+    Ok(content)
+}
+
 pub fn enrich_application_run_detail_visible_internal_llm_route_traces(
     mut detail: domain::ApplicationRunDetail,
     runtime_events: &[domain::RuntimeEventRecord],
