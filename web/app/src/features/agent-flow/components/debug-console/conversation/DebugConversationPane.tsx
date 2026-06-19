@@ -6,6 +6,7 @@ import type {
   AgentFlowRunContext
 } from '../../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../../hooks/runtime/useAgentFlowDebugSession';
+import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/NodeRunIOCard';
 import { DebugAssistantMessage } from './DebugAssistantMessage';
 import { DebugComposer } from './DebugComposer';
 import { DebugMarkdownContent } from './DebugMarkdownContent';
@@ -45,6 +46,7 @@ export function DebugConversationPane({
   messages,
   onChangeQuery,
   onLoadArtifact,
+  onLoadArtifacts,
   onOpenMessageLog,
   onOpenResumeTimeline,
   onReachTop,
@@ -58,6 +60,7 @@ export function DebugConversationPane({
   messages: AgentFlowDebugMessage[];
   onChangeQuery: (value: string) => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   onReachTop?: () => void;
@@ -262,6 +265,7 @@ export function DebugConversationPane({
                   key={message.id}
                   message={message}
                   onLoadArtifact={onLoadArtifact}
+                  onLoadArtifacts={onLoadArtifacts}
                   onOpenLog={
                     messageMatchesLogActionRun(message)
                       ? onOpenMessageLog

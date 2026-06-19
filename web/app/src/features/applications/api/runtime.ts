@@ -13,6 +13,7 @@ import {
   getConsoleApplicationRunTraceTree,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
+  resolveConsoleRuntimeDebugArtifacts,
   getConsoleRuntimeDebugStream,
   type ConsoleApplicationConversationMessage,
   type ConsoleApplicationConversationMessagesPage,
@@ -745,6 +746,17 @@ export function fetchRuntimeDebugArtifact(
   return getConsoleRuntimeDebugArtifact(
     applicationId,
     artifactId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchRuntimeDebugArtifacts(
+  applicationId: string,
+  artifactRefs: string[]
+) {
+  return resolveConsoleRuntimeDebugArtifacts(
+    applicationId,
+    artifactRefs,
     getApplicationsApiBaseUrl()
   );
 }

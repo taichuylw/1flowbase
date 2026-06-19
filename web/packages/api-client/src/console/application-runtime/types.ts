@@ -859,3 +859,13 @@ export interface ConsoleRuntimeDebugArtifactPreview {
   artifact_ref: string;
   preview: string;
 }
+
+export interface ConsoleRuntimeDebugArtifactValue {
+  artifact_ref: string;
+  content_type: string;
+  value: unknown;
+}
+
+export interface ConsoleRuntimeDebugArtifactsResolveResponse {
+  artifacts: ConsoleRuntimeDebugArtifactValue[];
+}

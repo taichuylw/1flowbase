@@ -390,6 +390,165 @@ async fn application_runtime_routes_runtime_debug_artifact_full_load_returns_ori
 }
 
 #[tokio::test]
+async fn application_runtime_routes_batch_resolves_runtime_debug_artifacts() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let answer_text = format!("answer:{}", "A".repeat(3_000));
+    let application_id = seed_answer_only_application(&app, &cookie, &csrf, &answer_text).await;
+    let debug_session_id = "runtime-debug-artifact-batch-session";
+    let large_query = "退款政策".repeat(900);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "debug_session_id": debug_session_id,
+                        "input_payload": {
+                            "node-start": { "query": large_query }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let run_id = payload["data"]["flow_run"]["id"].as_str().unwrap();
+
+    let detail = wait_for_run_detail_matching(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        &["succeeded", "failed", "cancelled"],
+        |detail| {
+            detail["flow_run"]["input_payload"]["__runtime_debug_artifact"] == true
+                && detail["flow_run"]["output_payload"]["answer"]["__runtime_debug_artifact"]
+                    == true
+        },
+        "flow input and output artifact previews",
+    )
+    .await;
+    let input_artifact_ref = detail["flow_run"]["input_payload"]["artifact_ref"]
+        .as_str()
+        .expect("flow input artifact ref should exist");
+    let answer_artifact_ref = detail["flow_run"]["output_payload"]["answer"]["artifact_ref"]
+        .as_str()
+        .expect("answer artifact ref should exist");
+
+    let unauthorized_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "artifact_refs": [input_artifact_ref, answer_artifact_ref] })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized_response.status(), StatusCode::UNAUTHORIZED);
+
+    let batch_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "artifact_refs": [
+                            input_artifact_ref,
+                            answer_artifact_ref,
+                            input_artifact_ref
+                        ]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(batch_response.status(), StatusCode::OK);
+    let batch_body = to_bytes(batch_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let batch_payload: Value = serde_json::from_slice(&batch_body).unwrap();
+    let artifacts = batch_payload["data"]["artifacts"]
+        .as_array()
+        .expect("batch response should include artifacts");
+
+    assert_eq!(artifacts.len(), 2);
+    let input_artifact = artifacts
+        .iter()
+        .find(|artifact| artifact["artifact_ref"] == json!(input_artifact_ref))
+        .expect("input artifact should be returned once");
+    let answer_artifact = artifacts
+        .iter()
+        .find(|artifact| artifact["artifact_ref"] == json!(answer_artifact_ref))
+        .expect("answer artifact should be returned once");
+    assert_eq!(input_artifact["content_type"], json!("application/json"));
+    assert_eq!(input_artifact["value"]["node-start"]["query"], large_query);
+    assert_eq!(answer_artifact["value"], answer_text);
+
+    let missing_artifact_ref = Uuid::new_v4().to_string();
+    let missing_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "artifact_refs": [
+                            input_artifact_ref,
+                            missing_artifact_ref
+                        ]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing_response.status(), StatusCode::NOT_FOUND);
+    let missing_body = to_bytes(missing_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let missing_payload: Value = serde_json::from_slice(&missing_body).unwrap();
+    assert!(missing_payload["code"].is_string());
+    assert!(missing_payload["message"].is_string());
+}
+
+#[tokio::test]
 async fn application_runtime_routes_flow_output_offloads_answer_field_without_compressing_sys_env()
 {
     let app = test_app().await;

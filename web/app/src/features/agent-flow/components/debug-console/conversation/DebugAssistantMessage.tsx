@@ -9,6 +9,7 @@ import { App, Button, Space, Tooltip } from 'antd';
 import { useEffect, useState } from 'react';
 
 import type { AgentFlowDebugMessage } from '../../../api/runtime';
+import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/NodeRunIOCard';
 import { parseAssistantContent } from '../../../lib/debug-console/assistant-content';
 import { copyTextToClipboard } from '../../../../../shared/ui/clipboard/copy-text';
 import { DebugMarkdownContent } from './DebugMarkdownContent';
@@ -128,11 +129,13 @@ function useProgressiveText(target: string, enabled: boolean) {
 export function DebugAssistantMessage({
   message,
   onLoadArtifact,
+  onLoadArtifacts,
   onOpenLog,
   onOpenResumeTimeline
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onOpenLog?: (message: AgentFlowDebugMessage) => void;
   onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
 }) {
@@ -167,6 +170,7 @@ export function DebugAssistantMessage({
         <DebugWorkflowProcess
           items={message.traceSummary}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
         />
         {hasReasoning ? (
           <section

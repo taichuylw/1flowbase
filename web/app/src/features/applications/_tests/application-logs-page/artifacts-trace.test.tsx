@@ -148,6 +148,7 @@ const runtimeApi = vi.hoisted(() => ({
   fetchApplicationLogConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
+  fetchRuntimeDebugArtifacts: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
 }));
@@ -628,6 +629,7 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     runtimeApi.fetchApplicationLogConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
+    runtimeApi.fetchRuntimeDebugArtifacts.mockReset();
     currentRunDetail = sampleRunDetail();
 
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
@@ -746,18 +748,28 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
       rendered_templates: {}
     };
     currentRunDetail = detail;
-    runtimeApi.fetchRuntimeDebugArtifact.mockImplementation(
-      async (_applicationId: string, artifactRef: string) => {
-        if (artifactRef === 'artifact-detail-answer') {
-          return '详情完整回答';
-        }
+    runtimeApi.fetchRuntimeDebugArtifacts.mockImplementation(
+      async (_applicationId: string, artifactRefs: string[]) => ({
+        artifacts: artifactRefs.map((artifactRef) => {
+          if (artifactRef === 'artifact-detail-answer') {
+            return {
+              artifact_ref: artifactRef,
+              content_type: 'application/json',
+              value: '详情完整回答'
+            };
+          }
 
-        if (artifactRef === 'artifact-trace-answer') {
-          return '追踪完整回答';
-        }
+          if (artifactRef === 'artifact-trace-answer') {
+            return {
+              artifact_ref: artifactRef,
+              content_type: 'application/json',
+              value: '追踪完整回答'
+            };
+          }
 
-        throw new Error(`unexpected artifact: ${artifactRef}`);
-      }
+          throw new Error(`unexpected artifact: ${artifactRef}`);
+        })
+      })
     );
 
     render(
@@ -787,9 +799,9 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
         name: '加载完整值'
       })
     ).not.toBeInTheDocument();
-    expect(runtimeApi.fetchRuntimeDebugArtifact).not.toHaveBeenCalledWith(
+    expect(runtimeApi.fetchRuntimeDebugArtifacts).not.toHaveBeenCalledWith(
       'app-1',
-      'artifact-detail-answer'
+      ['artifact-detail-answer']
     );
 
     fireEvent.click(within(logPanel).getByRole('tab', { name: '追踪' }));
@@ -811,9 +823,9 @@ describe('ApplicationLogsPage - artifacts and trace', () => {
     expect(traceLoadButton).toBeEnabled();
     fireEvent.click(traceLoadButton);
 
-    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+    expect(runtimeApi.fetchRuntimeDebugArtifacts).toHaveBeenCalledWith(
       'app-1',
-      'artifact-trace-answer'
+      ['artifact-trace-answer']
     );
     await waitFor(() =>
       expect(

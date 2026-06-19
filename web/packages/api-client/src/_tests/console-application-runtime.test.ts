@@ -16,6 +16,7 @@ import {
   getConsoleApplicationRunTraceTree,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
+  resolveConsoleRuntimeDebugArtifacts,
   startConsoleFlowDebugRunStream,
   subscribeConsoleFlowDebugRunStream
 } from '../console/application-runtime';
@@ -147,6 +148,54 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
+      })
+    );
+  });
+
+  test('resolves runtime debug artifacts in one request', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            artifacts: [
+              {
+                artifact_ref: 'artifact-1',
+                content_type: 'application/json',
+                value: { hello: 'world' }
+              }
+            ]
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      resolveConsoleRuntimeDebugArtifacts(
+        'app-1',
+        ['artifact-1', 'artifact-2'],
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      artifacts: [
+        {
+          artifact_ref: 'artifact-1',
+          content_type: 'application/json',
+          value: { hello: 'world' }
+        }
+      ]
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/debug-artifacts/resolve',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          artifact_refs: ['artifact-1', 'artifact-2']
+        })
       })
     );
   });

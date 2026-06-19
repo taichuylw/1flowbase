@@ -16,6 +16,7 @@ import type {
   ConsoleApplicationRunResumeTimeline,
   ConsoleDebugVariableSnapshot,
   ConsoleNodeLastRun,
+  ConsoleRuntimeDebugArtifactsResolveResponse,
   DeleteConsoleDebugVariableCacheEntriesInput,
   GetConsoleApplicationRunMonitoringReportInput,
   GetConsoleApplicationRunsInput,
@@ -383,6 +384,19 @@ export async function getConsoleRuntimeDebugArtifact(
   }
 
   return response.text();
+}
+
+export function resolveConsoleRuntimeDebugArtifacts(
+  applicationId: string,
+  artifactRefs: string[],
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRuntimeDebugArtifactsResolveResponse>({
+    path: `/api/console/applications/${applicationId}/orchestration/debug-artifacts/resolve`,
+    method: 'POST',
+    body: { artifact_refs: artifactRefs },
+    baseUrl
+  });
 }
 
 export function getConsoleNodeLastRun(

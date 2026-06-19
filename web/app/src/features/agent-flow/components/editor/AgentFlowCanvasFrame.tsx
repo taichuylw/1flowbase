@@ -13,6 +13,7 @@ import {
   buildNodeDebugPreviewPlan,
   buildNodeDebugVariableConfirmationPlan,
   fetchRuntimeDebugArtifact,
+  fetchRuntimeDebugArtifacts,
   nodeLastRunToFlowDebugRunDetail,
   nodeLastRunQueryKey,
   startNodeDebugPreview,
@@ -1101,6 +1102,9 @@ export function AgentFlowCanvasFrame({
               onLoadArtifact={(artifactRef) =>
                 fetchRuntimeDebugArtifact(applicationId, artifactRef)
               }
+              onLoadArtifacts={(artifactRefs) =>
+                fetchRuntimeDebugArtifacts(applicationId, artifactRefs)
+              }
             />
           </AgentFlowSideDock>
         ) : null}
@@ -1129,6 +1133,9 @@ export function AgentFlowCanvasFrame({
               }}
               onLoadArtifact={(artifactRef) =>
                 fetchRuntimeDebugArtifact(applicationId, artifactRef)
+              }
+              onLoadArtifacts={(artifactRefs) =>
+                fetchRuntimeDebugArtifacts(applicationId, artifactRefs)
               }
               onOpenMessageLog={(debugMessage) =>
                 setConversationLogMessageId(debugMessage.id)

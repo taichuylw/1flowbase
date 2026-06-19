@@ -15,7 +15,10 @@ import type {
   AgentFlowTraceItem
 } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
-import { NodeRunPayloadSections } from '../detail/last-run/NodeRunIOCard';
+import {
+  NodeRunPayloadSections,
+  type RuntimeDebugArtifactBatchLoader
+} from '../detail/last-run/NodeRunIOCard';
 import { DebugWorkflowNodeItem } from './conversation/DebugWorkflowNodeRow';
 import { DebugWorkflowNodeDetailContent } from './conversation/LlmToolTraceTree';
 import {
@@ -249,10 +252,12 @@ function overviewDetailOutput(
 function ConversationLogDetailContent({
   message,
   onLoadArtifact,
+  onLoadArtifacts,
   overview
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   overview?: ConversationLogRunOverview;
 }) {
   const firstTraceItem = message.traceSummary[0] ?? null;
@@ -275,6 +280,7 @@ function ConversationLogDetailContent({
           inputPayload={overviewDetailInput(message, overview)}
           outputPayload={overviewDetailOutput(message, overview)}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
         />
       </div>
       <section
@@ -347,11 +353,13 @@ function ConversationLogDetailContent({
 function ConversationLogLazyDetail({
   message,
   onLoadArtifact,
+  onLoadArtifacts,
   overviewLoader,
   overviewRunId
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   overviewLoader: ConversationLogOverviewLoader;
   overviewRunId: string;
 }) {
@@ -375,6 +383,7 @@ function ConversationLogLazyDetail({
       message={message}
       overview={overviewQuery.data}
       onLoadArtifact={onLoadArtifact}
+      onLoadArtifacts={onLoadArtifacts}
     />
   );
 }
@@ -382,10 +391,12 @@ function ConversationLogLazyDetail({
 function ConversationLogDetail({
   message,
   onLoadArtifact,
+  onLoadArtifacts,
   overviewLoader
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   overviewLoader?: ConversationLogOverviewLoader;
 }) {
   const overviewRunId = message.detailRunId ?? message.runId;
@@ -397,6 +408,7 @@ function ConversationLogDetail({
         overviewLoader={overviewLoader}
         overviewRunId={overviewRunId}
         onLoadArtifact={onLoadArtifact}
+        onLoadArtifacts={onLoadArtifacts}
       />
     );
   }
@@ -405,6 +417,7 @@ function ConversationLogDetail({
     <ConversationLogDetailContent
       message={message}
       onLoadArtifact={onLoadArtifact}
+      onLoadArtifacts={onLoadArtifacts}
     />
   );
 }
@@ -412,10 +425,12 @@ function ConversationLogDetail({
 function ConversationTrace({
   message,
   onLoadArtifact,
+  onLoadArtifacts,
   traceLoader
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   traceLoader?: ConversationLogTraceLoader;
 }) {
   const traceRunId = message.detailRunId ?? message.runId;
@@ -425,6 +440,7 @@ function ConversationTrace({
       <LazyConversationTrace
         key={`${message.id}:${traceRunId}`}
         onLoadArtifact={onLoadArtifact}
+        onLoadArtifacts={onLoadArtifacts}
         runId={traceRunId}
         traceLoader={traceLoader}
       />
@@ -436,6 +452,7 @@ function ConversationTrace({
       key={message.id}
       message={message}
       onLoadArtifact={onLoadArtifact}
+      onLoadArtifacts={onLoadArtifacts}
     />
   );
 }
@@ -842,10 +859,12 @@ function TraceProjectionStatusNotice({
 
 function LazyConversationTrace({
   onLoadArtifact,
+  onLoadArtifacts,
   runId,
   traceLoader
 }: {
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
@@ -891,6 +910,7 @@ function LazyConversationTrace({
       <LazyTraceNodeList
         nodes={nodes}
         onLoadArtifact={onLoadArtifact}
+        onLoadArtifacts={onLoadArtifacts}
         runId={runId}
         traceLoader={traceLoader}
       />
@@ -901,11 +921,13 @@ function LazyConversationTrace({
 function LazyTraceNodeList({
   nodes,
   onLoadArtifact,
+  onLoadArtifacts,
   runId,
   traceLoader
 }: {
   nodes: ConversationLogTraceNodeSummary[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
@@ -919,6 +941,7 @@ function LazyTraceNodeList({
           key={node.trace_node_id}
           node={node}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
           runId={runId}
           traceLoader={traceLoader}
         />
@@ -930,11 +953,13 @@ function LazyTraceNodeList({
 function FlattenedToolModeTraceNodeChildren({
   nodes,
   onLoadArtifact,
+  onLoadArtifacts,
   runId,
   traceLoader
 }: {
   nodes: ConversationLogTraceNodeSummary[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
@@ -949,6 +974,7 @@ function FlattenedToolModeTraceNodeChildren({
           key={node.trace_node_id}
           node={node}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
           runId={runId}
           traceLoader={traceLoader}
         />
@@ -960,11 +986,13 @@ function FlattenedToolModeTraceNodeChildren({
 function FlattenedToolModeTraceNodeChild({
   node,
   onLoadArtifact,
+  onLoadArtifacts,
   runId,
   traceLoader
 }: {
   node: ConversationLogTraceNodeSummary;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
@@ -1004,6 +1032,7 @@ function FlattenedToolModeTraceNodeChild({
         <LazyTraceNodeList
           nodes={childNodes}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
           runId={runId}
           traceLoader={traceLoader}
         />
@@ -1015,11 +1044,13 @@ function FlattenedToolModeTraceNodeChild({
 function LazyTraceNodeItem({
   node,
   onLoadArtifact,
+  onLoadArtifacts,
   runId,
   traceLoader
 }: {
   node: ConversationLogTraceNodeSummary;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
@@ -1171,6 +1202,7 @@ function LazyTraceNodeItem({
         <FlattenedToolModeTraceNodeChildren
           nodes={toolModeNodes}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
           runId={runId}
           traceLoader={traceLoader}
         />
@@ -1178,6 +1210,7 @@ function LazyTraceNodeItem({
           <LazyTraceNodeList
             nodes={visibleChildNodes}
             onLoadArtifact={onLoadArtifact}
+            onLoadArtifacts={onLoadArtifacts}
             runId={runId}
             traceLoader={traceLoader}
           />
@@ -1244,6 +1277,7 @@ function LazyTraceNodeItem({
                 beforePayloadContent={childNodesBeforePayload}
                 item={item}
                 onLoadArtifact={onLoadArtifact}
+                onLoadArtifacts={onLoadArtifacts}
                 onLoadToolCallbackDetail={
                   loadToolCallbackDetail
                     ? (toolCallId) =>
@@ -1267,10 +1301,12 @@ function LazyTraceNodeItem({
 
 function ConversationTraceContent({
   message,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadArtifacts
 }: {
   message: AgentFlowDebugMessage;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
 }) {
   const [expandedNodeKey, setExpandedNodeKey] = useState<string | null>(null);
   const traceGroups = useMemo(
@@ -1320,6 +1356,7 @@ function ConversationTraceContent({
                   <DebugWorkflowNodeDetailContent
                     item={item}
                     onLoadArtifact={onLoadArtifact}
+                    onLoadArtifacts={onLoadArtifacts}
                   />
                 </div>
               </section>
@@ -1384,12 +1421,14 @@ export function ConversationLogPanel({
   message,
   onClose,
   onLoadArtifact,
+  onLoadArtifacts,
   overviewLoader,
   traceLoader
 }: {
   message: AgentFlowDebugMessage;
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   overviewLoader?: ConversationLogOverviewLoader;
   traceLoader?: ConversationLogTraceLoader;
 }) {
@@ -1419,6 +1458,7 @@ export function ConversationLogPanel({
                 message={message}
                 overviewLoader={overviewLoader}
                 onLoadArtifact={loadArtifact}
+                onLoadArtifacts={onLoadArtifacts}
               />
             )
           },
@@ -1430,6 +1470,7 @@ export function ConversationLogPanel({
                 <ConversationTrace
                   message={message}
                   onLoadArtifact={loadArtifact}
+                  onLoadArtifacts={onLoadArtifacts}
                   traceLoader={traceLoader}
                 />
               ) : null

@@ -39,6 +39,23 @@ pub struct CompleteCallbackTaskBody {
     pub response_payload: serde_json::Value,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ResolveRuntimeDebugArtifactsBody {
+    pub artifact_refs: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RuntimeDebugArtifactValueResponse {
+    pub artifact_ref: String,
+    pub content_type: String,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ResolveRuntimeDebugArtifactsResponse {
+    pub artifacts: Vec<RuntimeDebugArtifactValueResponse>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct FlowRunSummaryResponse {
     pub id: String,

@@ -117,6 +117,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             put(upsert_debug_variable_cache_entry).delete(delete_debug_variable_cache_entries),
         )
         .route(
+            "/applications/:id/orchestration/debug-artifacts/resolve",
+            post(resolve_runtime_debug_artifacts),
+        )
+        .route(
             "/applications/:id/orchestration/debug-artifacts/:artifact_id",
             get(get_runtime_debug_artifact),
         )

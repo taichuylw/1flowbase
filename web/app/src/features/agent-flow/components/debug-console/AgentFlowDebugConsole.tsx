@@ -9,6 +9,7 @@ import type {
 } from '../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../hooks/runtime/useAgentFlowDebugSession';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
+import type { RuntimeDebugArtifactBatchLoader } from '../detail/last-run/NodeRunIOCard';
 import { ConversationLogPanel } from './ConversationLogPanel';
 import { DebugConversationPane } from './conversation/DebugConversationPane';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -30,6 +31,7 @@ export function AgentFlowDebugConsole({
   onClearSession,
   onClose,
   onLoadArtifact,
+  onLoadArtifacts,
   onOpenMessageLog,
   onOpenResumeTimeline,
   onReachConversationTop,
@@ -56,6 +58,7 @@ export function AgentFlowDebugConsole({
   onClearSession: () => void;
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   onReachConversationTop?: () => void;
@@ -79,6 +82,7 @@ export function AgentFlowDebugConsole({
           message={openLogMessage}
           onClose={() => setOpenLogMessageId(null)}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
         />
       ) : null}
       <AgentFlowDockPanel
@@ -115,6 +119,7 @@ export function AgentFlowDebugConsole({
           status={status}
           stopping={stopping}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
           onOpenResumeTimeline={onOpenResumeTimeline}
           onReachTop={onReachConversationTop}
           onOpenMessageLog={(message) => {

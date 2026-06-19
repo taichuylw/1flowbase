@@ -12,7 +12,8 @@ import {
 import type { AgentFlowTraceItem } from '../../../api/runtime';
 import {
   NodeRunPayloadSections,
-  RuntimeDebugPayloadBlock
+  RuntimeDebugPayloadBlock,
+  type RuntimeDebugArtifactBatchLoader
 } from '../../detail/last-run/NodeRunIOCard';
 import { AnswerSnapshotTrace } from './AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem } from './DebugWorkflowNodeRow';
@@ -214,11 +215,13 @@ export function DebugWorkflowNodeDetailContent({
   item,
   beforePayloadContent,
   onLoadArtifact,
+  onLoadArtifacts,
   onLoadToolCallbackDetail
 }: {
   item: AgentFlowTraceItem;
   beforePayloadContent?: ReactNode;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const debugPayload = stripLlmRoundsFromDebugPayload(item.debugPayload ?? {});
@@ -228,12 +231,14 @@ export function DebugWorkflowNodeDetailContent({
       <LlmToolTraceTree
         debugPayload={item.debugPayload}
         onLoadArtifact={onLoadArtifact}
+        onLoadArtifacts={onLoadArtifacts}
         onLoadToolCallbackDetail={onLoadToolCallbackDetail}
       />
       {item.answerSnapshot ? (
         <AnswerSnapshotTrace
           snapshot={item.answerSnapshot}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
         />
       ) : null}
       {beforePayloadContent}
@@ -242,6 +247,7 @@ export function DebugWorkflowNodeDetailContent({
         inputPayload={item.inputPayload}
         outputPayload={item.outputPayload}
         onLoadArtifact={onLoadArtifact}
+        onLoadArtifacts={onLoadArtifacts}
       />
     </>
   );
@@ -251,12 +257,14 @@ function LlmToolRouteBranchNode({
   branch,
   callback,
   index,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadArtifacts
 }: {
   branch: LlmToolRouteBranchSummary | LlmToolRouteBranchTrace;
   callback: LlmToolCallback;
   index: number;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
 }) {
   const [expanded, setExpanded] = useState(false);
   const branchTraceItem = buildRouteBranchTraceItem(callback, branch, index);
@@ -275,6 +283,7 @@ function LlmToolRouteBranchNode({
           <DebugWorkflowNodeDetailContent
             item={branchTraceItem}
             onLoadArtifact={onLoadArtifact}
+            onLoadArtifacts={onLoadArtifacts}
           />
         </div>
       </DebugWorkflowNodeItem>
@@ -284,10 +293,12 @@ function LlmToolRouteBranchNode({
 
 function LlmToolRouteNode({
   callback,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadArtifacts
 }: {
   callback: LlmToolCallback;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
 }) {
   const [routeTraceLoadState, dispatchRouteTraceLoad] = useReducer(
     routeTraceLoadReducer,
@@ -377,6 +388,7 @@ function LlmToolRouteNode({
               callback={callback}
               index={index}
               onLoadArtifact={onLoadArtifact}
+              onLoadArtifacts={onLoadArtifacts}
             />
           ))}
         </div>
@@ -387,6 +399,7 @@ function LlmToolRouteNode({
           payload={sourceRouteTrace.rawPayload}
           title={routeTraceTitle}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
         />
       )}
     </>
@@ -399,6 +412,7 @@ function LlmToolCallbackItem({
   loadFailed,
   loading,
   onLoadArtifact,
+  onLoadArtifacts,
   onToggle
 }: {
   callback: LlmToolCallback;
@@ -406,6 +420,7 @@ function LlmToolCallbackItem({
   loadFailed: boolean;
   loading: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onToggle: () => void;
 }) {
   return (
@@ -461,12 +476,14 @@ function LlmToolCallbackItem({
                 key={routeTraceNodeKey(callback)}
                 callback={callback}
                 onLoadArtifact={onLoadArtifact}
+                onLoadArtifacts={onLoadArtifacts}
               />
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
                 title={i18nText('agentFlow', 'auto.tool_call')}
                 onLoadArtifact={onLoadArtifact}
+                onLoadArtifacts={onLoadArtifacts}
               />
               {callback.parsedResult ? (
                 <RuntimeDebugPayloadBlock
@@ -474,6 +491,7 @@ function LlmToolCallbackItem({
                   payload={callback.parsedResult}
                   title={i18nText('agentFlow', 'auto.parse_results')}
                   onLoadArtifact={onLoadArtifact}
+                  onLoadArtifacts={onLoadArtifacts}
                 />
               ) : null}
               {callback.callbackPayload ? (
@@ -482,6 +500,7 @@ function LlmToolCallbackItem({
                   payload={callback.callbackPayload}
                   title={i18nText('agentFlow', 'auto.full_callback')}
                   onLoadArtifact={onLoadArtifact}
+                  onLoadArtifacts={onLoadArtifacts}
                 />
               ) : (
                 <Typography.Text type="secondary">
@@ -664,6 +683,7 @@ export function LlmToolTraceTree(props: {
   debugPayload: unknown;
   debugPayloads?: unknown[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const resetKey = llmToolTraceTreeResetKey(props);
@@ -675,11 +695,13 @@ function LlmToolTraceTreeContent({
   debugPayload,
   debugPayloads,
   onLoadArtifact,
+  onLoadArtifacts,
   onLoadToolCallbackDetail
 }: {
   debugPayload: unknown;
   debugPayloads?: unknown[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const [traceTreeState, dispatchTraceTree] = useReducer(
@@ -844,6 +866,7 @@ function LlmToolTraceTreeContent({
                       )}
                       loading={traceTreeState.loadingToolKey === callback.key}
                       onLoadArtifact={onLoadArtifact}
+                      onLoadArtifacts={onLoadArtifacts}
                       onToggle={() => {
                         const nextExpanded = !expanded;
                         dispatchTraceTree({

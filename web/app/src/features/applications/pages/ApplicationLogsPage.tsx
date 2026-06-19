@@ -23,6 +23,7 @@ import {
   fetchApplicationRunOverview,
   type FetchApplicationRunsInput,
   fetchRuntimeDebugArtifact,
+  fetchRuntimeDebugArtifacts,
   type ApplicationRunSortField,
   type ApplicationRunSortOrder,
   type ApplicationRunSummary
@@ -572,6 +573,9 @@ export function ApplicationLogsPage({
               }}
               onLoadArtifact={(artifactRef) =>
                 fetchRuntimeDebugArtifact(applicationId, artifactRef)
+              }
+              onLoadArtifacts={(artifactRefs) =>
+                fetchRuntimeDebugArtifacts(applicationId, artifactRefs)
               }
               traceLoader={{
                 loadTree: (runId) =>

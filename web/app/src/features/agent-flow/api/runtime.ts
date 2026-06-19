@@ -9,6 +9,7 @@ import {
   getConsoleApplicationRunNodeLastRun,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugArtifact,
+  resolveConsoleRuntimeDebugArtifacts,
   startConsoleFlowDebugRun,
   startConsoleFlowDebugRunStream,
   getConsoleNodeLastRun,
@@ -315,6 +316,17 @@ export function fetchRuntimeDebugArtifact(
   return getConsoleRuntimeDebugArtifact(
     applicationId,
     artifactId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchRuntimeDebugArtifacts(
+  applicationId: string,
+  artifactRefs: string[]
+) {
+  return resolveConsoleRuntimeDebugArtifacts(
+    applicationId,
+    artifactRefs,
     getApplicationsApiBaseUrl()
   );
 }

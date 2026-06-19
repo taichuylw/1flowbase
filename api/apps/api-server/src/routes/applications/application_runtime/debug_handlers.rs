@@ -657,3 +657,53 @@ pub async fn get_runtime_debug_artifact(
     load_runtime_debug_artifact_response(state, context.actor.current_workspace_id, id, artifact_id)
         .await
 }
+
+#[utoipa::path(
+    post,
+    path = "/api/console/applications/{id}/orchestration/debug-artifacts/resolve",
+    request_body = ResolveRuntimeDebugArtifactsBody,
+    params(
+        ("id" = String, Path, description = "Application id")
+    ),
+    responses(
+        (status = 200, body = ResolveRuntimeDebugArtifactsResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn resolve_runtime_debug_artifacts(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ResolveRuntimeDebugArtifactsBody>,
+) -> Result<Json<ApiSuccess<ResolveRuntimeDebugArtifactsResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+
+    let mut seen = HashSet::new();
+    let mut artifacts = Vec::new();
+    for artifact_id in body.artifact_refs {
+        if !seen.insert(artifact_id) {
+            continue;
+        }
+
+        let value = load_runtime_debug_artifact_json_value(
+            state.clone(),
+            context.actor.current_workspace_id,
+            id,
+            artifact_id,
+        )
+        .await?;
+        artifacts.push(RuntimeDebugArtifactValueResponse {
+            artifact_ref: artifact_id.to_string(),
+            content_type: "application/json".to_string(),
+            value,
+        });
+    }
+
+    Ok(Json(ApiSuccess::new(ResolveRuntimeDebugArtifactsResponse {
+        artifacts,
+    })))
+}

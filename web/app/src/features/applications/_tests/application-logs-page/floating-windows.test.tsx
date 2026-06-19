@@ -169,6 +169,7 @@ const runtimeApi = vi.hoisted(() => ({
     }
   ),
   fetchRuntimeDebugArtifact: vi.fn(),
+  fetchRuntimeDebugArtifacts: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
 }));
