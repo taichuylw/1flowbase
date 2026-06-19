@@ -13,6 +13,7 @@ use control_plane::application_public_api::{
         ApplicationPublishedCallbackResumeService, PublishedCallbackResumeSource,
         PublishedCallbackResumeTarget, ResumePublishedCallbackCommand,
     },
+    client_protocol_envelope::{capture_client_protocol_envelope, ClientProtocolIngressPolicy},
     compat::openai::{
         extract_model_list_from_start_node, map_chat_completion_request, map_response_request,
         response_id_from_run_id, run_id_from_response_id, OpenAiCompatError, OpenAiCompatibleModel,
@@ -26,6 +27,7 @@ use control_plane::application_public_api::{
     run_service::ApplicationPublishedRunControlRepository,
 };
 use control_plane::orchestration_runtime::OrchestrationRuntimeService;
+use plugin_framework::provider_contract::ClientProtocolEnvelope;
 use serde_json::{json, Value};
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -164,7 +166,7 @@ pub async fn create_chat_completion(
         return Ok(Json(to_openai_response(run, model, completion_id)).into_response());
     }
 
-    let request = match map_chat_completion_request(value) {
+    let mut request = match map_chat_completion_request(value) {
         Ok(request) => request,
         Err(error) => {
             let route_error = OpenAiRouteError::from(error);
@@ -176,6 +178,7 @@ pub async fn create_chat_completion(
             return Err(route_error);
         }
     };
+    request.client_protocol_envelope = openai_client_protocol_envelope_from_headers(&headers);
     let run = match create_native_run(state.clone(), credential.token.clone(), request).await {
         Ok(run) => run,
         Err(error) => {
@@ -336,7 +339,7 @@ pub async fn create_response(
         ))
         .into_response());
     }
-    let request = match map_response_request(value, previous_response) {
+    let mut request = match map_response_request(value, previous_response) {
         Ok(request) => request,
         Err(error) => {
             let route_error = OpenAiRouteError::from(error);
@@ -348,6 +351,7 @@ pub async fn create_response(
             return Err(route_error);
         }
     };
+    request.client_protocol_envelope = openai_client_protocol_envelope_from_headers(&headers);
     let model = request.model.clone().unwrap_or_default();
     let response_mode = request.response_mode.clone();
     let run = match create_native_run(state.clone(), credential.token.clone(), request).await {
@@ -508,6 +512,17 @@ fn openai_credential(headers: &HeaderMap) -> Result<OpenAiCredential, native::Na
                 "missing Authorization bearer token or x-api-key",
             )
         })
+}
+
+fn openai_client_protocol_envelope_from_headers(
+    headers: &HeaderMap,
+) -> Option<ClientProtocolEnvelope> {
+    capture_client_protocol_envelope(
+        ClientProtocolIngressPolicy::DefaultDeny,
+        headers
+            .iter()
+            .filter_map(|(name, value)| value.to_str().ok().map(|value| (name.as_str(), value))),
+    )
 }
 
 fn parse_openai_json_body(body: Bytes) -> Result<Value, OpenAiRouteError> {

@@ -1,10 +1,13 @@
+use std::collections::BTreeMap;
+
 use plugin_framework::{
     installation::PluginTaskStatus,
     provider_contract::{
-        ModelDiscoveryMode, ProviderBalanceInfo, ProviderBalanceResult, ProviderInvocationInput,
-        ProviderInvocationResult, ProviderMessage, ProviderMessageRole, ProviderRuntimeError,
-        ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod, ProviderStdioRequest,
-        ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
+        ClientProtocolEnvelope, ModelDiscoveryMode, ProviderBalanceInfo, ProviderBalanceResult,
+        ProviderInvocationInput, ProviderInvocationResult, ProviderMessage, ProviderMessageRole,
+        ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod,
+        ProviderStdioRequest, ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall,
+        ProviderUsage,
     },
 };
 use serde_json::json;
@@ -188,6 +191,43 @@ fn provider_invocation_input_preserves_tool_message_metadata() {
     assert_eq!(payload["messages"][1]["role"], "tool");
     assert_eq!(payload["messages"][1]["tool_call_id"], "call-1");
     assert_eq!(payload["messages"][1]["is_error"], true);
+}
+
+#[test]
+fn provider_invocation_input_serializes_client_protocol_envelope() {
+    let input = ProviderInvocationInput {
+        client_protocol_envelope: Some(ClientProtocolEnvelope {
+            source_protocol: "anthropic_messages".to_string(),
+            policy: "anthropic_messages_v1".to_string(),
+            headers: BTreeMap::from([
+                ("anthropic-version".to_string(), "2023-06-01".to_string()),
+                ("anthropic-beta".to_string(), "prompt-caching".to_string()),
+            ]),
+        }),
+        ..ProviderInvocationInput::default()
+    };
+
+    let payload = serde_json::to_value(input).unwrap();
+    let decoded: ProviderInvocationInput = serde_json::from_value(payload.clone()).unwrap();
+
+    assert_eq!(
+        payload["client_protocol_envelope"]["source_protocol"],
+        "anthropic_messages"
+    );
+    assert_eq!(
+        payload["client_protocol_envelope"]["headers"]["anthropic-version"],
+        "2023-06-01"
+    );
+    assert_eq!(
+        decoded
+            .client_protocol_envelope
+            .as_ref()
+            .unwrap()
+            .headers
+            .get("anthropic-beta")
+            .map(String::as_str),
+        Some("prompt-caching")
+    );
 }
 
 #[test]

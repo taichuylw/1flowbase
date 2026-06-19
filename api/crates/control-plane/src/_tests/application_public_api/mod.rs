@@ -26,6 +26,7 @@ use time::Duration;
 use uuid::Uuid;
 
 mod anthropic_compat;
+mod client_protocol_envelope;
 mod conversations;
 mod native_run;
 mod openai_compat;

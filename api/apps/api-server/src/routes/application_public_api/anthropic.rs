@@ -13,6 +13,7 @@ use control_plane::application_public_api::{
         ApplicationPublishedCallbackResumeService, PublishedCallbackResumeSource,
         PublishedCallbackResumeTarget, ResumePublishedCallbackCommand,
     },
+    client_protocol_envelope::{capture_client_protocol_envelope, ClientProtocolIngressPolicy},
     compat::anthropic::{
         anthropic_content_is_tool_result_only, map_messages_request,
         sanitize_anthropic_compat_assistant_text, AnthropicCompatError,
@@ -26,6 +27,7 @@ use control_plane::application_public_api::{
     },
 };
 use control_plane::orchestration_runtime::OrchestrationRuntimeService;
+use plugin_framework::provider_contract::ClientProtocolEnvelope;
 use serde::Serialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
@@ -268,7 +270,8 @@ pub async fn create_message(
         }
         return Ok(Json(to_anthropic_response(run, model)).into_response());
     }
-    let request = map_messages_request(value)?;
+    let mut request = map_messages_request(value)?;
+    request.client_protocol_envelope = anthropic_client_protocol_envelope_from_headers(&headers);
     let response_mode = request.response_mode.clone();
     let run = create_native_run(state.clone(), bearer_token.clone(), request).await?;
 
@@ -355,6 +358,17 @@ fn merge_claude_code_session_header(value: &mut Value, headers: &HeaderMap) {
     metadata
         .entry("session_id".to_string())
         .or_insert_with(|| Value::String(session_id.to_string()));
+}
+
+fn anthropic_client_protocol_envelope_from_headers(
+    headers: &HeaderMap,
+) -> Option<ClientProtocolEnvelope> {
+    capture_client_protocol_envelope(
+        ClientProtocolIngressPolicy::AnthropicMessages,
+        headers
+            .iter()
+            .filter_map(|(name, value)| value.to_str().ok().map(|value| (name.as_str(), value))),
+    )
 }
 
 async fn authenticate_anthropic_token(

@@ -158,6 +158,40 @@ fn claude_code_session_header_fills_missing_metadata_session_id() {
 }
 
 #[test]
+fn anthropic_ingress_captures_client_protocol_envelope_from_headers() {
+    let mut headers = HeaderMap::new();
+    headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
+    headers.insert("anthropic-beta", "prompt-caching".parse().unwrap());
+    headers.insert(
+        "x-claude-code-session-id",
+        "header-session-123".parse().unwrap(),
+    );
+    headers.insert("authorization", "Bearer platform-key".parse().unwrap());
+    headers.insert("content-length", "42".parse().unwrap());
+
+    let envelope = anthropic_client_protocol_envelope_from_headers(&headers)
+        .expect("anthropic headers should produce client protocol envelope");
+
+    assert_eq!(envelope.source_protocol, "anthropic_messages");
+    assert_eq!(
+        envelope
+            .headers
+            .get("anthropic-version")
+            .map(String::as_str),
+        Some("2023-06-01")
+    );
+    assert_eq!(
+        envelope
+            .headers
+            .get("x-claude-code-session-id")
+            .map(String::as_str),
+        Some("header-session-123")
+    );
+    assert!(!envelope.headers.contains_key("authorization"));
+    assert!(!envelope.headers.contains_key("content-length"));
+}
+
+#[test]
 fn anthropic_response_encodes_callback_task_id_into_tool_use_ids() {
     let callback_task_id = Uuid::from_u128(0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee);
     let run = NativeRunResult {

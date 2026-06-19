@@ -179,6 +179,79 @@ async fn llm_runtime_sends_enabled_model_parameters_and_keeps_undeclared_structu
 }
 
 #[tokio::test]
+async fn llm_runtime_forwards_client_protocol_envelope_to_provider_invocation() {
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: Arc::new(Mutex::new(None)),
+        final_content: "ok".to_string(),
+    };
+    start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "__client_protocol_envelope": {
+                "source_protocol": "anthropic_messages",
+                "policy": "anthropic_messages_v1",
+                "headers": {
+                    "anthropic-version": "2023-06-01",
+                    "anthropic-beta": "prompt-caching",
+                    "x-claude-code-session-id": "session-123"
+                }
+            },
+            "node-start": { "query": "退款政策" }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured_input = invoker
+        .captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    let envelope = captured_input
+        .client_protocol_envelope
+        .expect("client protocol envelope should be forwarded");
+
+    assert_eq!(envelope.source_protocol, "anthropic_messages");
+    assert_eq!(
+        envelope.headers.get("anthropic-beta").map(String::as_str),
+        Some("prompt-caching")
+    );
+    assert!(captured_input
+        .run_context
+        .get("resolved_inputs")
+        .and_then(|value| value.get("__client_protocol_envelope"))
+        .is_none());
+}
+
+#[tokio::test]
+async fn llm_runtime_leaves_plain_workflow_invocations_without_client_protocol_envelope() {
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: Arc::new(Mutex::new(None)),
+        final_content: "ok".to_string(),
+    };
+    start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured_input = invoker
+        .captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+
+    assert!(captured_input.client_protocol_envelope.is_none());
+}
+
+#[tokio::test]
 async fn llm_runtime_ignores_external_reasoning_parameters_without_node_opt_in() {
     let plan = base_plan();
     let invoker = StubProviderInvoker {

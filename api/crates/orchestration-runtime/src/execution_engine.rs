@@ -5,9 +5,10 @@ use async_trait::async_trait;
 use plugin_framework::{
     error::PluginFrameworkError,
     provider_contract::{
-        ProviderFinishReason, ProviderInvocationInput, ProviderInvocationResult, ProviderMessage,
-        ProviderMessageRole, ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderStreamEvent,
-        ProviderToolCall, ProviderUsage,
+        ClientProtocolEnvelope, ProviderFinishReason, ProviderInvocationInput,
+        ProviderInvocationResult, ProviderMessage, ProviderMessageRole, ProviderRuntimeError,
+        ProviderRuntimeErrorKind, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
+        CLIENT_PROTOCOL_ENVELOPE_PAYLOAD_KEY,
     },
 };
 use serde_json::{json, Map, Value};
@@ -82,14 +83,25 @@ const RESPONSES_WEBSOCKET_TRANSPORT: &str = "responses_websocket";
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ExecutionRuntimeContext {
     tools: Vec<Value>,
+    client_protocol_envelope: Option<ClientProtocolEnvelope>,
 }
 
 impl ExecutionRuntimeContext {
     pub fn from_plan_input(plan: &CompiledPlan, variable_pool: &Map<String, Value>) -> Self {
         Self {
             tools: run_level_provider_tools(plan, variable_pool),
+            client_protocol_envelope: client_protocol_envelope_from_variable_pool(variable_pool),
         }
     }
+}
+
+fn client_protocol_envelope_from_variable_pool(
+    variable_pool: &Map<String, Value>,
+) -> Option<ClientProtocolEnvelope> {
+    variable_pool
+        .get(CLIENT_PROTOCOL_ENVELOPE_PAYLOAD_KEY)
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
 }
 
 #[derive(Debug, Clone, PartialEq)]

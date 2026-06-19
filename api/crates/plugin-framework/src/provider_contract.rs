@@ -5,6 +5,8 @@ use serde_json::Value;
 
 use crate::error::PluginFrameworkError;
 
+pub const CLIENT_PROTOCOL_ENVELOPE_PAYLOAD_KEY: &str = "__client_protocol_envelope";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelDiscoveryMode {
@@ -302,6 +304,14 @@ pub struct ProviderMessage {
     pub content_blocks: Option<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ClientProtocolEnvelope {
+    pub source_protocol: String,
+    pub policy: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProviderInvocationInput {
     pub provider_instance_id: String,
@@ -322,6 +332,8 @@ pub struct ProviderInvocationInput {
     pub response_format: Option<Value>,
     #[serde(default)]
     pub model_parameters: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_protocol_envelope: Option<ClientProtocolEnvelope>,
     #[serde(default)]
     pub trace_context: BTreeMap<String, String>,
     #[serde(default)]

@@ -6,6 +6,9 @@ pub use orchestration_runtime::answer_projection::{
     answer_segments_from_text, answer_segments_from_value, answer_segments_value,
     AnswerProjectionSegment, AnswerProjectionSegmentKind, ANSWER_SEGMENTS_KEY,
 };
+use plugin_framework::provider_contract::{
+    ClientProtocolEnvelope, CLIENT_PROTOCOL_ENVELOPE_PAYLOAD_KEY,
+};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::{json, Map, Value};
 use time::OffsetDateTime;
@@ -66,6 +69,8 @@ pub struct NativeRunRequest {
     // Protocol mappers set this after deserialization; public Native JSON cannot own run-control policy.
     #[serde(skip)]
     pub protocol_request_kind: Option<NativeProtocolRequestKind>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub client_protocol_envelope: Option<ClientProtocolEnvelope>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -268,12 +273,27 @@ impl NativeInputMapper {
             input.attachments_target.as_deref(),
             Value::Array(request.attachments.clone()),
         )?;
+        if let Some(envelope) = &request.client_protocol_envelope {
+            write_selector(
+                &mut node_input_payload,
+                CLIENT_PROTOCOL_ENVELOPE_PAYLOAD_KEY,
+                client_protocol_envelope_payload(envelope),
+            )?;
+        }
 
         Ok(NativeMappedInput {
             node_input_payload,
             metadata: build_run_metadata(request),
         })
     }
+}
+
+fn client_protocol_envelope_payload(envelope: &ClientProtocolEnvelope) -> Value {
+    json!({
+        "source_protocol": &envelope.source_protocol,
+        "policy": &envelope.policy,
+        "headers": &envelope.headers,
+    })
 }
 
 fn split_system_context_from_history(request: &NativeRunRequest) -> (Option<String>, Vec<Value>) {
