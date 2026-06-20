@@ -101,6 +101,20 @@ test('tooling index dispatches raw-jsonb-report subcommand', async () => {
   assert.deepEqual(capturedArgv, ['--max-evidence', '2']);
 });
 
+test('tooling index dispatches log-query-contract-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['log-query-contract-report'], {
+    runLogQueryContractReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, []);
+});
+
 test('tooling index dispatches repo-hygiene subcommand', async () => {
   let capturedArgv = null;
 

@@ -15,6 +15,7 @@ import {
   getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
   getConsoleDebugVariableSnapshot,
+  getConsoleRuntimeDebugStream,
   getConsoleRuntimeDebugArtifact,
   resolveConsoleRuntimeDebugArtifacts,
   startConsoleFlowDebugRunStream,
@@ -145,6 +146,46 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     ).resolves.toEqual({ hello: 'world' });
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/debug-artifacts/artifact-1',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('loads runtime debug stream with sequence cursor and limit', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            parts: [],
+            page_size: 25,
+            next_sequence: 42,
+            has_more: true
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      getConsoleRuntimeDebugStream(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800',
+        { from_sequence: 12, limit: 25 }
+      )
+    ).resolves.toEqual({
+      parts: [],
+      page_size: 25,
+      next_sequence: 42,
+      has_more: true
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/debug-stream?from_sequence=12&limit=25',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'

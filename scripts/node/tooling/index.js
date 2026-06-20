@@ -8,6 +8,7 @@ const { main: runGateRouter } = require('../gate-router/core.js');
 const { main: runGrowthTableReport } = require('../growth-table-report/core.js');
 const { main: runHotspotReview } = require('../hotspot-review/core.js');
 const { main: runI18nHygiene } = require('../i18n-hygiene/core.js');
+const { main: runLogQueryContractReport } = require('../log-query-contract-report/core.js');
 const { main: runRepoHygiene } = require('../repo-hygiene/core.js');
 const { main: runSchemaHygiene } = require('../schema-hygiene/core.js');
 const { main: runSecurityRisk } = require('../security-risk/core.js');
@@ -31,6 +32,7 @@ const TOOLING_COMMANDS = new Set([
   'growth-table-report',
   'hotspot-review',
   'i18n-hygiene',
+  'log-query-contract-report',
   'mock-ui-sync',
   'page-debug',
   'raw-jsonb-report',
@@ -99,7 +101,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|growth-table-report|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|raw-jsonb-report|repo-hygiene|runtime-gate|schema-hygiene|security-risk> [args]\n'
+    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|growth-table-report|hotspot-review|i18n-hygiene|log-query-contract-report|mock-ui-sync|page-debug|raw-jsonb-report|repo-hygiene|runtime-gate|schema-hygiene|security-risk> [args]\n'
   );
 }
 
@@ -145,6 +147,10 @@ async function main(argv = [], deps = {}) {
 
   if (options.command === 'i18n-hygiene') {
     return (deps.runI18nHygieneImpl || runI18nHygiene)(options.rest, deps);
+  }
+
+  if (options.command === 'log-query-contract-report') {
+    return (deps.runLogQueryContractReportImpl || runLogQueryContractReport)(options.rest, deps);
   }
 
   if (options.command === 'mock-ui-sync') {

@@ -269,3 +269,81 @@ async fn application_runtime_routes_logs_report_run_statistics() {
         expected_statistics
     );
 }
+
+#[tokio::test]
+async fn application_runtime_routes_monitoring_non_positive_window_uses_default() {
+    let (app, database_url) = test_app_with_database_url().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let old_run_id =
+        start_full_debug_run(&app, &cookie, &csrf, &application_id, "old monitoring run").await;
+    let recent_run_id = start_full_debug_run(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        "recent monitoring run",
+    )
+    .await;
+
+    for flow_run_id in [&old_run_id, &recent_run_id] {
+        wait_for_run_detail(
+            &app,
+            &cookie,
+            &application_id,
+            flow_run_id,
+            &["succeeded", "failed", "cancelled"],
+        )
+        .await;
+    }
+
+    let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+    sqlx::query(
+        r#"
+        update application_run_log_summaries
+        set started_at = now() - interval '8 days',
+            finished_at = now() - interval '8 days',
+            created_at = now() - interval '8 days',
+            updated_at = now() - interval '8 days'
+        where flow_run_id = $1
+        "#,
+    )
+    .bind(Uuid::parse_str(&old_run_id).unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let default_payload = get_console_json(
+        &app,
+        &cookie,
+        format!(
+            "/api/console/applications/{application_id}/monitoring/run-metrics?time_range_days=0"
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        default_payload["data"]["meta"]["bucket"].as_str(),
+        Some("day")
+    );
+    assert_eq!(
+        default_payload["data"]["overview"]["total_count"].as_i64(),
+        Some(1)
+    );
+
+    let extended_payload = get_console_json(
+        &app,
+        &cookie,
+        format!(
+            "/api/console/applications/{application_id}/monitoring/run-metrics?time_range_days=30"
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        extended_payload["data"]["overview"]["total_count"].as_i64(),
+        Some(2)
+    );
+}

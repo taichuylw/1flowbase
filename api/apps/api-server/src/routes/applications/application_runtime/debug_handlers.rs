@@ -696,6 +696,10 @@ pub async fn resolve_runtime_debug_artifacts(
     let context = require_session(&state, &headers).await?;
     ensure_application_visible(&state, context.user.id, id).await?;
 
+    if body.artifact_refs.len() > RUNTIME_DEBUG_ARTIFACT_RESOLVE_MAX_REFS {
+        return Err(ControlPlaneError::InvalidInput("artifact_refs").into());
+    }
+
     let mut seen = HashSet::new();
     let mut artifacts = Vec::new();
     for artifact_id in body.artifact_refs {

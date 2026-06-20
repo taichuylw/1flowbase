@@ -18,6 +18,12 @@ pub struct DebugRunStreamQuery {
     pub last_event_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RuntimeDebugStreamQuery {
+    pub from_sequence: Option<i64>,
+    pub limit: Option<i64>,
+}
+
 #[derive(Debug, Deserialize, Default, ToSchema)]
 pub struct ApplicationRunsQuery {
     pub page: Option<i64>,
@@ -362,6 +368,9 @@ pub struct ApplicationRunResumeTimelineResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RuntimeDebugStreamResponse {
     pub parts: Vec<RuntimeDebugStreamPartResponse>,
+    pub page_size: i64,
+    pub next_sequence: Option<i64>,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

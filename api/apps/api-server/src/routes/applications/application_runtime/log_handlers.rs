@@ -9,7 +9,7 @@ use trace_projection_payloads::*;
         ("id" = String, Path, description = "Application id"),
         ("page" = Option<i64>, Query, description = "1-based page number"),
         ("page_size" = Option<i64>, Query, description = "Page size"),
-        ("time_range_days" = Option<i64>, Query, description = "Optional created-at day window"),
+        ("time_range_days" = Option<i64>, Query, description = "Created-at day window, defaults to 7 days"),
         ("sort_by" = Option<String>, Query, description = "Sort field: created_at, started_at, finished_at or updated_at"),
         ("sort_order" = Option<String>, Query, description = "Sort direction: asc or desc"),
         ("cache_mode" = Option<String>, Query, description = "Read mode: refresh bypasses application log cache reads")
@@ -1011,7 +1011,9 @@ pub async fn get_application_run_node_last_run(
     path = "/api/console/applications/{id}/logs/runs/{run_id}/debug-stream",
     params(
         ("id" = String, Path, description = "Application id"),
-        ("run_id" = String, Path, description = "Flow run id")
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("from_sequence" = Option<i64>, Query, description = "Return runtime debug events after this stream sequence"),
+        ("limit" = Option<i64>, Query, description = "Page size, defaults to 500 and maxes at 1000")
     ),
     responses(
         (status = 200, body = RuntimeDebugStreamResponse),
@@ -1024,6 +1026,7 @@ pub async fn get_runtime_debug_stream(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path((id, run_id)): Path<(Uuid, Uuid)>,
+    Query(query): Query<RuntimeDebugStreamQuery>,
 ) -> Result<Json<ApiSuccess<RuntimeDebugStreamResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     ensure_application_visible(&state, context.user.id, id).await?;
@@ -1032,22 +1035,45 @@ pub async fn get_runtime_debug_stream(
         .await?
         .ok_or(ControlPlaneError::NotFound("flow_run"))?;
 
-    let parts = <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
-        &state.store,
-        run_id,
-        0,
-    )
-    .await?
-    .iter()
-    .filter_map(|event| {
-        control_plane::runtime_observability::debug_read_model::fold_event_to_debug_part(
-            run_id, event,
+    let page_size = runtime_debug_stream_page_size(query.limit);
+    let from_sequence = query.from_sequence.unwrap_or(0).max(0);
+    let mut records =
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_event_backfill_page(
+            &state.store,
+            run_id,
+            from_sequence,
+            page_size + 1,
         )
-    })
-    .map(to_runtime_debug_stream_part_response)
-    .collect();
+        .await?;
+    let has_more = records.len() > page_size;
+    if has_more {
+        records.truncate(page_size);
+    }
+    let next_sequence = records
+        .last()
+        .map(debug_run_stream::durable_event_stream_sequence);
+    let parts = records
+        .iter()
+        .filter_map(|event| {
+            control_plane::runtime_observability::debug_read_model::fold_event_to_debug_part(
+                run_id, event,
+            )
+        })
+        .map(to_runtime_debug_stream_part_response)
+        .collect();
 
-    Ok(Json(ApiSuccess::new(RuntimeDebugStreamResponse { parts })))
+    Ok(Json(ApiSuccess::new(RuntimeDebugStreamResponse {
+        parts,
+        page_size: i64::try_from(page_size).unwrap_or(i64::MAX),
+        next_sequence,
+        has_more,
+    })))
+}
+
+fn runtime_debug_stream_page_size(limit: Option<i64>) -> usize {
+    limit
+        .unwrap_or(RUNTIME_DEBUG_STREAM_DEFAULT_PAGE_SIZE as i64)
+        .clamp(1, RUNTIME_DEBUG_STREAM_MAX_PAGE_SIZE as i64) as usize
 }
 
 #[utoipa::path(

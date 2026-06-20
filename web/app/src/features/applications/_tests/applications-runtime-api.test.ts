@@ -218,7 +218,12 @@ vi.mock('@1flowbase/api-client', () => ({
     items: [],
     total: 0
   }),
-  getConsoleRuntimeDebugStream: vi.fn().mockResolvedValue({ parts: [] }),
+  getConsoleRuntimeDebugStream: vi.fn().mockResolvedValue({
+    parts: [],
+    page_size: 500,
+    next_sequence: null,
+    has_more: false
+  }),
   resumeConsoleFlowRun: vi.fn().mockResolvedValue(undefined),
   getDefaultApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800')
 }));

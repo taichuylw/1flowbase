@@ -183,11 +183,10 @@ fn application_run_statistics(
 }
 
 fn application_runs_created_after(query: &ApplicationRunsQuery) -> Option<OffsetDateTime> {
-    let days = query.time_range_days?;
-
-    if days <= 0 {
-        return None;
-    }
+    let days = query
+        .time_range_days
+        .filter(|days| *days > 0)
+        .unwrap_or(APPLICATION_RUN_LOG_DEFAULT_TIME_RANGE_DAYS);
 
     Some(OffsetDateTime::now_utc() - Duration::days(days))
 }

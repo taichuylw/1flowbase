@@ -20,6 +20,7 @@ import type {
   DeleteConsoleDebugVariableCacheEntriesInput,
   GetConsoleApplicationRunMonitoringReportInput,
   GetConsoleApplicationRunsInput,
+  RuntimeDebugStreamQuery,
   RuntimeDebugStreamResponse,
   UpsertConsoleDebugVariableCacheEntryInput
 } from './types';
@@ -336,10 +337,20 @@ export function getConsoleApplicationRunNodeLastRun(
 export function getConsoleRuntimeDebugStream(
   applicationId: string,
   runId: string,
-  baseUrl?: string
+  baseUrl?: string,
+  query: RuntimeDebugStreamQuery = {}
 ) {
+  const searchParams = new URLSearchParams();
+  if (query.from_sequence !== undefined) {
+    searchParams.set('from_sequence', String(query.from_sequence));
+  }
+  if (query.limit !== undefined) {
+    searchParams.set('limit', String(query.limit));
+  }
+  const queryString = searchParams.toString();
+
   return apiFetch<RuntimeDebugStreamResponse>({
-    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/debug-stream`,
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/debug-stream${queryString ? `?${queryString}` : ''}`,
     baseUrl
   });
 }

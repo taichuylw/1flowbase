@@ -1,5 +1,38 @@
 use super::*;
 
+#[tokio::test]
+async fn resolve_runtime_debug_artifacts_rejects_unbounded_ref_batches() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let artifact_refs = (0..51)
+        .map(|_| Uuid::now_v7().to_string())
+        .collect::<Vec<_>>();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "artifact_refs": artifact_refs }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
 fn build_answer_only_document(flow_id: &str, answer_text: &str) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v2",

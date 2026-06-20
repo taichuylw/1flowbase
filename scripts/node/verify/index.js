@@ -986,6 +986,12 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       cwd: repoRoot,
     },
     {
+      label: 'repo-log-query-contract-report',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'log-query-contract-report'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-security-risk',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'security-risk'],
