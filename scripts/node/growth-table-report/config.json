@@ -1,0 +1,672 @@
+{
+  "version": 1,
+  "sourceSearchDirs": [
+    "api/crates/storage-durable/postgres/src",
+    "api/crates/control-plane/src",
+    "api/crates/orchestration-runtime/src",
+    "api/crates/runtime-core/src"
+  ],
+  "tables": [
+    {
+      "name": "flow_runs",
+      "growthType": "run",
+      "requiredRoutingColumns": ["scope_id", "application_id"],
+      "ownerColumns": ["application_id", "flow_id", "flow_draft_id"],
+      "requiredTimeColumns": ["started_at", "created_at", "updated_at"],
+      "uniqueRouteKeys": ["scope_id", "application_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "started_at", "id"],
+          "scenario": "workspace run list and capacity inspection by start time",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "updated_at", "id"],
+          "scenario": "workspace active run polling and retention sweep",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_runs.id ranges or application_id shards",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before partition/distribution planning; do not change primary key semantics without a separate ADR."
+    },
+    {
+      "name": "application_run_log_summaries",
+      "growthType": "log_summary",
+      "requiredRoutingColumns": ["scope_id", "application_id", "flow_run_id"],
+      "ownerColumns": ["application_id", "flow_run_id", "api_key_id"],
+      "requiredTimeColumns": ["created_at", "started_at", "updated_at", "log_created_at"],
+      "uniqueRouteKeys": ["flow_run_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "created_at", "flow_run_id"],
+          "scenario": "workspace run log list",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "application_id", "created_at", "flow_run_id"],
+          "scenario": "application run log list under workspace",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "application_id", "started_at", "flow_run_id"],
+          "scenario": "application monitoring and time-window analytics",
+          "priority": "later"
+        }
+      ],
+      "recommendation": "Keep as read model; only add missing analytical indexes after measuring write amplification."
+    },
+    {
+      "name": "node_runs",
+      "growthType": "node_run",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "node_id"],
+      "requiredTimeColumns": ["created_at", "started_at"],
+      "uniqueRouteKeys": ["flow_run_id", "node_run_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace flow run node list",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "node_run_id", "created_at", "id"],
+          "scenario": "registered system table node-run lookup",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Existing scope indexes are enough for registered read-model access; JSONB payload reads should stay detail-oriented."
+    },
+    {
+      "name": "flow_run_events",
+      "growthType": "run_event",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id"],
+      "requiredTimeColumns": ["created_at", "sequence"],
+      "uniqueRouteKeys": ["flow_run_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "sequence", "id"],
+          "scenario": "workspace event replay by flow run cursor",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "node_run_id", "sequence", "id"],
+          "scenario": "workspace node event drill-down",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Keep unique(flow_run_id, sequence) unless the distribution key changes; adding scope to uniqueness needs a migration issue."
+    },
+    {
+      "name": "flow_run_checkpoints",
+      "growthType": "checkpoint",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["flow_run_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace checkpoint history by flow run",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "node_run_id", "created_at", "id"],
+          "scenario": "workspace checkpoint history by node run",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Scope indexes exist; keep payload detail reads out of list endpoints."
+    },
+    {
+      "name": "flow_run_callback_tasks",
+      "growthType": "callback_task",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id"],
+      "requiredTimeColumns": ["created_at", "completed_at"],
+      "uniqueRouteKeys": ["flow_run_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace callback task list by run",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "node_run_id", "created_at", "id"],
+          "scenario": "workspace callback task list by node run",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Scope indexes exist; callback payloads remain detail/read-model fields."
+    },
+    {
+      "name": "flow_run_callback_resume_attempts",
+      "growthType": "callback_resume_attempt",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "callback_task_id"],
+      "ownerColumns": ["flow_run_id", "callback_task_id"],
+      "requiredTimeColumns": ["created_at", "updated_at", "completed_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace callback resume history by run",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "status", "created_at", "id"],
+          "scenario": "workspace retry/cancel worker scan",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "already has scope_id; unique idempotency constraints need semantic review",
+        "batchBoundary": "constraint replacement must use concurrent unique index validation",
+        "failureRecovery": "keep old unique index until new scoped uniqueness is validated"
+      },
+      "recommendation": "Review global idempotency_key uniqueness before Citus; likely needs scoped idempotency semantics in a separate migration issue."
+    },
+    {
+      "name": "runtime_spans",
+      "growthType": "runtime_span",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "parent_span_id"],
+      "requiredTimeColumns": ["started_at", "finished_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "parent_span_id", "started_at", "id"],
+          "scenario": "workspace runtime span tree by flow run",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "runtime_spans.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before exposing span lists or capacity reports."
+    },
+    {
+      "name": "runtime_events",
+      "growthType": "runtime_event",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "span_id"],
+      "requiredTimeColumns": ["created_at", "sequence"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "sequence", "id"],
+          "scenario": "workspace runtime event replay by flow run cursor",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "runtime_events.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id or id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Do not widen event list APIs until scope_id and cursor indexes exist."
+    },
+    {
+      "name": "runtime_items",
+      "growthType": "runtime_item",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id"],
+      "ownerColumns": ["flow_run_id", "span_id", "source_event_id"],
+      "requiredTimeColumns": ["created_at", "updated_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace runtime item replay by flow run",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "runtime_items.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before item-level retention or replay screens."
+    },
+    {
+      "name": "runtime_context_projections",
+      "growthType": "runtime_projection",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "llm_turn_span_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace context projection history",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "runtime_context_projections.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Keep projection payload refs out of list responses; add scope_id before capacity inspection."
+    },
+    {
+      "name": "runtime_usage_ledger",
+      "growthType": "usage_ledger",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "span_id", "provider_instance_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace usage ledger by flow run",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "provider_instance_id", "created_at", "id"],
+          "scenario": "workspace provider cost inspection",
+          "priority": "later"
+        }
+      ],
+      "backfill": {
+        "source": "runtime_usage_ledger.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "created_at/id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before cost/capacity rollups; provider index should wait for real reporting needs."
+    },
+    {
+      "name": "runtime_artifacts",
+      "growthType": "runtime_artifact",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id"],
+      "ownerColumns": ["flow_run_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace runtime artifact listing and cleanup",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "runtime_artifacts.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before retention workers scan artifacts by workspace."
+    },
+    {
+      "name": "runtime_audit_hashes",
+      "growthType": "audit_hash",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id"],
+      "ownerColumns": ["flow_run_id", "fact_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace audit hash verification by flow run",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "runtime_audit_hashes.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Treat as append-only verification data; add scope_id before cross-run validation reports."
+    },
+    {
+      "name": "runtime_debug_artifacts",
+      "growthType": "debug_artifact",
+      "requiredRoutingColumns": ["workspace_id", "application_id", "flow_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "run_event_id", "storage_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["workspace_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["application_id", "created_at", "id"],
+          "scenario": "application debug artifact list",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["flow_run_id", "created_at", "id"],
+          "scenario": "flow run debug artifact drill-down",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["retention_state", "created_at"],
+          "scenario": "retention cleanup worker scan",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Scope and retention evidence is already present; defer workspace-wide artifact index until capacity inspection proves it is needed."
+    },
+    {
+      "name": "application_run_trace_projection_statuses",
+      "growthType": "trace_projection_status",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id"],
+      "ownerColumns": ["flow_run_id"],
+      "requiredTimeColumns": ["created_at", "updated_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "status", "updated_at", "flow_run_id"],
+          "scenario": "workspace trace projection worker retry scan",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "application_run_trace_projection_statuses.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before global projection worker scans grow."
+    },
+    {
+      "name": "application_run_trace_nodes",
+      "growthType": "trace_node_projection",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "trace_node_id"],
+      "ownerColumns": ["flow_run_id", "parent_trace_node_id", "owner_id"],
+      "requiredTimeColumns": ["started_at", "created_at", "updated_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "parent_trace_node_id", "order_key", "trace_node_id"],
+          "scenario": "workspace trace tree children listing",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "flow_run_id", "owner_kind", "owner_id"],
+          "scenario": "workspace trace owner drill-down",
+          "priority": "later"
+        }
+      ],
+      "backfill": {
+        "source": "application_run_trace_nodes.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Scope the trace tree indexes before making trace projections capacity-visible."
+    },
+    {
+      "name": "application_run_trace_node_contents",
+      "growthType": "trace_node_content",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "trace_node_id"],
+      "ownerColumns": ["trace_node_id"],
+      "requiredTimeColumns": ["created_at", "updated_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "trace_node_id"],
+          "scenario": "workspace trace content cleanup and detail prefetch",
+          "priority": "must_fix"
+        }
+      ],
+      "backfill": {
+        "source": "application_run_trace_node_contents.trace_node_id -> application_run_trace_nodes.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "trace_node_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Needs flow_run_id/scope_id columns before content retention can avoid joins."
+    },
+    {
+      "name": "capability_invocations",
+      "growthType": "capability_invocation",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "span_id"],
+      "ownerColumns": ["flow_run_id", "span_id", "capability_id"],
+      "requiredTimeColumns": ["created_at", "started_at", "finished_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace capability invocation history",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "capability_id", "created_at", "id"],
+          "scenario": "workspace capability usage inspection",
+          "priority": "later"
+        }
+      ],
+      "backfill": {
+        "source": "capability_invocations.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before capability usage reports; capability_id index should wait for productized analytics."
+    },
+    {
+      "name": "model_failover_attempt_ledger",
+      "growthType": "failover_ledger",
+      "requiredRoutingColumns": ["scope_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "provider_instance_id", "usage_ledger_id"],
+      "requiredTimeColumns": ["started_at", "finished_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "node_run_id", "attempt_index"],
+          "scenario": "workspace failover attempt replay by node run",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "provider_instance_id", "started_at", "id"],
+          "scenario": "workspace provider failover inspection",
+          "priority": "later"
+        }
+      ],
+      "backfill": {
+        "source": "model_failover_attempt_ledger.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "batchBoundary": "flow_run_id ranges",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Add scope_id before failover ledger becomes queryable outside per-run details."
+    },
+    {
+      "name": "data_model_side_effect_receipts",
+      "growthType": "side_effect_receipt",
+      "requiredRoutingColumns": ["workspace_id", "scope_id", "application_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["flow_run_id", "node_run_id", "actor_user_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["workspace_id", "scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "flow_run_id", "created_at", "id"],
+          "scenario": "workspace side-effect audit by flow run",
+          "priority": "later"
+        }
+      ],
+      "recommendation": "Existing scoped idempotency key is good; add audit index only when UI needs receipt browsing."
+    },
+    {
+      "name": "application_conversations",
+      "growthType": "conversation_projection",
+      "requiredRoutingColumns": ["scope_id", "application_id"],
+      "ownerColumns": ["application_id", "api_key_id", "external_user"],
+      "requiredTimeColumns": ["created_at", "updated_at"],
+      "uniqueRouteKeys": ["application_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "created_at", "id"],
+          "scenario": "workspace conversation list",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["application_id", "created_at", "id"],
+          "scenario": "application conversation list",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Unique conversation key is application-routed; do not scope it without API idempotency review."
+    },
+    {
+      "name": "application_public_conversations",
+      "growthType": "legacy_public_conversation",
+      "requiredRoutingColumns": ["scope_id", "application_id", "api_key_id"],
+      "ownerColumns": ["application_id", "api_key_id", "external_user"],
+      "requiredTimeColumns": ["created_at", "updated_at"],
+      "uniqueRouteKeys": ["scope_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["scope_id", "application_id", "updated_at", "id"],
+          "scenario": "workspace public conversation legacy binding review",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["application_id", "updated_at", "id"],
+          "scenario": "application public conversation binding lookup",
+          "priority": "later"
+        }
+      ],
+      "backfill": {
+        "source": "application_public_conversations.application_id -> applications.workspace_id",
+        "batchBoundary": "application_id shards",
+        "failureRecovery": "idempotent update where scope_id is null"
+      },
+      "recommendation": "Legacy table is still written by bind_application_public_conversation; add scope_id or retire the table after application_conversations fully owns reads and writes."
+    },
+    {
+      "name": "application_conversation_messages",
+      "growthType": "conversation_message_projection",
+      "requiredRoutingColumns": ["scope_id", "application_id", "conversation_id", "flow_run_id", "node_run_id"],
+      "ownerColumns": ["conversation_id", "flow_run_id", "node_run_id"],
+      "requiredTimeColumns": ["created_at", "updated_at", "sequence"],
+      "uniqueRouteKeys": ["conversation_id", "flow_run_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["conversation_id", "sequence", "created_at", "id"],
+          "scenario": "conversation message replay",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["scope_id", "created_at", "id"],
+          "scenario": "workspace message capacity inspection",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Conversation sequence index exists; scope_created index keeps capacity reports bounded."
+    },
+    {
+      "name": "runtime_cost_ledger",
+      "growthType": "cost_ledger",
+      "requiredRoutingColumns": ["workspace_id", "flow_run_id", "span_id"],
+      "ownerColumns": ["flow_run_id", "span_id", "usage_ledger_id", "provider_instance_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["workspace_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["workspace_id", "created_at", "id"],
+          "scenario": "workspace cost ledger list and capacity inspection",
+          "priority": "later"
+        },
+        {
+          "columns": ["flow_run_id", "created_at", "id"],
+          "scenario": "per-run cost ledger detail",
+          "priority": "later"
+        }
+      ],
+      "recommendation": "Append path exists; add read indexes only when cost ledger browsing or workspace billing reports become productized."
+    },
+    {
+      "name": "runtime_credit_ledger",
+      "growthType": "credit_ledger",
+      "requiredRoutingColumns": ["workspace_id", "flow_run_id"],
+      "ownerColumns": ["workspace_id", "user_id", "flow_run_id", "cost_ledger_id"],
+      "requiredTimeColumns": ["created_at"],
+      "uniqueRouteKeys": ["workspace_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["workspace_id", "created_at", "id"],
+          "scenario": "workspace credit ledger list",
+          "priority": "later"
+        },
+        {
+          "columns": ["flow_run_id", "created_at", "id"],
+          "scenario": "per-run credit ledger detail",
+          "priority": "later"
+        }
+      ],
+      "recommendation": "Existing unique(workspace_id, idempotency_key) is distribution-friendly; defer list indexes until billing UI requires them."
+    },
+    {
+      "name": "billing_sessions",
+      "growthType": "billing_session",
+      "requiredRoutingColumns": ["workspace_id", "flow_run_id"],
+      "ownerColumns": ["workspace_id", "flow_run_id", "route_id"],
+      "requiredTimeColumns": ["created_at", "updated_at"],
+      "uniqueRouteKeys": ["workspace_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["workspace_id", "created_at", "id"],
+          "scenario": "workspace billing session audit list",
+          "priority": "later"
+        },
+        {
+          "columns": ["flow_run_id", "created_at", "id"],
+          "scenario": "per-run billing session detail",
+          "priority": "later"
+        }
+      ],
+      "recommendation": "Unique(workspace_id, idempotency_key) is already scoped; defer new indexes until billing session reads are exposed."
+    },
+    {
+      "name": "debug_variable_cache_entries",
+      "growthType": "debug_cache",
+      "requiredRoutingColumns": ["workspace_id", "application_id", "flow_draft_id", "actor_user_id"],
+      "ownerColumns": ["application_id", "flow_draft_id", "actor_user_id", "node_id"],
+      "requiredTimeColumns": ["created_at", "updated_at"],
+      "uniqueRouteKeys": ["application_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["application_id", "flow_draft_id", "actor_user_id", "updated_at", "id"],
+          "scenario": "debug variable cache lookup and cleanup",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Growth is bounded by draft/user/node/key; existing lookup index is sufficient for current debug cache flows."
+    },
+    {
+      "name": "plugin_package_catalog_projection",
+      "growthType": "plugin_catalog_projection",
+      "requiredRoutingColumns": ["installation_id", "package_code"],
+      "ownerColumns": ["installation_id", "package_code", "package_version"],
+      "requiredTimeColumns": ["updated_at", "refreshed_at"],
+      "missingTimePriority": "later",
+      "uniqueRouteKeys": ["installation_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["package_code", "package_version"],
+          "scenario": "package catalog projection lookup",
+          "priority": "must_fix"
+        },
+        {
+          "columns": ["projection_status", "updated_at"],
+          "scenario": "catalog projection repair scan",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Projection is bounded by plugin installations; no high-growth migration is needed unless projection history is introduced."
+    },
+    {
+      "name": "plugin_artifact_instances",
+      "growthType": "plugin_artifact_projection",
+      "requiredRoutingColumns": ["installation_id", "node_id"],
+      "ownerColumns": ["installation_id", "node_id"],
+      "requiredTimeColumns": ["checked_at"],
+      "uniqueRouteKeys": ["installation_id"],
+      "recommendedIndexes": [
+        {
+          "columns": ["installation_id"],
+          "scenario": "plugin installation artifact status lookup",
+          "priority": "must_fix"
+        }
+      ],
+      "recommendation": "Projection cardinality is bounded by installed plugins; no high-growth migration needed unless artifact history is added."
+    }
+  ]
+}

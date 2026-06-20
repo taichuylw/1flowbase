@@ -73,6 +73,20 @@ test('tooling index dispatches hotspot-review subcommand', async () => {
   assert.deepEqual(capturedArgv, ['--since', '1 day ago']);
 });
 
+test('tooling index dispatches growth-table-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['growth-table-report', '--max-evidence', '2'], {
+    runGrowthTableReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--max-evidence', '2']);
+});
+
 test('tooling index dispatches repo-hygiene subcommand', async () => {
   let capturedArgv = null;
 
