@@ -2,7 +2,46 @@
   "version": 1,
   "tableProfiles": {},
   "dynamicModelTablePatterns": [],
-  "registeredSystemTables": [],
+  "registeredSystemTables": [
+    "users",
+    "roles",
+    "application_run_log_summaries",
+    "application_conversations",
+    "application_conversation_messages",
+    "node_runs",
+    "flow_run_events",
+    "flow_run_checkpoints",
+    "flow_run_callback_tasks"
+  ],
+  "registeredSystemTableTemplates": {
+    "users": {
+      "requiredColumns": ["id", "account", "email", "phone", "password_hash", "name", "nickname", "avatar_url", "introduction", "default_display_role", "email_login_enabled", "phone_login_enabled", "status", "session_version", "created_by", "created_at", "updated_by", "updated_at", "preferred_locale", "meta"]
+    },
+    "roles": {
+      "requiredColumns": ["id", "scope_kind", "workspace_id", "code", "name", "introduction", "is_builtin", "is_editable", "system_kind", "created_by", "created_at", "updated_by", "updated_at", "auto_grant_new_permissions", "is_default_member_role"]
+    },
+    "application_run_log_summaries": {
+      "requiredColumns": ["flow_run_id", "application_id", "run_mode", "status", "target_node_id", "title", "input_payload", "external_user", "authorized_account", "api_key_id", "publication_version_id", "external_conversation_id", "external_trace_id", "compatibility_mode", "idempotency_key", "total_tokens", "unique_node_count", "tool_callback_count", "started_at", "finished_at", "created_at", "updated_at", "log_created_at", "log_updated_at", "api_key_name_snapshot", "scope_id", "id", "input_tokens", "output_tokens", "input_cache_hit_tokens"]
+    },
+    "application_conversations": {
+      "requiredColumns": ["id", "scope_id", "application_id", "external_conversation_id", "external_user", "api_key_id", "title", "created_at", "updated_at"]
+    },
+    "application_conversation_messages": {
+      "requiredColumns": ["id", "scope_id", "conversation_id", "application_id", "flow_run_id", "node_run_id", "role", "content", "sequence", "status", "started_at", "finished_at", "created_at", "updated_at"]
+    },
+    "node_runs": {
+      "requiredColumns": ["id", "flow_run_id", "node_id", "node_type", "node_alias", "status", "input_payload", "output_payload", "error_payload", "metrics_payload", "started_at", "finished_at", "debug_payload", "scope_id", "node_run_id", "created_at"]
+    },
+    "flow_run_events": {
+      "requiredColumns": ["id", "flow_run_id", "node_run_id", "sequence", "event_type", "payload", "created_at", "scope_id"]
+    },
+    "flow_run_checkpoints": {
+      "requiredColumns": ["id", "flow_run_id", "node_run_id", "status", "reason", "locator_payload", "variable_snapshot", "external_ref_payload", "created_at", "scope_id"]
+    },
+    "flow_run_callback_tasks": {
+      "requiredColumns": ["id", "flow_run_id", "node_run_id", "callback_kind", "status", "request_payload", "response_payload", "external_ref_payload", "created_at", "completed_at", "scope_id"]
+    }
+  },
   "appendOnlyTables": [],
   "systemScopeTables": [],
   "reasonPolicy": {

@@ -830,6 +830,7 @@ function normalizeConfig(config = {}) {
     tableProfiles: config.tableProfiles || {},
     dynamicModelTablePatterns: (config.dynamicModelTablePatterns || []).map((pattern) => new RegExp(pattern, 'u')),
     registeredSystemTables: new Set(config.registeredSystemTables || []),
+    registeredSystemTableTemplates: config.registeredSystemTableTemplates || {},
     appendOnlyTables: new Set(config.appendOnlyTables || []),
     systemScopeTables: new Set(config.systemScopeTables || []),
     reasonPolicy: {
@@ -1059,6 +1060,32 @@ function evaluateDynamicModelTable(table, exemption) {
   return findings;
 }
 
+function evaluateRegisteredSystemTableTemplate(table, config, exemption) {
+  const template = config.registeredSystemTableTemplates[table.name];
+  if (!template) {
+    return [
+      finding({
+        rule: 'registered-system-table-template-missing',
+        table,
+        message: 'registered_system_table requires a fixed field template declaration',
+      }),
+    ];
+  }
+
+  const findings = [];
+  for (const columnName of template.requiredColumns || []) {
+    if (!hasColumn(table, columnName) && !isSkipped(exemption, 'registered-system-table-required-column', columnName)) {
+      findings.push(finding({
+        rule: 'registered-system-table-required-column',
+        table,
+        column: columnName,
+        message: `registered_system_table fixed template requires column ${columnName}`,
+      }));
+    }
+  }
+  return findings;
+}
+
 function evaluateSchemaHygiene({ inventory, config = {} }) {
   const normalizedConfig = normalizeConfig(config);
   const findings = [...inventory.parseErrors];
@@ -1072,6 +1099,9 @@ function evaluateSchemaHygiene({ inventory, config = {} }) {
     if (profile === 'dynamic_model_table') {
       tableFindings.push(...evaluateDynamicModelTable(table, exemption));
     } else {
+      if (profile === 'registered_system_table') {
+        tableFindings.push(...evaluateRegisteredSystemTableTemplate(table, normalizedConfig, exemption));
+      }
       tableFindings.push(...evaluateManagedTable(table, normalizedConfig, exemption));
     }
 

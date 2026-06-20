@@ -295,6 +295,11 @@ test('evaluateSchemaHygiene keeps registered_system_table profile visible and sc
     inventory,
     config: {
       registeredSystemTables: ['registered_catalog'],
+      registeredSystemTableTemplates: {
+        registered_catalog: {
+          requiredColumns: ['id', 'created_at', 'fixed_code'],
+        },
+      },
     },
   });
 
@@ -302,10 +307,39 @@ test('evaluateSchemaHygiene keeps registered_system_table profile visible and sc
   assert.deepEqual(
     report.findings.map((finding) => finding.rule),
     [
+      'registered-system-table-required-column',
       'managed-table-updated-at-or-append-only',
       'managed-table-scope-column',
       'managed-table-scope-time-index',
     ]
+  );
+});
+
+test('evaluateSchemaHygiene fails registered_system_table without fixed template declaration', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table registered_catalog (
+      id uuid primary key,
+      scope_id uuid not null,
+      fixed_code text not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+    create index registered_catalog_scope_updated_idx
+      on registered_catalog (scope_id, updated_at desc, id desc);
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: {
+      registeredSystemTables: ['registered_catalog'],
+    },
+  });
+
+  assert.equal(report.tables[0].profile, 'registered_system_table');
+  assert.deepEqual(
+    report.findings.map((finding) => finding.rule),
+    ['registered-system-table-template-missing']
   );
 });
 
