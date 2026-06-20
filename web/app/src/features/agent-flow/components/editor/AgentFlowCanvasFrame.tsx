@@ -573,6 +573,7 @@ export function AgentFlowCanvasFrame({
     detailContainerWidth,
     nodeDetailLayout,
     sideDockOccupiedWidth,
+    variableCacheCenterLeft,
     variableCacheMaxHeight,
     variableCacheRightOffset,
     variableCacheSidebarMaxWidth,

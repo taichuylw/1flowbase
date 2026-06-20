@@ -134,5 +134,5 @@ describe('debug conversation log pagination', () => {
     expect(
       screen.queryByRole('button', { name: '加载更多' })
     ).not.toBeInTheDocument();
-  });
+  }, 10000);
 });

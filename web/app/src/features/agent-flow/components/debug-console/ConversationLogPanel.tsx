@@ -40,8 +40,6 @@ import type {
   ConversationLogRunOverview,
   ConversationLogTraceLoader,
   ConversationLogTraceNodeChildrenPageInfo,
-  ConversationLogTraceNodeContent,
-  ConversationLogTraceNodeDetail,
   ConversationLogTraceNodeSummary,
   ConversationLogTraceProjectionStatus
 } from './conversation-log-trace-model';
