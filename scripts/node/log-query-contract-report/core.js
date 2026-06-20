@@ -35,13 +35,17 @@ function resolveSource(repoRoot, filePath) {
   };
 }
 
-function functionContext(source, functionName) {
+function findFunctionMatch(source, functionName) {
   if (!source.exists || !functionName) {
-    return '';
+    return null;
   }
 
   const pattern = new RegExp(`\\b(?:pub\\s+)?(?:async\\s+)?fn\\s+${functionName}\\s*\\(`, 'u');
-  const match = pattern.exec(source.text);
+  return pattern.exec(source.text);
+}
+
+function functionContext(source, functionName) {
+  const match = findFunctionMatch(source, functionName);
   if (!match) {
     return '';
   }
@@ -115,6 +119,8 @@ function endpointContext(repoRoot, endpoint) {
     const source = resolveSource(repoRoot, sourceSpec.file || '');
     return {
       source,
+      functionName: sourceSpec.functionName || '',
+      functionFound: Boolean(findFunctionMatch(source, sourceSpec.functionName)),
       context: functionContext(source, sourceSpec.functionName),
     };
   });
@@ -122,6 +128,10 @@ function endpointContext(repoRoot, endpoint) {
   return {
     apiSource,
     repositorySource,
+    apiFunctionName: endpoint.api?.functionName || '',
+    repositoryFunctionName: endpoint.repository?.functionName || '',
+    apiFunctionFound: Boolean(findFunctionMatch(apiSource, endpoint.api?.functionName)),
+    repositoryFunctionFound: Boolean(findFunctionMatch(repositorySource, endpoint.repository?.functionName)),
     extraSources,
     text: [apiContext, repositoryContext, ...extraSources.map((source) => source.context)].join('\n'),
   };
@@ -146,13 +156,19 @@ function evaluateEndpoint({ repoRoot, endpoint }) {
 
   if (!context.apiSource.exists) {
     findings.push(endpointFinding(endpoint, 'source', `API source file is missing: ${context.apiSource.file}`));
+  } else if (context.apiFunctionName && !context.apiFunctionFound) {
+    findings.push(endpointFinding(endpoint, 'source', `API function is missing: ${context.apiFunctionName}`));
   }
   if (!context.repositorySource.exists) {
     findings.push(endpointFinding(endpoint, 'source', `Repository source file is missing: ${context.repositorySource.file}`));
+  } else if (context.repositoryFunctionName && !context.repositoryFunctionFound) {
+    findings.push(endpointFinding(endpoint, 'source', `Repository function is missing: ${context.repositoryFunctionName}`));
   }
   for (const extraSource of context.extraSources) {
     if (!extraSource.source.exists) {
       findings.push(endpointFinding(endpoint, 'source', `Extra source file is missing: ${extraSource.source.file}`));
+    } else if (extraSource.functionName && !extraSource.functionFound) {
+      findings.push(endpointFinding(endpoint, 'source', `Extra source function is missing: ${extraSource.functionName}`));
     }
   }
   for (const dimension of dimensions) {

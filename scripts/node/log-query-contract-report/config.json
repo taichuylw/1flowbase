@@ -470,7 +470,7 @@
       "method": "GET",
       "path": "/api/console/applications/{id}/orchestration/debug-artifacts/{artifact_id}",
       "api": {
-        "file": "api/apps/api-server/src/routes/applications/application_runtime/runtime_debug_artifacts.rs",
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/debug_handlers.rs",
         "functionName": "get_runtime_debug_artifact"
       },
       "repository": {

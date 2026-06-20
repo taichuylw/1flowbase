@@ -131,6 +131,54 @@ test('collectLogQueryContractReport accepts explicit reasoned exemptions', () =>
   assert.equal(report.endpoints[0].dimensions.find((dimension) => dimension.dimension === 'cursor').status, 'exempted');
 });
 
+test('collectLogQueryContractReport fails when configured function is missing', () => {
+  const repoRoot = createRepoWithSource(`
+    async fn list_logs() {}
+    async fn list_logs_page() {}
+  `);
+  const config = endpointConfig({
+    scope: { patterns: ['list_logs'] },
+    time: {
+      patterns: [],
+      exemption: {
+        reason: 'Fixture checks source resolution only.',
+        removeBy: 'not_required',
+      },
+    },
+    cursor: {
+      patterns: [],
+      exemption: {
+        reason: 'Fixture checks source resolution only.',
+        removeBy: 'not_required',
+      },
+    },
+    limit: {
+      patterns: [],
+      exemption: {
+        reason: 'Fixture checks source resolution only.',
+        removeBy: 'not_required',
+      },
+    },
+  });
+  config.endpoints[0].api.functionName = 'missing_logs_handler';
+
+  const report = collectLogQueryContractReport({
+    repoRoot,
+    config,
+  });
+
+  assert.equal(report.status, 'failed');
+  assert.equal(report.summary.needsFix, 1);
+  assert.deepEqual(report.endpoints[0].findings, [
+    {
+      endpointId: 'logs',
+      dimension: 'source',
+      severity: 'fail',
+      message: 'API function is missing: missing_logs_handler',
+    },
+  ]);
+});
+
 test('writeLogQueryContractReports writes JSON and Markdown under tmp/test-governance', () => {
   const repoRoot = createRepoWithSource(`
     async fn list_logs() {
