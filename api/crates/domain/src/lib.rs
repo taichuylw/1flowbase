@@ -80,14 +80,15 @@ pub use modeling::{
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{
-    ApplicationRunDetail, ApplicationRunLogSummary, ApplicationRunStitchedTrace,
-    ApplicationRunSummary, ApplicationRunTraceNodeContentRecord, ApplicationRunTraceNodeRecord,
-    ApplicationRunTraceProjectionDiagnostic, ApplicationRunTraceProjectionStatus,
-    ApplicationRunTraceProjectionStatusRecord, CallbackTaskRecord, CallbackTaskStatus,
-    CheckpointRecord, CompiledPlanRecord, DataModelSideEffectReceiptRecord,
-    FlowRunCallbackResumeAttemptRecord, FlowRunCallbackResumeAttemptStatus, FlowRunMode,
-    FlowRunRecord, FlowRunStatus, NodeDebugPreviewResult, NodeLastRun, NodeRunRecord,
-    NodeRunStatus, RunEventRecord, RuntimeDebugArtifactRecord,
+    ApplicationConversationRunSummary, ApplicationRunDetail, ApplicationRunLogSummary,
+    ApplicationRunStitchedTrace, ApplicationRunSummary, ApplicationRunTraceNodeContentRecord,
+    ApplicationRunTraceNodeRecord, ApplicationRunTraceProjectionDiagnostic,
+    ApplicationRunTraceProjectionStatus, ApplicationRunTraceProjectionStatusRecord,
+    CallbackTaskRecord, CallbackTaskStatus, CheckpointRecord, CompiledPlanRecord,
+    DataModelSideEffectReceiptRecord, FlowRunCallbackResumeAttemptRecord,
+    FlowRunCallbackResumeAttemptStatus, FlowRunMode, FlowRunRecord, FlowRunStatus,
+    NodeDebugPreviewResult, NodeLastRun, NodeRunRecord, NodeRunStatus, RunEventRecord,
+    RuntimeDebugArtifactRecord,
 };
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;

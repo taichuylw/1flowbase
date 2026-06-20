@@ -313,6 +313,17 @@ pub struct ApplicationRunLogSummary {
     pub tool_callback_count: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationConversationRunSummary {
+    pub id: Uuid,
+    pub status: FlowRunStatus,
+    pub query: Option<String>,
+    pub model: Option<String>,
+    pub answer: Option<String>,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationRunTraceProjectionStatus {

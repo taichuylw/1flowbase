@@ -147,23 +147,12 @@ pub async fn list_application_conversation_messages(
             },
         )
         .await?;
-    let current_run_id = query.around_run_id;
-    let workspace_id = context.actor.current_workspace_id;
-    let load_debug_artifact = |artifact_id| {
-        let state = state.clone();
-
-        async move {
-            load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
-                .await
-                .ok()
-        }
-    };
     let mut items = Vec::with_capacity(page.items.len());
     for run in page.items {
-        items.push(
-            to_application_conversation_message_response(run, current_run_id, &load_debug_artifact)
-                .await,
-        );
+        items.push(to_application_conversation_message_summary_response(
+            run,
+            query.around_run_id,
+        ));
     }
 
     Ok(Json(ApiSuccess::new(

@@ -387,6 +387,9 @@ test('default report includes storage read evidence for runtime raw payloads', (
     config: loadConfig(repoRoot),
   });
 
+  assert.equal(report.status, 'passed');
+  assert.equal(report.summary.listRawRisks, 0);
+
   for (const key of [
     'node_runs.input_payload',
     'node_runs.output_payload',

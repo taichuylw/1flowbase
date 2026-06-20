@@ -33,6 +33,28 @@ where
     }
 }
 
+fn to_application_conversation_message_summary_response(
+    run: domain::ApplicationConversationRunSummary,
+    current_run_id: Option<Uuid>,
+) -> ApplicationConversationMessageResponse {
+    let run_id = run.id.to_string();
+
+    ApplicationConversationMessageResponse {
+        run_id: run_id.clone(),
+        detail_run_id: Some(run_id),
+        can_open_detail: true,
+        role: None,
+        content: None,
+        started_at: format_time(run.started_at),
+        finished_at: format_optional_time(run.finished_at),
+        status: run.status.as_str().to_string(),
+        query: run.query,
+        model: run.model,
+        answer: run.answer,
+        is_current: current_run_id == Some(run.id),
+    }
+}
+
 async fn application_conversation_answer_text<F, Fut>(
     payload: &serde_json::Value,
     load_debug_artifact: &F,
