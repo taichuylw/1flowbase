@@ -2,6 +2,7 @@
 
 const path = require('node:path');
 
+const { main: runCapacityReport } = require('../capacity-report/core.js');
 const { main: runCheckStyleBoundary } = require('../check-style-boundary/core.js');
 const { main: runCheckRustBackend } = require('../check-rust-backend/core.js');
 const { main: runGateRouter } = require('../gate-router/core.js');
@@ -26,6 +27,7 @@ const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
 const TOOLING_COMMANDS = new Set([
   'check-style-boundary',
   'api-debug',
+  'capacity-report',
   'check-rust-backend',
   'claude-skill-sync',
   'gate-router',
@@ -101,7 +103,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|growth-table-report|hotspot-review|i18n-hygiene|log-query-contract-report|mock-ui-sync|page-debug|raw-jsonb-report|repo-hygiene|runtime-gate|schema-hygiene|security-risk> [args]\n'
+    'Usage: node scripts/node/tooling <api-debug|capacity-report|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|growth-table-report|hotspot-review|i18n-hygiene|log-query-contract-report|mock-ui-sync|page-debug|raw-jsonb-report|repo-hygiene|runtime-gate|schema-hygiene|security-risk> [args]\n'
   );
 }
 
@@ -123,6 +125,10 @@ async function main(argv = [], deps = {}) {
 
   if (options.command === 'api-debug') {
     return (deps.runApiDebugImpl || runApiDebug)(options.rest);
+  }
+
+  if (options.command === 'capacity-report') {
+    return (deps.runCapacityReportImpl || runCapacityReport)(options.rest, deps);
   }
 
   if (options.command === 'check-rust-backend') {

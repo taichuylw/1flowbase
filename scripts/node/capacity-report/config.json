@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "thresholds": {
+    "partitionCandidateRowEstimate": 10000000,
+    "partitionCandidateTotalSizeBytes": 10737418240,
+    "indexToTableSizeRatio": 4
+  },
+  "retentionArchiveStates": {}
+}

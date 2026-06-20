@@ -115,6 +115,20 @@ test('tooling index dispatches log-query-contract-report subcommand', async () =
   assert.deepEqual(capturedArgv, []);
 });
 
+test('tooling index dispatches capacity-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['capacity-report', '--inspection-input', 'tmp/capacity.json'], {
+    runCapacityReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--inspection-input', 'tmp/capacity.json']);
+});
+
 test('tooling index dispatches repo-hygiene subcommand', async () => {
   let capturedArgv = null;
 
