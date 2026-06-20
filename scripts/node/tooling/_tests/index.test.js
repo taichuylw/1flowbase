@@ -87,6 +87,20 @@ test('tooling index dispatches growth-table-report subcommand', async () => {
   assert.deepEqual(capturedArgv, ['--max-evidence', '2']);
 });
 
+test('tooling index dispatches raw-jsonb-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['raw-jsonb-report', '--max-evidence', '2'], {
+    runRawJsonbReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--max-evidence', '2']);
+});
+
 test('tooling index dispatches repo-hygiene subcommand', async () => {
   let capturedArgv = null;
 

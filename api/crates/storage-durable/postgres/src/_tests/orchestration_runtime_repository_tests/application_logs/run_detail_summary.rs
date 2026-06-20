@@ -1,6 +1,209 @@
 use super::*;
 
 #[tokio::test]
+async fn application_run_log_list_uses_summary_projection_without_raw_payload() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-06-20 09:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "ok" }),
+            error_payload: None,
+            finished_at: Some(started_at + Duration::seconds(2)),
+        },
+    )
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        update application_run_log_summaries
+        set title = '',
+            input_payload = '{"query":"raw summary payload must not affect list title"}'::jsonb
+        where flow_run_id = $1
+        "#,
+    )
+    .bind(run.id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let logs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_logs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationRunsPageInput {
+                page: 1,
+                page_size: 20,
+                created_after: None,
+                sort_by: Some("created_at".to_string()),
+                sort_order: Some("desc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(logs.total, 1);
+    assert_eq!(logs.items[0].run.id, run.id);
+    assert_eq!(logs.items[0].run.title, "Untitled run");
+}
+
+#[tokio::test]
+async fn application_run_detail_returns_raw_payload_only_for_matching_application_scope() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let other_seeded = seed_runtime_base_with_workspace_name(&store, "Other Runtime").await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let started_at = datetime!(2026-06-20 10:00:00 UTC);
+    let run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        started_at,
+        FlowRunMode::DebugFlowRun,
+        None,
+    )
+    .await;
+    let node = seed_node_run_for(
+        &store,
+        &run,
+        "node-raw",
+        "llm",
+        "Raw Node",
+        json!({
+            "prompt_messages": [
+                { "role": "user", "content": "full raw node input" }
+            ],
+            "raw_marker": "node-input"
+        }),
+        started_at + Duration::seconds(1),
+    )
+    .await;
+
+    sqlx::query(
+        r#"
+        update flow_runs
+        set input_payload = $2,
+            output_payload = $3,
+            error_payload = $4
+        where id = $1
+        "#,
+    )
+    .bind(run.id)
+    .bind(json!({
+        "query": "full raw flow input",
+        "history": [
+            { "role": "user", "content": "long history item" }
+        ],
+        "raw_marker": "flow-input"
+    }))
+    .bind(json!({
+        "answer": "full raw flow output",
+        "raw_marker": "flow-output"
+    }))
+    .bind(Some(json!({
+        "code": "RAW_FLOW_ERROR",
+        "raw_marker": "flow-error"
+    })))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_node_run(
+        &store,
+        &UpdateNodeRunInput {
+            node_run_id: node.id,
+            status: NodeRunStatus::Failed,
+            output_payload: json!({
+                "text": "full raw node output",
+                "raw_marker": "node-output"
+            }),
+            error_payload: Some(json!({
+                "code": "RAW_NODE_ERROR",
+                "raw_marker": "node-error"
+            })),
+            metrics_payload: json!({ "usage": { "total_tokens": 9 } }),
+            debug_payload: json!({
+                "trace": [
+                    { "event": "provider_call", "raw_marker": "node-debug" }
+                ]
+            }),
+            finished_at: Some(started_at + Duration::seconds(3)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let detail =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+            &store,
+            seeded.application_id,
+            run.id,
+        )
+        .await
+        .unwrap()
+        .expect("matching application scope should read run detail");
+
+    assert_eq!(
+        detail.flow_run.input_payload["raw_marker"],
+        json!("flow-input")
+    );
+    assert_eq!(
+        detail.flow_run.output_payload["raw_marker"],
+        json!("flow-output")
+    );
+    assert_eq!(
+        detail.flow_run.error_payload.as_ref().unwrap()["raw_marker"],
+        json!("flow-error")
+    );
+    assert_eq!(detail.node_runs.len(), 1);
+    assert_eq!(
+        detail.node_runs[0].input_payload["raw_marker"],
+        json!("node-input")
+    );
+    assert_eq!(
+        detail.node_runs[0].output_payload["raw_marker"],
+        json!("node-output")
+    );
+    assert_eq!(
+        detail.node_runs[0].error_payload.as_ref().unwrap()["raw_marker"],
+        json!("node-error")
+    );
+    assert_eq!(
+        detail.node_runs[0].debug_payload["trace"][0]["raw_marker"],
+        json!("node-debug")
+    );
+
+    let cross_application_detail =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+            &store,
+            other_seeded.application_id,
+            run.id,
+        )
+        .await
+        .unwrap();
+    assert!(cross_application_detail.is_none());
+}
+
+#[tokio::test]
 async fn terminal_flow_run_writes_static_application_run_log_summary() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

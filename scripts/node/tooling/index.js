@@ -14,6 +14,7 @@ const { main: runSecurityRisk } = require('../security-risk/core.js');
 const { main: runPageDebug } = require('../page-debug/core.js');
 const { main: runApiDebug } = require('../api-debug/core.js');
 const { main: runMockUiSync } = require('../mock-ui-sync/core.js');
+const { main: runRawJsonbReport } = require('../raw-jsonb-report/core.js');
 const { main: runClaudeSkillSync } = require('../claude-skill-sync/core.js');
 const {
   getRepoRoot,
@@ -32,6 +33,7 @@ const TOOLING_COMMANDS = new Set([
   'i18n-hygiene',
   'mock-ui-sync',
   'page-debug',
+  'raw-jsonb-report',
   'repo-hygiene',
   'runtime-gate',
   'schema-hygiene',
@@ -97,7 +99,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|growth-table-report|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|schema-hygiene|security-risk> [args]\n'
+    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|growth-table-report|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|raw-jsonb-report|repo-hygiene|runtime-gate|schema-hygiene|security-risk> [args]\n'
   );
 }
 
@@ -151,6 +153,10 @@ async function main(argv = [], deps = {}) {
 
   if (options.command === 'page-debug') {
     return (deps.runPageDebugImpl || runPageDebug)(options.rest);
+  }
+
+  if (options.command === 'raw-jsonb-report') {
+    return (deps.runRawJsonbReportImpl || runRawJsonbReport)(options.rest, deps);
   }
 
   if (options.command === 'repo-hygiene') {
