@@ -8,6 +8,7 @@ const { main: runGateRouter } = require('../gate-router/core.js');
 const { main: runHotspotReview } = require('../hotspot-review/core.js');
 const { main: runI18nHygiene } = require('../i18n-hygiene/core.js');
 const { main: runRepoHygiene } = require('../repo-hygiene/core.js');
+const { main: runSchemaHygiene } = require('../schema-hygiene/core.js');
 const { main: runSecurityRisk } = require('../security-risk/core.js');
 const { main: runPageDebug } = require('../page-debug/core.js');
 const { main: runApiDebug } = require('../api-debug/core.js');
@@ -31,6 +32,7 @@ const TOOLING_COMMANDS = new Set([
   'page-debug',
   'repo-hygiene',
   'runtime-gate',
+  'schema-hygiene',
   'security-risk',
 ]);
 
@@ -93,7 +95,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|security-risk> [args]\n'
+    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|schema-hygiene|security-risk> [args]\n'
   );
 }
 
@@ -147,6 +149,10 @@ async function main(argv = [], deps = {}) {
 
   if (options.command === 'repo-hygiene') {
     return (deps.runRepoHygieneImpl || runRepoHygiene)(options.rest, deps);
+  }
+
+  if (options.command === 'schema-hygiene') {
+    return (deps.runSchemaHygieneImpl || runSchemaHygiene)(options.rest, deps);
   }
 
   if (options.command === 'security-risk') {

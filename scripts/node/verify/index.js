@@ -968,6 +968,12 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       cwd: repoRoot,
     },
     {
+      label: 'repo-schema-hygiene',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'schema-hygiene'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-security-risk',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'security-risk'],

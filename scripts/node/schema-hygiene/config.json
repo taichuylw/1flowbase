@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "tableProfiles": {},
+  "dynamicModelTablePatterns": [],
+  "registeredSystemTables": [],
+  "appendOnlyTables": [],
+  "systemScopeTables": [],
+  "reasonPolicy": {
+    "minLength": 12,
+    "minWords": 3,
+    "forbidden": ["misc", "legacy", "todo", "n/a", "none"]
+  },
+  "exemptions": {
+    "schema_migrations": {
+      "reason": "sqlx internal migration ledger, not application-managed user data",
+      "skip": ["id", "created_at", "updated_at", "managed-table-scope-column", "managed-table-scope-time-index"]
+    }
+  }
+}
