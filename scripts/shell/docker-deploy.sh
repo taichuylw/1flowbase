@@ -11,6 +11,7 @@ ROOT_ACCOUNT="${FLOWBASE_ROOT_ACCOUNT:-}"
 ROOT_PASSWORD="${FLOWBASE_ROOT_PASSWORD:-}"
 PROVIDER_SECRET="${FLOWBASE_PROVIDER_SECRET:-}"
 WEB_PORT="${FLOWBASE_WEB_PORT:-}"
+COOKIE_SECURE="${FLOWBASE_COOKIE_SECURE:-${API_COOKIE_SECURE:-}}"
 DATABASE_MODE="${FLOWBASE_DATABASE_MODE:-}"
 EXTERNAL_POSTGRES_HOST="${FLOWBASE_EXTERNAL_POSTGRES_HOST:-}"
 EXTERNAL_POSTGRES_PORT="${FLOWBASE_EXTERNAL_POSTGRES_PORT:-}"
@@ -101,6 +102,7 @@ print_env_summary() {
     BOOTSTRAP_ROOT_ACCOUNT \
     BOOTSTRAP_ROOT_PASSWORD \
     API_PROVIDER_SECRET_MASTER_KEY \
+    API_COOKIE_SECURE \
     API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL \
     API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED
   do
@@ -274,6 +276,14 @@ ensure_official_plugin_signature_required() {
   if [ -z "$current_value" ]; then
     set_env_value API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED true ./docker/.env
     echo "Added API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true to docker/.env."
+  fi
+}
+
+ensure_cookie_secure_default() {
+  current_value="$(read_env_value API_COOKIE_SECURE ./docker/.env)"
+  if [ -z "$current_value" ]; then
+    set_env_value API_COOKIE_SECURE true ./docker/.env
+    echo "Added API_COOKIE_SECURE=true to docker/.env."
   fi
 }
 
@@ -661,6 +671,7 @@ Options:
   --root-password VALUE     Pre-fill BOOTSTRAP_ROOT_PASSWORD before the interactive prompt.
   --provider-secret VALUE   Pre-fill API_PROVIDER_SECRET_MASTER_KEY before the interactive prompt.
   --web-port VALUE          Pre-fill WEB_PORT before the interactive prompt.
+  --cookie-secure VALUE     Pre-fill API_COOKIE_SECURE as true or false.
   --database-mode VALUE     Use internal or external PostgreSQL. Defaults to internal.
   --external-postgres-host VALUE
                             Pre-fill EXTERNAL_POSTGRES_HOST for external PostgreSQL.
@@ -691,6 +702,7 @@ Environment variables with the same effect:
   FLOWBASE_ROOT_PASSWORD
   FLOWBASE_PROVIDER_SECRET
   FLOWBASE_WEB_PORT
+  FLOWBASE_COOKIE_SECURE
   FLOWBASE_DATABASE_MODE
   FLOWBASE_EXTERNAL_POSTGRES_HOST
   FLOWBASE_EXTERNAL_POSTGRES_PORT
@@ -747,6 +759,14 @@ while [ "$#" -gt 0 ]; do
       ;;
     --web-port=*)
       WEB_PORT="${1#*=}"
+      shift
+      ;;
+    --cookie-secure)
+      COOKIE_SECURE="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --cookie-secure=*)
+      COOKIE_SECURE="${1#*=}"
       shift
       ;;
     --database-mode)
@@ -900,11 +920,13 @@ if [ ! -f ./docker/.env ]; then
   echo "Created docker/.env from docker/.env.example."
   ensure_database_mode_default ./docker/.env
   ensure_official_plugin_signature_required
+  ensure_cookie_secure_default
   PROMPT_CONFIG_VALUES=1
 else
   echo "Using existing docker/.env."
   ensure_database_mode_default ./docker/.env
   ensure_official_plugin_signature_required
+  ensure_cookie_secure_default
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
     print_env_summary ./docker/.env
     UPDATE_ENV="$(prompt_yes_no "Update current docker/.env configuration?" "no")"
@@ -935,6 +957,11 @@ fi
 if [ -n "$WEB_PORT" ]; then
   set_env_value WEB_PORT "$WEB_PORT" ./docker/.env
   echo "Updated WEB_PORT in docker/.env."
+fi
+if [ -n "$COOKIE_SECURE" ]; then
+  COOKIE_SECURE="$(normalize_true_false_value API_COOKIE_SECURE "$COOKIE_SECURE")"
+  set_env_value API_COOKIE_SECURE "$COOKIE_SECURE" ./docker/.env
+  echo "Updated API_COOKIE_SECURE in docker/.env."
 fi
 if [ -n "$DATABASE_MODE" ]; then
   DATABASE_MODE="$(normalize_database_mode DATABASE_MODE "$DATABASE_MODE")"
@@ -983,6 +1010,7 @@ if [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tt
   prompt_env_value BOOTSTRAP_ROOT_PASSWORD "Root password"
   prompt_env_value API_PROVIDER_SECRET_MASTER_KEY "API provider secret master key"
   prompt_env_value WEB_PORT "Web port"
+  prompt_true_false_env_value API_COOKIE_SECURE "Use secure session cookies (true/false)"
   prompt_official_plugin_github_proxy_url
   prompt_true_false_env_value API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED "Require official plugin signatures (true/false)"
 elif [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ]; then

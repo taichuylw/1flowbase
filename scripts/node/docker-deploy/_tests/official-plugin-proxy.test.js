@@ -290,9 +290,20 @@ exit 0
   const updateResult = runInteractiveShellDeploy({
     tempRoot,
     tempBin,
-    input: ['y', '', 'new-password', '', 'new-root-password', 'new-provider-secret', '4100', 'n', 'n', 'n', ''].join(
-      '\n',
-    ),
+    input: [
+      'y',
+      '',
+      'new-password',
+      '',
+      'new-root-password',
+      'new-provider-secret',
+      '4100',
+      'n',
+      'n',
+      'n',
+      '',
+      '',
+    ].join('\n'),
   });
   assert.equal(updateResult.status, 0, `${updateResult.stdout}\n${updateResult.stderr}`);
   assert.match(
@@ -444,6 +455,8 @@ exit 0
       'p@ss:word',
       '--external-postgres-sslmode',
       'require',
+      '--cookie-secure',
+      'false',
     ],
     {
       cwd: tempRoot,
@@ -465,6 +478,7 @@ exit 0
   assert.match(envFile, /^EXTERNAL_POSTGRES_USER=flowbase_user$/mu);
   assert.match(envFile, /^EXTERNAL_POSTGRES_PASSWORD=p@ss:word$/mu);
   assert.match(envFile, /^EXTERNAL_POSTGRES_SSLMODE=require$/mu);
+  assert.match(envFile, /^API_COOKIE_SECURE=false$/mu);
   assert.match(
     envFile,
     /^API_DATABASE_URL=postgres:\/\/flowbase_user:p%40ss%3Aword@db\.internal\.example:6543\/flowbase_prod\?sslmode=require$/mu,
@@ -594,6 +608,7 @@ test('docker deploy assets expose external postgres configuration consistently',
     'EXTERNAL_POSTGRES_USER=postgres',
     'EXTERNAL_POSTGRES_PASSWORD=',
     'EXTERNAL_POSTGRES_SSLMODE=prefer',
+    'API_COOKIE_SECURE=true',
   ]) {
     assert.match(envExample, new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'mu'));
   }
@@ -603,12 +618,17 @@ test('docker deploy assets expose external postgres configuration consistently',
     assert.match(script, /EXTERNAL_POSTGRES_HOST/u);
     assert.match(script, /EXTERNAL_POSTGRES_SSLMODE/u);
     assert.match(script, /API_DATABASE_URL/u);
+    assert.match(script, /API_COOKIE_SECURE/u);
     assert.match(script, /docker-compose\.external-db\.yaml/u);
   }
+  assert.match(shellScript, /cookie-secure/u);
+  assert.match(powershellScript, /CookieSecure/u);
 
   assert.match(readme, /外部 PostgreSQL/u);
   assert.match(readme, /DATABASE_MODE=external/u);
   assert.match(readme, /docker-compose\.external-db\.yaml/u);
+  assert.match(readme, /API_COOKIE_SECURE=false/u);
+  assert.match(readme, /API_ALLOWED_ORIGINS=http:\/\/localhost:3200/u);
   assert.match(readme, /127\.0\.0\.1/u);
 });
 

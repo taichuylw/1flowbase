@@ -215,7 +215,11 @@ impl ApiConfig {
                 .get("API_COOKIE_NAME")
                 .cloned()
                 .unwrap_or_else(|| "flowbase_console_session".to_string()),
-            cookie_secure: env == ApiEnvironment::Production,
+            cookie_secure: parse_bool_flag(
+                "API_COOKIE_SECURE",
+                map.get("API_COOKIE_SECURE"),
+                env == ApiEnvironment::Production,
+            )?,
             session_ttl_days: map
                 .get("API_SESSION_TTL_DAYS")
                 .and_then(|value| value.parse::<i64>().ok())

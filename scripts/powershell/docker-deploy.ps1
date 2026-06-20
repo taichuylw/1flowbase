@@ -4,6 +4,7 @@ param(
   [string]$RootPassword = $env:FLOWBASE_ROOT_PASSWORD,
   [string]$ProviderSecret = $env:FLOWBASE_PROVIDER_SECRET,
   [string]$WebPort = $env:FLOWBASE_WEB_PORT,
+  [string]$CookieSecure = $env:FLOWBASE_COOKIE_SECURE,
   [string]$DatabaseMode = $env:FLOWBASE_DATABASE_MODE,
   [string]$ExternalPostgresHost = $env:FLOWBASE_EXTERNAL_POSTGRES_HOST,
   [string]$ExternalPostgresPort = $env:FLOWBASE_EXTERNAL_POSTGRES_PORT,
@@ -54,6 +55,9 @@ if (-not $PluginGithubProxyUrl -and $env:API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL) {
 }
 if (-not $OfficialPluginSignatureRequired -and $env:API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED) {
   $OfficialPluginSignatureRequired = $env:API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED
+}
+if (-not $CookieSecure -and $env:API_COOKIE_SECURE) {
+  $CookieSecure = $env:API_COOKIE_SECURE
 }
 
 function Fail([string]$Message) {
@@ -136,6 +140,14 @@ function Ensure-OfficialPluginSignatureRequired() {
   if (-not $CurrentValue) {
     Set-EnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" "true" ".\docker\.env"
     Write-Host "Added API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true to docker/.env."
+  }
+}
+
+function Ensure-CookieSecureDefault() {
+  $CurrentValue = Read-EnvValue "API_COOKIE_SECURE" ".\docker\.env"
+  if (-not $CurrentValue) {
+    Set-EnvValue "API_COOKIE_SECURE" "true" ".\docker\.env"
+    Write-Host "Added API_COOKIE_SECURE=true to docker/.env."
   }
 }
 
@@ -263,6 +275,7 @@ function Show-EnvSummary([string]$Path) {
       "BOOTSTRAP_ROOT_ACCOUNT",
       "BOOTSTRAP_ROOT_PASSWORD",
       "API_PROVIDER_SECRET_MASTER_KEY",
+      "API_COOKIE_SECURE",
       "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL",
       "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED"
     )) {
@@ -650,11 +663,13 @@ if (-not (Test-Path ".\docker\.env")) {
   Write-Host "Created docker/.env from docker/.env.example."
   Ensure-DatabaseModeDefault ".\docker\.env"
   Ensure-OfficialPluginSignatureRequired
+  Ensure-CookieSecureDefault
   $PromptConfigValues = $true
 } else {
   Write-Host "Using existing docker/.env."
   Ensure-DatabaseModeDefault ".\docker\.env"
   Ensure-OfficialPluginSignatureRequired
+  Ensure-CookieSecureDefault
   if ($ShouldPrompt) {
     Show-EnvSummary ".\docker\.env"
     $UpdateEnv = Prompt-YesNo "Update current docker/.env configuration?" $false
@@ -685,6 +700,11 @@ if ($ProviderSecret) {
 if ($WebPort) {
   Set-EnvValue "WEB_PORT" $WebPort ".\docker\.env"
   Write-Host "Updated WEB_PORT in docker/.env."
+}
+if ($CookieSecure) {
+  $CookieSecure = Convert-ToTrueFalseEnvValue "API_COOKIE_SECURE" $CookieSecure
+  Set-EnvValue "API_COOKIE_SECURE" $CookieSecure ".\docker\.env"
+  Write-Host "Updated API_COOKIE_SECURE in docker/.env."
 }
 if ($DatabaseMode) {
   $DatabaseMode = Convert-ToDatabaseMode "DATABASE_MODE" $DatabaseMode
@@ -733,6 +753,7 @@ if ($ShouldPrompt -and $PromptConfigValues) {
   Prompt-EnvValue "BOOTSTRAP_ROOT_PASSWORD" "Root password"
   Prompt-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" "API provider secret master key"
   Prompt-EnvValue "WEB_PORT" "Web port"
+  Prompt-TrueFalseEnvValue "API_COOKIE_SECURE" "Use secure session cookies (true/false)"
   Prompt-OfficialPluginGithubProxyUrl
   Prompt-TrueFalseEnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" "Require official plugin signatures (true/false)"
 }

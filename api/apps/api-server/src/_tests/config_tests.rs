@@ -263,6 +263,30 @@ fn api_config_marks_session_cookie_secure_in_production() {
 }
 
 #[test]
+fn api_config_allows_disabling_secure_session_cookie_for_plain_http_deployments() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_ENV", "production"),
+        ("API_ALLOWED_ORIGINS", "http://192.168.31.25:3200"),
+        ("API_COOKIE_SECURE", "false"),
+        (
+            "API_PROVIDER_SECRET_MASTER_KEY",
+            "strong-provider-secret-master-key",
+        ),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .unwrap();
+
+    assert!(!config.cookie_secure);
+}
+
+#[test]
 fn api_config_leaves_session_cookie_insecure_by_default_for_development() {
     let config = ApiConfig::from_env_map(&base_env_without_ephemeral_backend()).unwrap();
 
