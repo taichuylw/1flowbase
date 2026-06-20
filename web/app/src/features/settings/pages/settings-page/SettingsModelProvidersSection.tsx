@@ -137,6 +137,8 @@ export function SettingsModelProvidersSection({
     familyDeleteMutation,
     officialInstallMutation,
     uploadMutation,
+    refreshCurrentNodeArtifactMutation,
+    installCurrentNodeArtifactMutation,
     versionMutation
   } = useModelProviderMutations({
     csrfToken,
@@ -168,6 +170,8 @@ export function SettingsModelProvidersSection({
     getErrorMessage(familyDeleteMutation.error) ??
     getErrorMessage(officialInstallMutation.error) ??
     getErrorMessage(versionMutation.error) ??
+    getErrorMessage(refreshCurrentNodeArtifactMutation.error) ??
+    getErrorMessage(installCurrentNodeArtifactMutation.error) ??
     getErrorMessage(pluginTaskQuery.error);
   const uploadErrorMessage =
     uploadValidationMessage ?? getErrorMessage(uploadMutation.error);
@@ -211,6 +215,16 @@ export function SettingsModelProvidersSection({
                     ? versionMutation.variables.providerCode
                     : null
                 }
+                refreshingArtifactInstallationId={
+                  refreshCurrentNodeArtifactMutation.isPending
+                    ? (refreshCurrentNodeArtifactMutation.variables ?? null)
+                    : null
+                }
+                installingArtifactInstallationId={
+                  installCurrentNodeArtifactMutation.isPending
+                    ? (installCurrentNodeArtifactMutation.variables ?? null)
+                    : null
+                }
                 onViewInstances={(entry) => {
                   setInstanceModalState({
                     providerCode: entry.provider_code,
@@ -235,6 +249,16 @@ export function SettingsModelProvidersSection({
                     providerCode: entry.provider_code,
                     installationId
                   });
+                }}
+                onRefreshCurrentNodeArtifact={(entry) => {
+                  refreshCurrentNodeArtifactMutation.mutate(
+                    entry.current_installation_id
+                  );
+                }}
+                onInstallCurrentNodeArtifact={(entry) => {
+                  installCurrentNodeArtifactMutation.mutate(
+                    entry.current_installation_id
+                  );
                 }}
                 onDelete={(entry) => {
                   void modal.confirm({

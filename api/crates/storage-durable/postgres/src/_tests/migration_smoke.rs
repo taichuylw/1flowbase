@@ -280,6 +280,81 @@ async fn migration_smoke_creates_plugin_trust_columns_and_constraints() {
 }
 
 #[tokio::test]
+async fn migration_smoke_creates_plugin_artifact_instances_table() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let schema: String = sqlx::query_scalar("select current_schema()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let columns: Vec<String> = sqlx::query_scalar(
+        r#"
+        select column_name
+        from information_schema.columns
+        where table_schema = $1
+          and table_name = 'plugin_artifact_instances'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let primary_key_columns: Vec<String> = sqlx::query_scalar(
+        r#"
+        select a.attname
+        from pg_constraint c
+        join pg_class r on r.oid = c.conrelid
+        join pg_namespace n on n.oid = r.relnamespace
+        join unnest(c.conkey) with ordinality as cols(attnum, ord) on true
+        join pg_attribute a on a.attrelid = r.oid and a.attnum = cols.attnum
+        where n.nspname = $1
+          and r.relname = 'plugin_artifact_instances'
+          and c.contype = 'p'
+        order by cols.ord
+        "#,
+    )
+    .bind(&schema)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let artifact_status_check: String = sqlx::query_scalar(
+        r#"
+        select pg_get_constraintdef(c.oid)
+        from pg_constraint c
+        join pg_class r on r.oid = c.conrelid
+        join pg_namespace n on n.oid = r.relnamespace
+        where n.nspname = $1
+          and r.relname = 'plugin_artifact_instances'
+          and c.conname = 'plugin_artifact_instances_artifact_status_check'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(columns.contains(&"node_id".to_string()));
+    assert!(columns.contains(&"installation_id".to_string()));
+    assert!(columns.contains(&"local_version".to_string()));
+    assert!(columns.contains(&"local_checksum".to_string()));
+    assert!(columns.contains(&"installed_path".to_string()));
+    assert!(columns.contains(&"artifact_status".to_string()));
+    assert!(columns.contains(&"runtime_status".to_string()));
+    assert!(columns.contains(&"checked_at".to_string()));
+    assert!(columns.contains(&"last_error".to_string()));
+    assert_eq!(
+        primary_key_columns,
+        vec!["node_id".to_string(), "installation_id".to_string()]
+    );
+    assert!(artifact_status_check.contains("missing"));
+    assert!(artifact_status_check.contains("ready"));
+    assert!(artifact_status_check.contains("outdated"));
+    assert!(artifact_status_check.contains("mismatched"));
+    assert!(artifact_status_check.contains("corrupted"));
+    assert!(artifact_status_check.contains("load_failed"));
+}
+
+#[tokio::test]
 async fn migration_smoke_creates_external_bridge_tables() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

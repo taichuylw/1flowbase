@@ -722,6 +722,17 @@ describe('settings api wrappers', () => {
           model_discovery_mode: 'hybrid',
           current_installation_id: 'installation-1',
           current_version: '0.3.7',
+          current_local_artifact: {
+            node_id: 'test-node',
+            installation_id: 'installation-1',
+            local_version: '0.3.7',
+            local_checksum: null,
+            installed_path: '/tmp/plugins/openai_compatible/0.3.7',
+            artifact_status: 'ready',
+            runtime_status: 'inactive',
+            checked_at: '2026-04-20T10:00:00Z',
+            last_error: null
+          },
           latest_version: '0.3.7',
           has_update: false,
           installed_versions: []

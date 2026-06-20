@@ -115,6 +115,8 @@ const pluginsApi = vi.hoisted(() => ({
   uploadSettingsPluginPackage: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -403,8 +405,8 @@ describe('SettingsPage', () => {
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
-page: { limit: 20, next_cursor: null },
-entries: []
+      page: { limit: 20, next_cursor: null },
+      entries: []
     });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {

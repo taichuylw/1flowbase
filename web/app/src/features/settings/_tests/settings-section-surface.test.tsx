@@ -64,6 +64,8 @@ const pluginsApi = vi.hoisted(() => ({
   uploadSettingsPluginPackage: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -197,8 +199,8 @@ describe('settings section surface', () => {
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
-page: { limit: 20, next_cursor: null },
-entries: []
+      page: { limit: 20, next_cursor: null },
+      entries: []
     });
     pluginsApi.fetchSettingsPluginTask.mockResolvedValue({
       id: 'task-1',
@@ -281,9 +283,9 @@ entries: []
 
       if (visibleText) {
         await waitFor(() => {
-          expect(within(surface).getAllByText(visibleText).length).toBeGreaterThan(
-            0
-          );
+          expect(
+            within(surface).getAllByText(visibleText).length
+          ).toBeGreaterThan(0);
         });
       }
     }

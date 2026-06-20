@@ -741,6 +741,54 @@ impl PluginRepository for InMemoryOrchestrationRuntimeRepository {
         Ok(installation.clone())
     }
 
+    async fn upsert_artifact_instance(
+        &self,
+        input: &crate::ports::UpsertPluginArtifactInstanceInput,
+    ) -> Result<domain::PluginArtifactInstanceRecord> {
+        let record = domain::PluginArtifactInstanceRecord {
+            node_id: input.node_id.clone(),
+            installation_id: input.installation_id,
+            local_version: input.local_version.clone(),
+            local_checksum: input.local_checksum.clone(),
+            installed_path: input.installed_path.clone(),
+            artifact_status: input.artifact_status,
+            runtime_status: input.runtime_status,
+            checked_at: input.checked_at,
+            last_error: input.last_error.clone(),
+        };
+        let mut inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        inner.artifact_instances_by_key.insert(
+            (record.node_id.clone(), record.installation_id),
+            record.clone(),
+        );
+        Ok(record)
+    }
+
+    async fn get_artifact_instance(
+        &self,
+        node_id: &str,
+        installation_id: Uuid,
+    ) -> Result<Option<domain::PluginArtifactInstanceRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .artifact_instances_by_key
+            .get(&(node_id.to_string(), installation_id))
+            .cloned())
+    }
+
+    async fn list_artifact_instances(
+        &self,
+        node_id: &str,
+    ) -> Result<Vec<domain::PluginArtifactInstanceRecord>> {
+        let inner = self.inner.lock().expect("runtime repo mutex poisoned");
+        Ok(inner
+            .artifact_instances_by_key
+            .values()
+            .filter(|record| record.node_id == node_id)
+            .cloned()
+            .collect())
+    }
+
     async fn create_assignment(
         &self,
         _input: &crate::ports::CreatePluginAssignmentInput,

@@ -5,9 +5,11 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::{
+    errors::ControlPlaneError,
     i18n::RequestedLocales,
     plugin_management::{
         OfficialPluginCatalogFilter, PluginCatalogFilter, PluginManagementService,
+        RefreshCurrentNodePluginArtifactCommand, RefreshPluginPackageCatalogProjectionCommand,
     },
     ports::{
         CreatePluginAssignmentInput, DownloadedOfficialPluginPackage,
@@ -218,6 +220,108 @@ async fn plugin_management_service_list_catalog_returns_missing_projection_witho
     assert_eq!(catalog.entries[0].model_discovery_mode, "unknown");
     assert!(catalog.entries[0].help_url.is_none());
     assert_eq!(repository.artifact_snapshot_update_count().await, 0);
+}
+
+#[tokio::test]
+async fn plugin_management_service_refresh_catalog_projection_uses_current_node_artifact() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let root_a = std::env::temp_dir().join(format!("plugin-projection-node-a-{}", Uuid::now_v7()));
+    let root_b = std::env::temp_dir().join(format!("plugin-projection-node-b-{}", Uuid::now_v7()));
+    let service_b = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &root_b,
+    )
+    .with_node_id("node-b");
+    let installation_id = seed_test_installation(
+        &repository,
+        &root_a,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+
+    let error = service_b
+        .refresh_catalog_projection(RefreshPluginPackageCatalogProjectionCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict("plugin_artifact_missing"))
+    ));
+}
+
+#[tokio::test]
+async fn plugin_management_service_list_families_reads_projection_instead_of_local_package() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-family-projection-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id,
+            workspace_id: repository.actor.current_workspace_id,
+            provider_code: "fixture_provider".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+    service
+        .refresh_current_node_artifact(RefreshCurrentNodePluginArtifactCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+        })
+        .await
+        .unwrap();
+    let installation = repository
+        .get_installation(installation_id)
+        .await
+        .unwrap()
+        .expect("installation should exist");
+    fs::remove_dir_all(&installation.installed_path).unwrap();
+
+    let families = service
+        .list_families(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(families.entries.len(), 1);
+    assert!(families.i18n_catalog["plugin.fixture_provider"].contains_key("en_US"));
+    assert_eq!(
+        families.entries[0].default_base_url.as_deref(),
+        Some("https://api.example.com")
+    );
 }
 
 #[tokio::test]

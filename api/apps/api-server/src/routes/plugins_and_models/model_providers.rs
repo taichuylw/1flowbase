@@ -380,6 +380,10 @@ fn service(state: &ApiState) -> ModelProviderService<MainDurableStore, ApiProvid
         ApiProviderRuntime::new(state.provider_runtime.clone()),
         state.provider_secret_master_key.clone(),
     )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
+    )
 }
 
 fn format_time(value: time::OffsetDateTime) -> String {

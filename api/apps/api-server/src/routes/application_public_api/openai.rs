@@ -603,6 +603,10 @@ async fn resume_openai_tool_call(
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
+    )
     .with_file_storage_registry(state.file_storage_registry.clone())
     .with_runtime_event_stream(state.runtime_event_stream.clone());
     let result =

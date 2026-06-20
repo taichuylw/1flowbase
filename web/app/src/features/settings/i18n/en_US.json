@@ -594,6 +594,19 @@
     "view_entry": "View entry",
     "no_expiry": "No expiry",
     "currently_provider_catalog_available": "There is currently no provider catalog available.",
-    "read_only": "read only"
+    "read_only": "read only",
+    "current_node_ready": "Current node ready",
+    "current_node_missing": "Current node missing",
+    "current_node_outdated": "Current node update required",
+    "current_node_mismatched": "Current node mismatched",
+    "current_node_corrupted": "Current node corrupted",
+    "current_node_load_failed": "Current node load failed",
+    "refresh_current_node": "Refresh current node",
+    "install_to_current_node": "Install to current node",
+    "update_current_node": "Update current node",
+    "expected_version": "Expected version: {{value1}}",
+    "current_node_version": "Current node version: {{value1}}",
+    "checked_at": "Checked at: {{value1}}",
+    "current_node_error": "Current node error: {{value1}}"
   }
 }

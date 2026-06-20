@@ -36,7 +36,9 @@ const pluginsApi = vi.hoisted(() => ({
   settingsOfficialPluginsQueryKey: ['settings', 'plugins', 'official-catalog'],
   settingsPluginFamiliesQueryKey: ['settings', 'plugins', 'families'],
   deleteSettingsPluginFamily: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
   installSettingsOfficialPlugin: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   uploadSettingsPluginPackage: vi.fn()

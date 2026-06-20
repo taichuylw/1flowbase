@@ -144,6 +144,17 @@ const styleBoundaryPluginFamiliesCatalog = {
     model_discovery_mode: entry.model_discovery_mode,
     current_installation_id: entry.installation_id,
     current_version: entry.plugin_version,
+    current_local_artifact: {
+      node_id: 'style-boundary-node',
+      installation_id: entry.installation_id,
+      local_version: entry.plugin_version,
+      local_checksum: null,
+      installed_path: `/tmp/1flowbase/plugins/${entry.provider_code}/${entry.plugin_version}`,
+      artifact_status: 'ready',
+      runtime_status: 'inactive',
+      checked_at: '2026-04-20T10:00:00Z',
+      last_error: null
+    },
     latest_version: entry.plugin_version,
     has_update: false,
     installed_versions: [
@@ -152,6 +163,19 @@ const styleBoundaryPluginFamiliesCatalog = {
         plugin_version: entry.plugin_version,
         source_kind: 'official_registry',
         trust_level: 'verified_official',
+        desired_state: 'active',
+        availability_status: 'available',
+        local_artifact: {
+          node_id: 'style-boundary-node',
+          installation_id: entry.installation_id,
+          local_version: entry.plugin_version,
+          local_checksum: null,
+          installed_path: `/tmp/1flowbase/plugins/${entry.provider_code}/${entry.plugin_version}`,
+          artifact_status: 'ready',
+          runtime_status: 'inactive',
+          checked_at: '2026-04-20T10:00:00Z',
+          last_error: null
+        },
         created_at: '2026-04-20T10:00:00Z',
         is_current: true
       }
@@ -401,7 +425,8 @@ export function seedStyleBoundaryTemplateFetch() {
             {
               workflow_id: 'boundary-template',
               schema_version: '1flowbase.application-template/v1',
-              application: createStyleBoundaryOfficialTemplatePackage().application,
+              application:
+                createStyleBoundaryOfficialTemplatePackage().application,
               template_url:
                 'https://example.com/agent-flow/workflows/boundary-template/template.json',
               template_sha256: 'sha256:boundary-template',

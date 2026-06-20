@@ -164,6 +164,10 @@ fn service(state: &ApiState) -> DataSourceService<MainDurableStore, ApiProviderR
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
     )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
+    )
 }
 
 fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {

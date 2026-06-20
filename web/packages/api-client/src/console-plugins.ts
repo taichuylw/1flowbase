@@ -9,6 +9,18 @@ export interface ConsolePluginCatalogFilter {
   limit?: number;
 }
 
+export interface ConsolePluginArtifactInstance {
+  node_id: string;
+  installation_id: string;
+  local_version: string | null;
+  local_checksum: string | null;
+  installed_path: string | null;
+  artifact_status: string;
+  runtime_status: string;
+  checked_at: string;
+  last_error: string | null;
+}
+
 export interface ConsolePluginInstallation {
   id: string;
   provider_code: string;
@@ -24,11 +36,15 @@ export interface ConsolePluginInstallation {
   artifact_status: string;
   runtime_status: string;
   availability_status: string;
+  package_path?: string | null;
+  installed_path?: string;
   checksum: string | null;
+  manifest_fingerprint?: string | null;
   signature_status: string | null;
   signature_algorithm: string | null;
   signing_key_id: string | null;
   last_load_error: string | null;
+  local_artifact?: ConsolePluginArtifactInstance | null;
   metadata_json: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -36,6 +52,7 @@ export interface ConsolePluginInstallation {
 
 export interface ConsolePluginCatalogEntry {
   installation: ConsolePluginInstallation;
+  local_artifact: ConsolePluginArtifactInstance;
   plugin_type: string;
   namespace: string;
   label_key: string;
@@ -105,6 +122,7 @@ export interface ConsolePluginInstalledVersion {
   trust_level: string;
   desired_state: string;
   availability_status: string;
+  local_artifact: ConsolePluginArtifactInstance;
   created_at: string;
   is_current: boolean;
 }
@@ -123,6 +141,7 @@ export interface ConsolePluginFamilyEntry {
   model_discovery_mode: string;
   current_installation_id: string;
   current_version: string;
+  current_local_artifact: ConsolePluginArtifactInstance;
   latest_version: string | null;
   has_update: boolean;
   installed_versions: ConsolePluginInstalledVersion[];
@@ -529,6 +548,32 @@ export function assignConsolePlugin(
 ) {
   return apiFetch<ConsolePluginTask>({
     path: `/api/console/plugins/${installationId}/assign`,
+    method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function refreshConsolePluginCurrentNodeArtifact(
+  installationId: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsolePluginArtifactInstance>({
+    path: `/api/console/plugins/${installationId}/artifact/refresh`,
+    method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function installConsolePluginCurrentNodeArtifact(
+  installationId: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsolePluginArtifactInstance>({
+    path: `/api/console/plugins/${installationId}/artifact/install-current-node`,
     method: 'POST',
     csrfToken,
     baseUrl

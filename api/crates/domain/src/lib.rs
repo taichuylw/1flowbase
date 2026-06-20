@@ -65,10 +65,11 @@ pub use model_provider::{
     ModelProviderCatalogSourceRecord, ModelProviderConfiguredModel, ModelProviderDiscoveryMode,
     ModelProviderInstanceRecord, ModelProviderInstanceStatus, ModelProviderMainInstanceRecord,
     ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
-    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
-    PluginTaskStatus, PluginVerificationStatus,
+    PluginArtifactInstanceRecord, PluginArtifactInstanceStatus, PluginArtifactStatus,
+    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginPackageCatalogProjectionRecord, PluginPackageCatalogProjectionStatus,
+    PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
+    PluginVerificationStatus,
 };
 pub use modeling::{
     ApiExposureReadiness, ApiExposureStatus, DataModelAdvisorFinding, DataModelAdvisorSeverity,

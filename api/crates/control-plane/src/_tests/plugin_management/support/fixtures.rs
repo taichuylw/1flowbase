@@ -687,7 +687,10 @@ pub(crate) async fn seed_test_installation(
     plugin_version: &str,
     desired_state: PluginDesiredState,
 ) -> Uuid {
-    let package_root = install_root.join(format!("{provider_code}-{plugin_version}"));
+    let package_root = install_root
+        .join("installed")
+        .join(provider_code)
+        .join(plugin_version);
     fs::create_dir_all(package_root.join("provider")).unwrap();
     fs::create_dir_all(package_root.join("bin")).unwrap();
     fs::create_dir_all(package_root.join("models/llm")).unwrap();
@@ -728,6 +731,21 @@ capabilities:
     fs::write(
         package_root.join("i18n/en_US.json"),
         r#"{ "plugin": { "label": "Fixture Provider" } }"#,
+    )
+    .unwrap();
+    let manifest_fingerprint =
+        plugin_framework::compute_manifest_fingerprint(&package_root.join("manifest.yaml"))
+            .await
+            .unwrap();
+    fs::write(
+        package_root.join(".1flowbase-artifact.json"),
+        serde_json::to_vec_pretty(&json!({
+            "plugin_id": format!("{provider_code}@{plugin_version}"),
+            "version": plugin_version,
+            "checksum": null,
+            "manifest_fingerprint": manifest_fingerprint,
+        }))
+        .unwrap(),
     )
     .unwrap();
 

@@ -6,7 +6,8 @@ use control_plane::{
         CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository,
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput,
-        UpsertPluginInstallationInput, UpsertPluginPackageCatalogProjectionInput,
+        UpsertPluginArtifactInstanceInput, UpsertPluginInstallationInput,
+        UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use sqlx::Row;
@@ -14,8 +15,8 @@ use uuid::Uuid;
 
 use crate::{
     mappers::plugin_mapper::{
-        PgPluginMapper, StoredPluginAssignmentRow, StoredPluginInstallationRow,
-        StoredPluginPackageCatalogProjectionRow, StoredPluginTaskRow,
+        PgPluginMapper, StoredPluginArtifactInstanceRow, StoredPluginAssignmentRow,
+        StoredPluginInstallationRow, StoredPluginPackageCatalogProjectionRow, StoredPluginTaskRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -59,6 +60,22 @@ fn map_assignment(row: sqlx::postgres::PgRow) -> Result<domain::PluginAssignment
         provider_code: row.get("provider_code"),
         assigned_by: row.get("assigned_by"),
         created_at: row.get("created_at"),
+    })
+}
+
+fn map_artifact_instance(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::PluginArtifactInstanceRecord> {
+    PgPluginMapper::to_artifact_instance_record(StoredPluginArtifactInstanceRow {
+        node_id: row.get("node_id"),
+        installation_id: row.get("installation_id"),
+        local_version: row.get("local_version"),
+        local_checksum: row.get("local_checksum"),
+        installed_path: row.get("installed_path"),
+        artifact_status: row.get("artifact_status"),
+        runtime_status: row.get("runtime_status"),
+        checked_at: row.get("checked_at"),
+        last_error: row.get("last_error"),
     })
 }
 
@@ -626,6 +643,116 @@ impl PluginRepository for PgControlPlaneStore {
             Some(row) => map_installation(row),
             None => bail!(ControlPlaneError::NotFound("plugin_installation")),
         }
+    }
+
+    async fn upsert_artifact_instance(
+        &self,
+        input: &UpsertPluginArtifactInstanceInput,
+    ) -> Result<domain::PluginArtifactInstanceRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into plugin_artifact_instances (
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            on conflict (node_id, installation_id) do update
+            set
+                local_version = excluded.local_version,
+                local_checksum = excluded.local_checksum,
+                installed_path = excluded.installed_path,
+                artifact_status = excluded.artifact_status,
+                runtime_status = excluded.runtime_status,
+                checked_at = excluded.checked_at,
+                last_error = excluded.last_error
+            returning
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            "#,
+        )
+        .bind(&input.node_id)
+        .bind(input.installation_id)
+        .bind(input.local_version.as_deref())
+        .bind(input.local_checksum.as_deref())
+        .bind(input.installed_path.as_deref())
+        .bind(input.artifact_status.as_str())
+        .bind(input.runtime_status.as_str())
+        .bind(input.checked_at)
+        .bind(input.last_error.as_deref())
+        .fetch_one(self.pool())
+        .await?;
+
+        map_artifact_instance(row)
+    }
+
+    async fn get_artifact_instance(
+        &self,
+        node_id: &str,
+        installation_id: Uuid,
+    ) -> Result<Option<domain::PluginArtifactInstanceRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            from plugin_artifact_instances
+            where node_id = $1 and installation_id = $2
+            "#,
+        )
+        .bind(node_id)
+        .bind(installation_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_artifact_instance).transpose()
+    }
+
+    async fn list_artifact_instances(
+        &self,
+        node_id: &str,
+    ) -> Result<Vec<domain::PluginArtifactInstanceRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            from plugin_artifact_instances
+            where node_id = $1
+            order by checked_at desc, installation_id desc
+            "#,
+        )
+        .bind(node_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_artifact_instance).collect()
     }
 
     async fn create_assignment(

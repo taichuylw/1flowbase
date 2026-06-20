@@ -317,6 +317,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
                 official_agent_flow_template_cache,
             ),
         ),
+        api_node_id: config.api_node_id.clone(),
         provider_install_root: config.provider_install_root.clone(),
         provider_secret_master_key: config.provider_secret_master_key.clone(),
         host_extension_dropin_root: config.host_extension_dropin_root.clone(),
@@ -336,6 +337,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         state.official_plugin_source.clone(),
         state.provider_install_root.clone(),
     )
+    .with_node_id(state.api_node_id.clone())
     .with_allow_uploaded_host_extensions(state.allow_uploaded_host_extensions)
     .reconcile_all_installations()
     .await?;

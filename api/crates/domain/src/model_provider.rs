@@ -90,6 +90,34 @@ impl PluginArtifactStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum PluginArtifactInstanceStatus {
+    Missing,
+    Ready,
+    Outdated,
+    Mismatched,
+    Corrupted,
+    LoadFailed,
+}
+
+impl PluginArtifactInstanceStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::Ready => "ready",
+            Self::Outdated => "outdated",
+            Self::Mismatched => "mismatched",
+            Self::Corrupted => "corrupted",
+            Self::LoadFailed => "load_failed",
+        }
+    }
+
+    pub fn is_ready(self) -> bool {
+        matches!(self, Self::Ready)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PluginRuntimeStatus {
     Inactive,
     Active,
@@ -189,6 +217,19 @@ pub struct PluginInstallationRecord {
     pub created_by: Uuid,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginArtifactInstanceRecord {
+    pub node_id: String,
+    pub installation_id: Uuid,
+    pub local_version: Option<String>,
+    pub local_checksum: Option<String>,
+    pub installed_path: Option<String>,
+    pub artifact_status: PluginArtifactInstanceStatus,
+    pub runtime_status: PluginRuntimeStatus,
+    pub checked_at: OffsetDateTime,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -34,8 +34,8 @@ use crate::{
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpdateScopeDataModelGrantInput, UpsertDataSourceCatalogCacheInput,
-        UpsertDataSourceSecretInput, UpsertPluginInstallationInput,
-        UpsertPluginPackageCatalogProjectionInput,
+        UpsertDataSourceSecretInput, UpsertPluginArtifactInstanceInput,
+        UpsertPluginInstallationInput, UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use domain::{
@@ -43,10 +43,10 @@ use domain::{
     DataSourceCatalogCacheRecord, DataSourceCatalogRefreshStatus, DataSourceDefaults,
     DataSourceInstanceRecord, DataSourceInstanceStatus, DataSourcePreviewSessionRecord,
     DataSourceSecretRecord, ModelDefinitionRecord, ModelFieldRecord, PermissionDefinition,
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginPackageCatalogProjectionRecord, PluginRuntimeStatus,
-    PluginTaskRecord, PluginVerificationStatus, ScopeContext, ScopeDataModelGrantRecord,
-    UserRecord,
+    PluginArtifactInstanceRecord, PluginArtifactStatus, PluginAssignmentRecord,
+    PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginPackageCatalogProjectionRecord, PluginRuntimeStatus, PluginTaskRecord,
+    PluginVerificationStatus, ScopeContext, ScopeDataModelGrantRecord, UserRecord,
 };
 
 fn tenant_id() -> Uuid {
@@ -104,6 +104,7 @@ fn seeded_installation() -> PluginInstallationRecord {
 struct InMemoryDataSourceRepository {
     actor: ActorContext,
     installations: Arc<RwLock<HashMap<Uuid, PluginInstallationRecord>>>,
+    artifact_instances: Arc<RwLock<HashMap<(String, Uuid), PluginArtifactInstanceRecord>>>,
     assignments: Arc<RwLock<Vec<PluginAssignmentRecord>>>,
     instances: Arc<RwLock<HashMap<Uuid, DataSourceInstanceRecord>>>,
     secrets: Arc<RwLock<HashMap<Uuid, Value>>>,
@@ -134,6 +135,7 @@ impl Default for InMemoryDataSourceRepository {
                 installation.id,
                 installation,
             )]))),
+            artifact_instances: Arc::new(RwLock::new(HashMap::new())),
             assignments: Arc::new(RwLock::new(vec![assignment])),
             instances: Arc::new(RwLock::new(HashMap::new())),
             secrets: Arc::new(RwLock::new(HashMap::new())),
@@ -329,6 +331,55 @@ impl crate::ports::PluginRepository for InMemoryDataSourceRepository {
         _input: &UpdatePluginRuntimeSnapshotInput,
     ) -> Result<PluginInstallationRecord> {
         anyhow::bail!("not implemented")
+    }
+
+    async fn upsert_artifact_instance(
+        &self,
+        input: &UpsertPluginArtifactInstanceInput,
+    ) -> Result<PluginArtifactInstanceRecord> {
+        let record = PluginArtifactInstanceRecord {
+            node_id: input.node_id.clone(),
+            installation_id: input.installation_id,
+            local_version: input.local_version.clone(),
+            local_checksum: input.local_checksum.clone(),
+            installed_path: input.installed_path.clone(),
+            artifact_status: input.artifact_status,
+            runtime_status: input.runtime_status,
+            checked_at: input.checked_at,
+            last_error: input.last_error.clone(),
+        };
+        self.artifact_instances.write().await.insert(
+            (record.node_id.clone(), record.installation_id),
+            record.clone(),
+        );
+        Ok(record)
+    }
+
+    async fn get_artifact_instance(
+        &self,
+        node_id: &str,
+        installation_id: Uuid,
+    ) -> Result<Option<PluginArtifactInstanceRecord>> {
+        Ok(self
+            .artifact_instances
+            .read()
+            .await
+            .get(&(node_id.to_string(), installation_id))
+            .cloned())
+    }
+
+    async fn list_artifact_instances(
+        &self,
+        node_id: &str,
+    ) -> Result<Vec<PluginArtifactInstanceRecord>> {
+        Ok(self
+            .artifact_instances
+            .read()
+            .await
+            .values()
+            .filter(|record| record.node_id == node_id)
+            .cloned()
+            .collect())
     }
 
     async fn create_assignment(

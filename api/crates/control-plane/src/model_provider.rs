@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use plugin_framework::{
@@ -13,7 +16,7 @@ use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
     i18n::{I18nCatalog, RequestedLocales},
-    plugin_lifecycle::reconcile_installation_snapshot,
+    plugin_management::mark_current_node_plugin_runtime_status,
     ports::{
         AuthRepository, CreateModelProviderInstanceInput, CreateModelProviderPreviewSessionInput,
         ModelProviderRepository, PluginRepository, ProviderRuntimePort,
@@ -39,7 +42,8 @@ use self::{
         empty_object, ensure_installation_assigned, ensure_state_model_permission, is_empty_object,
         load_actor_context_for_user, load_provider_package, map_catalog_source,
         map_model_discovery_mode, merge_json_object, normalize_required_text,
-        split_provider_config, validate_required_fields,
+        ready_model_provider_installation, split_provider_config, validate_required_fields,
+        ModelProviderNodeArtifactContext,
     },
 };
 
@@ -215,6 +219,8 @@ pub struct ModelProviderService<R, H> {
     repository: R,
     runtime: H,
     provider_secret_master_key: String,
+    node_id: Option<String>,
+    install_root: Option<PathBuf>,
 }
 
 impl<R, H> ModelProviderService<R, H>
@@ -227,7 +233,38 @@ where
             repository,
             runtime,
             provider_secret_master_key: provider_secret_master_key.into(),
+            node_id: None,
+            install_root: None,
         }
+    }
+
+    pub fn with_node_artifact_context(
+        mut self,
+        node_id: impl Into<String>,
+        install_root: impl Into<PathBuf>,
+    ) -> Self {
+        self.node_id = Some(node_id.into());
+        self.install_root = Some(install_root.into());
+        self
+    }
+
+    fn node_artifact_context(&self) -> Option<ModelProviderNodeArtifactContext<'_>> {
+        Some(ModelProviderNodeArtifactContext {
+            node_id: self.node_id.as_deref()?,
+            install_root: self.install_root.as_deref()?,
+        })
+    }
+
+    async fn ready_installation(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<domain::PluginInstallationRecord> {
+        ready_model_provider_installation(
+            &self.repository,
+            self.node_artifact_context(),
+            installation_id,
+        )
+        .await
     }
 
     pub async fn list_catalog(
@@ -256,13 +293,9 @@ where
             let form_schema = match form_schemas.get(&instance.installation_id) {
                 Some(form_schema) => form_schema.clone(),
                 None => {
-                    let installation = self
-                        .repository
-                        .get_installation(instance.installation_id)
-                        .await?
-                        .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
-                    let package = load_provider_package(&installation.installed_path)?;
-                    let form_schema = package.provider.form_schema;
+                    let form_schema = self
+                        .instance_list_form_schema(instance.installation_id)
+                        .await?;
                     form_schemas.insert(instance.installation_id, form_schema.clone());
                     form_schema
                 }
@@ -273,6 +306,37 @@ where
             );
         }
         Ok(output)
+    }
+
+    async fn instance_list_form_schema(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<Vec<ProviderConfigField>> {
+        if let Some(node_id) = self.node_id.as_deref() {
+            let Some(artifact) = self
+                .repository
+                .get_artifact_instance(node_id, installation_id)
+                .await?
+            else {
+                return Ok(Vec::new());
+            };
+            if !artifact.artifact_status.is_ready() {
+                return Ok(Vec::new());
+            }
+            let Some(installed_path) = artifact.installed_path.as_deref() else {
+                return Ok(Vec::new());
+            };
+            return Ok(load_provider_package(installed_path)?.provider.form_schema);
+        }
+
+        let installation = self
+            .repository
+            .get_installation(installation_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        Ok(load_provider_package(&installation.installed_path)?
+            .provider
+            .form_schema)
     }
 
     pub async fn get_main_instance(
@@ -296,11 +360,7 @@ where
     ) -> Result<ModelProviderInstanceView> {
         let actor = load_actor_context_for_user(&self.repository, command.actor_user_id).await?;
         ensure_state_model_permission(&actor, "manage")?;
-        let installation = self
-            .repository
-            .get_installation(command.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let installation = self.ready_installation(command.installation_id).await?;
         ensure_installation_assigned(
             &self.repository,
             actor.current_workspace_id,
@@ -417,11 +477,7 @@ where
             .get_instance(actor.current_workspace_id, command.instance_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-        let installation = self
-            .repository
-            .get_installation(existing.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let installation = self.ready_installation(existing.installation_id).await?;
         let package = load_provider_package(&installation.installed_path)?;
 
         let (patch_public_config, patch_secret_config) =
@@ -589,8 +645,7 @@ where
             .get_instance(actor.current_workspace_id, instance_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-        let installation =
-            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        let installation = self.ready_installation(instance.installation_id).await?;
         if installation.availability_status != domain::PluginAvailabilityStatus::Available {
             return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
         }
@@ -605,7 +660,7 @@ where
         )?;
 
         let validation_result = async {
-            self.runtime.ensure_loaded(&installation).await?;
+            self.ensure_runtime_loaded(&installation).await?;
             let output = self
                 .runtime
                 .validate_provider(&installation, provider_config.clone())
@@ -753,9 +808,7 @@ where
                         .get_instance(actor.current_workspace_id, instance_id)
                         .await?
                         .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-                    let installation =
-                        reconcile_installation_snapshot(&self.repository, instance.installation_id)
-                            .await?;
+                    let installation = self.ready_installation(instance.installation_id).await?;
                     if installation.availability_status
                         != domain::PluginAvailabilityStatus::Available
                     {
@@ -794,11 +847,7 @@ where
                     let installation_id = command
                         .installation_id
                         .ok_or(ControlPlaneError::InvalidInput("installation_id"))?;
-                    let installation = self
-                        .repository
-                        .get_installation(installation_id)
-                        .await?
-                        .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+                    let installation = self.ready_installation(installation_id).await?;
                     ensure_installation_assigned(
                         &self.repository,
                         actor.current_workspace_id,
@@ -834,7 +883,7 @@ where
                 }
             };
 
-        self.runtime.ensure_loaded(&installation).await?;
+        self.ensure_runtime_loaded(&installation).await?;
         let models = self
             .runtime
             .list_models(&installation, provider_config.clone())
@@ -878,7 +927,13 @@ where
         actor_user_id: Uuid,
         instance_id: Uuid,
     ) -> Result<ModelProviderModelCatalog> {
-        options::list_models(&self.repository, actor_user_id, instance_id).await
+        options::list_models(
+            &self.repository,
+            actor_user_id,
+            instance_id,
+            self.node_artifact_context(),
+        )
+        .await
     }
 
     pub async fn refresh_models(
@@ -892,6 +947,7 @@ where
             &self.provider_secret_master_key,
             actor_user_id,
             instance_id,
+            self.node_artifact_context(),
         )
         .await
     }
@@ -907,6 +963,7 @@ where
             &self.provider_secret_master_key,
             actor_user_id,
             instance_id,
+            self.node_artifact_context(),
         )
         .await
     }
@@ -993,7 +1050,13 @@ where
         actor_user_id: Uuid,
         locales: RequestedLocales,
     ) -> Result<ModelProviderOptionsView> {
-        catalog::options(&self.repository, actor_user_id, locales).await
+        catalog::options(
+            &self.repository,
+            actor_user_id,
+            locales,
+            self.node_artifact_context(),
+        )
+        .await
     }
 
     pub async fn reveal_secret(
@@ -1008,6 +1071,7 @@ where
             actor_user_id,
             instance_id,
             key,
+            self.node_artifact_context(),
         )
         .await
     }
@@ -1024,6 +1088,53 @@ where
             instance,
         )
         .await
+    }
+
+    async fn ensure_runtime_loaded(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+    ) -> Result<()> {
+        match self.runtime.ensure_loaded(installation).await {
+            Ok(()) => {
+                self.mark_current_node_runtime_status(
+                    installation,
+                    domain::PluginRuntimeStatus::Active,
+                    None,
+                )
+                .await?;
+                Ok(())
+            }
+            Err(error) => {
+                let _ = self
+                    .mark_current_node_runtime_status(
+                        installation,
+                        domain::PluginRuntimeStatus::LoadFailed,
+                        Some(error.to_string()),
+                    )
+                    .await;
+                Err(error)
+            }
+        }
+    }
+
+    async fn mark_current_node_runtime_status(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        runtime_status: domain::PluginRuntimeStatus,
+        last_error: Option<String>,
+    ) -> Result<()> {
+        let Some(context) = self.node_artifact_context() else {
+            return Ok(());
+        };
+        mark_current_node_plugin_runtime_status(
+            &self.repository,
+            context.node_id,
+            installation,
+            runtime_status,
+            last_error,
+        )
+        .await?;
+        Ok(())
     }
 
     async fn hydrate_instance_view(

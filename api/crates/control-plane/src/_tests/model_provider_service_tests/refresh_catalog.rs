@@ -278,6 +278,62 @@ async fn model_provider_service_refresh_failure_does_not_clear_enabled_model_ids
 }
 
 #[tokio::test]
+async fn model_provider_service_refresh_models_blocks_when_current_node_artifact_missing() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let package_root =
+        std::env::temp_dir().join(format!("provider-model-refresh-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    let bootstrap_service = ModelProviderService::new(
+        repository.clone(),
+        runtime.clone(),
+        "provider-secret-master-key",
+    );
+    let created = bootstrap_service
+        .create_instance(CreateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+            display_name: "Fixture Refresh".to_string(),
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+            configured_models: Vec::new(),
+            enabled_model_ids: vec!["fixture_chat".to_string()],
+            included_in_main: None,
+            preview_token: None,
+        })
+        .await
+        .unwrap();
+    let current_node_root =
+        std::env::temp_dir().join(format!("provider-refresh-node-missing-{}", Uuid::now_v7()));
+    let service =
+        ModelProviderService::new(repository.clone(), runtime, "provider-secret-master-key")
+            .with_node_artifact_context("node-without-artifact", current_node_root);
+
+    let error = service
+        .refresh_models(repository.actor.user_id, created.instance.id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict("plugin_artifact_missing"))
+    ));
+}
+
+#[tokio::test]
 async fn list_catalog_returns_i18n_namespace_and_keys() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(

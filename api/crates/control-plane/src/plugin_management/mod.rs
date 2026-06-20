@@ -1,3 +1,4 @@
+mod artifact_instance;
 mod catalog;
 mod catalog_projection;
 mod family;
@@ -31,10 +32,9 @@ use crate::{
         is_model_provider_installation, plugin_code_from_plugin_id,
     },
     i18n::{
-        merge_i18n_catalog, plugin_namespace, trim_json_bundles, trim_provider_bundles,
-        I18nCatalog, RequestedLocales,
+        merge_i18n_catalog, plugin_namespace, trim_json_bundles, I18nCatalog, RequestedLocales,
     },
-    plugin_lifecycle::{derive_availability_status, reconcile_installation_snapshot},
+    plugin_lifecycle::derive_availability_status,
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
         FrontendBlockCatalogRegistryInput, FrontendBlockCatalogRepository,
@@ -45,11 +45,12 @@ use crate::{
         ReplaceInstallationJsDependenciesInput, ReplaceInstallationNodeContributionsInput,
         UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
         UpdatePluginTaskStatusInput, UpsertModelProviderCatalogCacheInput,
-        UpsertPluginInstallationInput,
+        UpsertPluginArtifactInstanceInput, UpsertPluginInstallationInput,
     },
     state_transition::ensure_plugin_task_transition,
 };
 
+pub use artifact_instance::*;
 pub use catalog::*;
 pub use catalog_projection::*;
 pub use family::*;
@@ -61,6 +62,7 @@ pub struct PluginManagementService<R, H> {
     runtime: H,
     official_source: Arc<dyn OfficialPluginSourcePort>,
     install_root: PathBuf,
+    node_id: String,
     allow_uploaded_host_extensions: bool,
 }
 
@@ -85,12 +87,30 @@ where
             runtime,
             official_source,
             install_root: install_root.into(),
+            node_id: String::new(),
             allow_uploaded_host_extensions: true,
         }
+        .with_default_node_id()
     }
 
     pub fn with_allow_uploaded_host_extensions(mut self, allow: bool) -> Self {
         self.allow_uploaded_host_extensions = allow;
+        self
+    }
+
+    fn with_default_node_id(mut self) -> Self {
+        if self.node_id.is_empty() {
+            self.node_id = format!("local:{}", self.install_root.display());
+        }
+        self
+    }
+
+    pub fn with_node_id(mut self, node_id: impl Into<String>) -> Self {
+        let node_id = node_id.into();
+        let node_id = node_id.trim();
+        if !node_id.is_empty() {
+            self.node_id = node_id.to_string();
+        }
         self
     }
 }
