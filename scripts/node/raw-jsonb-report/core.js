@@ -112,18 +112,41 @@ function columnSourceForLine({ line, table, column }) {
   return null;
 }
 
-function classifyColumnSource({ contextLines, table, column }) {
-  let sawConstantProjection = false;
-  for (const line of contextLines) {
-    const source = columnSourceForLine({ line, table, column });
-    if (source === 'raw_column') {
+function tableAliasesFromContext({ context, table }) {
+  const aliases = new Set([table]);
+  const pattern = new RegExp(
+    `\\b(?:from|join)\\s+${escapeRegExp(table)}\\s+(?:as\\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\\b`,
+    'giu'
+  );
+  let match = pattern.exec(context);
+  while (match) {
+    const alias = match[1].toLowerCase();
+    if (!['where', 'on', 'using', 'order', 'group', 'limit'].includes(alias)) {
+      aliases.add(alias);
+    }
+    match = pattern.exec(context);
+  }
+  return aliases;
+}
+
+function classifyColumnSource({ line, table, column, context }) {
+  const aliases = tableAliasesFromContext({ context, table });
+  const escapedColumn = escapeRegExp(column);
+  const source = columnSourceForLine({ line, table, column });
+  if (source === 'raw_column') {
+    return 'raw_column';
+  }
+  if (source === 'constant_projection') {
+    return 'constant_projection';
+  }
+  const normalized = line.toLowerCase();
+  for (const alias of aliases) {
+    const aliasColumn = new RegExp(`\\b${escapeRegExp(alias)}\\s*\\.\\s*${escapedColumn}\\b`, 'iu');
+    if (aliasColumn.test(normalized)) {
       return 'raw_column';
     }
-    if (source === 'constant_projection') {
-      sawConstantProjection = true;
-    }
   }
-  return sawConstantProjection ? 'constant_projection' : 'not_referenced';
+  return 'not_referenced';
 }
 
 function readBoundaryForContext({ functionName, context }) {
@@ -141,6 +164,9 @@ function readBoundaryForContext({ functionName, context }) {
     || name.includes('_children')
     || name.includes('_roots');
 
+  if (name.includes('stitched_trace')) {
+    return 'detail';
+  }
   if (hasApplicationAndRunId || hasTraceNodeId || /\b(detail|content|fetch|get_latest)\b/u.test(name)) {
     return isPageOrList && (hasFlowRunScope || hasNodeRunScope) ? 'run_scope' : 'detail';
   }
@@ -160,7 +186,7 @@ function collectFieldEntrypoints({
   sourceSearchDirs = DEFAULT_SOURCE_SEARCH_DIRS,
   maxEvidence = DEFAULT_MAX_EVIDENCE,
 }) {
-  const matches = [];
+  const candidates = [];
   const seen = new Set();
   const tablePattern = new RegExp(`\\b${escapeRegExp(table)}\\b`, 'u');
   const columnPattern = new RegExp(`\\b${escapeRegExp(column)}\\b`, 'u');
@@ -185,7 +211,7 @@ function collectFieldEntrypoints({
 
         const functionName = nearestFunctionName(lines, lineIndex);
         const operation = queryOperation(context);
-        const columnSource = classifyColumnSource({ contextLines, table, column });
+        const columnSource = classifyColumnSource({ line, table, column, context });
         const key = [
           toRepoRelative(repoRoot, filePath),
           functionName || 'unknown',
@@ -198,7 +224,7 @@ function collectFieldEntrypoints({
         }
         seen.add(key);
 
-        matches.push({
+        candidates.push({
           file: toRepoRelative(repoRoot, filePath),
           line: lineIndex + 1,
           functionName,
@@ -209,14 +235,51 @@ function collectFieldEntrypoints({
           columnSource,
           snippet: line.trim().slice(0, 180),
         });
-        if (matches.length >= maxEvidence) {
-          return matches;
-        }
       }
     }
   }
 
-  return matches;
+  const priority = (entry) => {
+    if (entry.operation === 'read' && entry.columnSource === 'raw_column') {
+      return 0;
+    }
+    if (entry.operation === 'read') {
+      return 1;
+    }
+    if (entry.operation === 'write') {
+      return 2;
+    }
+    return 3;
+  };
+  const sqlEvidenceRank = (entry) => (
+    /\b(sqlx::query|select|from|join|returning|insert\s+into|update|delete\s+from)\b/iu
+      .test(entry.snippet)
+      ? 0
+      : 1
+  );
+  const readerFunctionRank = (entry) => (
+    /^(list|get|fetch)_/u.test(entry.functionName || '') ? 0 : 1
+  );
+  const columnSourceRank = (entry) => {
+    if (entry.columnSource === 'raw_column') {
+      return 0;
+    }
+    if (entry.columnSource === 'constant_projection') {
+      return 1;
+    }
+    return 2;
+  };
+
+  return candidates
+    .sort((left, right) => (
+      priority(left) - priority(right)
+        || readerFunctionRank(left) - readerFunctionRank(right)
+        || columnSourceRank(left) - columnSourceRank(right)
+        || sqlEvidenceRank(left) - sqlEvidenceRank(right)
+        || left.file.localeCompare(right.file)
+        || left.line - right.line
+    ))
+    .slice(0, maxEvidence);
 }
 
 function applyManualEntrypoints(entrypoints, spec) {

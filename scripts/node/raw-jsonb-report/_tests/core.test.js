@@ -209,6 +209,116 @@ test('collectRawJsonbReport treats constant projections as summary reads instead
   assert.equal(report.fields[0].appearsInListInterface, false);
 });
 
+test('collectRawJsonbReport recognizes table aliases when scanning raw list reads', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table flow_runs (
+      id uuid primary key,
+      application_id uuid not null,
+      input_payload jsonb not null default '{}'::jsonb,
+      output_payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now()
+    );
+  `, `
+    async fn list_application_conversation_runs_page() {
+      sqlx::query("
+        select
+          prior.id,
+          prior.input_payload,
+          prior.output_payload,
+          prior.created_at
+        from flow_runs prior
+        where prior.application_id = $1
+        order by prior.created_at asc
+      ");
+    }
+  `);
+
+  const report = collectRawJsonbReport({
+    repoRoot,
+    config: {
+      sourceSearchDirs: ['api/crates/storage-durable/postgres/src'],
+      fields: [
+        {
+          table: 'flow_runs',
+          column: 'input_payload',
+          purpose: 'flow run input truth',
+          payloadKind: 'raw',
+          readContract: 'detail_or_run_scope',
+          listPolicy: 'forbidden_raw',
+          summaryOrPreview: 'run summary title/query fields',
+          protectedBy: ['application_id', 'flow_run_id'],
+        },
+      ],
+    },
+  });
+
+  assert.equal(report.status, 'warning');
+  assert.equal(report.summary.listRawRisks, 1);
+  assert.equal(report.fields[0].readEntrypoints[0].columnSource, 'raw_column');
+  assert.equal(report.fields[0].findings[0].rule, 'raw-jsonb-list-read');
+});
+
+test('collectRawJsonbReport keeps storage SQL reads when non-SQL references exceed max evidence', () => {
+  const noisyReferences = Array.from({ length: 12 }, (_, index) => `
+    fn api_payload_reference_${index}() {
+      let _field = "input_payload";
+      let _table = "node_runs";
+    }
+  `).join('\n');
+  const repoRoot = createRepoWithMigration(`
+    create table node_runs (
+      id uuid primary key,
+      flow_run_id uuid not null,
+      input_payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now()
+    );
+  `, `
+    ${noisyReferences}
+
+    async fn list_node_runs_for_flow_run() {
+      sqlx::query("
+        select
+          id,
+          flow_run_id,
+          input_payload,
+          created_at
+        from node_runs
+        where flow_run_id = $1
+      ");
+    }
+  `);
+
+  const report = collectRawJsonbReport({
+    repoRoot,
+    maxEvidence: 4,
+    config: {
+      sourceSearchDirs: ['api/crates/storage-durable/postgres/src'],
+      fields: [
+        {
+          table: 'node_runs',
+          column: 'input_payload',
+          purpose: 'node input truth',
+          payloadKind: 'raw',
+          readContract: 'detail_or_run_scope',
+          listPolicy: 'forbidden_raw',
+          summaryOrPreview: 'trace node summary metadata',
+          protectedBy: ['flow_run_id', 'node_run_id'],
+        },
+      ],
+    },
+  });
+
+  assert.equal(report.status, 'passed');
+  assert.equal(
+    report.fields[0].readEntrypoints.some(
+      (entry) => entry.functionName === 'list_node_runs_for_flow_run'
+        && entry.readBoundary === 'run_scope'
+        && entry.columnSource === 'raw_column'
+    ),
+    true
+  );
+});
+
 test('writeRawJsonbReports writes JSON and Markdown under tmp/test-governance', () => {
   const repoRoot = createRepoWithMigration(`
     create table application_run_trace_node_contents (
@@ -267,5 +377,36 @@ test('default config covers issue-required raw runtime payload tables', () => {
     'application_run_trace_node_contents.payload',
   ]) {
     assert.equal(fieldKeys.has(key), true, `${key} must be covered`);
+  }
+});
+
+test('default report includes storage read evidence for runtime raw payloads', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const report = collectRawJsonbReport({
+    repoRoot,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const key of [
+    'node_runs.input_payload',
+    'node_runs.output_payload',
+    'node_runs.error_payload',
+    'node_runs.debug_payload',
+    'runtime_events.payload',
+  ]) {
+    const [table, column] = key.split('.');
+    const field = report.fields.find((candidate) => (
+      candidate.table === table && candidate.column === column
+    ));
+    assert.ok(field, `${key} must be in the report`);
+    assert.equal(
+      field.readEntrypoints.some((entry) => (
+        entry.file.includes('orchestration_runtime_repository/')
+          && entry.operation === 'read'
+          && entry.columnSource === 'raw_column'
+      )),
+      true,
+      `${key} must keep storage read evidence`
+    );
   }
 });
