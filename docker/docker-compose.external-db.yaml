@@ -1,24 +1,6 @@
 name: 1flowbase
 
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    shm_size: ${POSTGRES_SHM_SIZE:-512m}
-    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-300}"]
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-1flowbase}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for production compose}
-      POSTGRES_INITDB_ARGS: "${POSTGRES_INITDB_ARGS:---encoding=UTF8 --locale=C}"
-    volumes:
-      - ./postgres/data/pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-1flowbase}"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   plugin-runner:
     image: ghcr.io/taichuy/1flowbase-plugin-runner:${FLOWBASE_PLUGIN_RUNNER_VERSION:-latest}
     restart: unless-stopped
@@ -32,14 +14,12 @@ services:
     image: ghcr.io/taichuy/1flowbase-api-server:${FLOWBASE_API_SERVER_VERSION:-latest}
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
       plugin-runner:
         condition: service_started
     environment:
       RUST_LOG: ${API_RUST_LOG:-info}
       API_ENV: ${API_ENV:-production}
-      API_DATABASE_URL: ${API_DATABASE_URL:-postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required for production compose}@db:5432/${POSTGRES_DB:-1flowbase}}
+      API_DATABASE_URL: ${API_DATABASE_URL:?API_DATABASE_URL is required for external database compose}
       API_SERVER_ADDR: 0.0.0.0:7800
       API_PLUGIN_RUNNER_INTERNAL_BASE_URL: http://plugin-runner:7801
       API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3100,http://127.0.0.1:3100}

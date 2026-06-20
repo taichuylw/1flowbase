@@ -11,6 +11,13 @@ ROOT_ACCOUNT="${FLOWBASE_ROOT_ACCOUNT:-}"
 ROOT_PASSWORD="${FLOWBASE_ROOT_PASSWORD:-}"
 PROVIDER_SECRET="${FLOWBASE_PROVIDER_SECRET:-}"
 WEB_PORT="${FLOWBASE_WEB_PORT:-}"
+DATABASE_MODE="${FLOWBASE_DATABASE_MODE:-}"
+EXTERNAL_POSTGRES_HOST="${FLOWBASE_EXTERNAL_POSTGRES_HOST:-}"
+EXTERNAL_POSTGRES_PORT="${FLOWBASE_EXTERNAL_POSTGRES_PORT:-}"
+EXTERNAL_POSTGRES_DB="${FLOWBASE_EXTERNAL_POSTGRES_DB:-}"
+EXTERNAL_POSTGRES_USER="${FLOWBASE_EXTERNAL_POSTGRES_USER:-}"
+EXTERNAL_POSTGRES_PASSWORD="${FLOWBASE_EXTERNAL_POSTGRES_PASSWORD:-}"
+EXTERNAL_POSTGRES_SSLMODE="${FLOWBASE_EXTERNAL_POSTGRES_SSLMODE:-}"
 PLUGIN_GITHUB_PROXY_URL="${FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-${API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-}}"
 OFFICIAL_PLUGIN_SIGNATURE_REQUIRED="${FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED:-${API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED:-}}"
 PULL_IMAGES="${FLOWBASE_PULL_IMAGES:-}"
@@ -64,7 +71,7 @@ display_env_value() {
   fi
 
   case "$key" in
-    POSTGRES_PASSWORD|BOOTSTRAP_ROOT_PASSWORD|API_PROVIDER_SECRET_MASTER_KEY)
+    POSTGRES_PASSWORD|EXTERNAL_POSTGRES_PASSWORD|API_DATABASE_URL|BOOTSTRAP_ROOT_PASSWORD|API_PROVIDER_SECRET_MASTER_KEY)
       printf '%s\n' "<set>"
       ;;
     *)
@@ -81,9 +88,16 @@ print_env_summary() {
     FLOWBASE_API_SERVER_VERSION \
     FLOWBASE_PLUGIN_RUNNER_VERSION \
     WEB_PORT \
+    DATABASE_MODE \
     POSTGRES_DB \
     POSTGRES_USER \
     POSTGRES_PASSWORD \
+    EXTERNAL_POSTGRES_HOST \
+    EXTERNAL_POSTGRES_PORT \
+    EXTERNAL_POSTGRES_DB \
+    EXTERNAL_POSTGRES_USER \
+    EXTERNAL_POSTGRES_PASSWORD \
+    EXTERNAL_POSTGRES_SSLMODE \
     BOOTSTRAP_ROOT_ACCOUNT \
     BOOTSTRAP_ROOT_PASSWORD \
     API_PROVIDER_SECRET_MASTER_KEY \
@@ -115,6 +129,108 @@ normalize_true_false_value() {
       fail "Invalid value for ${option}: ${value}. Use true or false."
       ;;
   esac
+}
+
+normalize_database_mode() {
+  option="$1"
+  value="$2"
+  case "$value" in
+    ""|1|internal|INTERNAL|Internal)
+      printf '%s\n' "internal"
+      ;;
+    2|external|EXTERNAL|External)
+      printf '%s\n' "external"
+      ;;
+    *)
+      fail "Invalid value for ${option}: ${value}. Use internal or external."
+      ;;
+  esac
+}
+
+normalize_postgres_sslmode() {
+  option="$1"
+  value="$2"
+  [ -n "$value" ] || value="prefer"
+  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+  case "$value" in
+    disable|allow|prefer|require|verify-ca|verify-full)
+      printf '%s\n' "$value"
+      ;;
+    *)
+      fail "Invalid value for ${option}: ${value}. Use disable, allow, prefer, require, verify-ca, or verify-full."
+      ;;
+  esac
+}
+
+database_url_encode_value() {
+  printf '%s' "$1" | sed \
+    -e 's/%/%25/g' \
+    -e 's/ /%20/g' \
+    -e 's/@/%40/g' \
+    -e 's/:/%3A/g' \
+    -e 's|/|%2F|g' \
+    -e 's/?/%3F/g' \
+    -e 's/#/%23/g' \
+    -e 's/&/%26/g' \
+    -e 's/=/%3D/g' \
+    -e 's/+/%2B/g'
+}
+
+ensure_database_mode_default() {
+  file="$1"
+  current_value="$(read_env_value DATABASE_MODE "$file")"
+  if [ -z "$current_value" ]; then
+    set_env_value DATABASE_MODE internal "$file"
+    echo "Added DATABASE_MODE=internal to docker/.env."
+  fi
+}
+
+ensure_external_postgres_defaults() {
+  file="$1"
+  [ -n "$(read_env_value EXTERNAL_POSTGRES_PORT "$file")" ] || set_env_value EXTERNAL_POSTGRES_PORT 5432 "$file"
+  [ -n "$(read_env_value EXTERNAL_POSTGRES_DB "$file")" ] || set_env_value EXTERNAL_POSTGRES_DB 1flowbase "$file"
+  [ -n "$(read_env_value EXTERNAL_POSTGRES_USER "$file")" ] || set_env_value EXTERNAL_POSTGRES_USER postgres "$file"
+  [ -n "$(read_env_value EXTERNAL_POSTGRES_SSLMODE "$file")" ] || set_env_value EXTERNAL_POSTGRES_SSLMODE prefer "$file"
+}
+
+sync_external_database_url() {
+  file="$1"
+  ensure_external_postgres_defaults "$file"
+
+  host="$(read_env_value EXTERNAL_POSTGRES_HOST "$file")"
+  port="$(read_env_value EXTERNAL_POSTGRES_PORT "$file")"
+  db_name="$(read_env_value EXTERNAL_POSTGRES_DB "$file")"
+  db_user="$(read_env_value EXTERNAL_POSTGRES_USER "$file")"
+  db_password="$(read_env_value EXTERNAL_POSTGRES_PASSWORD "$file")"
+  sslmode="$(normalize_postgres_sslmode EXTERNAL_POSTGRES_SSLMODE "$(read_env_value EXTERNAL_POSTGRES_SSLMODE "$file")")"
+
+  [ -n "$host" ] || fail "EXTERNAL_POSTGRES_HOST is required when DATABASE_MODE=external."
+  case "$port" in
+    ""|*[!0123456789]*)
+      fail "EXTERNAL_POSTGRES_PORT must be a number."
+      ;;
+  esac
+  [ -n "$db_name" ] || fail "EXTERNAL_POSTGRES_DB is required when DATABASE_MODE=external."
+  [ -n "$db_user" ] || fail "EXTERNAL_POSTGRES_USER is required when DATABASE_MODE=external."
+  [ -n "$db_password" ] || fail "EXTERNAL_POSTGRES_PASSWORD is required when DATABASE_MODE=external."
+
+  set_env_value EXTERNAL_POSTGRES_SSLMODE "$sslmode" "$file"
+  encoded_user="$(database_url_encode_value "$db_user")"
+  encoded_password="$(database_url_encode_value "$db_password")"
+  encoded_db_name="$(database_url_encode_value "$db_name")"
+  set_env_value API_DATABASE_URL "postgres://${encoded_user}:${encoded_password}@${host}:${port}/${encoded_db_name}?sslmode=${sslmode}" "$file"
+}
+
+sync_database_configuration() {
+  file="$1"
+  mode="$(normalize_database_mode DATABASE_MODE "$(read_env_value DATABASE_MODE "$file")")"
+  set_env_value DATABASE_MODE "$mode" "$file"
+
+  if [ "$mode" = "external" ]; then
+    sync_external_database_url "$file"
+  else
+    set_env_value API_DATABASE_URL "" "$file"
+  fi
 }
 
 provider_secret_master_key_is_placeholder() {
@@ -190,6 +306,30 @@ prompt_env_value() {
   fi
 }
 
+prompt_secret_env_value() {
+  key="$1"
+  label="$2"
+  current_value="$(read_env_value "$key" ./docker/.env)"
+
+  if [ -n "$current_value" ]; then
+    printf '%s [<set>]: ' "$label" > /dev/tty 2>/dev/null || true
+  else
+    printf '%s: ' "$label" > /dev/tty 2>/dev/null || true
+  fi
+
+  input="$(read_from_tty)"
+  if [ -n "$input" ]; then
+    set_env_value "$key" "$input" ./docker/.env
+    echo "Updated ${key} in docker/.env."
+  else
+    if [ -n "$current_value" ]; then
+      echo "Keeping ${key}: <set>"
+    else
+      echo "Keeping ${key}: empty"
+    fi
+  fi
+}
+
 prompt_true_false_env_value() {
   key="$1"
   label="$2"
@@ -208,6 +348,38 @@ prompt_true_false_env_value() {
     echo "Updated ${key} in docker/.env."
   else
     echo "Keeping ${key}: ${current_value:-empty}"
+  fi
+}
+
+prompt_database_configuration() {
+  current_mode="$(normalize_database_mode DATABASE_MODE "$(read_env_value DATABASE_MODE ./docker/.env)")"
+  if [ "$current_mode" = "external" ]; then
+    default_choice=2
+  else
+    default_choice=1
+  fi
+
+  printf 'Database mode (1=internal PostgreSQL, 2=external PostgreSQL) [%s]: ' "$default_choice" > /dev/tty 2>/dev/null || true
+  input="$(read_from_tty)"
+  if [ -z "$input" ]; then
+    input="$current_mode"
+  fi
+  mode="$(normalize_database_mode DATABASE_MODE "$input")"
+  set_env_value DATABASE_MODE "$mode" ./docker/.env
+  echo "Updated DATABASE_MODE=${mode} in docker/.env."
+
+  if [ "$mode" = "external" ]; then
+    ensure_external_postgres_defaults ./docker/.env
+    prompt_env_value EXTERNAL_POSTGRES_HOST "External PostgreSQL host/IP"
+    prompt_env_value EXTERNAL_POSTGRES_PORT "External PostgreSQL port"
+    prompt_env_value EXTERNAL_POSTGRES_DB "External PostgreSQL database"
+    prompt_env_value EXTERNAL_POSTGRES_USER "External PostgreSQL user"
+    prompt_secret_env_value EXTERNAL_POSTGRES_PASSWORD "External PostgreSQL password"
+    prompt_env_value EXTERNAL_POSTGRES_SSLMODE "External PostgreSQL sslmode"
+    sync_external_database_url ./docker/.env
+  else
+    set_env_value API_DATABASE_URL "" ./docker/.env
+    prompt_env_value POSTGRES_PASSWORD "Database password"
   fi
 }
 
@@ -489,6 +661,19 @@ Options:
   --root-password VALUE     Pre-fill BOOTSTRAP_ROOT_PASSWORD before the interactive prompt.
   --provider-secret VALUE   Pre-fill API_PROVIDER_SECRET_MASTER_KEY before the interactive prompt.
   --web-port VALUE          Pre-fill WEB_PORT before the interactive prompt.
+  --database-mode VALUE     Use internal or external PostgreSQL. Defaults to internal.
+  --external-postgres-host VALUE
+                            Pre-fill EXTERNAL_POSTGRES_HOST for external PostgreSQL.
+  --external-postgres-port VALUE
+                            Pre-fill EXTERNAL_POSTGRES_PORT for external PostgreSQL.
+  --external-postgres-db VALUE
+                            Pre-fill EXTERNAL_POSTGRES_DB for external PostgreSQL.
+  --external-postgres-user VALUE
+                            Pre-fill EXTERNAL_POSTGRES_USER for external PostgreSQL.
+  --external-postgres-password VALUE
+                            Pre-fill EXTERNAL_POSTGRES_PASSWORD for external PostgreSQL.
+  --external-postgres-sslmode VALUE
+                            Pre-fill EXTERNAL_POSTGRES_SSLMODE for external PostgreSQL.
   --plugin-github-proxy-url VALUE
                             Pre-fill API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL before the interactive prompt.
   --official-plugin-signature-required VALUE
@@ -506,6 +691,13 @@ Environment variables with the same effect:
   FLOWBASE_ROOT_PASSWORD
   FLOWBASE_PROVIDER_SECRET
   FLOWBASE_WEB_PORT
+  FLOWBASE_DATABASE_MODE
+  FLOWBASE_EXTERNAL_POSTGRES_HOST
+  FLOWBASE_EXTERNAL_POSTGRES_PORT
+  FLOWBASE_EXTERNAL_POSTGRES_DB
+  FLOWBASE_EXTERNAL_POSTGRES_USER
+  FLOWBASE_EXTERNAL_POSTGRES_PASSWORD
+  FLOWBASE_EXTERNAL_POSTGRES_SSLMODE
   FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL
   FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED
   FLOWBASE_PULL_IMAGES=1
@@ -555,6 +747,62 @@ while [ "$#" -gt 0 ]; do
       ;;
     --web-port=*)
       WEB_PORT="${1#*=}"
+      shift
+      ;;
+    --database-mode)
+      DATABASE_MODE="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --database-mode=*)
+      DATABASE_MODE="${1#*=}"
+      shift
+      ;;
+    --external-postgres-host)
+      EXTERNAL_POSTGRES_HOST="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --external-postgres-host=*)
+      EXTERNAL_POSTGRES_HOST="${1#*=}"
+      shift
+      ;;
+    --external-postgres-port)
+      EXTERNAL_POSTGRES_PORT="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --external-postgres-port=*)
+      EXTERNAL_POSTGRES_PORT="${1#*=}"
+      shift
+      ;;
+    --external-postgres-db)
+      EXTERNAL_POSTGRES_DB="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --external-postgres-db=*)
+      EXTERNAL_POSTGRES_DB="${1#*=}"
+      shift
+      ;;
+    --external-postgres-user)
+      EXTERNAL_POSTGRES_USER="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --external-postgres-user=*)
+      EXTERNAL_POSTGRES_USER="${1#*=}"
+      shift
+      ;;
+    --external-postgres-password)
+      EXTERNAL_POSTGRES_PASSWORD="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --external-postgres-password=*)
+      EXTERNAL_POSTGRES_PASSWORD="${1#*=}"
+      shift
+      ;;
+    --external-postgres-sslmode)
+      EXTERNAL_POSTGRES_SSLMODE="$(require_value "$1" "${2-}")"
+      shift 2
+      ;;
+    --external-postgres-sslmode=*)
+      EXTERNAL_POSTGRES_SSLMODE="${1#*=}"
       shift
       ;;
     --plugin-github-proxy-url)
@@ -650,10 +898,12 @@ fi
 if [ ! -f ./docker/.env ]; then
   cp ./docker/.env.example ./docker/.env
   echo "Created docker/.env from docker/.env.example."
+  ensure_database_mode_default ./docker/.env
   ensure_official_plugin_signature_required
   PROMPT_CONFIG_VALUES=1
 else
   echo "Using existing docker/.env."
+  ensure_database_mode_default ./docker/.env
   ensure_official_plugin_signature_required
   if [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
     print_env_summary ./docker/.env
@@ -686,6 +936,36 @@ if [ -n "$WEB_PORT" ]; then
   set_env_value WEB_PORT "$WEB_PORT" ./docker/.env
   echo "Updated WEB_PORT in docker/.env."
 fi
+if [ -n "$DATABASE_MODE" ]; then
+  DATABASE_MODE="$(normalize_database_mode DATABASE_MODE "$DATABASE_MODE")"
+  set_env_value DATABASE_MODE "$DATABASE_MODE" ./docker/.env
+  echo "Updated DATABASE_MODE in docker/.env."
+fi
+if [ -n "$EXTERNAL_POSTGRES_HOST" ]; then
+  set_env_value EXTERNAL_POSTGRES_HOST "$EXTERNAL_POSTGRES_HOST" ./docker/.env
+  echo "Updated EXTERNAL_POSTGRES_HOST in docker/.env."
+fi
+if [ -n "$EXTERNAL_POSTGRES_PORT" ]; then
+  set_env_value EXTERNAL_POSTGRES_PORT "$EXTERNAL_POSTGRES_PORT" ./docker/.env
+  echo "Updated EXTERNAL_POSTGRES_PORT in docker/.env."
+fi
+if [ -n "$EXTERNAL_POSTGRES_DB" ]; then
+  set_env_value EXTERNAL_POSTGRES_DB "$EXTERNAL_POSTGRES_DB" ./docker/.env
+  echo "Updated EXTERNAL_POSTGRES_DB in docker/.env."
+fi
+if [ -n "$EXTERNAL_POSTGRES_USER" ]; then
+  set_env_value EXTERNAL_POSTGRES_USER "$EXTERNAL_POSTGRES_USER" ./docker/.env
+  echo "Updated EXTERNAL_POSTGRES_USER in docker/.env."
+fi
+if [ -n "$EXTERNAL_POSTGRES_PASSWORD" ]; then
+  set_env_value EXTERNAL_POSTGRES_PASSWORD "$EXTERNAL_POSTGRES_PASSWORD" ./docker/.env
+  echo "Updated EXTERNAL_POSTGRES_PASSWORD in docker/.env."
+fi
+if [ -n "$EXTERNAL_POSTGRES_SSLMODE" ]; then
+  EXTERNAL_POSTGRES_SSLMODE="$(normalize_postgres_sslmode EXTERNAL_POSTGRES_SSLMODE "$EXTERNAL_POSTGRES_SSLMODE")"
+  set_env_value EXTERNAL_POSTGRES_SSLMODE "$EXTERNAL_POSTGRES_SSLMODE" ./docker/.env
+  echo "Updated EXTERNAL_POSTGRES_SSLMODE in docker/.env."
+fi
 if [ -n "$PLUGIN_GITHUB_PROXY_URL" ]; then
   set_env_value API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL "$PLUGIN_GITHUB_PROXY_URL" ./docker/.env
   echo "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
@@ -698,7 +978,7 @@ fi
 
 if [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ] && [ -r /dev/tty ]; then
   echo "Configure docker/.env. Press Enter to keep the value shown in brackets."
-  prompt_env_value POSTGRES_PASSWORD "Database password"
+  prompt_database_configuration
   prompt_env_value BOOTSTRAP_ROOT_ACCOUNT "Root account"
   prompt_env_value BOOTSTRAP_ROOT_PASSWORD "Root password"
   prompt_env_value API_PROVIDER_SECRET_MASTER_KEY "API provider secret master key"
@@ -710,14 +990,16 @@ elif [ "$PROMPT_CONFIG_VALUES" -eq 1 ] && [ "$INTERACTIVE" -eq 1 ]; then
 fi
 
 ensure_provider_secret_master_key
+sync_database_configuration ./docker/.env
 
 NEW_POSTGRES_PASSWORD="$(read_env_value POSTGRES_PASSWORD ./docker/.env)"
 NEW_BOOTSTRAP_ROOT_ACCOUNT="$(read_env_value BOOTSTRAP_ROOT_ACCOUNT ./docker/.env)"
 NEW_BOOTSTRAP_ROOT_PASSWORD="$(read_env_value BOOTSTRAP_ROOT_PASSWORD ./docker/.env)"
 NEW_PROVIDER_SECRET="$(read_env_value API_PROVIDER_SECRET_MASTER_KEY ./docker/.env)"
+NEW_DATABASE_MODE="$(read_env_value DATABASE_MODE ./docker/.env)"
 POSTGRES_PASSWORD_SYNC_REQUIRED=0
 
-if postgres_data_exists; then
+if [ "$NEW_DATABASE_MODE" = "internal" ] && postgres_data_exists; then
   if [ -n "$NEW_POSTGRES_PASSWORD" ] && [ "$OLD_POSTGRES_PASSWORD" != "$NEW_POSTGRES_PASSWORD" ]; then
     POSTGRES_PASSWORD_SYNC_REQUIRED=1
   fi
@@ -766,7 +1048,11 @@ fi
 if [ "$POSTGRES_PASSWORD_SYNC_REQUIRED" -eq 0 ] && [ "$PULL_IMAGES" = "no" ] && [ "$START_CONTAINERS" = "no" ]; then
   echo "Docker files are ready in ./docker."
   echo "No images were pulled and no containers were started."
-  echo "To start later, run: cd docker && docker compose pull && docker compose up -d"
+  if [ "$NEW_DATABASE_MODE" = "external" ]; then
+    echo "To start later, run: cd docker && docker compose -f docker-compose.external-db.yaml pull && docker compose -f docker-compose.external-db.yaml up -d"
+  else
+    echo "To start later, run: cd docker && docker compose pull && docker compose up -d"
+  fi
   exit 0
 fi
 
@@ -783,16 +1069,28 @@ if [ "$PULL_IMAGES" = "yes" ] || [ "$START_CONTAINERS" = "yes" ]; then
 fi
 
 if [ "$PULL_IMAGES" = "yes" ]; then
-  compose pull
+  if [ "$NEW_DATABASE_MODE" = "external" ]; then
+    compose -f docker-compose.external-db.yaml pull
+  else
+    compose pull
+  fi
 else
   echo "Skipping image pull."
 fi
 
 if [ "$START_CONTAINERS" = "yes" ]; then
-  compose up -d
+  if [ "$NEW_DATABASE_MODE" = "external" ]; then
+    compose -f docker-compose.external-db.yaml up -d
+  else
+    compose up -d
+  fi
 else
   echo "Skipping container startup."
-  echo "To start later, run: cd docker && docker compose up -d"
+  if [ "$NEW_DATABASE_MODE" = "external" ]; then
+    echo "To start later, run: cd docker && docker compose -f docker-compose.external-db.yaml up -d"
+  else
+    echo "To start later, run: cd docker && docker compose up -d"
+  fi
   exit 0
 fi
 
