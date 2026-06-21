@@ -4,6 +4,7 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 const VISIBLE_INTERNAL_LLM_TOOL_TRACE_KIND: &str = "visible_internal_llm_tool_trace";
+const ROUTE_TRACE_STATUS_INTERCEPTED: &str = "intercepted";
 const TEXT_PREVIEW_CHARS: usize = 180;
 
 #[derive(Debug, Clone)]
@@ -836,7 +837,13 @@ fn route_trace_status(
     returned_to_main: bool,
     main_resume: bool,
 ) -> &'static str {
-    if facts.failed_event.is_some() {
+    if facts
+        .failed_event
+        .as_ref()
+        .is_some_and(failed_event_is_intercepted)
+    {
+        ROUTE_TRACE_STATUS_INTERCEPTED
+    } else if facts.failed_event.is_some() {
         "failed"
     } else if returned_to_main && main_resume {
         "succeeded"
@@ -849,6 +856,38 @@ fn route_trace_status(
     } else {
         "started"
     }
+}
+
+fn failed_event_is_intercepted(event: &Value) -> bool {
+    event
+        .get("error_payload")
+        .is_some_and(error_payload_is_interception)
+}
+
+fn error_payload_is_interception(error_payload: &Value) -> bool {
+    let Some(error_object) = error_payload.as_object() else {
+        return false;
+    };
+    if string_field(error_object, &["error_code"])
+        .as_deref()
+        .is_some_and(is_visible_internal_llm_tool_interception_error_code)
+    {
+        return true;
+    }
+
+    ["details", "error_payload"]
+        .into_iter()
+        .filter_map(|key| error_object.get(key))
+        .any(error_payload_is_interception)
+}
+
+fn is_visible_internal_llm_tool_interception_error_code(error_code: &str) -> bool {
+    matches!(
+        error_code,
+        "visible_internal_llm_tool_media_unavailable"
+            | "visible_internal_llm_tool_mixed_round_callback_unavailable"
+            | "visible_internal_llm_tool_external_callback_forbidden"
+    )
 }
 
 fn callback_request_detail(event: &Value) -> Value {

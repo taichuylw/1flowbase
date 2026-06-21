@@ -56,6 +56,8 @@ function executionStatusLabel(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
       return i18nText('agentFlow', 'auto.executed_successfully');
+    case 'intercepted':
+      return i18nText('agentFlow', 'auto.execution_intercepted');
     case 'failed':
       return i18nText('agentFlow', 'auto.execution_failed');
     case 'timed_out':
@@ -71,6 +73,8 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
       return 'success';
+    case 'intercepted':
+      return 'warning';
     case 'failed':
     case 'timed_out':
       return 'error';

@@ -216,6 +216,84 @@ fn route_trace_uses_completed_event_content_without_persisted_rounds() {
 }
 
 #[test]
+fn route_trace_marks_recoverable_media_precondition_failure_as_intercepted() {
+    let debug_payload = json!({
+        "llm_rounds": [
+            {
+                "round_index": 0,
+                "assistant": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call_image",
+                            "name": "image_llm"
+                        }
+                    ]
+                }
+            },
+            {
+                "round_index": 1,
+                "tool_results": [
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_image",
+                        "name": "image_llm",
+                        "content": "read the file with a client file tool first"
+                    }
+                ]
+            },
+            {
+                "round_index": 2,
+                "assistant": {
+                    "role": "assistant",
+                    "content": "main model handled the media guidance"
+                }
+            }
+        ],
+        "visible_internal_llm_tool_events": [
+            {
+                "event_type": "visible_internal_llm_tool_started",
+                "main_node_id": "node-llm",
+                "target_node_id": "node-image-llm",
+                "tool_name": "image_llm",
+                "tool_call_id": "call_image"
+            },
+            {
+                "event_type": "visible_internal_llm_tool_failed",
+                "main_node_id": "node-llm",
+                "target_node_id": "node-image-llm",
+                "tool_name": "image_llm",
+                "tool_call_id": "call_image",
+                "error_payload": {
+                    "error_code": "visible_internal_llm_tool_failed",
+                    "message": "visible internal LLM tool branch node failed",
+                    "details": {
+                        "error_code": "visible_internal_llm_tool_media_unavailable",
+                        "message": "visible internal LLM tool media was not available to the server",
+                        "recoverable": true
+                    }
+                }
+            }
+        ]
+    });
+
+    let traces = collect_visible_internal_llm_tool_route_traces(&debug_payload);
+
+    assert_eq!(traces.len(), 1);
+    let summary = traces[0].inline_summary_payload();
+    assert_eq!(summary["status"], json!("intercepted"));
+    assert_eq!(summary["returned_to_main"], json!(true));
+    assert_eq!(summary["main_resume"], json!(true));
+
+    let detail = traces[0].detail_payload();
+    assert_eq!(detail["status"], json!("intercepted"));
+    assert_eq!(
+        detail["tool_result"]["content"],
+        json!("read the file with a client file tool first")
+    );
+}
+
+#[test]
 fn route_trace_projects_node_output_as_main_resume_for_current_run_sample() {
     let debug_payload = json!({
         "visible_internal_llm_tool_events": [

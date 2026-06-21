@@ -311,11 +311,62 @@ pub(super) fn branch_trace_node_alias(branch_trace: &serde_json::Value) -> Strin
 }
 
 pub(super) fn route_trace_status(route_trace: &serde_json::Value) -> String {
-    route_trace
+    let status = route_trace
         .get("status")
         .and_then(serde_json::Value::as_str)
         .unwrap_or("completed")
-        .to_string()
+        .to_string();
+
+    if status == "failed" && route_trace_has_interception_error(route_trace) {
+        return "intercepted".to_string();
+    }
+
+    status
+}
+
+fn route_trace_has_interception_error(route_trace: &serde_json::Value) -> bool {
+    if route_trace
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        == Some("intercepted")
+    {
+        return true;
+    }
+
+    route_trace
+        .get("events")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|event| event.get("error_payload"))
+        .any(error_payload_is_interception)
+}
+
+fn error_payload_is_interception(error_payload: &serde_json::Value) -> bool {
+    let Some(error_object) = error_payload.as_object() else {
+        return false;
+    };
+    if error_object
+        .get("error_code")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(is_visible_internal_llm_tool_interception_error_code)
+    {
+        return true;
+    }
+
+    ["details", "error_payload"]
+        .into_iter()
+        .filter_map(|key| error_object.get(key))
+        .any(error_payload_is_interception)
+}
+
+fn is_visible_internal_llm_tool_interception_error_code(error_code: &str) -> bool {
+    matches!(
+        error_code,
+        "visible_internal_llm_tool_media_unavailable"
+            | "visible_internal_llm_tool_mixed_round_callback_unavailable"
+            | "visible_internal_llm_tool_external_callback_forbidden"
+    )
 }
 
 pub(super) fn branch_trace_status(branch_trace: &serde_json::Value) -> String {
@@ -390,6 +441,25 @@ fn tool_result_execution_status(tool_result: Option<&serde_json::Value>) -> Opti
         .map(ToOwned::to_owned)
 }
 
+fn route_trace_execution_status(route_trace: Option<&serde_json::Value>) -> Option<String> {
+    match route_trace_status(route_trace?).as_str() {
+        "intercepted" => Some("intercepted".to_string()),
+        "failed" => Some("failed".to_string()),
+        "succeeded" | "returned_to_main" | "route_completed" => Some("succeeded".to_string()),
+        _ => None,
+    }
+}
+
+pub(super) fn route_trace_tool_callback_status(
+    route_trace: Option<&serde_json::Value>,
+) -> Option<String> {
+    match route_trace_status(route_trace?).as_str() {
+        "intercepted" => Some("intercepted".to_string()),
+        "failed" => Some("failed".to_string()),
+        _ => None,
+    }
+}
+
 pub(super) fn tool_callback_content_payload(
     task: Option<&domain::CallbackTaskRecord>,
     tool_call_id: &str,
@@ -416,7 +486,8 @@ pub(super) fn tool_callback_content_payload(
         "callback_task_id": task.map(|task| task.id),
         "tool_call_id": tool_call_id,
         "callback_status": callback_status,
-        "execution_status": tool_result_execution_status(tool_result),
+        "execution_status": route_trace_execution_status(route_trace)
+            .or_else(|| tool_result_execution_status(tool_result)),
         "request_payload": tool_call,
         "callback_payload": tool_result,
         "parsed_result": tool_result,

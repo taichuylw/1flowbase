@@ -5,6 +5,7 @@ export interface LlmToolCallback {
   callbackStatus: 'returned' | 'waiting_callback' | 'cancelled';
   executionStatus:
     | 'succeeded'
+    | 'intercepted'
     | 'failed'
     | 'timed_out'
     | 'cancelled'
@@ -279,6 +280,7 @@ function executionStatusValue(
   value: unknown
 ): LlmToolCallback['executionStatus'] {
   return value === 'succeeded' ||
+    value === 'intercepted' ||
     value === 'failed' ||
     value === 'timed_out' ||
     value === 'cancelled' ||
@@ -334,9 +336,7 @@ function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
     ? recordArray(debugPayload.llm_rounds.tool_callbacks)
     : [];
 
-  return [...rootCallbacks, ...llmRoundsCallbacks].map(
-    readIndexedToolCallback
-  );
+  return [...rootCallbacks, ...llmRoundsCallbacks].map(readIndexedToolCallback);
 }
 
 export function readLlmToolCallbackDetail(
@@ -473,6 +473,7 @@ function normalizedExecutionStatus(
   }
 
   return status === 'succeeded' ||
+    status === 'intercepted' ||
     status === 'failed' ||
     status === 'timed_out' ||
     status === 'cancelled' ||

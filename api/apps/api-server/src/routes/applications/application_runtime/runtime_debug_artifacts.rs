@@ -88,13 +88,15 @@ struct RuntimeDebugArtifactWriter {
     llm_tool_callback_runtime_facts: HashMap<String, LlmToolCallbackRuntimeFacts>,
 }
 
-#[cfg(test)]
-use llm_tool_callbacks::execution_status_from_callback_payload;
 use llm_tool_callbacks::{
     attach_inline_route_traces, collect_llm_tool_callback_runtime_facts,
     collect_llm_tool_callbacks, is_llm_rounds_debug_artifact_missing_tool_index,
     is_llm_rounds_field_path, is_llm_rounds_leaf_field_path, is_tool_calls_field_path,
     with_array_item_count, with_llm_tool_callback_runtime_facts, LlmToolCallbackRuntimeFacts,
+};
+#[cfg(test)]
+use llm_tool_callbacks::{
+    execution_status_from_callback_payload, execution_status_from_callback_payload_and_route_trace,
 };
 
 pub(super) fn count_llm_tool_callback_trace_items(
