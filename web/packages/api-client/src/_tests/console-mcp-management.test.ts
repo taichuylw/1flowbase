@@ -46,10 +46,11 @@ describe('console-mcp-management client', () => {
         fetchConsoleMcpListItems({
           instance_id: 'default_system',
           path: '/ops',
+          path_regex: '^/ops',
           limit: 25
         }),
       expected: {
-        path: '/api/console/mcp/list?instance_id=default_system&path=%2Fops&limit=25'
+        path: '/api/console/mcp/list?instance_id=default_system&path=%2Fops&path_regex=%5E%2Fops&limit=25'
       }
     },
     {

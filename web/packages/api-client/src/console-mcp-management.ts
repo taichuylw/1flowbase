@@ -95,13 +95,13 @@ export interface ConsoleMcpInterfaceCapability {
 }
 
 export interface ConsoleMcpListItemSummary {
-  id: string;
-  item_kind: string;
-  path: string;
-  name: string;
-  description_short: string | null;
-  children_count: number;
-  risk_level: string | null;
+  id?: string;
+  item_kind?: string;
+  path?: string;
+  name?: string;
+  description_short?: string | null;
+  children_count?: number;
+  risk_level?: string | null;
 }
 
 export interface ConsoleMcpExportPackage {
@@ -196,7 +196,7 @@ export function fetchConsoleMcpInterfaceCapabilities(
 }
 
 export function fetchConsoleMcpListItems(
-  options: { instance_id?: string; path?: string; limit?: number } = {},
+  options: { instance_id?: string; path?: string; path_regex?: string; limit?: number } = {},
   baseUrl?: string
 ) {
   const params = new URLSearchParams();
@@ -205,6 +205,9 @@ export function fetchConsoleMcpListItems(
   }
   if (options.path) {
     params.set('path', options.path);
+  }
+  if (options.path_regex) {
+    params.set('path_regex', options.path_regex);
   }
   if (options.limit !== undefined) {
     params.set('limit', String(options.limit));

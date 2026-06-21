@@ -273,3 +273,224 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
         StatusCode::NOT_FOUND
     );
 }
+
+#[tokio::test]
+async fn mcp_meta_tool_config_updates_validate_and_shape_list_defaults() {
+    let app = test_app().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let catalog_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/mcp/catalog")
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(catalog_response.status(), StatusCode::OK);
+
+    for (path, display_name, sort_order) in [
+        ("/system", "System", 1),
+        ("/system/runtime", "Runtime", 2),
+        ("/ops", "Operations", 3),
+    ] {
+        let upsert_group_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/console/mcp/instances/default_system/groups")
+                    .header("cookie", &root_cookie)
+                    .header("x-csrf-token", &root_csrf)
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "path": path,
+                            "display_name": display_name,
+                            "description_short": null,
+                            "enabled": true,
+                            "sort_order": sort_order
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(upsert_group_response.status(), StatusCode::OK);
+    }
+
+    let invalid_return_fields_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/console/mcp/meta-tool-config")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "list_default_limit": 1,
+                        "list_max_depth": 1,
+                        "list_regex_enabled": true,
+                        "list_regex_max_length": 16,
+                        "list_return_fields": ["id", "secret"],
+                        "get_include_mapping_summary": true,
+                        "get_include_interface_summary": true,
+                        "call_default_des_id_policy": "required",
+                        "call_high_risk_requires_des_id": true,
+                        "call_validation_error_format": "field_errors"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        invalid_return_fields_response.status(),
+        StatusCode::BAD_REQUEST
+    );
+    let invalid_return_fields_payload = response_json(invalid_return_fields_response).await;
+    assert_eq!(
+        invalid_return_fields_payload["code"].as_str(),
+        Some("list_return_fields")
+    );
+
+    let invalid_des_policy_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/console/mcp/meta-tool-config")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "list_default_limit": 1,
+                        "list_max_depth": 1,
+                        "list_regex_enabled": true,
+                        "list_regex_max_length": 16,
+                        "list_return_fields": ["id", "name"],
+                        "get_include_mapping_summary": true,
+                        "get_include_interface_summary": true,
+                        "call_default_des_id_policy": "frontend_only",
+                        "call_high_risk_requires_des_id": true,
+                        "call_validation_error_format": "field_errors"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        invalid_des_policy_response.status(),
+        StatusCode::BAD_REQUEST
+    );
+    let invalid_des_policy_payload = response_json(invalid_des_policy_response).await;
+    assert_eq!(
+        invalid_des_policy_payload["code"].as_str(),
+        Some("call_default_des_id_policy")
+    );
+
+    let update_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/api/console/mcp/meta-tool-config")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "list_default_limit": 1,
+                        "list_max_depth": 1,
+                        "list_regex_enabled": true,
+                        "list_regex_max_length": 16,
+                        "list_return_fields": ["id", "name"],
+                        "get_include_mapping_summary": true,
+                        "get_include_interface_summary": true,
+                        "call_default_des_id_policy": "required",
+                        "call_high_risk_requires_des_id": true,
+                        "call_validation_error_format": "field_errors"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(update_response.status(), StatusCode::OK);
+    let update_payload = response_json(update_response).await;
+    assert_eq!(
+        update_payload["data"]["call_default_des_id_policy"].as_str(),
+        Some("required")
+    );
+    assert_eq!(
+        update_payload["data"]["call_validation_error_format"].as_str(),
+        Some("field_errors")
+    );
+
+    let default_list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/mcp/list")
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(default_list_response.status(), StatusCode::OK);
+    let default_list_payload = response_json(default_list_response).await;
+    let default_items = default_list_payload["data"].as_array().unwrap();
+    assert_eq!(default_items.len(), 1);
+    assert!(default_items[0].get("id").is_some());
+    assert!(default_items[0].get("name").is_some());
+    assert!(default_items[0].get("path").is_none());
+    assert!(default_items[0].get("children_count").is_none());
+
+    let regex_list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/mcp/list?limit=10&path_regex=%5E%2Fsystem")
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(regex_list_response.status(), StatusCode::OK);
+    let regex_list_payload = response_json(regex_list_response).await;
+    let regex_items = regex_list_payload["data"].as_array().unwrap();
+    assert_eq!(regex_items.len(), 1);
+    assert_eq!(regex_items[0]["name"].as_str(), Some("System"));
+
+    let long_regex_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/mcp/list?path_regex=%5E%2Fsystem%2Fruntime-long")
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(long_regex_response.status(), StatusCode::BAD_REQUEST);
+    let long_regex_payload = response_json(long_regex_response).await;
+    assert_eq!(long_regex_payload["code"].as_str(), Some("path_regex"));
+}

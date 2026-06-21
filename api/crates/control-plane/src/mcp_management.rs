@@ -1,5 +1,8 @@
+use std::collections::BTreeSet;
+
 use anyhow::Result;
 use rand_core::{OsRng, RngCore};
+use regex::Regex;
 use uuid::Uuid;
 
 use crate::{
@@ -445,6 +448,17 @@ where
         validate_positive(command.list_default_limit, "list_default_limit")?;
         validate_positive(command.list_max_depth, "list_max_depth")?;
         validate_positive(command.list_regex_max_length, "list_regex_max_length")?;
+        validate_list_return_fields(&command.list_return_fields)?;
+        validate_allowed_value(
+            &command.call_default_des_id_policy,
+            "call_default_des_id_policy",
+            &["tool_config", "required", "optional", "disabled"],
+        )?;
+        validate_allowed_value(
+            &command.call_validation_error_format,
+            "call_validation_error_format",
+            &["structured", "field_errors"],
+        )?;
         self.repository
             .update_mcp_meta_tool_config(&UpdateMcpMetaToolConfigInput {
                 actor_user_id: command.actor_user_id,
@@ -487,10 +501,19 @@ where
         actor_user_id: Uuid,
         instance_id: Option<&str>,
         path: Option<&str>,
+        path_regex: Option<&str>,
         limit: Option<usize>,
     ) -> Result<Vec<domain::McpListItemSummary>> {
         let actor = self.authorize_view(actor_user_id).await?;
         let workspace_id = actor.current_workspace_id;
+        let meta_config = self
+            .ensure_meta_tool_config(workspace_id, actor_user_id)
+            .await?;
+        let path_regex_filter = compile_list_path_regex(
+            path_regex,
+            meta_config.list_regex_enabled,
+            meta_config.list_regex_max_length,
+        )?;
         let instance = match instance_id {
             Some(instance_id) => {
                 self.repository
@@ -517,10 +540,15 @@ where
         let base_path = path.unwrap_or(instance.default_entry_path.as_str());
         let mut items = Vec::new();
 
-        for group in groups
-            .into_iter()
-            .filter(|group| group.enabled && path_matches(base_path, &group.path))
-        {
+        for group in groups.into_iter().filter(|group| {
+            group.enabled
+                && path_matches_list_query(
+                    base_path,
+                    &group.path,
+                    meta_config.list_max_depth,
+                    path_regex_filter.as_ref(),
+                )
+        }) {
             items.push(domain::McpListItemSummary {
                 id: group.id.to_string(),
                 item_kind: domain::McpListItemKind::Group,
@@ -532,10 +560,15 @@ where
             });
         }
 
-        for binding in bindings
-            .into_iter()
-            .filter(|binding| binding.visible && path_matches(base_path, &binding.group_path))
-        {
+        for binding in bindings.into_iter().filter(|binding| {
+            binding.visible
+                && path_matches_list_query(
+                    base_path,
+                    &binding.group_path,
+                    meta_config.list_max_depth,
+                    path_regex_filter.as_ref(),
+                )
+        }) {
             if let Some(tool) = tools
                 .iter()
                 .find(|tool| tool.id == binding.tool_record_id)
@@ -556,7 +589,7 @@ where
             }
         }
 
-        let limit = limit.unwrap_or(50);
+        let limit = limit.unwrap_or(meta_config.list_default_limit as usize);
         items.truncate(limit);
         Ok(items)
     }
@@ -662,6 +695,45 @@ fn validate_positive(value: i32, field: &'static str) -> Result<()> {
     Ok(())
 }
 
+fn validate_list_return_fields(value: &serde_json::Value) -> Result<()> {
+    let Some(fields) = value.as_array() else {
+        return Err(ControlPlaneError::InvalidInput("list_return_fields").into());
+    };
+    if fields.is_empty() {
+        return Err(ControlPlaneError::InvalidInput("list_return_fields").into());
+    }
+
+    let mut seen = BTreeSet::new();
+    for field in fields {
+        let Some(field) = field.as_str() else {
+            return Err(ControlPlaneError::InvalidInput("list_return_fields").into());
+        };
+        if ![
+            "id",
+            "type",
+            "item_kind",
+            "path",
+            "name",
+            "description_short",
+            "children_count",
+            "risk_level",
+        ]
+        .contains(&field)
+            || !seen.insert(field)
+        {
+            return Err(ControlPlaneError::InvalidInput("list_return_fields").into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_allowed_value(value: &str, field: &'static str, allowed_values: &[&str]) -> Result<()> {
+    if !allowed_values.contains(&value) {
+        return Err(ControlPlaneError::InvalidInput(field).into());
+    }
+    Ok(())
+}
+
 fn readable_tool_id(path: Option<&str>, name: &str) -> String {
     let mut parts = Vec::new();
     if let Some(path) = path {
@@ -710,6 +782,64 @@ fn generate_short_id() -> String {
 
 fn path_matches(base_path: &str, candidate: &str) -> bool {
     base_path == "/" || candidate == base_path || candidate.starts_with(&format!("{base_path}/"))
+}
+
+fn path_matches_list_query(
+    base_path: &str,
+    candidate: &str,
+    max_depth: i32,
+    path_regex_filter: Option<&Regex>,
+) -> bool {
+    let Some(depth) = list_relative_depth(base_path, candidate) else {
+        return false;
+    };
+    if depth > max_depth {
+        return false;
+    }
+    path_regex_filter
+        .map(|path_regex_filter| path_regex_filter.is_match(candidate))
+        .unwrap_or(true)
+}
+
+fn list_relative_depth(base_path: &str, candidate: &str) -> Option<i32> {
+    if !path_matches(base_path, candidate) {
+        return None;
+    }
+    if candidate == base_path {
+        return Some(0);
+    }
+    let relative_path = if base_path == "/" {
+        candidate.trim_start_matches('/')
+    } else {
+        candidate.strip_prefix(base_path)?.trim_start_matches('/')
+    };
+    Some(
+        relative_path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .count() as i32,
+    )
+}
+
+fn compile_list_path_regex(
+    pattern: Option<&str>,
+    regex_enabled: bool,
+    regex_max_length: i32,
+) -> Result<Option<Regex>> {
+    let Some(pattern) = pattern else {
+        return Ok(None);
+    };
+    if !regex_enabled {
+        return Err(ControlPlaneError::InvalidInput("path_regex").into());
+    }
+    let regex_max_length = usize::try_from(regex_max_length)
+        .map_err(|_| ControlPlaneError::InvalidInput("path_regex"))?;
+    if pattern.chars().count() > regex_max_length {
+        return Err(ControlPlaneError::InvalidInput("path_regex").into());
+    }
+    Regex::new(pattern)
+        .map(Some)
+        .map_err(|_| ControlPlaneError::InvalidInput("path_regex").into())
 }
 
 fn bindable_interface(interface_id: &str) -> Result<domain::McpInterfaceCatalogEntry> {

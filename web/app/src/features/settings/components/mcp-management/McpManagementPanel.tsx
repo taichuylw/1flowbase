@@ -1399,13 +1399,23 @@ function McpMetaConfigTab({
           <Switch />
         </Form.Item>
         <Form.Item name="call_default_des_id_policy" label="call_default_des_id_policy">
-          <Input />
+          <Select
+            options={['tool_config', 'required', 'optional', 'disabled'].map((value) => ({
+              label: value,
+              value
+            }))}
+          />
         </Form.Item>
         <Form.Item name="call_high_risk_requires_des_id" label="call_high_risk_requires_des_id" valuePropName="checked">
           <Switch />
         </Form.Item>
         <Form.Item name="call_validation_error_format" label="call_validation_error_format">
-          <Input />
+          <Select
+            options={['structured', 'field_errors'].map((value) => ({
+              label: value,
+              value
+            }))}
+          />
         </Form.Item>
         <Button
           type="primary"

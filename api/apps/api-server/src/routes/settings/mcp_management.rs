@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
@@ -139,12 +139,19 @@ pub struct McpDescriptionCheckResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct McpListItemSummaryResponse {
-    pub id: String,
-    pub item_kind: String,
-    pub path: String,
-    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description_short: Option<String>,
-    pub children_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children_count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub risk_level: Option<String>,
 }
 
@@ -283,6 +290,7 @@ pub struct McpInterfaceCatalogQuery {
 pub struct McpListQuery {
     pub instance_id: Option<String>,
     pub path: Option<String>,
+    pub path_regex: Option<String>,
     pub limit: Option<usize>,
 }
 
@@ -380,16 +388,23 @@ pub async fn list_mcp_items(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<Vec<McpListItemSummaryResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let items = McpManagementService::new(state.store.clone())
+    let service = McpManagementService::new(state.store.clone());
+    let items = service
         .list_items(
             context.user.id,
             query.instance_id.as_deref(),
             query.path.as_deref(),
+            query.path_regex.as_deref(),
             query.limit,
         )
         .await?;
+    let snapshot = service.read_workspace_catalog(context.user.id).await?;
+    let return_fields = list_response_field_set(&snapshot.meta_tool_config.list_return_fields)?;
     Ok(Json(ApiSuccess::new(
-        items.into_iter().map(to_list_item_response).collect(),
+        items
+            .into_iter()
+            .map(|item| to_list_item_response(item, &return_fields))
+            .collect(),
     )))
 }
 
@@ -986,17 +1001,72 @@ fn to_interface_response(
     }
 }
 
-fn to_list_item_response(item: domain::McpListItemSummary) -> McpListItemSummaryResponse {
+fn list_response_field_set(value: &serde_json::Value) -> Result<BTreeSet<String>, ApiError> {
+    let Some(fields) = value.as_array() else {
+        return Err(
+            control_plane::errors::ControlPlaneError::InvalidInput("list_return_fields").into(),
+        );
+    };
+    let mut field_set = BTreeSet::new();
+    for field in fields {
+        let Some(field) = field.as_str() else {
+            return Err(control_plane::errors::ControlPlaneError::InvalidInput(
+                "list_return_fields",
+            )
+            .into());
+        };
+        field_set.insert(field.to_string());
+    }
+    Ok(field_set)
+}
+
+fn includes_list_response_field(fields: &BTreeSet<String>, field: &str) -> bool {
+    fields.contains(field) || (field == "item_kind" && fields.contains("type"))
+}
+
+fn to_list_item_response(
+    item: domain::McpListItemSummary,
+    fields: &BTreeSet<String>,
+) -> McpListItemSummaryResponse {
+    let item_kind = match item.item_kind {
+        domain::McpListItemKind::Group => "group".to_string(),
+        domain::McpListItemKind::Tool => "tool".to_string(),
+    };
     McpListItemSummaryResponse {
-        id: item.id,
-        item_kind: match item.item_kind {
-            domain::McpListItemKind::Group => "group".into(),
-            domain::McpListItemKind::Tool => "tool".into(),
+        id: if includes_list_response_field(fields, "id") {
+            Some(item.id)
+        } else {
+            None
         },
-        path: item.path,
-        name: item.name,
-        description_short: item.description_short,
-        children_count: item.children_count,
-        risk_level: item.risk_level.map(|risk| risk.as_str().into()),
+        item_kind: if includes_list_response_field(fields, "item_kind") {
+            Some(item_kind)
+        } else {
+            None
+        },
+        path: if includes_list_response_field(fields, "path") {
+            Some(item.path)
+        } else {
+            None
+        },
+        name: if includes_list_response_field(fields, "name") {
+            Some(item.name)
+        } else {
+            None
+        },
+        description_short: if includes_list_response_field(fields, "description_short") {
+            item.description_short
+        } else {
+            None
+        },
+        children_count: if includes_list_response_field(fields, "children_count") {
+            Some(item.children_count)
+        } else {
+            None
+        },
+        risk_level: if includes_list_response_field(fields, "risk_level") {
+            item.risk_level.map(|risk| risk.as_str().into())
+        } else {
+            None
+        },
     }
 }
