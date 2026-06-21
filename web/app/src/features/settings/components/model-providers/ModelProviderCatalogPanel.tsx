@@ -5,8 +5,7 @@ import { ScrollableSurface } from '../../../../shared/ui/scrollable-surface/Scro
 import type { SettingsPluginFamilyEntry } from '../../api/plugins';
 import type { SettingsModelProviderCatalogEntry } from '../../api/model-providers';
 import {
-  formatPluginArtifactStatus,
-  formatPluginAvailabilityStatus,
+  formatPluginArtifactAvailabilityStatus,
   isPluginArtifactUnavailable
 } from './plugin-installation-status';
 import { ModelProviderOverviewSummary } from '../../pages/settings-page/model-providers/ModelProviderOverviewSummary';
@@ -121,10 +120,6 @@ export function ModelProviderCatalogPanel({
                     const artifactUnavailable = isPluginArtifactUnavailable(
                       localArtifact.artifact_status
                     );
-                    const installLabel =
-                      localArtifact.artifact_status === 'missing'
-                        ? i18nText('settings', 'auto.install_to_current_node')
-                        : i18nText('settings', 'auto.update_current_node');
 
                     return (
                       <Space
@@ -155,7 +150,7 @@ export function ModelProviderCatalogPanel({
                           }
                           onClick={() => onRefreshCurrentNodeArtifact(entry)}
                         >
-                          {i18nText('settings', 'auto.refresh_current_node')}
+                          {i18nText('settings', 'auto.refresh')}
                         </Button>
                         {artifactUnavailable ? (
                           <Button
@@ -166,7 +161,7 @@ export function ModelProviderCatalogPanel({
                             }
                             onClick={() => onInstallCurrentNodeArtifact(entry)}
                           >
-                            {installLabel}
+                            {i18nText('settings', 'auto.repair')}
                           </Button>
                         ) : null}
                         <Button
@@ -198,12 +193,7 @@ export function ModelProviderCatalogPanel({
             key: 'status',
             width: 190,
             render: (_, entry) => {
-              const currentCatalogEntry =
-                currentCatalogEntries[entry.provider_code];
-              const status = formatPluginAvailabilityStatus(
-                currentCatalogEntry?.availability_status ?? 'disabled'
-              );
-              const artifactStatus = formatPluginArtifactStatus(
+              const artifactStatus = formatPluginArtifactAvailabilityStatus(
                 entry.current_local_artifact.artifact_status
               );
 
@@ -213,7 +203,6 @@ export function ModelProviderCatalogPanel({
                   size={[6, 6]}
                   className="model-provider-panel__catalog-status"
                 >
-                  <Tag color={status.color}>{status.label}</Tag>
                   <Tag color={artifactStatus.color}>{artifactStatus.label}</Tag>
                   <Tag>{entry.model_discovery_mode}</Tag>
                   {entry.has_update ? (
@@ -230,6 +219,11 @@ export function ModelProviderCatalogPanel({
             key: 'version',
             width: 220,
             render: (_, entry) => {
+              const localArtifactVersion =
+                entry.current_local_artifact.local_version;
+              const shouldShowLocalArtifactVersion =
+                Boolean(localArtifactVersion) &&
+                localArtifactVersion !== entry.current_version;
               const versionOptions = [...entry.installed_versions]
                 .sort((left, right) =>
                   compareVersions(left.plugin_version, right.plugin_version)
@@ -291,24 +285,16 @@ export function ModelProviderCatalogPanel({
                       {entry.current_version}
                     </Typography.Text>
                   )}
-                  <Typography.Text
-                    type="secondary"
-                    className="model-provider-panel__version-detail"
-                  >
-                    {i18nText('settings', 'auto.expected_version', {
-                      value1: entry.current_version
-                    })}
-                  </Typography.Text>
-                  <Typography.Text
-                    type="secondary"
-                    className="model-provider-panel__version-detail"
-                  >
-                    {i18nText('settings', 'auto.current_node_version', {
-                      value1:
-                        entry.current_local_artifact.local_version ??
-                        i18nText('settings', 'auto.not_detected')
-                    })}
-                  </Typography.Text>
+                  {shouldShowLocalArtifactVersion ? (
+                    <Typography.Text
+                      type="secondary"
+                      className="model-provider-panel__version-detail"
+                    >
+                      {i18nText('settings', 'auto.current_node_version', {
+                        value1: localArtifactVersion
+                      })}
+                    </Typography.Text>
+                  ) : null}
                   <Typography.Text
                     type="secondary"
                     className="model-provider-panel__version-detail"

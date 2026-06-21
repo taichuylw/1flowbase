@@ -465,6 +465,12 @@ describe('ModelProvidersPage - catalog and family version', () => {
     expect(
       within(catalogRow).queryByRole('button', { name: '版本管理' })
     ).not.toBeInTheDocument();
+    expect(within(catalogRow).getByText('可用')).toBeInTheDocument();
+    expect(within(catalogRow).queryByText('当前节点可用')).not.toBeInTheDocument();
+    expect(within(catalogRow).queryByText(/^期望版本：/)).not.toBeInTheDocument();
+    expect(
+      within(catalogRow).queryByText(/^当前节点版本：/)
+    ).not.toBeInTheDocument();
     fireEvent.click(
       within(catalogRow).getByRole('button', { name: /更\s*新/ })
     );
@@ -492,13 +498,13 @@ describe('ModelProvidersPage - catalog and family version', () => {
         current_local_artifact: {
           node_id: 'test-node',
           installation_id: 'installation-1',
-          local_version: null,
+          local_version: '0.0.9',
           local_checksum: null,
-          installed_path: null,
-          artifact_status: 'missing',
+          installed_path: '/tmp/plugins/openai_compatible/0.0.9',
+          artifact_status: 'outdated',
           runtime_status: 'inactive',
           checked_at: '2026-04-18T10:00:00Z',
-          last_error: 'artifact_missing'
+          last_error: 'local_version_outdated'
         },
         latest_version: '0.1.0',
         has_update: false,
@@ -528,8 +534,15 @@ describe('ModelProvidersPage - catalog and family version', () => {
     expect(
       within(catalogRow).getByRole('button', { name: '新增' })
     ).toBeDisabled();
+    expect(within(catalogRow).getByText('不可用')).toBeInTheDocument();
+    expect(within(catalogRow).queryByText('可用')).not.toBeInTheDocument();
+    expect(within(catalogRow).queryByText('当前节点缺失')).not.toBeInTheDocument();
+    expect(within(catalogRow).queryByText(/^期望版本：/)).not.toBeInTheDocument();
     expect(
-      within(catalogRow).getByRole('button', { name: '安装到当前节点' })
+      within(catalogRow).getByText('当前节点版本：0.0.9')
+    ).toBeInTheDocument();
+    expect(
+      within(catalogRow).getByRole('button', { name: '修复' })
     ).toBeInTheDocument();
   });
 

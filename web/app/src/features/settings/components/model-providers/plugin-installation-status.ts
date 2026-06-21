@@ -29,44 +29,18 @@ export function formatPluginAvailabilityStatus(status: string) {
   }
 }
 
-export function formatPluginArtifactStatus(status: string) {
-  switch (status) {
-    case 'ready':
-      return {
-        color: 'green',
-        label: i18nText('settings', 'auto.current_node_ready')
-      };
-    case 'missing':
-      return {
-        color: 'red',
-        label: i18nText('settings', 'auto.current_node_missing')
-      };
-    case 'outdated':
-      return {
-        color: 'gold',
-        label: i18nText('settings', 'auto.current_node_outdated')
-      };
-    case 'mismatched':
-      return {
-        color: 'red',
-        label: i18nText('settings', 'auto.current_node_mismatched')
-      };
-    case 'corrupted':
-      return {
-        color: 'red',
-        label: i18nText('settings', 'auto.current_node_corrupted')
-      };
-    case 'load_failed':
-      return {
-        color: 'red',
-        label: i18nText('settings', 'auto.current_node_load_failed')
-      };
-    default:
-      return {
-        color: 'default',
-        label: status || i18nText('settings', 'auto.unknown')
-      };
+export function formatPluginArtifactAvailabilityStatus(status: string) {
+  if (status === 'ready') {
+    return {
+      color: 'green',
+      label: i18nText('settings', 'auto.available')
+    };
   }
+
+  return {
+    color: 'red',
+    label: i18nText('settings', 'auto.unavailable')
+  };
 }
 
 export function isPluginArtifactUnavailable(status: string) {
