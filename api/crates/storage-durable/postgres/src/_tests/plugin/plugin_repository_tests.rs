@@ -253,7 +253,7 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
         &CreatePluginTaskInput {
             task_id,
             installation_id: Some(installation_id),
-            workspace_id: Some(workspace.id),
+            workspace_id: None,
             provider_code: "fixture_provider".into(),
             task_kind: PluginTaskKind::Install,
             status: PluginTaskStatus::Queued,
@@ -265,6 +265,16 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
     .await
     .unwrap();
     assert_eq!(task.status, PluginTaskStatus::Queued);
+    let install_scope: (String, Uuid) =
+        sqlx::query_as("select scope_kind, scope_id from plugin_tasks where id = $1")
+            .bind(task.id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(
+        install_scope,
+        ("system".to_string(), domain::SYSTEM_SCOPE_ID)
+    );
 
     let completed_task = PluginRepository::update_task_status(
         &store,
@@ -280,6 +290,31 @@ async fn plugin_repository_persists_installations_assignments_and_tasks() {
 
     assert_eq!(completed_task.status, PluginTaskStatus::Succeeded);
     assert!(completed_task.finished_at.is_some());
+
+    let assign_task_id = Uuid::now_v7();
+    let assign_task = PluginRepository::create_task(
+        &store,
+        &CreatePluginTaskInput {
+            task_id: assign_task_id,
+            installation_id: Some(installation_id),
+            workspace_id: Some(workspace.id),
+            provider_code: "fixture_provider".into(),
+            task_kind: PluginTaskKind::Assign,
+            status: PluginTaskStatus::Queued,
+            status_message: None,
+            detail_json: json!({ "workspace_id": workspace.id }),
+            actor_user_id: Some(actor.id),
+        },
+    )
+    .await
+    .unwrap();
+    let assign_scope: (String, Uuid) =
+        sqlx::query_as("select scope_kind, scope_id from plugin_tasks where id = $1")
+            .bind(assign_task.id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(assign_scope, ("workspace".to_string(), workspace.id));
 
     let installations = PluginRepository::list_installations(&store).await.unwrap();
     assert_eq!(installations.len(), 1);

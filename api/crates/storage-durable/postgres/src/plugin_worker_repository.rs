@@ -16,12 +16,13 @@ impl PluginWorkerRepository for PgControlPlaneStore {
             r#"
             insert into plugin_worker_leases (
                 id,
+                scope_id,
                 installation_id,
                 worker_key,
                 status,
                 runtime_scope
             ) values (
-                $1, $2, $3, $4, $5
+                $1, $2, $3, $4, $5, $6
             )
             returning
                 id,
@@ -35,6 +36,7 @@ impl PluginWorkerRepository for PgControlPlaneStore {
             "#,
         )
         .bind(Uuid::now_v7())
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(input.installation_id)
         .bind(&input.worker_key)
         .bind(input.status.as_str())

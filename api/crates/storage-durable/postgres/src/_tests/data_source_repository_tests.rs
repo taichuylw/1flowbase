@@ -157,6 +157,21 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
         secret.secret_ref,
         domain::data_source_secret_ref(created.id)
     );
+    let secret_scope_id: Uuid = sqlx::query_scalar(
+        "select scope_id from data_source_secrets where data_source_instance_id = $1",
+    )
+    .bind(created.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    let secret_platform_id: Uuid =
+        sqlx::query_scalar("select id from data_source_secrets where data_source_instance_id = $1")
+            .bind(created.id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(secret_scope_id, workspace.id);
+    assert_ne!(secret_platform_id, created.id);
 
     let cache = <PgControlPlaneStore as DataSourceRepository>::upsert_catalog_cache(
         &store,
@@ -178,6 +193,22 @@ async fn creates_instance_secret_and_catalog_cache_rows() {
     .await
     .unwrap();
     assert_eq!(cache.refresh_status, DataSourceCatalogRefreshStatus::Ready);
+    let cache_scope_id: Uuid = sqlx::query_scalar(
+        "select scope_id from data_source_catalog_caches where data_source_instance_id = $1",
+    )
+    .bind(created.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    let cache_platform_id: Uuid = sqlx::query_scalar(
+        "select id from data_source_catalog_caches where data_source_instance_id = $1",
+    )
+    .bind(created.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(cache_scope_id, workspace.id);
+    assert_ne!(cache_platform_id, created.id);
 
     let loaded_secret =
         <PgControlPlaneStore as DataSourceRepository>::get_secret_json(&store, created.id)

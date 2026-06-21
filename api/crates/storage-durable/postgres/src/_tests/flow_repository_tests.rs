@@ -146,6 +146,13 @@ async fn get_or_create_editor_state_bootstraps_default_draft_and_first_version()
     assert_eq!(start_node["config"]["input_fields"], json!([]));
     assert_eq!(state.versions.len(), 1);
     assert_eq!(state.versions[0].trigger, FlowVersionTrigger::Autosave);
+    let draft_scope: (Uuid, Uuid) =
+        sqlx::query_as("select scope_id, created_by from flow_drafts where id = $1")
+            .bind(state.draft.id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(draft_scope, (workspace_id, actor_user_id));
 
     let detail = <PgControlPlaneStore as ApplicationRepository>::get_application(
         &store,

@@ -121,6 +121,7 @@ impl PluginRepository for PgControlPlaneStore {
             r#"
             insert into plugin_installations (
                 id,
+                scope_id,
                 provider_code,
                 plugin_id,
                 plugin_version,
@@ -143,11 +144,12 @@ impl PluginRepository for PgControlPlaneStore {
                 signing_key_id,
                 last_load_error,
                 metadata_json,
-                created_by
+                created_by,
+                updated_by
             ) values (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                $21, $22, $23, $24
+                $21, $22, $23, $24, $25, $26
             )
             on conflict (plugin_id) do update
             set
@@ -172,6 +174,7 @@ impl PluginRepository for PgControlPlaneStore {
                 signing_key_id = excluded.signing_key_id,
                 last_load_error = excluded.last_load_error,
                 metadata_json = excluded.metadata_json,
+                updated_by = excluded.updated_by,
                 updated_at = now()
             returning
                 id,
@@ -203,6 +206,7 @@ impl PluginRepository for PgControlPlaneStore {
             "#,
         )
         .bind(input.installation_id)
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(&input.provider_code)
         .bind(&input.plugin_id)
         .bind(&input.plugin_version)
@@ -225,6 +229,7 @@ impl PluginRepository for PgControlPlaneStore {
         .bind(input.signing_key_id.as_deref())
         .bind(input.last_load_error.as_deref())
         .bind(&input.metadata_json)
+        .bind(input.actor_user_id)
         .bind(input.actor_user_id)
         .fetch_one(self.pool())
         .await?;
@@ -818,13 +823,29 @@ impl PluginRepository for PgControlPlaneStore {
                 id,
                 installation_id,
                 workspace_id,
+                scope_kind,
+                scope_id,
                 provider_code,
                 task_kind,
                 status,
                 status_message,
                 detail_json,
-                created_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                created_by,
+                updated_by
+            ) values (
+                $1,
+                $2,
+                $3,
+                case when $5 in ('assign', 'unassign') then 'workspace' else 'system' end,
+                case when $5 in ('assign', 'unassign') then $3 else $4 end,
+                $6,
+                $5,
+                $7,
+                $8,
+                $9,
+                $10,
+                $10
+            )
             returning
                 id,
                 installation_id,
@@ -843,8 +864,9 @@ impl PluginRepository for PgControlPlaneStore {
         .bind(input.task_id)
         .bind(input.installation_id)
         .bind(input.workspace_id)
-        .bind(&input.provider_code)
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(input.task_kind.as_str())
+        .bind(&input.provider_code)
         .bind(input.status.as_str())
         .bind(input.status_message.as_deref())
         .bind(&input.detail_json)

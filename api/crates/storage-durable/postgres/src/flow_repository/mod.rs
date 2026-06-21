@@ -347,8 +347,10 @@ async fn insert_draft(
 ) -> Result<domain::FlowDraftRecord> {
     let row = sqlx::query(
         r#"
-        insert into flow_drafts (id, flow_id, schema_version, document, updated_by)
-        values ($1, $2, $3, $4, $5)
+        insert into flow_drafts (id, flow_id, scope_id, schema_version, document, created_by, updated_by)
+        select $1, flows.id, flows.scope_id, $3, $4, $5, $5
+        from flows
+        where flows.id = $2
         returning id, flow_id, schema_version, document, updated_at
         "#,
     )

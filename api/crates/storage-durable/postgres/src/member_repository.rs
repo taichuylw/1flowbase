@@ -28,9 +28,9 @@ impl MemberRepository for PgControlPlaneStore {
         &self,
         input: &CreateMemberInput,
     ) -> Result<domain::UserRecord> {
-        let default_role: (Uuid, String) = sqlx::query_as(
+        let default_role: (Uuid, String, Uuid) = sqlx::query_as(
             r#"
-            select id, code
+            select id, code, scope_id
             from roles
             where scope_kind = 'workspace'
               and workspace_id = $1
@@ -116,14 +116,15 @@ impl MemberRepository for PgControlPlaneStore {
 
         sqlx::query(
             r#"
-            insert into user_role_bindings (id, user_id, role_id, created_by, updated_by)
-            values ($1, $2, $3, $4, $4)
+            insert into user_role_bindings (id, user_id, role_id, scope_id, created_by, updated_by)
+            values ($1, $2, $3, $4, $5, $5)
             on conflict (user_id, role_id) do nothing
             "#,
         )
         .bind(Uuid::now_v7())
         .bind(user_id)
         .bind(default_role.0)
+        .bind(default_role.2)
         .bind(input.actor_user_id)
         .execute(&mut *tx)
         .await?;
@@ -247,8 +248,10 @@ impl MemberRepository for PgControlPlaneStore {
         for role_id in role_ids {
             sqlx::query(
                 r#"
-                insert into user_role_bindings (id, user_id, role_id, created_by, updated_by)
-                values ($1, $2, $3, $4, $4)
+                insert into user_role_bindings (id, user_id, role_id, scope_id, created_by, updated_by)
+                select $1, $2, roles.id, roles.scope_id, $4, $4
+                from roles
+                where roles.id = $3
                 on conflict (user_id, role_id) do nothing
                 "#,
             )

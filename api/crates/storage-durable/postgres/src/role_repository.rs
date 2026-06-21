@@ -78,10 +78,10 @@ impl RoleRepository for PgControlPlaneStore {
         sqlx::query(
             r#"
             insert into roles (
-                id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable,
+                id, scope_id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable,
                 auto_grant_new_permissions, is_default_member_role, created_by, updated_by
             )
-            values ($1, 'workspace', $2, $3, $4, $5, false, true, $6, $7, $8, $8)
+            values ($1, $2, 'workspace', $2, $3, $4, $5, false, true, $6, $7, $8, $8)
             "#,
         )
         .bind(Uuid::now_v7())
@@ -230,8 +230,10 @@ impl RoleRepository for PgControlPlaneStore {
         for permission_id in permission_ids {
             sqlx::query(
                 r#"
-                insert into role_permissions (id, role_id, permission_id, created_by, updated_by)
-                values ($1, $2, $3, $4, $4)
+                insert into role_permissions (id, role_id, permission_id, scope_id, created_by, updated_by)
+                select $1, roles.id, $3, roles.scope_id, $4, $4
+                from roles
+                where roles.id = $2
                 on conflict (role_id, permission_id) do nothing
                 "#,
             )

@@ -188,24 +188,24 @@ impl DataSourceRepository for PgControlPlaneStore {
             r#"
             select
                 data_source_instances.id,
-                workspace_id,
-                installation_id,
-                source_code,
-                display_name,
-                status,
-                config_json,
-                metadata_json,
-                default_data_model_status,
-                default_api_exposure_status,
-                created_by,
-                created_at,
+                data_source_instances.workspace_id,
+                data_source_instances.installation_id,
+                data_source_instances.source_code,
+                data_source_instances.display_name,
+                data_source_instances.status,
+                data_source_instances.config_json,
+                data_source_instances.metadata_json,
+                data_source_instances.default_data_model_status,
+                data_source_instances.default_api_exposure_status,
+                data_source_instances.created_by,
+                data_source_instances.created_at,
                 data_source_instances.updated_at,
                 secrets.secret_version
             from data_source_instances
             left join data_source_secrets secrets
               on secrets.data_source_instance_id = data_source_instances.id
-            where workspace_id = $1
-            order by display_name asc, data_source_instances.created_at asc
+            where data_source_instances.workspace_id = $1
+            order by data_source_instances.display_name asc, data_source_instances.created_at asc
             "#,
         )
         .bind(workspace_id)
@@ -523,24 +523,24 @@ impl DataSourceRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             select
-                id,
-                workspace_id,
-                installation_id,
-                source_code,
-                display_name,
-                status,
-                config_json,
-                metadata_json,
-                default_data_model_status,
-                default_api_exposure_status,
-                created_by,
-                created_at,
+                data_source_instances.id,
+                data_source_instances.workspace_id,
+                data_source_instances.installation_id,
+                data_source_instances.source_code,
+                data_source_instances.display_name,
+                data_source_instances.status,
+                data_source_instances.config_json,
+                data_source_instances.metadata_json,
+                data_source_instances.default_data_model_status,
+                data_source_instances.default_api_exposure_status,
+                data_source_instances.created_by,
+                data_source_instances.created_at,
                 data_source_instances.updated_at,
                 secrets.secret_version
             from data_source_instances
             left join data_source_secrets secrets
               on secrets.data_source_instance_id = data_source_instances.id
-            where workspace_id = $1
+            where data_source_instances.workspace_id = $1
               and data_source_instances.id = $2
             "#,
         )
@@ -558,17 +558,35 @@ impl DataSourceRepository for PgControlPlaneStore {
     ) -> Result<domain::DataSourceSecretRecord> {
         let row = sqlx::query(
             r#"
-            insert into data_source_secrets (
-                data_source_instance_id,
-                encrypted_secret_json,
-                secret_version
-            ) values (
-                $1, $2, $3
+            with parent as (
+                select scope_id, created_by
+                from data_source_instances
+                where id = $1
             )
+            insert into data_source_secrets (
+                id,
+                data_source_instance_id,
+                scope_id,
+                encrypted_secret_json,
+                secret_version,
+                created_by,
+                updated_by
+            )
+            select
+                $2,
+                $1,
+                parent.scope_id,
+                $3,
+                $4,
+                parent.created_by,
+                parent.created_by
+            from parent
             on conflict (data_source_instance_id) do update
             set
+                scope_id = excluded.scope_id,
                 encrypted_secret_json = excluded.encrypted_secret_json,
                 secret_version = excluded.secret_version,
+                updated_by = excluded.updated_by,
                 updated_at = now()
             returning
                 data_source_instance_id,
@@ -578,6 +596,7 @@ impl DataSourceRepository for PgControlPlaneStore {
             "#,
         )
         .bind(input.data_source_instance_id)
+        .bind(Uuid::now_v7())
         .bind(&input.secret_json)
         .bind(input.secret_version)
         .fetch_one(self.pool())
@@ -624,17 +643,35 @@ impl DataSourceRepository for PgControlPlaneStore {
 
         let secret_row = sqlx::query(
             r#"
-            insert into data_source_secrets (
-                data_source_instance_id,
-                encrypted_secret_json,
-                secret_version
-            ) values (
-                $1, $2, 1
+            with parent as (
+                select scope_id, created_by
+                from data_source_instances
+                where id = $1
             )
+            insert into data_source_secrets (
+                id,
+                data_source_instance_id,
+                scope_id,
+                encrypted_secret_json,
+                secret_version,
+                created_by,
+                updated_by
+            )
+            select
+                $2,
+                $1,
+                parent.scope_id,
+                $3,
+                1,
+                parent.created_by,
+                parent.created_by
+            from parent
             on conflict (data_source_instance_id) do update
             set
+                scope_id = excluded.scope_id,
                 encrypted_secret_json = excluded.encrypted_secret_json,
                 secret_version = data_source_secrets.secret_version + 1,
+                updated_by = excluded.updated_by,
                 updated_at = now()
             returning
                 data_source_instance_id,
@@ -644,6 +681,7 @@ impl DataSourceRepository for PgControlPlaneStore {
         "#,
         )
         .bind(input.data_source_instance_id)
+        .bind(Uuid::now_v7())
         .bind(&secret_json)
         .fetch_one(&mut *transaction)
         .await?;
@@ -753,21 +791,41 @@ impl DataSourceRepository for PgControlPlaneStore {
     ) -> Result<domain::DataSourceCatalogCacheRecord> {
         let row = sqlx::query(
             r#"
+            with parent as (
+                select scope_id, created_by
+                from data_source_instances
+                where id = $1
+            )
             insert into data_source_catalog_caches (
+                id,
                 data_source_instance_id,
+                scope_id,
                 refresh_status,
                 catalog_json,
                 last_error_message,
-                refreshed_at
-            ) values (
-                $1, $2, $3, $4, $5
+                refreshed_at,
+                created_by,
+                updated_by
             )
+            select
+                $2,
+                $1,
+                parent.scope_id,
+                $3,
+                $4,
+                $5,
+                $6,
+                parent.created_by,
+                parent.created_by
+            from parent
             on conflict (data_source_instance_id) do update
             set
+                scope_id = excluded.scope_id,
                 refresh_status = excluded.refresh_status,
                 catalog_json = excluded.catalog_json,
                 last_error_message = excluded.last_error_message,
                 refreshed_at = excluded.refreshed_at,
+                updated_by = excluded.updated_by,
                 updated_at = now()
             returning
                 data_source_instance_id,
@@ -779,6 +837,7 @@ impl DataSourceRepository for PgControlPlaneStore {
             "#,
         )
         .bind(input.data_source_instance_id)
+        .bind(Uuid::now_v7())
         .bind(input.refresh_status.as_str())
         .bind(&input.catalog_json)
         .bind(input.last_error_message.as_deref())

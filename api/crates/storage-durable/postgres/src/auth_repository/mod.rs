@@ -188,9 +188,9 @@ impl BootstrapRepository for PgControlPlaneStore {
         }
 
         for permission_id in inserted_permission_ids {
-            let role_ids: Vec<Uuid> = sqlx::query_scalar(
+            let role_scopes: Vec<(Uuid, Uuid)> = sqlx::query_as(
                 r#"
-                select id
+                select id, scope_id
                 from roles
                 where auto_grant_new_permissions = true
                 "#,
@@ -198,17 +198,18 @@ impl BootstrapRepository for PgControlPlaneStore {
             .fetch_all(&mut *tx)
             .await?;
 
-            for role_id in role_ids {
+            for (role_id, scope_id) in role_scopes {
                 sqlx::query(
                     r#"
-                    insert into role_permissions (id, role_id, permission_id)
-                    values ($1, $2, $3)
+                    insert into role_permissions (id, role_id, permission_id, scope_id)
+                    values ($1, $2, $3, $4)
                     on conflict (role_id, permission_id) do nothing
                     "#,
                 )
                 .bind(Uuid::now_v7())
                 .bind(role_id)
                 .bind(permission_id)
+                .bind(scope_id)
                 .execute(&mut *tx)
                 .await?;
             }
@@ -325,6 +326,7 @@ impl BootstrapRepository for PgControlPlaneStore {
                 r#"
                 insert into roles (
                     id,
+                    scope_id,
                     scope_kind,
                     workspace_id,
                     code,
@@ -336,12 +338,16 @@ impl BootstrapRepository for PgControlPlaneStore {
                     is_default_member_role,
                     system_kind
                 )
-                values ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, $10)
+                values ($1, $2, $3, $4, $5, $6, '', $7, $8, $9, $10, $11)
                 on conflict do nothing
                 returning id
                 "#,
             )
             .bind(Uuid::now_v7())
+            .bind(match role.scope_kind {
+                RoleScopeKind::System => domain::SYSTEM_SCOPE_ID,
+                RoleScopeKind::Workspace => workspace_id,
+            })
             .bind(scope_kind)
             .bind(scoped_workspace_id)
             .bind(&role.code)
@@ -376,10 +382,11 @@ impl BootstrapRepository for PgControlPlaneStore {
                 for permission_code in role.permissions {
                     sqlx::query(
                         r#"
-                        insert into role_permissions (id, role_id, permission_id)
-                        select $1, $2, id
-                        from permission_definitions
-                        where code = $3
+                        insert into role_permissions (id, role_id, permission_id, scope_id)
+                        select $1, roles.id, permission_definitions.id, roles.scope_id
+                        from roles
+                        join permission_definitions on permission_definitions.code = $3
+                        where roles.id = $2
                         on conflict (role_id, permission_id) do nothing
                         "#,
                     )
@@ -441,8 +448,8 @@ impl BootstrapRepository for PgControlPlaneStore {
 
         sqlx::query(
             r#"
-            insert into user_role_bindings (id, user_id, role_id)
-            select $1, $2, id from roles where code = 'root' and scope_kind = 'system'
+            insert into user_role_bindings (id, user_id, role_id, scope_id)
+            select $1, $2, id, scope_id from roles where code = 'root' and scope_kind = 'system'
             on conflict (user_id, role_id) do nothing
             "#,
         )
@@ -741,14 +748,29 @@ impl AuthRepository for PgControlPlaneStore {
     }
 
     async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        let scope_id = event.workspace_id.unwrap_or(domain::SYSTEM_SCOPE_ID);
         sqlx::query(
             r#"
-            insert into audit_logs (id, workspace_id, actor_user_id, target_type, target_id, event_code, payload, created_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8)
+            insert into audit_logs (
+                id,
+                workspace_id,
+                scope_id,
+                actor_user_id,
+                target_type,
+                target_id,
+                event_code,
+                payload,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            )
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $4, $4, $9, $9)
             "#,
         )
         .bind(event.id)
         .bind(event.workspace_id)
+        .bind(scope_id)
         .bind(event.actor_user_id)
         .bind(&event.target_type)
         .bind(event.target_id)
