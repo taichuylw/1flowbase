@@ -159,9 +159,17 @@ function recommendedActionsForTable({
   const actions = [];
   if (!hasColumn(table, 'id')) {
     pushAction(actions, 'add_id');
+    pushAction(actions, 'needs_owner_review');
+    return actions;
   }
   if (!hasColumn(table, 'created_at')) {
     pushAction(actions, 'add_created_at');
+    pushAction(actions, 'needs_owner_review');
+    return actions;
+  }
+  if (!systemScope && !hasScopeColumn(table) && !backfillSource) {
+    pushAction(actions, 'needs_owner_review');
+    return actions;
   }
   if (!appendOnly && !hasColumn(table, 'updated_at')) {
     pushAction(actions, 'add_updated_at');
@@ -170,12 +178,8 @@ function recommendedActionsForTable({
     pushAction(actions, 'mark_system_scope');
   }
   if (!systemScope && !hasScopeColumn(table)) {
-    if (backfillSource) {
-      pushAction(actions, 'add_scope_id');
-      pushAction(actions, 'backfill_scope_id');
-    } else {
-      pushAction(actions, 'needs_owner_review');
-    }
+    pushAction(actions, 'add_scope_id');
+    pushAction(actions, 'backfill_scope_id');
   }
   if (!systemScope && (hasScopeColumn(table) || backfillSource) && !hasReadinessIndex) {
     pushAction(actions, 'add_scope_time_index');
@@ -201,7 +205,11 @@ function recommendedActionsForTable({
 function platformReadinessForTable({ table, profile, config, tableFindings }) {
   const appendOnly = config.appendOnlyTables.has(table.name);
   const systemScope = config.systemScopeTables.has(table.name);
-  const declaration = config.tableReadiness[table.name] || {};
+  const declaration = {
+    ...config.defaultTableReadiness,
+    ...(config.tableReadiness[table.name] || {}),
+  };
+  const needsOwnerReviewReason = config.needsOwnerReviewTables[table.name] || null;
   const fields = Object.fromEntries(
     [...PLATFORM_FIELDS, 'workspace_id'].map((columnName) => [
       columnName,
@@ -224,6 +232,24 @@ function platformReadinessForTable({ table, profile, config, tableFindings }) {
     declaration,
     scopeGenerationSource,
   });
+  if (needsOwnerReviewReason) {
+    return {
+      category: 'unknown_needs_review',
+      timeKey: EXPANSION_TIME_COLUMN,
+      tieBreaker: EXPANSION_TIE_BREAKER_COLUMN,
+      fields,
+      missingFields: PLATFORM_FIELDS.filter((columnName) => !hasColumn(table, columnName)),
+      requiredScopeId: !systemScope,
+      routingKeyStatus: hasScopeColumn(table) ? 'present' : 'missing',
+      scopeGenerationSource,
+      backfillSource: null,
+      writePathSource: declaredSource(declaration.writePathSource),
+      hasScopeTimeIdIndex: hasReadinessIndex,
+      recommendedActions: ['needs_owner_review'],
+      severity: 'warning',
+      reason: needsOwnerReviewReason,
+    };
+  }
   const recommendedActions = recommendedActionsForTable({
     table,
     appendOnly,

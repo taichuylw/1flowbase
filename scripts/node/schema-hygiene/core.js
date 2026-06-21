@@ -839,7 +839,9 @@ function normalizeConfig(config = {}) {
     registeredSystemTableTemplates: config.registeredSystemTableTemplates || {},
     appendOnlyTables: new Set(config.appendOnlyTables || []),
     systemScopeTables: new Set(config.systemScopeTables || []),
+    defaultTableReadiness: config.defaultTableReadiness || {},
     tableReadiness: config.tableReadiness || {},
+    needsOwnerReviewTables: config.needsOwnerReviewTables || {},
     reasonPolicy: {
       ...DEFAULT_REASON_POLICY,
       ...(config.reasonPolicy || {}),
@@ -865,9 +867,9 @@ function actionForRule(rule) {
   return 'Inspect the schema hygiene rule and fix the table or config entry.';
 }
 
-function finding({ rule, table, message, column = null }) {
+function finding({ rule, table, message, column = null, severity = 'error' }) {
   return {
-    severity: 'error',
+    severity,
     rule,
     table: table.name,
     column,
@@ -1079,10 +1081,18 @@ function evaluateSchemaHygiene({ inventory, config = {} }) {
     const profile = profileForTable(table, normalizedConfig);
     const exemption = normalizedConfig.exemptions[table.name];
     const tableFindings = [];
+    const needsOwnerReviewReason = normalizedConfig.needsOwnerReviewTables[table.name];
 
     tableFindings.push(...collectExemptionPolicyFindings(table, exemption, normalizedConfig));
 
-    if (profile === 'dynamic_model_table') {
+    if (needsOwnerReviewReason) {
+      tableFindings.push(finding({
+        rule: 'managed-table-needs-owner-review',
+        table,
+        severity: 'warning',
+        message: needsOwnerReviewReason,
+      }));
+    } else if (profile === 'dynamic_model_table') {
       tableFindings.push(...evaluateDynamicModelTable(table, exemption));
     } else {
       if (profile === 'registered_system_table') {

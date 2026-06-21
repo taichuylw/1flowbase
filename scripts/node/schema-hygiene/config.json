@@ -42,8 +42,257 @@
       "requiredColumns": ["id", "flow_run_id", "node_run_id", "callback_kind", "status", "request_payload", "response_payload", "external_ref_payload", "created_at", "completed_at", "scope_id"]
     }
   },
-  "appendOnlyTables": [],
+  "appendOnlyTables": [
+    "flow_run_callback_tasks",
+    "flow_run_checkpoints",
+    "flow_run_events",
+    "node_runs",
+    "runtime_artifacts",
+    "runtime_audit_hashes",
+    "runtime_context_projections",
+    "runtime_cost_ledger",
+    "runtime_credit_ledger",
+    "runtime_debug_artifacts",
+    "runtime_events",
+    "runtime_usage_ledger"
+  ],
   "systemScopeTables": [],
+  "defaultTableReadiness": {
+    "idGeneration": "repository write path supplies Uuid::now_v7 ids before insert",
+    "created_byGeneration": "actor context is written when available; system paths may remain null",
+    "updated_byGeneration": "actor context is written when available; system paths may remain null",
+    "writePathSource": "durable storage repositories and migration triggers maintain platform fields"
+  },
+  "tableReadiness": {
+    "api_keys": {
+      "scopeGenerationSource": "existing API key write path stores scope_id from workspace context"
+    },
+    "application_conversation_messages": {
+      "scopeGenerationSource": "existing conversation message write path copies conversation scope_id"
+    },
+    "application_conversations": {
+      "scopeGenerationSource": "existing conversation write path derives scope_id from application workspace"
+    },
+    "application_js_dependency_selections": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "application_public_conversations": {
+      "scopeGenerationSource": "application_id -> applications.workspace_id, maintained by migration trigger",
+      "backfillSource": "applications.workspace_id"
+    },
+    "application_run_log_summaries": {
+      "scopeGenerationSource": "existing runtime summary write path stores scope_id from flow run context"
+    },
+    "application_tags": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "applications": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "billing_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "capability_invocations": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "data_model_side_effect_receipts": {
+      "scopeGenerationSource": "existing side-effect receipt write path stores scope_id from workspace context"
+    },
+    "data_source_instances": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "data_source_preview_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "debug_variable_cache_entries": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "external_agent_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "file_tables": {
+      "scopeGenerationSource": "existing file table write path stores scope_id from workspace storage context"
+    },
+    "flow_run_callback_resume_attempts": {
+      "scopeGenerationSource": "existing resume attempt write path stores scope_id from flow run context"
+    },
+    "flow_run_callback_tasks": {
+      "scopeGenerationSource": "existing callback task write path stores scope_id from flow run context"
+    },
+    "flow_run_checkpoints": {
+      "scopeGenerationSource": "existing checkpoint write path stores scope_id from flow run context"
+    },
+    "flow_run_events": {
+      "scopeGenerationSource": "existing event write path stores scope_id from flow run context"
+    },
+    "flow_runs": {
+      "scopeGenerationSource": "application_id -> applications.workspace_id, maintained by migration trigger",
+      "backfillSource": "applications.workspace_id"
+    },
+    "frontstage_block_codes": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "frontstage_pages": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "mcp_instances": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "mcp_meta_tool_configs": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "mcp_tools": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_definitions": {
+      "scopeGenerationSource": "existing model definition write path stores scope_id from model owner context"
+    },
+    "model_failover_attempt_ledger": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "model_failover_queue_templates": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_provider_catalog_sources": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_provider_instances": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_provider_preview_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "node_runs": {
+      "scopeGenerationSource": "existing node run write path stores scope_id from flow run context"
+    },
+    "plugin_assignments": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "provider_account_pools": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "runtime_artifacts": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_audit_hashes": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_context_projections": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_cost_ledger": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "runtime_credit_ledger": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "runtime_debug_artifacts": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "runtime_events": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_items": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_spans": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_usage_ledger": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "scope_data_model_grants": {
+      "scopeGenerationSource": "existing data model grant write path stores scope_id from grant owner context"
+    },
+    "workspace_memberships": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    }
+  },
+  "needsOwnerReviewTables": {
+    "api_key_data_model_permissions": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
+    "application_api_mappings": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
+    "application_environment_variables": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
+    "application_publication_versions": "publication lifecycle owner and append-only update semantics need owner decision before scope migration",
+    "application_run_trace_node_contents": "trace projection identity semantics need owner decision before adding platform id and scope routing",
+    "application_run_trace_nodes": "trace projection identity semantics need owner decision before adding platform id and scope routing",
+    "application_run_trace_projection_statuses": "trace projection identity semantics need owner decision before adding platform id and scope routing",
+    "application_tag_bindings": "binding table identity semantics need owner decision before adding platform id and scope routing",
+    "audit_logs": "workspace_id is nullable and audit scope semantics need owner decision before automatic scope migration",
+    "authenticators": "system or tenant ownership semantics need owner decision before assigning platform scope routing",
+    "data_source_catalog_caches": "cache identity and refresh lifecycle semantics need owner decision before adding platform id and scope routing",
+    "data_source_secrets": "secret ownership and key semantics need owner decision before adding platform id and scope routing",
+    "external_agent_telemetry_events": "telemetry owner source is not declared enough for automated scope_id migration",
+    "file_storages": "system storage ownership needs owner decision before assigning platform scope routing",
+    "flow_compiled_plans": "compiled plan owner source is not declared enough for automated scope_id migration",
+    "flow_drafts": "draft owner and historical created_at source need owner decision before automated migration",
+    "flow_versions": "flow version owner and append-only update semantics need owner decision before scope migration",
+    "flows": "flow owner source is not declared enough for automated scope_id migration",
+    "frontend_block_catalog": "catalog system scope semantics need owner decision before assigning platform scope routing",
+    "frontstage_page_schemas": "one-to-one page schema identity semantics need owner decision before adding platform id and scope routing",
+    "host_extension_migrations": "host extension migration ledger scope and lifecycle semantics need owner decision",
+    "host_infrastructure_provider_configs": "host infrastructure ownership semantics need owner decision before scope migration",
+    "js_dependency_registry": "global registry scope semantics need owner decision before assigning platform scope routing",
+    "main_source_defaults": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",
+    "mcp_groups": "MCP group owner source is not declared enough for automated scope_id migration",
+    "mcp_tool_bindings": "MCP tool binding owner source is not declared enough for automated scope_id migration",
+    "model_catalog_sync_runs": "sync run owner and historical created_at source need owner decision before automated migration",
+    "model_change_logs": "model change log owner and append-only update semantics need owner decision before scope migration",
+    "model_failover_queue_items": "queue item owner and historical created_at source need owner decision before automated migration",
+    "model_failover_queue_snapshots": "queue snapshot owner and append-only update semantics need owner decision before scope migration",
+    "model_fields": "model field owner source is not declared enough for automated scope_id migration",
+    "model_provider_catalog_entries": "catalog entry owner and historical created_at source need owner decision before automated migration",
+    "model_provider_instance_secrets": "secret identity and ownership semantics need owner decision before adding platform id and scope routing",
+    "model_provider_main_instances": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",
+    "node_contribution_registry": "node contribution registry scope semantics need owner decision before assigning platform scope routing",
+    "permission_definitions": "permission catalog system scope semantics need owner decision before assigning platform scope routing",
+    "plugin_artifact_instances": "artifact instance identity and lifecycle semantics need owner decision before adding platform id and scope routing",
+    "plugin_installations": "plugin installation owner source is not declared enough for automated scope_id migration",
+    "plugin_package_catalog_projection": "catalog projection identity semantics need owner decision before adding platform id and scope routing",
+    "plugin_tasks": "workspace_id is nullable and plugin task scope semantics need owner decision before automatic scope migration",
+    "plugin_worker_leases": "plugin worker lease owner source is not declared enough for automated scope_id migration",
+    "provider_instance_model_catalog_cache": "provider cache identity semantics need owner decision before adding platform id and scope routing",
+    "role_permissions": "role permission owner source is not declared enough for automated scope_id migration",
+    "roles": "mixed system and workspace role scope semantics need owner decision before automatic scope migration",
+    "system_default_upgrade_items": "system default upgrade item scope semantics need owner decision before assigning platform scope routing",
+    "system_default_upgrade_runs": "system default upgrade run scope semantics need owner decision before assigning platform scope routing",
+    "tenants": "tenant root scope semantics need owner decision before assigning platform scope routing",
+    "user_auth_identities": "user auth identity owner source is not declared enough for automated scope_id migration",
+    "user_role_bindings": "user role binding owner source is not declared enough for automated scope_id migration",
+    "users": "user root scope semantics need owner decision before assigning platform scope routing",
+    "workspaces": "workspace root scope semantics need owner decision before assigning platform scope routing"
+  },
   "reasonPolicy": {
     "minLength": 12,
     "minWords": 3,

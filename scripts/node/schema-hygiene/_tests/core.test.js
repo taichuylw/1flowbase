@@ -194,8 +194,7 @@ test('evaluateSchemaHygiene marks missing scope source as needs_owner_review', (
     create table ownerless_events (
       id uuid primary key,
       payload jsonb not null default '{}'::jsonb,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now()
+      created_at timestamptz not null default now()
     );
   `);
 
@@ -206,8 +205,87 @@ test('evaluateSchemaHygiene marks missing scope source as needs_owner_review', (
   assert.equal(readiness.scopeGenerationSource.status, 'needs_owner_review');
   assert.equal(readiness.scopeGenerationSource.source, null);
   assert.equal(readiness.backfillSource, null);
-  assert.ok(readiness.recommendedActions.includes('needs_owner_review'));
+  assert.deepEqual(readiness.recommendedActions, ['needs_owner_review']);
   assert.equal(readiness.recommendedActions.includes('backfill_scope_id'), false);
+});
+
+test('evaluateSchemaHygiene stops migration actions when id or created_at needs owner review', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table workspace_events (
+      workspace_id uuid not null,
+      payload jsonb not null default '{}'::jsonb,
+      updated_at timestamptz not null default now()
+    );
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({ inventory });
+  const readiness = report.tables[0].platformReadiness;
+
+  assert.deepEqual(readiness.recommendedActions, [
+    'add_id',
+    'needs_owner_review',
+  ]);
+  assert.equal(readiness.recommendedActions.includes('backfill_scope_id'), false);
+  assert.equal(readiness.recommendedActions.includes('add_scope_time_index'), false);
+});
+
+test('evaluateSchemaHygiene can explicitly stop a table at needs_owner_review warning', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table ownerless_events (
+      id uuid primary key,
+      payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now()
+    );
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: {
+      needsOwnerReviewTables: {
+        ownerless_events: 'owner relation is not declared enough for automated migration',
+      },
+    },
+  });
+
+  assert.equal(report.summary.errors, 0);
+  assert.equal(report.summary.warnings, 1);
+  assert.equal(report.findings[0].rule, 'managed-table-needs-owner-review');
+  assert.deepEqual(report.tables[0].platformReadiness.recommendedActions, ['needs_owner_review']);
+});
+
+test('evaluateSchemaHygiene uses default generation declarations for complete tables', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table scoped_events (
+      id uuid primary key,
+      scope_id uuid not null,
+      payload jsonb not null default '{}'::jsonb,
+      created_by uuid,
+      updated_by uuid,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create index scoped_events_scope_created_idx
+      on scoped_events (scope_id, created_at desc, id desc);
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: {
+      defaultTableReadiness: {
+        idGeneration: 'application write path supplies uuidv7 ids',
+        scopeGenerationSource: 'repository write path binds scope_id',
+        created_byGeneration: 'actor context or nullable system path',
+        updated_byGeneration: 'actor context or nullable system path',
+        writePathSource: 'repository write path owns platform fields',
+      },
+    },
+  });
+
+  assert.deepEqual(report.tables[0].platformReadiness.recommendedActions, ['no_action']);
 });
 
 test('collectSchemaInventory rejects empty schema instead of silently passing', () => {
