@@ -96,9 +96,12 @@ test('collectGrowthTableReport flags missing routing columns, unsafe uniqueness,
       'unique-constraint-routing-key',
       'unique-constraint-routing-key',
       'missing-recommended-index',
+      'missing-expansion-scope-column',
+      'missing-expansion-scope-time-id-index',
       'raw-jsonb-review',
     ]
   );
+  assert.equal(table.expansionReadiness.status, 'not_ready');
   assert.equal(table.recommendedIndexes[0].present, false);
   assert.equal(table.recommendedIndexes[0].scenario, 'workspace-scoped runtime event replay by flow run cursor');
   assert.equal(table.queryEntrypoints[0].functionName, 'list_runtime_events');
@@ -113,7 +116,8 @@ test('collectGrowthTableReport flags missing routing columns, unsafe uniqueness,
 test('collectGrowthTableReport keeps routed tables without missing recommendations in ok status', () => {
   const repoRoot = createRepoWithMigration(`
     create table application_run_log_summaries (
-      flow_run_id uuid primary key,
+      id uuid primary key,
+      flow_run_id uuid not null,
       scope_id uuid not null,
       application_id uuid not null,
       status text not null,
@@ -124,6 +128,8 @@ test('collectGrowthTableReport keeps routed tables without missing recommendatio
 
     create index application_run_log_summaries_scope_application_idx
       on application_run_log_summaries (scope_id, application_id, created_at desc, flow_run_id desc);
+    create index application_run_log_summaries_scope_created_idx
+      on application_run_log_summaries (scope_id, created_at desc, id desc);
   `);
 
   const report = collectGrowthTableReport({
@@ -135,7 +141,7 @@ test('collectGrowthTableReport keeps routed tables without missing recommendatio
           growthType: 'log_summary',
           requiredRoutingColumns: ['scope_id', 'application_id', 'flow_run_id'],
           requiredTimeColumns: ['created_at', 'started_at'],
-          uniqueRouteKeys: ['flow_run_id'],
+          uniqueRouteKeys: [],
           recommendedIndexes: [
             {
               columns: ['scope_id', 'application_id', 'created_at', 'flow_run_id'],
@@ -153,8 +159,50 @@ test('collectGrowthTableReport keeps routed tables without missing recommendatio
   assert.equal(report.tables[0].status, 'ok');
   assert.deepEqual(report.tables[0].findings, []);
   assert.equal(report.tables[0].recommendedIndexes[0].present, true);
+  assert.equal(report.tables[0].expansionReadiness.status, 'ready');
   assert.equal(report.tables[0].downtimeRisk.level, 'low');
   assert.equal(report.tables[0].constraintReplacementRisk.level, 'none');
+});
+
+test('collectGrowthTableReport rejects workspace_id-only expansion readiness', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table workspace_events (
+      id uuid primary key,
+      workspace_id uuid not null,
+      created_at timestamptz not null default now()
+    );
+
+    create index workspace_events_workspace_created_idx
+      on workspace_events (workspace_id, created_at desc, id desc);
+  `);
+
+  const report = collectGrowthTableReport({
+    repoRoot,
+    config: {
+      tables: [
+        {
+          name: 'workspace_events',
+          growthType: 'workspace_high_growth',
+          requiredRoutingColumns: ['workspace_id'],
+          requiredTimeColumns: ['created_at'],
+          uniqueRouteKeys: ['workspace_id'],
+          recommendedIndexes: [
+            {
+              columns: ['workspace_id', 'created_at', 'id'],
+              scenario: 'legacy workspace event list',
+              priority: 'must_fix',
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const table = report.tables[0];
+  assert.equal(table.status, 'must_fix');
+  assert.equal(table.expansionReadiness.hasScopeId, false);
+  assert.equal(table.expansionReadiness.workspaceIdOnly, true);
+  assert.ok(table.findings.some((finding) => finding.rule === 'missing-expansion-scope-column'));
 });
 
 test('collectGrowthTableReport splits write and read entrypoints from SQL evidence', () => {
@@ -166,6 +214,9 @@ test('collectGrowthTableReport splits write and read entrypoints from SQL eviden
       sequence bigint not null,
       created_at timestamptz not null default now()
     );
+
+    create index runtime_events_scope_created_idx
+      on runtime_events (scope_id, created_at desc, id desc);
   `, `
     async fn append_runtime_event() {
       sqlx::query("insert into runtime_events (id, scope_id, flow_run_id, sequence) values ($1, $2, $3, $4)");

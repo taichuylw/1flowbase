@@ -87,6 +87,129 @@ test('evaluateSchemaHygiene treats unmarked tables as managed_table and reports 
   assert.equal(report.summary.errors, 3);
 });
 
+test('evaluateSchemaHygiene requires scope_id even when workspace_id is present', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table workspace_events (
+      id uuid primary key,
+      workspace_id uuid not null,
+      payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create index workspace_events_workspace_created_idx
+      on workspace_events (workspace_id, created_at desc, id desc);
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({ inventory });
+
+  assert.deepEqual(
+    report.findings.map((finding) => finding.rule),
+    [
+      'managed-table-scope-column',
+      'managed-table-scope-time-index',
+    ]
+  );
+});
+
+test('evaluateSchemaHygiene requires scope_id created_at id index for expansion readiness', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table scoped_events (
+      id uuid primary key,
+      scope_id uuid not null,
+      payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create index scoped_events_scope_updated_idx
+      on scoped_events (scope_id, updated_at desc, id desc);
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({ inventory });
+
+  assert.deepEqual(
+    report.findings.map((finding) => finding.rule),
+    ['managed-table-scope-time-index']
+  );
+});
+
+test('evaluateSchemaHygiene passes managed table with required expansion fields and index', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table scoped_events (
+      id uuid primary key,
+      scope_id uuid not null,
+      payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create index scoped_events_scope_created_idx
+      on scoped_events (scope_id, created_at desc, id desc);
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({ inventory });
+
+  assert.deepEqual(report.findings, []);
+  assert.equal(report.summary.errors, 0);
+});
+
+test('evaluateSchemaHygiene reports platform readiness matrix and stable actions', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table workspace_events (
+      id uuid primary key,
+      workspace_id uuid not null,
+      payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now()
+    );
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({ inventory });
+  const readiness = report.tables[0].platformReadiness;
+
+  assert.equal(readiness.category, 'unknown_needs_review');
+  assert.equal(readiness.fields.id.present, true);
+  assert.equal(readiness.fields.scope_id.present, false);
+  assert.equal(readiness.fields.workspace_id.present, true);
+  assert.equal(readiness.fields.created_at.present, true);
+  assert.equal(readiness.fields.updated_at.present, false);
+  assert.equal(readiness.scopeGenerationSource.status, 'inferred');
+  assert.equal(readiness.scopeGenerationSource.source, 'workspace_id');
+  assert.deepEqual(readiness.missingFields, ['scope_id', 'updated_at', 'created_by', 'updated_by']);
+  assert.deepEqual(readiness.recommendedActions, [
+    'add_updated_at',
+    'add_scope_id',
+    'backfill_scope_id',
+    'add_scope_time_index',
+    'declare_generation_rule',
+  ]);
+});
+
+test('evaluateSchemaHygiene marks missing scope source as needs_owner_review', () => {
+  const repoRoot = createRepoWithMigration(`
+    create table ownerless_events (
+      id uuid primary key,
+      payload jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({ inventory });
+  const readiness = report.tables[0].platformReadiness;
+
+  assert.equal(readiness.scopeGenerationSource.status, 'needs_owner_review');
+  assert.equal(readiness.scopeGenerationSource.source, null);
+  assert.equal(readiness.backfillSource, null);
+  assert.ok(readiness.recommendedActions.includes('needs_owner_review'));
+  assert.equal(readiness.recommendedActions.includes('backfill_scope_id'), false);
+});
+
 test('collectSchemaInventory rejects empty schema instead of silently passing', () => {
   const repoRoot = createRepoWithMigration('select 1;');
 
@@ -219,7 +342,7 @@ test('evaluateSchemaHygiene rejects forbidden reason words at boundaries and pun
   }
 });
 
-test('evaluateSchemaHygiene checks dynamic_model_table workspace scope and index rules', () => {
+test('evaluateSchemaHygiene checks dynamic_model_table scope_id and index rules', () => {
   const repoRoot = createRepoWithMigration(`
     create table modeled_rows (
       id uuid primary key,
@@ -324,8 +447,8 @@ test('evaluateSchemaHygiene fails registered_system_table without fixed template
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
-    create index registered_catalog_scope_updated_idx
-      on registered_catalog (scope_id, updated_at desc, id desc);
+    create index registered_catalog_scope_created_idx
+      on registered_catalog (scope_id, created_at desc, id desc);
   `);
 
   const inventory = collectSchemaInventory({ repoRoot });

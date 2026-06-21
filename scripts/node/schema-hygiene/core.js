@@ -1,6 +1,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const {
+  EXPANSION_SCOPE_COLUMN,
+  hasColumn,
+  hasScopeColumn,
+  hasScopeTimeIndex,
+  platformReadinessForTable,
+} = require('./readiness.js');
+
 const OUTPUT_ROOT = path.join('tmp', 'test-governance');
 const JSON_REPORT_FILE = 'schema-hygiene.json';
 const MARKDOWN_REPORT_FILE = 'schema-hygiene.md';
@@ -13,8 +21,6 @@ const DEFAULT_MIGRATIONS_DIR = path.join(
   'migrations'
 );
 const DEFAULT_CONFIG_FILE = path.join('scripts', 'node', 'schema-hygiene', 'config.json');
-const SCOPE_COLUMNS = ['workspace_id', 'scope_id'];
-const TIME_COLUMNS = ['updated_at', 'created_at', 'started_at', 'finished_at'];
 const DEFAULT_REASON_POLICY = {
   minLength: 12,
   minWords: 3,
@@ -833,6 +839,7 @@ function normalizeConfig(config = {}) {
     registeredSystemTableTemplates: config.registeredSystemTableTemplates || {},
     appendOnlyTables: new Set(config.appendOnlyTables || []),
     systemScopeTables: new Set(config.systemScopeTables || []),
+    tableReadiness: config.tableReadiness || {},
     reasonPolicy: {
       ...DEFAULT_REASON_POLICY,
       ...(config.reasonPolicy || {}),
@@ -842,35 +849,12 @@ function normalizeConfig(config = {}) {
   };
 }
 
-function hasColumn(table, columnName) {
-  return table.columns.some((column) => column.name === columnName);
-}
-
-function hasAnyColumn(table, columnNames) {
-  return columnNames.some((columnName) => hasColumn(table, columnName));
-}
-
-function hasScopeColumn(table) {
-  return hasAnyColumn(table, SCOPE_COLUMNS);
-}
-
-function hasScopeTimeIndex(table, { preferUpdatedAt = false } = {}) {
-  const acceptedTimeColumns = preferUpdatedAt ? ['updated_at', 'created_at'] : TIME_COLUMNS;
-  return table.indexes.some((index) => {
-    const firstColumn = index.columns[0];
-    if (!SCOPE_COLUMNS.includes(firstColumn)) {
-      return false;
-    }
-    return index.columns.slice(1, 4).some((columnName) => acceptedTimeColumns.includes(columnName));
-  });
-}
-
 function actionForRule(rule) {
   if (rule.startsWith('exemption-')) {
     return 'Update scripts/node/schema-hygiene/config.json with a specific reason and concrete skip entries.';
   }
   if (rule.startsWith('dynamic-model-')) {
-    return 'Update the dynamic model table template to include workspace scope, timestamps, and a scope/time index.';
+    return 'Update the dynamic model table template to include scope_id, timestamps, and a (scope_id, created_at, id) index.';
   }
   if (rule.startsWith('managed-table-')) {
     return 'Add the missing physical schema property or add a concrete, reasoned exemption for a bounded special table.';
@@ -1005,7 +989,8 @@ function evaluateManagedTable(table, config, exemption) {
     findings.push(finding({
       rule: 'managed-table-scope-column',
       table,
-      message: 'managed_table requires workspace_id or scope_id unless configured as system scope',
+      column: EXPANSION_SCOPE_COLUMN,
+      message: 'managed_table requires scope_id for expansion readiness unless configured as system scope',
     }));
   }
 
@@ -1013,7 +998,7 @@ function evaluateManagedTable(table, config, exemption) {
     findings.push(finding({
       rule: 'managed-table-scope-time-index',
       table,
-      message: 'managed_table requires a scope + time index such as (scope_id, updated_at desc, id desc)',
+      message: 'managed_table requires a (scope_id, created_at, id) index for expansion readiness',
     }));
   }
 
@@ -1021,7 +1006,7 @@ function evaluateManagedTable(table, config, exemption) {
     findings.push(finding({
       rule: 'managed-table-scope-time-index',
       table,
-      message: 'managed_table cannot satisfy scope + time index without workspace_id or scope_id',
+      message: 'managed_table cannot satisfy (scope_id, created_at, id) index without scope_id',
     }));
   }
 
@@ -1045,15 +1030,16 @@ function evaluateDynamicModelTable(table, exemption) {
     findings.push(finding({
       rule: 'dynamic-model-scope-column',
       table,
-      message: 'dynamic_model_table requires workspace_id or scope_id',
+      column: EXPANSION_SCOPE_COLUMN,
+      message: 'dynamic_model_table requires scope_id',
     }));
   }
 
-  if (!hasScopeTimeIndex(table, { preferUpdatedAt: true }) && !isSkipped(exemption, 'dynamic-model-scope-time-index')) {
+  if (!hasScopeTimeIndex(table) && !isSkipped(exemption, 'dynamic-model-scope-time-index')) {
     findings.push(finding({
       rule: 'dynamic-model-scope-time-index',
       table,
-      message: 'dynamic_model_table requires a scope + updated_at/created_at + id index',
+      message: 'dynamic_model_table requires a (scope_id, created_at, id) index',
     }));
   }
 
@@ -1107,10 +1093,18 @@ function evaluateSchemaHygiene({ inventory, config = {} }) {
 
     findings.push(...tableFindings);
 
+    const platformReadiness = platformReadinessForTable({
+      table,
+      profile,
+      config: normalizedConfig,
+      tableFindings,
+    });
+
     return {
       ...table,
       profile,
       exemption: exemption ? { reason: exemption.reason || null, skip: exemption.skip || [] } : null,
+      platformReadiness,
       findings: tableFindings,
     };
   });
@@ -1128,6 +1122,16 @@ function evaluateSchemaHygiene({ inventory, config = {} }) {
       errors,
       warnings,
       parseErrors: inventory.parseErrors.length,
+      platformReadiness: {
+        ok: tables.filter((table) => table.platformReadiness.severity === 'ok').length,
+        warnings: tables.filter((table) => table.platformReadiness.severity === 'warning').length,
+        errors: tables.filter((table) => table.platformReadiness.severity === 'error').length,
+        needsOwnerReview: tables.filter((table) => (
+          table.platformReadiness.recommendedActions.includes('needs_owner_review')
+        )).length,
+        missingScopeId: tables.filter((table) => !table.platformReadiness.fields.scope_id.present).length,
+        missingScopeTimeIdIndex: tables.filter((table) => !table.platformReadiness.hasScopeTimeIdIndex).length,
+      },
     },
     tables,
     findings,
@@ -1157,10 +1161,15 @@ function writeMarkdownReport(report, markdownPath) {
     }
   }
 
-  lines.push('', '## Tables', '', '| Table | Profile | Columns | JSONB | Indexes |');
-  lines.push('| --- | --- | ---: | --- | ---: |');
+  lines.push('', '## Tables', '', '| Table | Profile | Category | Missing platform fields | Actions | Columns | JSONB | Indexes |');
+  lines.push('| --- | --- | --- | --- | --- | ---: | --- | ---: |');
   for (const table of report.tables) {
-    lines.push(`| ${table.name} | ${table.profile} | ${table.columns.length} | ${table.jsonbColumns.join(', ')} | ${table.indexes.length} |`);
+    lines.push(
+      `| ${table.name} | ${table.profile} | ${table.platformReadiness.category} | `
+        + `${table.platformReadiness.missingFields.join(', ') || '-'} | `
+        + `${table.platformReadiness.recommendedActions.join(', ')} | `
+        + `${table.columns.length} | ${table.jsonbColumns.join(', ')} | ${table.indexes.length} |`
+    );
   }
 
   fs.writeFileSync(markdownPath, `${lines.join('\n')}\n`, 'utf8');
