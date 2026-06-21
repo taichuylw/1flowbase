@@ -602,7 +602,6 @@
     "current_node_error": "当前节点错误：{{value1}}",
     "export": "导出",
     "mcp_management": "MCP 管理",
-    "mcp_management_description": "管理 workspace 级 MCP 实例目录、Tool 配置和 mcp.list / mcp.get / mcp.call 默认行为。",
     "mcp_instances": "MCP 实例",
     "mcp_tool_config": "Tool 配置",
     "mcp_meta_config": "MCP 配置",

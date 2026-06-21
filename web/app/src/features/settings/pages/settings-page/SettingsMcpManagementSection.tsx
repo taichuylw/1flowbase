@@ -58,7 +58,6 @@ export function SettingsMcpManagementSection({
   return (
     <SettingsSectionSurface
       title={i18nText('settings', 'auto.mcp_management')}
-      description={i18nText('settings', 'auto.mcp_management_description')}
       heightMode="fill"
     >
       <McpManagementPanel

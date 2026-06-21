@@ -602,7 +602,6 @@
     "current_node_error": "Current node error: {{value1}}",
     "export": "Export",
     "mcp_management": "MCP management",
-    "mcp_management_description": "Manage workspace MCP instance directories, Tool configuration, and mcp.list / mcp.get / mcp.call defaults.",
     "mcp_instances": "MCP instances",
     "mcp_tool_config": "Tool configuration",
     "mcp_meta_config": "MCP configuration",
