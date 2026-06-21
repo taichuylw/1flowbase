@@ -165,6 +165,7 @@ use utoipa::OpenApi;
         crate::routes::mcp_management::upsert_mcp_group,
         crate::routes::mcp_management::list_mcp_tools,
         crate::routes::mcp_management::create_mcp_tool,
+        crate::routes::mcp_management::get_mcp_tool,
         crate::routes::mcp_management::update_mcp_tool,
         crate::routes::mcp_management::delete_mcp_tool,
         crate::routes::mcp_management::refresh_mcp_tool_description,

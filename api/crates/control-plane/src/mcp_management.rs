@@ -326,6 +326,19 @@ where
             .await
     }
 
+    pub async fn get_tool(
+        &self,
+        actor_user_id: Uuid,
+        tool_id: &str,
+    ) -> Result<domain::McpToolRecord> {
+        let actor = self.authorize_view(actor_user_id).await?;
+        Ok(self
+            .repository
+            .get_mcp_tool(actor.current_workspace_id, tool_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("mcp_tool"))?)
+    }
+
     pub async fn refresh_tool_description(
         &self,
         command: RefreshMcpToolDescriptionCommand,

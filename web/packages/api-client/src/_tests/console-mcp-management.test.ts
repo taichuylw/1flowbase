@@ -12,6 +12,7 @@ import {
   fetchConsoleMcpCatalog,
   fetchConsoleMcpInterfaceCapabilities,
   fetchConsoleMcpListItems,
+  fetchConsoleMcpTool,
   refreshConsoleMcpToolDescription,
   updateConsoleMcpInstance,
   updateConsoleMcpMetaToolConfig,
@@ -53,6 +54,11 @@ describe('console-mcp-management client', () => {
       name: 'export package',
       request: () => exportConsoleMcpCatalog(),
       expected: { path: '/api/console/mcp/export' }
+    },
+    {
+      name: 'single tool',
+      request: () => fetchConsoleMcpTool('runtime/get'),
+      expected: { path: '/api/console/mcp/tools/runtime%2Fget' }
     }
   ])('reads the $name route', async ({ request, expected }) => {
     await expect(request()).resolves.toMatchObject(expected);

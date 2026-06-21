@@ -216,6 +216,13 @@ export function exportConsoleMcpCatalog(baseUrl?: string) {
   });
 }
 
+export function fetchConsoleMcpTool(toolId: string, baseUrl?: string) {
+  return apiFetch<ConsoleMcpTool>({
+    path: `/api/console/mcp/tools/${encodeURIComponent(toolId)}`,
+    baseUrl
+  });
+}
+
 export function createConsoleMcpInstance(
   body: SaveConsoleMcpInstanceBody,
   csrfToken: string,

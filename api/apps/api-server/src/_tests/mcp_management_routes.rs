@@ -120,6 +120,22 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
             .is_none()
     );
 
+    let get_tool_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/console/mcp/tools/{tool_id}"))
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_tool_response.status(), StatusCode::OK);
+    let get_tool_payload = response_json(get_tool_response).await;
+    assert_eq!(get_tool_payload["data"]["tool_id"].as_str(), Some(tool_id));
+
     let refresh_response = app
         .clone()
         .oneshot(
@@ -140,5 +156,59 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
     assert_ne!(
         refresh_payload["data"]["des_id"].as_str().unwrap(),
         first_des_id
+    );
+
+    let delete_tool_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/console/mcp/tools/{tool_id}"))
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(delete_tool_response.status(), StatusCode::NO_CONTENT);
+
+    let missing_get_tool_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/console/mcp/tools/{tool_id}"))
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing_get_tool_response.status(), StatusCode::NOT_FOUND);
+
+    let missing_description_check_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/mcp/tools/{tool_id}/description-check"
+                ))
+                .header("cookie", &root_cookie)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "des_id": first_des_id
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        missing_description_check_response.status(),
+        StatusCode::NOT_FOUND
     );
 }

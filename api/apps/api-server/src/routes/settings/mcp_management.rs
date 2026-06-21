@@ -302,7 +302,9 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route("/mcp/tools", get(list_mcp_tools).post(create_mcp_tool))
         .route(
             "/mcp/tools/:tool_id",
-            put(update_mcp_tool).delete(delete_mcp_tool),
+            get(get_mcp_tool)
+                .put(update_mcp_tool)
+                .delete(delete_mcp_tool),
         )
         .route(
             "/mcp/tools/:tool_id/description/refresh",
@@ -503,6 +505,19 @@ pub async fn create_mcp_tool(
         StatusCode::CREATED,
         Json(ApiSuccess::new(to_tool_response(record))),
     ))
+}
+
+#[utoipa::path(get, path = "/api/console/mcp/tools/{tool_id}", responses((status = 200, body = McpToolResponse)))]
+pub async fn get_mcp_tool(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(tool_id): Path<String>,
+) -> Result<Json<ApiSuccess<McpToolResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let record = McpManagementService::new(state.store.clone())
+        .get_tool(context.user.id, &tool_id)
+        .await?;
+    Ok(Json(ApiSuccess::new(to_tool_response(record))))
 }
 
 #[utoipa::path(put, path = "/api/console/mcp/tools/{tool_id}", request_body = UpdateMcpToolBody, responses((status = 200, body = McpToolResponse)))]
