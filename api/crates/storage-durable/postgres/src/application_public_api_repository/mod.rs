@@ -226,9 +226,18 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
             return Err(ControlPlaneError::NotFound("application").into());
         }
 
-        sqlx::query("update application_publication_versions set api_enabled = $2 where application_id = $1")
+        sqlx::query(
+            r#"
+            update application_publication_versions
+            set api_enabled = $2,
+                updated_by = $3,
+                updated_at = now()
+            where application_id = $1
+            "#,
+        )
         .bind(input.application_id)
         .bind(input.api_enabled)
+        .bind(input.actor_user_id)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;

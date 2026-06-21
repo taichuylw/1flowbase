@@ -8,6 +8,7 @@ use control_plane::{
     ports::{
         ApplicationApiMappingRepository, ApplicationPublicationRepository,
         CreateApplicationPublicationVersionInput, ReplaceApplicationApiMappingInput,
+        SetApplicationApiEnabledInput,
     },
 };
 use sqlx::PgPool;
@@ -503,6 +504,16 @@ async fn application_public_api_repository_republish_updates_single_current_publ
         )
         .await
         .unwrap();
+    ApplicationPublicationRepository::set_application_api_enabled(
+        &store,
+        &SetApplicationApiEnabledInput {
+            actor_user_id,
+            application_id,
+            api_enabled: true,
+        },
+    )
+    .await
+    .unwrap();
 
     let publications = ApplicationPublicationRepository::list_application_publication_versions(
         &store,
@@ -517,6 +528,13 @@ async fn application_public_api_repository_republish_updates_single_current_publ
     .fetch_one(&pool)
     .await
     .unwrap();
+    let publication_audit: (bool, Uuid) = sqlx::query_as(
+        "select api_enabled, updated_by from application_publication_versions where application_id = $1",
+    )
+    .bind(application_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
 
     assert_eq!(second_publication.id, first_publication.id);
     assert_eq!(second_publication.version_sequence, 1);
@@ -524,8 +542,11 @@ async fn application_public_api_repository_republish_updates_single_current_publ
     assert_eq!(second_publication.compiled_plan_id, second_compiled_plan_id);
     assert_eq!(second_publication.document_snapshot, second_document);
     assert!(!second_publication.api_enabled);
-    assert_eq!(publications, vec![second_publication]);
+    assert_eq!(publications.len(), 1);
+    assert_eq!(publications[0].id, second_publication.id);
+    assert!(publications[0].api_enabled);
     assert_eq!(row_count, 1);
+    assert_eq!(publication_audit, (true, actor_user_id));
 }
 
 #[tokio::test]
