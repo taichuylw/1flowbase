@@ -1,6 +1,10 @@
 use control_plane::mcp_management::{
     CreateMcpInstanceCommand, CreateMcpToolBindingCommand, CreateMcpToolCommand,
-    McpManagementService, RefreshMcpToolDescriptionCommand, UpsertMcpGroupCommand,
+    McpManagementService, RefreshMcpToolDescriptionCommand, UpdateMcpToolBindingCommand,
+    UpsertMcpGroupCommand,
+};
+use control_plane::ports::{
+    CreateMemberInput, CreateWorkspaceRoleInput, MemberRepository, RoleRepository,
 };
 use sqlx::PgPool;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
@@ -102,6 +106,71 @@ async fn mcp_management_seeds_default_instance_without_overwriting_user_changes(
     assert_eq!(second.default_instance.unwrap().name, "Renamed Default");
     assert_eq!(second.instances.len(), 1);
     assert_eq!(second.meta_tool_config.workspace_id, workspace.id);
+}
+
+#[tokio::test]
+async fn mcp_default_catalog_seed_allows_view_permission_without_manage() {
+    let (store, workspace, actor) = seed_store().await;
+    RoleRepository::create_team_role(
+        &store,
+        &CreateWorkspaceRoleInput {
+            actor_user_id: actor.id,
+            workspace_id: workspace.id,
+            code: "mcp_viewer".into(),
+            name: "MCP Viewer".into(),
+            introduction: "Can read MCP management catalog".into(),
+            auto_grant_new_permissions: false,
+            is_default_member_role: false,
+        },
+    )
+    .await
+    .unwrap();
+    RoleRepository::replace_role_permissions(
+        &store,
+        actor.id,
+        workspace.id,
+        "mcp_viewer",
+        &["mcp_management.view.all".into()],
+    )
+    .await
+    .unwrap();
+    let viewer = store
+        .create_member_with_default_role(&CreateMemberInput {
+            actor_user_id: actor.id,
+            workspace_id: workspace.id,
+            account: "mcp-viewer".into(),
+            email: "mcp-viewer@example.com".into(),
+            phone: None,
+            password_hash: "$argon2id$v=19$m=19456,t=2,p=1$test$test".into(),
+            name: "MCP Viewer".into(),
+            nickname: "MCP Viewer".into(),
+            introduction: String::new(),
+            email_login_enabled: true,
+            phone_login_enabled: false,
+        })
+        .await
+        .unwrap();
+    MemberRepository::replace_member_roles(
+        &store,
+        actor.id,
+        workspace.id,
+        viewer.id,
+        &["mcp_viewer".into()],
+    )
+    .await
+    .unwrap();
+
+    let service = McpManagementService::new(store);
+    let snapshot = service
+        .ensure_default_workspace_catalog(viewer.id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        snapshot.default_instance.unwrap().instance_id,
+        "default_system"
+    );
+    assert_eq!(snapshot.meta_tool_config.workspace_id, workspace.id);
 }
 
 #[tokio::test]
@@ -209,6 +278,107 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
         .description_check(actor.id, &tool.tool_id, Some(&refreshed.des_id))
         .await;
     assert!(missing.is_err());
+}
+
+#[tokio::test]
+async fn mcp_tool_binding_write_scope_is_limited_to_actor_workspace() {
+    let (store, workspace, actor) = seed_store().await;
+    let other_workspace = store
+        .upsert_workspace(workspace.tenant_id, "Other MCP Management")
+        .await
+        .unwrap();
+    store
+        .upsert_builtin_roles(other_workspace.id)
+        .await
+        .unwrap();
+    let other_actor = store
+        .upsert_root_user(
+            other_workspace.id,
+            "other-root",
+            "other-root@example.com",
+            "$argon2id$v=19$m=19456,t=2,p=1$test$test",
+            "Other Root",
+            "Other Root",
+        )
+        .await
+        .unwrap();
+    let service = McpManagementService::new(store.clone());
+    service
+        .ensure_default_workspace_catalog(actor.id)
+        .await
+        .unwrap();
+    let tool = service
+        .create_tool(CreateMcpToolCommand {
+            actor_user_id: actor.id,
+            tool_id: Some("runtime_profile".into()),
+            suggested_group_path: Some("/ops".into()),
+            name: "Runtime Profile".into(),
+            short_description: "Read runtime profile".into(),
+            usage_description: None,
+            full_description: "Read the current runtime profile.".into(),
+            interface_id: "settings.system_runtime.get_profile".into(),
+            parameter_schema: serde_json::json!({}),
+            result_schema: serde_json::json!({}),
+            input_mapping: serde_json::json!({}),
+            output_mapping: serde_json::json!({}),
+            permission_code: Some("system_runtime.view.all".into()),
+            risk_level: domain::McpRiskLevel::High,
+            audit_policy: serde_json::json!({}),
+            des_id_required: true,
+            status: domain::McpToolStatus::Enabled,
+        })
+        .await
+        .unwrap();
+    service
+        .upsert_group(UpsertMcpGroupCommand {
+            actor_user_id: actor.id,
+            instance_id: "default_system".into(),
+            path: "/ops".into(),
+            display_name: "Operations".into(),
+            description_short: None,
+            enabled: true,
+            sort_order: 1,
+        })
+        .await
+        .unwrap();
+    let binding = service
+        .create_tool_binding(CreateMcpToolBindingCommand {
+            actor_user_id: actor.id,
+            instance_id: "default_system".into(),
+            group_path: "/ops".into(),
+            tool_id: tool.tool_id,
+            display_alias: None,
+            visible: true,
+            sort_order: 1,
+        })
+        .await
+        .unwrap();
+
+    let other_service = McpManagementService::new(store);
+    assert!(other_service
+        .update_tool_binding(UpdateMcpToolBindingCommand {
+            actor_user_id: other_actor.id,
+            binding_id: binding.id,
+            group_path: "/ops".into(),
+            display_alias: Some("Cross workspace update".into()),
+            visible: false,
+            sort_order: 9,
+        })
+        .await
+        .is_err());
+    assert!(other_service
+        .delete_tool_binding(other_actor.id, binding.id)
+        .await
+        .is_err());
+
+    let catalog = service.read_workspace_catalog(actor.id).await.unwrap();
+    let original_binding = catalog
+        .bindings
+        .iter()
+        .find(|candidate| candidate.id == binding.id)
+        .unwrap();
+    assert!(original_binding.visible);
+    assert_eq!(original_binding.display_alias, None);
 }
 
 #[tokio::test]
@@ -364,7 +534,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .unwrap();
 
     let root_items = service
-        .list_items(actor.id, None, Some("/"), None)
+        .list_items(actor.id, None, Some("/"), None, None)
         .await
         .unwrap();
     assert!(root_items
@@ -383,7 +553,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .any(|item| item.id == disabled_tool.tool_id || item.name == "Invisible Runtime"));
 
     let ops_items = service
-        .list_items(actor.id, None, Some("/ops"), None)
+        .list_items(actor.id, None, Some("/ops"), None, None)
         .await
         .unwrap();
     assert!(ops_items
@@ -393,7 +563,13 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .iter()
         .any(|item| item.id == disabled_tool.tool_id || item.name == "Invisible Runtime"));
     assert!(service
-        .list_items(actor.id, Some(&disabled_instance.instance_id), None, None)
+        .list_items(
+            actor.id,
+            Some(&disabled_instance.instance_id),
+            None,
+            None,
+            None,
+        )
         .await
         .is_err());
 
@@ -442,7 +618,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .await
         .unwrap();
     assert!(service
-        .list_items(actor.id, None, None, None)
+        .list_items(actor.id, None, None, None, None)
         .await
         .is_err());
 }

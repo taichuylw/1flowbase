@@ -1,9 +1,12 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use control_plane::ports::{
-    AuthRepository, CreateMcpInstanceInput, CreateMcpToolBindingInput, CreateMcpToolInput,
-    McpManagementRepository, UpdateMcpInstanceInput, UpdateMcpMetaToolConfigInput,
-    UpdateMcpToolBindingInput, UpdateMcpToolInput, UpsertMcpGroupInput,
+use control_plane::{
+    errors::ControlPlaneError,
+    ports::{
+        AuthRepository, CreateMcpInstanceInput, CreateMcpToolBindingInput, CreateMcpToolInput,
+        McpManagementRepository, UpdateMcpInstanceInput, UpdateMcpMetaToolConfigInput,
+        UpdateMcpToolBindingInput, UpdateMcpToolInput, UpsertMcpGroupInput,
+    },
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -672,6 +675,12 @@ impl McpManagementRepository for PgControlPlaneStore {
                 updated_by = $6,
                 updated_at = now()
             where id = $1
+              and exists (
+                  select 1
+                  from mcp_instances
+                  where mcp_instances.id = mcp_tool_bindings.instance_record_id
+                    and mcp_instances.workspace_id = $7
+              )
             returning
                 mcp_tool_bindings.*,
                 (
@@ -687,17 +696,31 @@ impl McpManagementRepository for PgControlPlaneStore {
         .bind(input.visible)
         .bind(input.sort_order)
         .bind(input.actor_user_id)
-        .fetch_one(self.pool())
-        .await?;
+        .bind(input.workspace_id)
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or(ControlPlaneError::NotFound("mcp_tool_binding"))?;
 
         map_binding(row)
     }
 
-    async fn delete_mcp_tool_binding(&self, binding_id: Uuid) -> Result<()> {
-        sqlx::query("delete from mcp_tool_bindings where id = $1")
-            .bind(binding_id)
-            .execute(self.pool())
-            .await?;
+    async fn delete_mcp_tool_binding(&self, workspace_id: Uuid, binding_id: Uuid) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            delete from mcp_tool_bindings
+            using mcp_instances
+            where mcp_tool_bindings.id = $1
+              and mcp_tool_bindings.instance_record_id = mcp_instances.id
+              and mcp_instances.workspace_id = $2
+            "#,
+        )
+        .bind(binding_id)
+        .bind(workspace_id)
+        .execute(self.pool())
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(ControlPlaneError::NotFound("mcp_tool_binding").into());
+        }
         Ok(())
     }
 

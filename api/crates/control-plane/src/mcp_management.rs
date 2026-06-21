@@ -127,7 +127,7 @@ where
         &self,
         actor_user_id: Uuid,
     ) -> Result<domain::McpCatalogSnapshot> {
-        let actor = self.authorize_manage(actor_user_id).await?;
+        let actor = self.authorize_view(actor_user_id).await?;
         let workspace_id = actor.current_workspace_id;
         let instances = self.repository.list_mcp_instances(workspace_id).await?;
         if instances.is_empty() {
@@ -421,11 +421,12 @@ where
         &self,
         command: UpdateMcpToolBindingCommand,
     ) -> Result<domain::McpToolBindingRecord> {
-        self.authorize_manage(command.actor_user_id).await?;
+        let actor = self.authorize_manage(command.actor_user_id).await?;
         validate_path(&command.group_path)?;
         self.repository
             .update_mcp_tool_binding(&UpdateMcpToolBindingInput {
                 actor_user_id: command.actor_user_id,
+                workspace_id: actor.current_workspace_id,
                 binding_id: command.binding_id,
                 group_path: command.group_path,
                 display_alias: command.display_alias,
@@ -436,8 +437,10 @@ where
     }
 
     pub async fn delete_tool_binding(&self, actor_user_id: Uuid, binding_id: Uuid) -> Result<()> {
-        self.authorize_manage(actor_user_id).await?;
-        self.repository.delete_mcp_tool_binding(binding_id).await
+        let actor = self.authorize_manage(actor_user_id).await?;
+        self.repository
+            .delete_mcp_tool_binding(actor.current_workspace_id, binding_id)
+            .await
     }
 
     pub async fn update_meta_tool_config(

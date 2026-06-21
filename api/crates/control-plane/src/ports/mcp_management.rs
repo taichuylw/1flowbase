@@ -96,6 +96,7 @@ pub struct CreateMcpToolBindingInput {
 #[derive(Debug, Clone)]
 pub struct UpdateMcpToolBindingInput {
     pub actor_user_id: Uuid,
+    pub workspace_id: Uuid,
     pub binding_id: Uuid,
     pub group_path: String,
     pub display_alias: Option<String>,
@@ -205,7 +206,11 @@ pub trait McpManagementRepository: Send + Sync {
         &self,
         input: &UpdateMcpToolBindingInput,
     ) -> anyhow::Result<domain::McpToolBindingRecord>;
-    async fn delete_mcp_tool_binding(&self, binding_id: Uuid) -> anyhow::Result<()>;
+    async fn delete_mcp_tool_binding(
+        &self,
+        workspace_id: Uuid,
+        binding_id: Uuid,
+    ) -> anyhow::Result<()>;
 
     async fn get_mcp_meta_tool_config(
         &self,
