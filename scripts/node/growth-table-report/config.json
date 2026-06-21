@@ -362,7 +362,7 @@
         }
       ],
       "backfill": {
-        "source": "application_run_trace_projection_statuses.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "source": "application_run_trace_projection_statuses.flow_run_id -> flow_runs.scope_id",
         "batchBoundary": "flow_run_id ranges",
         "failureRecovery": "idempotent update where scope_id is null"
       },
@@ -388,7 +388,7 @@
         }
       ],
       "backfill": {
-        "source": "application_run_trace_nodes.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "source": "application_run_trace_nodes.flow_run_id -> flow_runs.scope_id",
         "batchBoundary": "flow_run_id ranges",
         "failureRecovery": "idempotent update where scope_id is null"
       },
@@ -409,7 +409,7 @@
         }
       ],
       "backfill": {
-        "source": "application_run_trace_node_contents.trace_node_id -> application_run_trace_nodes.flow_run_id -> flow_runs.application_id -> applications.workspace_id",
+        "source": "application_run_trace_node_contents.flow_run_id -> flow_runs.scope_id",
         "batchBoundary": "trace_node_id ranges",
         "failureRecovery": "idempotent update where scope_id is null"
       },
@@ -638,6 +638,11 @@
       "requiredTimeColumns": ["updated_at", "refreshed_at"],
       "missingTimePriority": "later",
       "uniqueRouteKeys": ["installation_id"],
+      "expansionReadinessExemption": {
+        "kind": "bounded_projection",
+        "reason": "bounded plugin package catalog projection is one row per plugin installation and does not introduce unbounded expansion history",
+        "boundedBy": ["plugin_installations"]
+      },
       "recommendedIndexes": [
         {
           "columns": ["package_code", "package_version"],
@@ -659,6 +664,11 @@
       "ownerColumns": ["installation_id", "node_id"],
       "requiredTimeColumns": ["checked_at"],
       "uniqueRouteKeys": ["installation_id"],
+      "expansionReadinessExemption": {
+        "kind": "bounded_projection",
+        "reason": "bounded plugin artifact projection is keyed by plugin installation and node without unbounded history",
+        "boundedBy": ["plugin_installations"]
+      },
       "recommendedIndexes": [
         {
           "columns": ["installation_id"],

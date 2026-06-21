@@ -23,6 +23,7 @@ const DEFAULT_SOURCE_SEARCH_DIRS = [
 ];
 const DEFAULT_MAX_EVIDENCE = 6;
 const VALID_PRIORITIES = new Set(['must_fix', 'later']);
+const VALID_EXPANSION_EXEMPTION_KINDS = new Set(['bounded_projection']);
 const EXPANSION_SCOPE_COLUMN = 'scope_id';
 const EXPANSION_TIME_COLUMN = 'created_at';
 const EXPANSION_TIE_BREAKER_COLUMN = 'id';
@@ -58,6 +59,37 @@ function hasExpansionReadinessIndex(table) {
     EXPANSION_TIME_COLUMN,
     EXPANSION_TIE_BREAKER_COLUMN,
   ]));
+}
+
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+}
+
+function normalizeExpansionReadinessExemption(spec = {}) {
+  const exemption = spec.expansionReadinessExemption;
+  if (!exemption) {
+    return null;
+  }
+
+  const reason = typeof exemption.reason === 'string' ? exemption.reason.trim() : '';
+  if (reason.length === 0) {
+    return null;
+  }
+
+  if (!VALID_EXPANSION_EXEMPTION_KINDS.has(exemption.kind)) {
+    return null;
+  }
+
+  return {
+    kind: exemption.kind,
+    reason,
+    boundedBy: normalizeStringList(exemption.boundedBy),
+  };
 }
 
 function normalizePriority(priority) {
@@ -216,12 +248,13 @@ function evaluateRecommendedIndexes(table, spec) {
   });
 }
 
-function collectExpansionReadiness(table) {
+function collectExpansionReadiness(table, spec = {}) {
   const hasId = hasColumn(table, EXPANSION_TIE_BREAKER_COLUMN);
   const hasScopeId = hasColumn(table, EXPANSION_SCOPE_COLUMN);
   const hasWorkspaceId = hasColumn(table, 'workspace_id');
   const hasCreatedAt = hasColumn(table, EXPANSION_TIME_COLUMN);
   const hasScopeTimeIdIndex = hasExpansionReadinessIndex(table);
+  const exemption = normalizeExpansionReadinessExemption(spec);
   const recommendedActions = [];
 
   if (!hasId) {
@@ -238,7 +271,9 @@ function collectExpansionReadiness(table) {
   }
 
   return {
-    status: hasId && hasScopeId && hasCreatedAt && hasScopeTimeIdIndex ? 'ready' : 'not_ready',
+    status: exemption
+      ? 'bounded'
+      : hasId && hasScopeId && hasCreatedAt && hasScopeTimeIdIndex ? 'ready' : 'not_ready',
     hasId,
     hasScopeId,
     hasWorkspaceId,
@@ -247,7 +282,10 @@ function collectExpansionReadiness(table) {
     hasScopeTimeIdIndex,
     timeKey: EXPANSION_TIME_COLUMN,
     tieBreaker: EXPANSION_TIE_BREAKER_COLUMN,
-    recommendedActions: recommendedActions.length > 0 ? recommendedActions : ['no_action'],
+    recommendedActions: exemption
+      ? ['bounded_projection_exempt']
+      : recommendedActions.length > 0 ? recommendedActions : ['no_action'],
+    exemption,
   };
 }
 
@@ -315,7 +353,7 @@ function evaluateGrowthTable(table, spec, queryEntrypoints) {
   const requiredTimeColumns = spec.requiredTimeColumns || [];
   const uniqueRouteKeys = spec.uniqueRouteKeys || [];
   const recommendedIndexes = evaluateRecommendedIndexes(table, spec);
-  const expansionReadiness = collectExpansionReadiness(table);
+  const expansionReadiness = collectExpansionReadiness(table, spec);
 
   for (const columnName of requiredRoutingColumns) {
     if (!hasColumn(table, columnName)) {
@@ -363,40 +401,42 @@ function evaluateGrowthTable(table, spec, queryEntrypoints) {
     }
   }
 
-  if (!expansionReadiness.hasId) {
-    findings.push(finding({
-      rule: 'missing-expansion-id',
-      priority: 'must_fix',
-      column: EXPANSION_TIE_BREAKER_COLUMN,
-      message: `${table.name} is missing id for expansion cursor tie-breakers`,
-    }));
-  }
+  if (!expansionReadiness.exemption) {
+    if (!expansionReadiness.hasId) {
+      findings.push(finding({
+        rule: 'missing-expansion-id',
+        priority: 'must_fix',
+        column: EXPANSION_TIE_BREAKER_COLUMN,
+        message: `${table.name} is missing id for expansion cursor tie-breakers`,
+      }));
+    }
 
-  if (!expansionReadiness.hasScopeId) {
-    findings.push(finding({
-      rule: 'missing-expansion-scope-column',
-      priority: 'must_fix',
-      column: EXPANSION_SCOPE_COLUMN,
-      message: `${table.name} is missing scope_id; workspace_id can only be a backfill source`,
-    }));
-  }
+    if (!expansionReadiness.hasScopeId) {
+      findings.push(finding({
+        rule: 'missing-expansion-scope-column',
+        priority: 'must_fix',
+        column: EXPANSION_SCOPE_COLUMN,
+        message: `${table.name} is missing scope_id; workspace_id can only be a backfill source`,
+      }));
+    }
 
-  if (!expansionReadiness.hasCreatedAt) {
-    findings.push(finding({
-      rule: 'missing-expansion-created-at',
-      priority: 'must_fix',
-      column: EXPANSION_TIME_COLUMN,
-      message: `${table.name} is missing created_at as the fixed expansion time key`,
-    }));
-  }
+    if (!expansionReadiness.hasCreatedAt) {
+      findings.push(finding({
+        rule: 'missing-expansion-created-at',
+        priority: 'must_fix',
+        column: EXPANSION_TIME_COLUMN,
+        message: `${table.name} is missing created_at as the fixed expansion time key`,
+      }));
+    }
 
-  if (!expansionReadiness.hasScopeTimeIdIndex) {
-    findings.push(finding({
-      rule: 'missing-expansion-scope-time-id-index',
-      priority: 'must_fix',
-      index: `${EXPANSION_SCOPE_COLUMN}, ${EXPANSION_TIME_COLUMN}, ${EXPANSION_TIE_BREAKER_COLUMN}`,
-      message: `${table.name} lacks (scope_id, created_at, id) expansion readiness index`,
-    }));
+    if (!expansionReadiness.hasScopeTimeIdIndex) {
+      findings.push(finding({
+        rule: 'missing-expansion-scope-time-id-index',
+        priority: 'must_fix',
+        index: `${EXPANSION_SCOPE_COLUMN}, ${EXPANSION_TIME_COLUMN}, ${EXPANSION_TIE_BREAKER_COLUMN}`,
+        message: `${table.name} lacks (scope_id, created_at, id) expansion readiness index`,
+      }));
+    }
   }
 
   if (table.jsonbColumns.length > 0 && spec.rawJsonbPolicy !== 'ignore') {
@@ -558,11 +598,26 @@ function formatList(items) {
   return items.length === 0 ? '-' : items.map((item) => `\`${item}\``).join(', ');
 }
 
+function escapeMarkdownTableCell(value) {
+  return String(value).replace(/\|/gu, '\\|');
+}
+
+function formatReadinessExemption(exemption) {
+  if (!exemption) {
+    return '-';
+  }
+  const boundedBy = exemption.boundedBy.length > 0
+    ? `; bounded by ${exemption.boundedBy.join(', ')}`
+    : '';
+  return escapeMarkdownTableCell(`${exemption.kind}: ${exemption.reason}${boundedBy}`);
+}
+
 function formatGrowthTableMarkdown(report) {
   const tableRows = report.tables.map((table) => (
     `| \`${table.name}\` | ${table.status} | ${table.growthType} | ${table.expansionReadiness.status} | `
       + `${formatList(table.routingColumns)} | ${formatList(table.missingRoutingColumns)} | `
-      + `${formatList(table.timeColumns)} | ${table.findings.length} |`
+      + `${formatList(table.timeColumns)} | ${formatReadinessExemption(table.expansionReadiness.exemption)} | `
+      + `${table.findings.length} |`
   ));
   const findingRows = report.tables.flatMap((table) => (
     table.findings.map((item) => (
@@ -617,8 +672,8 @@ function formatGrowthTableMarkdown(report) {
     '',
     '## Tables',
     '',
-    '| Table | Status | Growth type | Expansion readiness | Routing columns | Missing routing columns | Time columns | Findings |',
-    '| --- | --- | --- | --- | --- | --- | --- | ---: |',
+    '| Table | Status | Growth type | Expansion readiness | Routing columns | Missing routing columns | Time columns | Readiness exemption | Findings |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | ---: |',
     ...tableRows,
     '',
     '## Findings',

@@ -122,6 +122,8 @@ impl PgControlPlaneStore {
         input: &ReplaceApplicationRunTraceProjectionInput,
     ) -> Result<()> {
         let mut tx = self.pool().begin().await?;
+        let scope_id = trace_projection_flow_run_scope_id_for_update(&mut tx, input.flow_run_id)
+            .await?;
 
         sqlx::query(
             r#"
@@ -148,6 +150,8 @@ impl PgControlPlaneStore {
             sqlx::query(
                 r#"
                 insert into application_run_trace_nodes (
+                    id,
+                    scope_id,
                     trace_node_id,
                     flow_run_id,
                     parent_trace_node_id,
@@ -173,10 +177,13 @@ impl PgControlPlaneStore {
                     source_watermark
                 ) values (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                    $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+                    $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+                    $23, $24, $25
                 )
                 "#,
             )
+            .bind(Uuid::now_v7())
+            .bind(scope_id)
             .bind(node.trace_node_id)
             .bind(input.flow_run_id)
             .bind(node.parent_trace_node_id)
@@ -208,13 +215,19 @@ impl PgControlPlaneStore {
             sqlx::query(
                 r#"
                 insert into application_run_trace_node_contents (
+                    id,
+                    flow_run_id,
+                    scope_id,
                     trace_node_id,
                     content_kind,
                     payload,
                     source_refs
-                ) values ($1, $2, $3, $4)
+                ) values ($1, $2, $3, $4, $5, $6, $7)
                 "#,
             )
+            .bind(Uuid::now_v7())
+            .bind(input.flow_run_id)
+            .bind(scope_id)
             .bind(content.trace_node_id)
             .bind(&content.content_kind)
             .bind(&content.payload)
@@ -235,6 +248,7 @@ impl PgControlPlaneStore {
                 last_success_at: Some(OffsetDateTime::now_utc()),
                 diagnostic: None,
             },
+            scope_id,
         )
         .await?;
 
@@ -247,7 +261,9 @@ impl PgControlPlaneStore {
         input: &UpsertApplicationRunTraceProjectionStatusInput,
     ) -> Result<()> {
         let mut tx = self.pool().begin().await?;
-        upsert_application_run_trace_projection_status_in_tx(&mut tx, input).await?;
+        let scope_id = trace_projection_flow_run_scope_id_for_update(&mut tx, input.flow_run_id)
+            .await?;
+        upsert_application_run_trace_projection_status_in_tx(&mut tx, input, scope_id).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -489,6 +505,7 @@ impl PgControlPlaneStore {
             join application_run_trace_nodes nodes
               on nodes.trace_node_id = contents.trace_node_id
             where nodes.flow_run_id = $1
+              and contents.flow_run_id = $1
               and contents.trace_node_id = $2
             "#,
         )
@@ -521,15 +538,37 @@ impl PgControlPlaneStore {
     }
 }
 
+async fn trace_projection_flow_run_scope_id_for_update(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    flow_run_id: Uuid,
+) -> Result<Uuid> {
+    sqlx::query_scalar(
+        r#"
+        select flow_runs.scope_id
+        from flow_runs
+        join applications on applications.id = flow_runs.application_id
+        where flow_runs.id = $1
+        for update of flow_runs
+        "#,
+    )
+    .bind(flow_run_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| ControlPlaneError::NotFound("flow_run").into())
+}
+
 async fn upsert_application_run_trace_projection_status_in_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
     input: &UpsertApplicationRunTraceProjectionStatusInput,
+    scope_id: Uuid,
 ) -> Result<()> {
     let diagnostic = input.diagnostic.clone();
 
     sqlx::query(
         r#"
         insert into application_run_trace_projection_statuses (
+            id,
+            scope_id,
             flow_run_id,
             projection_version,
             status,
@@ -545,10 +584,11 @@ async fn upsert_application_run_trace_projection_status_in_tx(
             last_error_ref,
             retriable
         ) values (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
         )
         on conflict (flow_run_id, projection_version) do update
         set status = excluded.status,
+            scope_id = excluded.scope_id,
             source_watermark = excluded.source_watermark,
             attempt_count = excluded.attempt_count,
             last_attempt_at = excluded.last_attempt_at,
@@ -563,6 +603,8 @@ async fn upsert_application_run_trace_projection_status_in_tx(
             updated_at = now()
         "#,
     )
+    .bind(Uuid::now_v7())
+    .bind(scope_id)
     .bind(input.flow_run_id)
     .bind(input.projection_version)
     .bind(input.status.as_str())

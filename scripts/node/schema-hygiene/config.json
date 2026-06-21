@@ -84,6 +84,24 @@
     "application_run_log_summaries": {
       "scopeGenerationSource": "existing runtime summary write path stores scope_id from flow run context"
     },
+    "application_run_trace_node_contents": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, written by trace projection repository and backfilled from application_run_trace_nodes",
+      "backfillSource": "application_run_trace_nodes.flow_run_id and application_run_trace_nodes.scope_id",
+      "writePathSource": "trace projection repository writes content flow_run_id and scope_id from flow run context"
+    },
+    "application_run_trace_nodes": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, written by trace projection repository",
+      "backfillSource": "flow_runs.scope_id",
+      "writePathSource": "trace projection repository writes node scope_id from flow run context"
+    },
+    "application_run_trace_projection_statuses": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, written by trace projection repository",
+      "backfillSource": "flow_runs.scope_id",
+      "writePathSource": "trace projection repository writes status scope_id from flow run context"
+    },
     "application_tags": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
@@ -245,9 +263,6 @@
     "application_api_mappings": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
     "application_environment_variables": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
     "application_publication_versions": "publication lifecycle owner and append-only update semantics need owner decision before scope migration",
-    "application_run_trace_node_contents": "trace projection identity semantics need owner decision before adding platform id and scope routing",
-    "application_run_trace_nodes": "trace projection identity semantics need owner decision before adding platform id and scope routing",
-    "application_run_trace_projection_statuses": "trace projection identity semantics need owner decision before adding platform id and scope routing",
     "application_tag_bindings": "binding table identity semantics need owner decision before adding platform id and scope routing",
     "audit_logs": "workspace_id is nullable and audit scope semantics need owner decision before automatic scope migration",
     "authenticators": "system or tenant ownership semantics need owner decision before assigning platform scope routing",
@@ -277,9 +292,7 @@
     "model_provider_main_instances": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",
     "node_contribution_registry": "node contribution registry scope semantics need owner decision before assigning platform scope routing",
     "permission_definitions": "permission catalog system scope semantics need owner decision before assigning platform scope routing",
-    "plugin_artifact_instances": "artifact instance identity and lifecycle semantics need owner decision before adding platform id and scope routing",
     "plugin_installations": "plugin installation owner source is not declared enough for automated scope_id migration",
-    "plugin_package_catalog_projection": "catalog projection identity semantics need owner decision before adding platform id and scope routing",
     "plugin_tasks": "workspace_id is nullable and plugin task scope semantics need owner decision before automatic scope migration",
     "plugin_worker_leases": "plugin worker lease owner source is not declared enough for automated scope_id migration",
     "provider_instance_model_catalog_cache": "provider cache identity semantics need owner decision before adding platform id and scope routing",
@@ -299,6 +312,27 @@
     "forbidden": ["misc", "legacy", "todo", "n/a", "none"]
   },
   "exemptions": {
+    "plugin_artifact_instances": {
+      "kind": "bounded_projection",
+      "reason": "bounded plugin artifact projection is keyed by plugin installation and node without unbounded history",
+      "skip": [
+        "managed-table-id",
+        "managed-table-created-at",
+        "managed-table-updated-at-or-append-only",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
+    "plugin_package_catalog_projection": {
+      "kind": "bounded_projection",
+      "reason": "bounded plugin package catalog projection is one row per plugin installation and does not introduce unbounded expansion history",
+      "skip": [
+        "managed-table-id",
+        "managed-table-created-at",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
     "schema_migrations": {
       "reason": "sqlx internal migration ledger, not application-managed user data",
       "skip": ["id", "created_at", "updated_at", "managed-table-scope-column", "managed-table-scope-time-index"]

@@ -7,6 +7,7 @@ const path = require('node:path');
 const {
   collectSchemaInventory,
   evaluateSchemaHygiene,
+  loadConfig,
   main,
 } = require('../core.js');
 
@@ -253,6 +254,77 @@ test('evaluateSchemaHygiene can explicitly stop a table at needs_owner_review wa
   assert.equal(report.summary.warnings, 1);
   assert.equal(report.findings[0].rule, 'managed-table-needs-owner-review');
   assert.deepEqual(report.tables[0].platformReadiness.recommendedActions, ['needs_owner_review']);
+});
+
+test('evaluateSchemaHygiene lets bounded plugin projections use explicit exemptions', () => {
+  const catalogReason = 'bounded plugin catalog projection keyed by plugin installation';
+  const artifactReason = 'bounded plugin artifact projection keyed by installation and node';
+  const repoRoot = createRepoWithMigration(`
+    create table plugin_package_catalog_projection (
+      installation_id uuid primary key,
+      package_code text not null,
+      package_version text not null,
+      catalog_snapshot_json jsonb not null default '{}'::jsonb,
+      projection_status text not null,
+      refreshed_at timestamptz,
+      updated_at timestamptz not null default now()
+    );
+
+    create table plugin_artifact_instances (
+      node_id text not null,
+      installation_id uuid not null,
+      artifact_status text not null,
+      runtime_status text not null default 'inactive',
+      checked_at timestamptz not null default now(),
+      primary key (node_id, installation_id)
+    );
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: {
+      exemptions: {
+        plugin_package_catalog_projection: {
+          kind: 'bounded_projection',
+          reason: catalogReason,
+          skip: [
+            'managed-table-id',
+            'managed-table-created-at',
+            'managed-table-scope-column',
+            'managed-table-scope-time-index',
+          ],
+        },
+        plugin_artifact_instances: {
+          kind: 'bounded_projection',
+          reason: artifactReason,
+          skip: [
+            'managed-table-id',
+            'managed-table-created-at',
+            'managed-table-updated-at-or-append-only',
+            'managed-table-scope-column',
+            'managed-table-scope-time-index',
+          ],
+        },
+      },
+    },
+  });
+
+  assert.equal(report.summary.errors, 0);
+
+  for (const [tableName, reason] of [
+    ['plugin_package_catalog_projection', catalogReason],
+    ['plugin_artifact_instances', artifactReason],
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.equal(table.exemption.kind, 'bounded_projection');
+    assert.equal(table.exemption.reason, reason);
+    assert.deepEqual(table.findings, []);
+    assert.equal(table.platformReadiness.category, 'bounded_projection');
+    assert.equal(table.platformReadiness.severity, 'ok');
+    assert.equal(table.platformReadiness.reason, reason);
+    assert.deepEqual(table.platformReadiness.recommendedActions, ['bounded_projection_exempt']);
+  }
 });
 
 test('evaluateSchemaHygiene uses default generation declarations for complete tables', () => {
@@ -542,6 +614,54 @@ test('evaluateSchemaHygiene fails registered_system_table without fixed template
     report.findings.map((finding) => finding.rule),
     ['registered-system-table-template-missing']
   );
+});
+
+test('default schema hygiene config exempts only bounded plugin projection tables', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const tableName of ['plugin_package_catalog_projection', 'plugin_artifact_instances']) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.equal(table.exemption.kind, 'bounded_projection');
+    assert.equal(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'), false);
+    assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
+    assert.deepEqual(table.platformReadiness.recommendedActions, ['bounded_projection_exempt']);
+  }
+
+  for (const tableName of ['plugin_tasks', 'plugin_installations', 'plugin_worker_leases']) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
+    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
+  }
+});
+
+test('default schema hygiene config declares trace projection owner chain', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const tableName of [
+    'application_run_trace_projection_statuses',
+    'application_run_trace_nodes',
+    'application_run_trace_node_contents',
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.equal(
+      table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'),
+      false
+    );
+    assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
+    assert.equal(table.platformReadiness.category, 'join_or_child');
+    assert.equal(table.platformReadiness.scopeGenerationSource.status, 'declared');
+    assert.match(table.platformReadiness.scopeGenerationSource.source, /flow_runs\.scope_id/u);
+  }
 });
 
 test('main writes JSON and Markdown reports under tmp/test-governance and exits non-zero on fail findings', async () => {

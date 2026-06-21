@@ -32,6 +32,7 @@ const BROAD_EXEMPTION_SKIPS = new Set([
   'dynamic_model_table',
   'registered_system_table',
 ]);
+const BOUNDED_PROJECTION_EXEMPTION_KIND = 'bounded_projection';
 const COLUMN_CONSTRAINT_KEYWORDS = [
   'not',
   'null',
@@ -942,6 +943,37 @@ function collectExemptionPolicyFindings(table, exemption, config) {
   return findings;
 }
 
+function exemptionForReport(exemption) {
+  if (!exemption) {
+    return null;
+  }
+  const report = {
+    reason: exemption.reason || null,
+    skip: exemption.skip || [],
+  };
+  if (typeof exemption.kind === 'string' && exemption.kind.trim().length > 0) {
+    report.kind = exemption.kind.trim();
+  }
+  return report;
+}
+
+function applyPlatformReadinessExemption({ platformReadiness, exemption, tableFindings }) {
+  if (!exemption || exemption.kind !== BOUNDED_PROJECTION_EXEMPTION_KIND) {
+    return platformReadiness;
+  }
+  if (tableFindings.some((item) => item.severity === 'error')) {
+    return platformReadiness;
+  }
+
+  return {
+    ...platformReadiness,
+    category: BOUNDED_PROJECTION_EXEMPTION_KIND,
+    recommendedActions: ['bounded_projection_exempt'],
+    severity: 'ok',
+    reason: exemption.reason.trim(),
+  };
+}
+
 function profileForTable(table, config) {
   if (config.tableProfiles[table.name]) {
     return config.tableProfiles[table.name];
@@ -1103,17 +1135,21 @@ function evaluateSchemaHygiene({ inventory, config = {} }) {
 
     findings.push(...tableFindings);
 
-    const platformReadiness = platformReadinessForTable({
-      table,
-      profile,
-      config: normalizedConfig,
+    const platformReadiness = applyPlatformReadinessExemption({
+      platformReadiness: platformReadinessForTable({
+        table,
+        profile,
+        config: normalizedConfig,
+        tableFindings,
+      }),
+      exemption,
       tableFindings,
     });
 
     return {
       ...table,
       profile,
-      exemption: exemption ? { reason: exemption.reason || null, skip: exemption.skip || [] } : null,
+      exemption: exemptionForReport(exemption),
       platformReadiness,
       findings: tableFindings,
     };
@@ -1171,13 +1207,14 @@ function writeMarkdownReport(report, markdownPath) {
     }
   }
 
-  lines.push('', '## Tables', '', '| Table | Profile | Category | Missing platform fields | Actions | Columns | JSONB | Indexes |');
-  lines.push('| --- | --- | --- | --- | --- | ---: | --- | ---: |');
+  lines.push('', '## Tables', '', '| Table | Profile | Category | Missing platform fields | Actions | Readiness reason | Columns | JSONB | Indexes |');
+  lines.push('| --- | --- | --- | --- | --- | --- | ---: | --- | ---: |');
   for (const table of report.tables) {
     lines.push(
       `| ${table.name} | ${table.profile} | ${table.platformReadiness.category} | `
         + `${table.platformReadiness.missingFields.join(', ') || '-'} | `
         + `${table.platformReadiness.recommendedActions.join(', ')} | `
+        + `${(table.platformReadiness.reason || '').replace(/\|/gu, '\\|')} | `
         + `${table.columns.length} | ${table.jsonbColumns.join(', ')} | ${table.indexes.length} |`
     );
   }

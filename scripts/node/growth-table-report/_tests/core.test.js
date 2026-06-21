@@ -205,6 +205,113 @@ test('collectGrowthTableReport rejects workspace_id-only expansion readiness', (
   assert.ok(table.findings.some((finding) => finding.rule === 'missing-expansion-scope-column'));
 });
 
+test('collectGrowthTableReport exempts bounded plugin projections from expansion blockers', () => {
+  const catalogReason = 'bounded plugin package catalog projection keyed by plugin installation';
+  const artifactReason = 'bounded plugin artifact projection keyed by installation and node';
+  const repoRoot = createRepoWithMigration(`
+    create table plugin_package_catalog_projection (
+      installation_id uuid primary key,
+      package_code text not null,
+      package_version text not null,
+      catalog_snapshot_json jsonb not null default '{}'::jsonb,
+      projection_status text not null,
+      refreshed_at timestamptz,
+      updated_at timestamptz not null default now()
+    );
+
+    create index plugin_package_catalog_projection_package_idx
+      on plugin_package_catalog_projection (package_code, package_version);
+
+    create index plugin_package_catalog_projection_status_idx
+      on plugin_package_catalog_projection (projection_status, updated_at desc);
+
+    create table plugin_artifact_instances (
+      node_id text not null,
+      installation_id uuid not null,
+      artifact_status text not null,
+      runtime_status text not null default 'inactive',
+      checked_at timestamptz not null default now(),
+      primary key (node_id, installation_id)
+    );
+
+    create index plugin_artifact_instances_installation_id_idx
+      on plugin_artifact_instances (installation_id);
+  `);
+
+  const report = collectGrowthTableReport({
+    repoRoot,
+    config: {
+      tables: [
+        {
+          name: 'plugin_package_catalog_projection',
+          growthType: 'plugin_catalog_projection',
+          requiredRoutingColumns: ['installation_id', 'package_code'],
+          requiredTimeColumns: ['updated_at', 'refreshed_at'],
+          missingTimePriority: 'later',
+          uniqueRouteKeys: ['installation_id'],
+          expansionReadinessExemption: {
+            kind: 'bounded_projection',
+            reason: catalogReason,
+            boundedBy: ['plugin_installations'],
+          },
+          recommendedIndexes: [
+            {
+              columns: ['package_code', 'package_version'],
+              scenario: 'package catalog projection lookup',
+              priority: 'must_fix',
+            },
+            {
+              columns: ['projection_status', 'updated_at'],
+              scenario: 'catalog projection repair scan',
+              priority: 'must_fix',
+            },
+          ],
+        },
+        {
+          name: 'plugin_artifact_instances',
+          growthType: 'plugin_artifact_projection',
+          requiredRoutingColumns: ['installation_id', 'node_id'],
+          requiredTimeColumns: ['checked_at'],
+          uniqueRouteKeys: ['installation_id'],
+          expansionReadinessExemption: {
+            kind: 'bounded_projection',
+            reason: artifactReason,
+            boundedBy: ['plugin_installations'],
+          },
+          recommendedIndexes: [
+            {
+              columns: ['installation_id'],
+              scenario: 'plugin installation artifact status lookup',
+              priority: 'must_fix',
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.equal(report.summary.mustFix, 0);
+  const catalog = report.tables.find((table) => table.name === 'plugin_package_catalog_projection');
+  const artifact = report.tables.find((table) => table.name === 'plugin_artifact_instances');
+
+  assert.equal(catalog.expansionReadiness.status, 'bounded');
+  assert.equal(catalog.expansionReadiness.exemption.reason, catalogReason);
+  assert.deepEqual(catalog.expansionReadiness.recommendedActions, ['bounded_projection_exempt']);
+  assert.equal(catalog.findings.some((finding) => finding.rule.startsWith('missing-expansion-')), false);
+  assert.equal(catalog.status, 'later');
+
+  assert.equal(artifact.expansionReadiness.status, 'bounded');
+  assert.equal(artifact.expansionReadiness.exemption.reason, artifactReason);
+  assert.deepEqual(artifact.expansionReadiness.recommendedActions, ['bounded_projection_exempt']);
+  assert.deepEqual(artifact.findings, []);
+  assert.equal(artifact.status, 'ok');
+
+  const markdown = formatGrowthTableMarkdown(report);
+  assert.match(markdown, /Readiness exemption/u);
+  assert.match(markdown, new RegExp(catalogReason, 'u'));
+  assert.match(markdown, new RegExp(artifactReason, 'u'));
+});
+
 test('collectGrowthTableReport splits write and read entrypoints from SQL evidence', () => {
   const repoRoot = createRepoWithMigration(`
     create table runtime_events (
@@ -312,7 +419,27 @@ test('default config covers issue-required and active legacy high-growth tables'
     'runtime_debug_artifacts',
     'application_run_log_summaries',
     'application_public_conversations',
+    'application_run_trace_projection_statuses',
+    'application_run_trace_nodes',
+    'application_run_trace_node_contents',
+    'plugin_package_catalog_projection',
+    'plugin_artifact_instances',
   ]) {
     assert.equal(tableNames.has(tableName), true, `${tableName} must be covered`);
+  }
+
+  for (const tableName of ['plugin_package_catalog_projection', 'plugin_artifact_instances']) {
+    const spec = config.tables.find((table) => table.name === tableName);
+    assert.equal(spec.expansionReadinessExemption.kind, 'bounded_projection');
+    assert.match(spec.expansionReadinessExemption.reason, /bounded plugin/u);
+  }
+
+  for (const tableName of [
+    'application_run_trace_projection_statuses',
+    'application_run_trace_nodes',
+    'application_run_trace_node_contents',
+  ]) {
+    const spec = config.tables.find((table) => table.name === tableName);
+    assert.match(spec.backfill.source, /flow_runs\.scope_id/u);
   }
 });

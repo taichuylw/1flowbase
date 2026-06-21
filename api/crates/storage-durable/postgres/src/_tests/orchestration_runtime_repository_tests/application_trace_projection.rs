@@ -114,6 +114,63 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
     );
     assert_eq!(status.source_watermark, "node_runs:2/runtime_events:0");
 
+    let flow_run_scope_id: Uuid =
+        sqlx::query_scalar("select scope_id from flow_runs where id = $1")
+            .bind(run.id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(flow_run_scope_id, seeded.workspace_id);
+
+    let (status_id, status_scope_id): (Uuid, Uuid) = sqlx::query_as(
+        r#"
+        select id, scope_id
+        from application_run_trace_projection_statuses
+        where flow_run_id = $1
+          and projection_version = $2
+        "#,
+    )
+    .bind(run.id)
+    .bind(1)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(status_scope_id, flow_run_scope_id);
+    assert_ne!(status_id, run.id);
+
+    let node_physical_rows: Vec<(Uuid, Uuid, Uuid)> = sqlx::query_as(
+        r#"
+        select trace_node_id, id, scope_id
+        from application_run_trace_nodes
+        where flow_run_id = $1
+        order by order_key
+        "#,
+    )
+    .bind(run.id)
+    .fetch_all(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(node_physical_rows.len(), 2);
+    for (trace_node_id, node_id, node_scope_id) in node_physical_rows {
+        assert_eq!(node_scope_id, flow_run_scope_id);
+        assert_ne!(node_id, trace_node_id);
+    }
+
+    let (content_id, content_flow_run_id, content_scope_id): (Uuid, Uuid, Uuid) = sqlx::query_as(
+        r#"
+        select id, flow_run_id, scope_id
+        from application_run_trace_node_contents
+        where trace_node_id = $1
+        "#,
+    )
+    .bind(child_trace_node_id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(content_flow_run_id, run.id);
+    assert_eq!(content_scope_id, flow_run_scope_id);
+    assert_ne!(content_id, child_trace_node_id);
+
     let roots =
         <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_run_trace_roots(
             &store, run.id,
@@ -169,13 +226,17 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
     assert_eq!(content.payload["tool_call_id"], json!("call-weather"));
     assert_eq!(content.payload["payload"]["temperature"], json!(22));
 
-    let index_names: Vec<String> = sqlx::query_scalar(
+    let index_names: Vec<(String, String)> = sqlx::query_as(
         r#"
-        select indexname
+        select tablename, indexname
         from pg_indexes
         where schemaname = current_schema()
-          and tablename = 'application_run_trace_nodes'
-        order by indexname
+          and tablename in (
+              'application_run_trace_projection_statuses',
+              'application_run_trace_nodes',
+              'application_run_trace_node_contents'
+          )
+        order by tablename, indexname
         "#,
     )
     .fetch_all(store.pool())
@@ -183,10 +244,19 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
     .unwrap();
     assert!(index_names
         .iter()
-        .any(|name| name == "application_run_trace_nodes_children_idx"));
+        .any(|(_, name)| name == "application_run_trace_nodes_children_idx"));
     assert!(index_names
         .iter()
-        .any(|name| name == "application_run_trace_nodes_stable_locator_idx"));
+        .any(|(_, name)| name == "application_run_trace_nodes_stable_locator_idx"));
+    assert!(index_names.iter().any(|(_, name)| {
+        name == "application_run_trace_projection_statuses_scope_created_id_idx"
+    }));
+    assert!(index_names
+        .iter()
+        .any(|(_, name)| name == "application_run_trace_nodes_scope_created_id_idx"));
+    assert!(index_names
+        .iter()
+        .any(|(_, name)| { name == "application_run_trace_node_contents_scope_created_id_idx" }));
 }
 
 #[tokio::test]
@@ -398,4 +468,20 @@ async fn trace_projection_failed_status_preserves_diagnostics() {
         Some("req-trace-projection-1")
     );
     assert!(status.retriable);
+
+    let (status_id, status_scope_id): (Uuid, Uuid) = sqlx::query_as(
+        r#"
+        select statuses.id, statuses.scope_id
+        from application_run_trace_projection_statuses statuses
+        where statuses.flow_run_id = $1
+          and statuses.projection_version = $2
+        "#,
+    )
+    .bind(run.id)
+    .bind(1)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(status_scope_id, seeded.workspace_id);
+    assert_ne!(status_id, run.id);
 }
