@@ -327,6 +327,54 @@ test('evaluateSchemaHygiene lets bounded plugin projections use explicit exempti
   }
 });
 
+test('evaluateSchemaHygiene lets concrete profile exemptions surface readiness categories', () => {
+  const reason = 'routing root table uses its primary id as the platform route key';
+  const repoRoot = createRepoWithMigration(`
+    create table routing_roots (
+      id uuid primary key,
+      code text not null unique,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create table unprofiled_roots (
+      id uuid primary key,
+      code text not null unique,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+  `);
+
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: {
+      tableProfiles: {
+        routing_roots: 'routing_root_reference',
+      },
+      exemptions: {
+        routing_roots: {
+          kind: 'routing_root_reference',
+          reason,
+          skip: [
+            'managed-table-scope-column',
+            'managed-table-scope-time-index',
+          ],
+        },
+      },
+    },
+  });
+
+  const table = report.tables.find((candidate) => candidate.name === 'routing_roots');
+  assert.equal(table.profile, 'routing_root_reference');
+  assert.equal(table.platformReadiness.category, 'routing_root_reference');
+  assert.equal(table.platformReadiness.reason, reason);
+  assert.deepEqual(table.platformReadiness.recommendedActions, ['routing_root_reference_declared']);
+
+  const unprofiled = report.tables.find((candidate) => candidate.name === 'unprofiled_roots');
+  assert.ok(unprofiled.findings.some((finding) => finding.rule === 'managed-table-scope-column'));
+});
+
 test('evaluateSchemaHygiene uses default generation declarations for complete tables', () => {
   const repoRoot = createRepoWithMigration(`
     create table scoped_events (
@@ -632,10 +680,32 @@ test('default schema hygiene config exempts only bounded plugin projection table
     assert.deepEqual(table.platformReadiness.recommendedActions, ['bounded_projection_exempt']);
   }
 
-  for (const tableName of ['plugin_tasks', 'plugin_installations', 'plugin_worker_leases']) {
+  assert.equal(report.summary.errors, 0);
+});
+
+test('default schema hygiene config declares issue 1082 root and auth reference profiles', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const [tableName, expectedCategory] of [
+    ['tenants', 'routing_root_reference'],
+    ['workspaces', 'workspace_routing_root'],
+    ['users', 'global_identity_reference'],
+    ['authenticators', 'system_reference_table'],
+    ['user_auth_identities', 'global_identity_reference'],
+  ]) {
     const table = report.tables.find((candidate) => candidate.name === tableName);
-    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
-    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
+    assert.equal(
+      table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'),
+      false
+    );
+    assert.equal(table.platformReadiness.category, expectedCategory);
+    assert.equal(table.platformReadiness.severity, 'ok');
+    assert.match(table.platformReadiness.reason, /(routing|identity|system|auth)/u);
   }
 });
 
@@ -693,15 +763,8 @@ test('default schema hygiene config declares issue 1074 owner-confirmed scoped r
     assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
   }
 
-  for (const tableName of [
-    'plugin_installations',
-    'plugin_worker_leases',
-    'user_auth_identities',
-  ]) {
-    const table = report.tables.find((candidate) => candidate.name === tableName);
-    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
-    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
-  }
+  assert.equal(report.tables.some((table) => table.name === 'user_auth_identities'
+    && table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review')), false);
 });
 
 test('default schema hygiene config declares issue 1073 lifecycle scoped readiness tables', () => {
@@ -733,18 +796,70 @@ test('default schema hygiene config declares issue 1073 lifecycle scoped readine
     assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
   }
 
-  for (const tableName of [
-    'flow_drafts',
-    'model_catalog_sync_runs',
-    'model_change_logs',
-    'model_failover_queue_items',
-    'model_provider_catalog_entries',
-    'data_source_catalog_caches',
-    'data_source_secrets',
+  assert.equal(report.tables.some((table) => table.name === 'plugin_tasks'
+    && table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review')), false);
+});
+
+test('default schema hygiene config declares issue 1085 model provider bounded history profiles', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const [tableName, expectedCategory] of [
+    ['model_provider_catalog_entries', 'bounded_catalog_projection'],
+    ['model_failover_queue_items', 'bounded_child_list'],
+    ['model_catalog_sync_runs', 'low_volume_operational_history'],
+    ['model_change_logs', 'low_volume_audit_history'],
   ]) {
     const table = report.tables.find((candidate) => candidate.name === tableName);
-    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
-    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
+    assert.equal(
+      table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'),
+      false
+    );
+    assert.equal(table.platformReadiness.category, expectedCategory);
+    assert.equal(table.platformReadiness.severity, 'ok');
+    assert.equal(table.exemption.kind, expectedCategory);
+  }
+
+  const changeLogs = report.tables.find((candidate) => candidate.name === 'model_change_logs');
+  assert.match(changeLogs.platformReadiness.reason, /data_model_id = null/u);
+});
+
+test('default schema hygiene config declares remaining scoped readiness issue tables', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const [tableName, expectedCategory] of [
+    ['roles', 'mixed_role_owner_chain'],
+    ['role_permissions', 'join_or_child'],
+    ['user_role_bindings', 'join_or_child'],
+    ['plugin_installations', 'system_global'],
+    ['plugin_tasks', 'mixed_plugin_task'],
+    ['plugin_worker_leases', 'system_runtime'],
+    ['data_source_secrets', 'join_or_child'],
+    ['data_source_catalog_caches', 'join_or_child'],
+    ['audit_logs', 'mixed_audit_history'],
+    ['flow_drafts', 'join_or_child'],
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.equal(
+      table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'),
+      false,
+      `${tableName} should not remain in owner review`
+    );
+    assert.equal(table.platformReadiness.category, expectedCategory);
+    assert.equal(table.platformReadiness.fields.scope_id.present, true);
+    assert.equal(table.platformReadiness.fields.created_at.present, true);
+    assert.equal(table.platformReadiness.hasScopeTimeIdIndex, true);
+    assert.equal(table.platformReadiness.scopeGenerationSource.status, 'declared');
+    assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
   }
 });
 
@@ -790,16 +905,8 @@ test('default schema hygiene config declares issue 1075 system global scoped rea
     assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
   }
 
-  for (const tableName of [
-    'authenticators',
-    'tenants',
-    'users',
-    'workspaces',
-  ]) {
-    const table = report.tables.find((candidate) => candidate.name === tableName);
-    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
-    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
-  }
+  assert.equal(report.tables.some((table) => ['authenticators', 'tenants', 'users', 'workspaces'].includes(table.name)
+    && table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review')), false);
 });
 
 test('default schema hygiene config declares issue 1076 identity join scoped readiness tables', () => {
@@ -838,14 +945,8 @@ test('default schema hygiene config declares issue 1076 identity join scoped rea
     assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
   }
 
-  for (const tableName of [
-    'role_permissions',
-    'user_role_bindings',
-  ]) {
-    const table = report.tables.find((candidate) => candidate.name === tableName);
-    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
-    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
-  }
+  assert.equal(report.tables.some((table) => ['role_permissions', 'user_role_bindings'].includes(table.name)
+    && table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review')), false);
 });
 
 test('main writes JSON and Markdown reports under tmp/test-governance and exits non-zero on fail findings', async () => {

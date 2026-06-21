@@ -33,6 +33,7 @@ const BROAD_EXEMPTION_SKIPS = new Set([
   'registered_system_table',
 ]);
 const BOUNDED_PROJECTION_EXEMPTION_KIND = 'bounded_projection';
+const BOUNDED_PROJECTION_EXEMPT_ACTION = 'bounded_projection_exempt';
 const COLUMN_CONSTRAINT_KEYWORDS = [
   'not',
   'null',
@@ -958,17 +959,22 @@ function exemptionForReport(exemption) {
 }
 
 function applyPlatformReadinessExemption({ platformReadiness, exemption, tableFindings }) {
-  if (!exemption || exemption.kind !== BOUNDED_PROJECTION_EXEMPTION_KIND) {
+  if (!exemption || typeof exemption.kind !== 'string' || exemption.kind.trim().length === 0) {
     return platformReadiness;
   }
   if (tableFindings.some((item) => item.severity === 'error')) {
     return platformReadiness;
   }
 
+  const kind = exemption.kind.trim();
   return {
     ...platformReadiness,
-    category: BOUNDED_PROJECTION_EXEMPTION_KIND,
-    recommendedActions: ['bounded_projection_exempt'],
+    category: kind,
+    recommendedActions: [
+      kind === BOUNDED_PROJECTION_EXEMPTION_KIND
+        ? BOUNDED_PROJECTION_EXEMPT_ACTION
+        : `${kind}_declared`,
+    ],
     severity: 'ok',
     reason: exemption.reason.trim(),
   };
