@@ -704,6 +704,50 @@ test('default schema hygiene config declares issue 1074 owner-confirmed scoped r
   }
 });
 
+test('default schema hygiene config declares issue 1073 lifecycle scoped readiness tables', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const tableName of [
+    'application_publication_versions',
+    'flow_versions',
+    'model_failover_queue_snapshots',
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.equal(
+      table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'),
+      false
+    );
+    assert.equal(table.platformReadiness.fields.id.present, true);
+    assert.equal(table.platformReadiness.fields.scope_id.present, true);
+    assert.equal(table.platformReadiness.fields.created_at.present, true);
+    if (tableName === 'flow_versions') {
+      assert.equal(table.platformReadiness.fields.updated_at.present, true);
+    }
+    assert.equal(table.platformReadiness.hasScopeTimeIdIndex, true);
+    assert.equal(table.platformReadiness.scopeGenerationSource.status, 'declared');
+    assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
+  }
+
+  for (const tableName of [
+    'flow_drafts',
+    'model_catalog_sync_runs',
+    'model_change_logs',
+    'model_failover_queue_items',
+    'model_provider_catalog_entries',
+    'data_source_catalog_caches',
+    'data_source_secrets',
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
+    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
+  }
+});
+
 test('main writes JSON and Markdown reports under tmp/test-governance and exits non-zero on fail findings', async () => {
   const repoRoot = createRepoWithMigration(`
     create table audit_events (

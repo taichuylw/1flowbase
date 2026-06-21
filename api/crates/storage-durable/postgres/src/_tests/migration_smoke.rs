@@ -157,6 +157,140 @@ async fn migration_smoke_creates_workspace_tables_and_workspace_scoped_indexes()
 }
 
 #[tokio::test]
+async fn migration_smoke_creates_lifecycle_scoped_readiness_columns_and_indexes() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let schema: String = sqlx::query_scalar("select current_schema()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    for (table, expected_columns) in [
+        (
+            "application_publication_versions",
+            vec![
+                "id",
+                "scope_id",
+                "created_at",
+                "created_by",
+                "updated_at",
+                "updated_by",
+            ],
+        ),
+        (
+            "flow_versions",
+            vec![
+                "id",
+                "scope_id",
+                "created_at",
+                "created_by",
+                "updated_at",
+                "updated_by",
+            ],
+        ),
+        (
+            "model_failover_queue_snapshots",
+            vec!["id", "scope_id", "created_at", "created_by", "updated_by"],
+        ),
+    ] {
+        let columns: Vec<String> = sqlx::query_scalar(
+            r#"
+            select column_name
+            from information_schema.columns
+            where table_schema = $1
+              and table_name = $2
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        for expected_column in expected_columns {
+            assert!(
+                columns.contains(&expected_column.to_string()),
+                "missing {table}.{expected_column}"
+            );
+        }
+
+        let scope_index_count: i64 = sqlx::query_scalar(
+            r#"
+            select count(*)
+            from pg_indexes
+            where schemaname = $1
+              and tablename = $2
+              and indexdef ilike '%(scope_id, created_at, id)%'
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            scope_index_count, 1,
+            "missing {table} scope readiness index"
+        );
+    }
+
+    let publication_unique_count: i64 = sqlx::query_scalar(
+        r#"
+        select count(*)
+        from pg_indexes
+        where schemaname = $1
+          and tablename = 'application_publication_versions'
+          and indexname = 'application_publication_versions_application_id_idx'
+          and indexdef ilike '%unique%'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(publication_unique_count, 1);
+
+    let flow_sequence_unique_count: i64 = sqlx::query_scalar(
+        r#"
+        select count(*)
+        from information_schema.table_constraints constraints
+        join information_schema.key_column_usage columns
+          on columns.constraint_schema = constraints.constraint_schema
+         and columns.constraint_name = constraints.constraint_name
+        where constraints.table_schema = $1
+          and constraints.table_name = 'flow_versions'
+          and constraints.constraint_type = 'UNIQUE'
+          and columns.column_name in ('flow_id', 'sequence')
+        group by constraints.constraint_name
+        having count(*) = 2
+        "#,
+    )
+    .bind(&schema)
+    .fetch_optional(&pool)
+    .await
+    .unwrap()
+    .unwrap_or(0);
+    assert_eq!(flow_sequence_unique_count, 2);
+
+    let snapshot_template_delete_rule: String = sqlx::query_scalar(
+        r#"
+        select constraints.delete_rule
+        from information_schema.referential_constraints constraints
+        join information_schema.key_column_usage columns
+          on columns.constraint_schema = constraints.constraint_schema
+         and columns.constraint_name = constraints.constraint_name
+        where columns.table_schema = $1
+          and columns.table_name = 'model_failover_queue_snapshots'
+          and columns.column_name = 'queue_template_id'
+        "#,
+    )
+    .bind(&schema)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(snapshot_template_delete_rule, "RESTRICT");
+}
+
+#[tokio::test]
 async fn bootstrap_repository_upserts_password_local_and_root_user() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

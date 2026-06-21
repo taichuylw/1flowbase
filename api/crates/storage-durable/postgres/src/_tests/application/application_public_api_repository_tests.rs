@@ -152,9 +152,9 @@ async fn seed_flow_version_and_compiled_plan(
     sqlx::query(
         r#"
         insert into flow_versions (
-            id, flow_id, sequence, trigger, change_kind, summary,
-            summary_is_custom, is_protected, document, created_by
-        ) values ($1, $2, 1, 'autosave', 'logical', 'published', false, true, $3, $4)
+            id, flow_id, scope_id, sequence, trigger, change_kind, summary,
+            summary_is_custom, is_protected, document, created_by, updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), 1, 'autosave', 'logical', 'published', false, true, $3, $4, $4)
         "#,
     )
     .bind(version_id)
@@ -204,9 +204,9 @@ async fn seed_publication_revision(
     sqlx::query(
         r#"
         insert into flow_versions (
-            id, flow_id, sequence, trigger, change_kind, summary,
-            summary_is_custom, is_protected, document, created_by
-        ) values ($1, $2, $3, 'autosave', 'logical', 'published', false, true, $4, $5)
+            id, flow_id, scope_id, sequence, trigger, change_kind, summary,
+            summary_is_custom, is_protected, document, created_by, updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), $3, 'autosave', 'logical', 'published', false, true, $4, $5, $5)
         "#,
     )
     .bind(version_id)

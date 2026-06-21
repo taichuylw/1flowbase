@@ -1050,9 +1050,20 @@ impl ModelProviderRepository for PgControlPlaneStore {
             insert into model_failover_queue_snapshots (
                 id,
                 queue_template_id,
+                scope_id,
                 version,
-                items
-            ) values ($1, $2, $3, $4)
+                items,
+                created_by,
+                updated_by
+            ) values (
+                $1,
+                $2,
+                (select scope_id from model_failover_queue_templates where id = $2),
+                $3,
+                $4,
+                (select created_by from model_failover_queue_templates where id = $2),
+                (select created_by from model_failover_queue_templates where id = $2)
+            )
             returning
                 id,
                 queue_template_id,

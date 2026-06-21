@@ -88,6 +88,7 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
             insert into application_publication_versions (
                 id,
                 application_id,
+                scope_id,
                 flow_id,
                 flow_version_id,
                 compiled_plan_id,
@@ -101,12 +102,14 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
                 runtime_profile_snapshot,
                 output_selector,
                 dependency_snapshot,
-                created_by
+                created_by,
+                updated_by
             ) values (
-                $1, $2, $3, $4, $5, 1, true, $6, $7, $8, $9, $10, $11, $12, $13, $14
+                $1, $2, (select scope_id from applications where id = $2), $3, $4, $5, 1, true, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14
             )
             on conflict (application_id) do update
-            set flow_id = excluded.flow_id,
+            set scope_id = excluded.scope_id,
+                flow_id = excluded.flow_id,
                 flow_version_id = excluded.flow_version_id,
                 compiled_plan_id = excluded.compiled_plan_id,
                 version_sequence = 1,
@@ -120,7 +123,9 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
                 output_selector = excluded.output_selector,
                 dependency_snapshot = excluded.dependency_snapshot,
                 created_by = excluded.created_by,
-                created_at = now()
+                created_at = now(),
+                updated_by = excluded.updated_by,
+                updated_at = now()
             returning
                 id,
                 application_id,

@@ -325,6 +325,7 @@ async fn save_draft_trim_keeps_current_publication_flow_version() {
         insert into application_publication_versions (
             id,
             application_id,
+            scope_id,
             flow_id,
             flow_version_id,
             compiled_plan_id,
@@ -338,10 +339,11 @@ async fn save_draft_trim_keeps_current_publication_flow_version() {
             runtime_profile_snapshot,
             output_selector,
             dependency_snapshot,
-            created_by
+            created_by,
+            updated_by
         ) values (
-            $1, $2, $3, $4, $5, 1, true, true, $6, 'sha256:published',
-            $7, $8, '{}', '{}', '[]', $9
+            $1, $2, (select scope_id from applications where id = $2), $3, $4, $5, 1, true, true, $6, 'sha256:published',
+            $7, $8, '{}', '{}', '[]', $9, $9
         )
         "#,
     )

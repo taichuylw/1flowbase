@@ -47,6 +47,7 @@
     "flow_run_callback_tasks",
     "flow_run_checkpoints",
     "flow_run_events",
+    "model_failover_queue_snapshots",
     "node_runs",
     "runtime_artifacts",
     "runtime_audit_hashes",
@@ -81,6 +82,12 @@
     "application_public_conversations": {
       "scopeGenerationSource": "application_id -> applications.workspace_id, maintained by migration trigger",
       "backfillSource": "applications.workspace_id"
+    },
+    "application_publication_versions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id, written by publication repository",
+      "backfillSource": "applications.scope_id",
+      "writePathSource": "publication repository writes current publication scope_id from application owner scope"
     },
     "application_run_log_summaries": {
       "scopeGenerationSource": "existing runtime summary write path stores scope_id from flow run context"
@@ -177,6 +184,12 @@
       "backfillSource": "applications.scope_id",
       "writePathSource": "flow repository writes scope_id from application workspace context"
     },
+    "flow_versions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_id -> flows.scope_id, written by flow repository",
+      "backfillSource": "flows.scope_id",
+      "writePathSource": "flow repository writes version scope_id from flow owner scope"
+    },
     "frontstage_block_codes": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
@@ -225,6 +238,12 @@
     "model_failover_queue_templates": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
+    },
+    "model_failover_queue_snapshots": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "queue_template_id -> model_failover_queue_templates.scope_id, written by model provider repository",
+      "backfillSource": "model_failover_queue_templates.scope_id",
+      "writePathSource": "model provider repository writes queue snapshot scope_id from template owner scope"
     },
     "model_provider_catalog_sources": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
@@ -301,7 +320,6 @@
     "api_key_data_model_permissions": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
     "application_api_mappings": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
     "application_environment_variables": "primary or unique identity semantics need owner decision before adding platform id and scope routing",
-    "application_publication_versions": "publication lifecycle owner and append-only update semantics need owner decision before scope migration",
     "application_tag_bindings": "binding table identity semantics need owner decision before adding platform id and scope routing",
     "audit_logs": "workspace_id is nullable and audit scope semantics need owner decision before automatic scope migration",
     "authenticators": "system or tenant ownership semantics need owner decision before assigning platform scope routing",
@@ -309,7 +327,6 @@
     "data_source_secrets": "secret ownership and key semantics need owner decision before adding platform id and scope routing",
     "file_storages": "system storage ownership needs owner decision before assigning platform scope routing",
     "flow_drafts": "draft owner and historical created_at source need owner decision before automated migration",
-    "flow_versions": "flow version owner and append-only update semantics need owner decision before scope migration",
     "frontend_block_catalog": "catalog system scope semantics need owner decision before assigning platform scope routing",
     "frontstage_page_schemas": "one-to-one page schema identity semantics need owner decision before adding platform id and scope routing",
     "host_extension_migrations": "host extension migration ledger scope and lifecycle semantics need owner decision",
@@ -319,7 +336,6 @@
     "model_catalog_sync_runs": "sync run owner and historical created_at source need owner decision before automated migration",
     "model_change_logs": "model change log owner and append-only update semantics need owner decision before scope migration",
     "model_failover_queue_items": "queue item owner and historical created_at source need owner decision before automated migration",
-    "model_failover_queue_snapshots": "queue snapshot owner and append-only update semantics need owner decision before scope migration",
     "model_provider_catalog_entries": "catalog entry owner and historical created_at source need owner decision before automated migration",
     "model_provider_instance_secrets": "secret identity and ownership semantics need owner decision before adding platform id and scope routing",
     "model_provider_main_instances": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",
