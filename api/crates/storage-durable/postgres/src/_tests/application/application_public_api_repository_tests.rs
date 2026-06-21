@@ -130,7 +130,7 @@ async fn seed_flow_version_and_compiled_plan(
     let document = domain::default_flow_document(flow_id);
 
     sqlx::query(
-        "insert into flows (id, application_id, created_by, updated_by) values ($1, $2, $3, $3)",
+        "insert into flows (id, application_id, scope_id, created_by, updated_by) values ($1, $2, (select scope_id from applications where id = $2), $3, $3)",
     )
     .bind(flow_id)
     .bind(application_id)
@@ -168,9 +168,9 @@ async fn seed_flow_version_and_compiled_plan(
         r#"
         insert into flow_compiled_plans (
             id, flow_id, flow_draft_id, schema_version, document_hash,
-            document_updated_at, plan, created_by
+            document_updated_at, plan, scope_id, created_by, updated_by
         )
-        select $1, $2, $3, $4, 'sha256:test', updated_at, $5, $6
+        select $1, $2, $3, $4, 'sha256:test', updated_at, $5, (select scope_id from flows where id = $2), $6, $6
         from flow_drafts
         where id = $3
         "#,
@@ -222,9 +222,9 @@ async fn seed_publication_revision(
         r#"
         insert into flow_compiled_plans (
             id, flow_id, flow_draft_id, schema_version, document_hash,
-            document_updated_at, plan, created_by
+            document_updated_at, plan, scope_id, created_by, updated_by
         )
-        select $1, $2, $3, $4, $5, updated_at, $6, $7
+        select $1, $2, $3, $4, $5, updated_at, $6, (select scope_id from flows where id = $2), $7, $7
         from flow_drafts
         where id = $3
         "#,

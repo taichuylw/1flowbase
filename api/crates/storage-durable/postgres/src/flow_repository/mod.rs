@@ -304,8 +304,8 @@ async fn insert_flow(
 ) -> Result<domain::FlowRecord> {
     let row = sqlx::query(
         r#"
-        insert into flows (id, application_id, created_by, updated_by)
-        values ($1, $2, $3, $3)
+        insert into flows (id, application_id, scope_id, created_by, updated_by)
+        values ($1, $2, (select scope_id from applications where id = $2), $3, $3)
         returning id, application_id, created_by, updated_at
         "#,
     )

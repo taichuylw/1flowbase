@@ -43,6 +43,7 @@
     }
   },
   "appendOnlyTables": [
+    "external_agent_telemetry_events",
     "flow_run_callback_tasks",
     "flow_run_checkpoints",
     "flow_run_events",
@@ -137,8 +138,23 @@
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
     },
+    "external_agent_telemetry_events": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "external_agent_session_id -> external_agent_sessions.scope_id, maintained by migration trigger until telemetry repository writes exist",
+      "backfillSource": "external_agent_sessions.scope_id",
+      "created_byGeneration": "telemetry rows are append-only system observations; actor fields are nullable until a repository write path exists",
+      "updated_byGeneration": "telemetry rows are append-only system observations; actor fields are nullable until a repository write path exists",
+      "writePathSource": "temporary migration trigger fills scope_id; replace with telemetry repository-owned scope_id writes by 2026-09-30"
+    },
     "file_tables": {
       "scopeGenerationSource": "existing file table write path stores scope_id from workspace storage context"
+    },
+    "flow_compiled_plans": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_id -> flows.scope_id, written by orchestration runtime repository",
+      "backfillSource": "flows.scope_id",
+      "updated_byGeneration": "orchestration runtime repository writes updater from actor context",
+      "writePathSource": "orchestration runtime repository writes scope_id and updated_by from flow and actor context"
     },
     "flow_run_callback_resume_attempts": {
       "scopeGenerationSource": "existing resume attempt write path stores scope_id from flow run context"
@@ -156,6 +172,11 @@
       "scopeGenerationSource": "application_id -> applications.workspace_id, maintained by migration trigger",
       "backfillSource": "applications.workspace_id"
     },
+    "flows": {
+      "scopeGenerationSource": "application_id -> applications.scope_id, written by flow repository",
+      "backfillSource": "applications.scope_id",
+      "writePathSource": "flow repository writes scope_id from application workspace context"
+    },
     "frontstage_block_codes": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
@@ -168,9 +189,21 @@
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
     },
+    "mcp_groups": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "instance_record_id -> mcp_instances.scope_id, written by MCP management repository",
+      "backfillSource": "mcp_instances.scope_id",
+      "writePathSource": "MCP management repository writes scope_id from instance context"
+    },
     "mcp_meta_tool_configs": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
+    },
+    "mcp_tool_bindings": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "instance_record_id -> mcp_instances.scope_id, written by MCP management repository",
+      "backfillSource": "mcp_instances.scope_id",
+      "writePathSource": "MCP management repository writes scope_id from instance context"
     },
     "mcp_tools": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
@@ -178,6 +211,12 @@
     },
     "model_definitions": {
       "scopeGenerationSource": "existing model definition write path stores scope_id from model owner context"
+    },
+    "model_fields": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "data_model_id -> model_definitions.scope_id, written by model definition repository",
+      "backfillSource": "model_definitions.scope_id",
+      "writePathSource": "model definition repository writes scope_id from data model owner context"
     },
     "model_failover_attempt_ledger": {
       "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
@@ -268,25 +307,19 @@
     "authenticators": "system or tenant ownership semantics need owner decision before assigning platform scope routing",
     "data_source_catalog_caches": "cache identity and refresh lifecycle semantics need owner decision before adding platform id and scope routing",
     "data_source_secrets": "secret ownership and key semantics need owner decision before adding platform id and scope routing",
-    "external_agent_telemetry_events": "telemetry owner source is not declared enough for automated scope_id migration",
     "file_storages": "system storage ownership needs owner decision before assigning platform scope routing",
-    "flow_compiled_plans": "compiled plan owner source is not declared enough for automated scope_id migration",
     "flow_drafts": "draft owner and historical created_at source need owner decision before automated migration",
     "flow_versions": "flow version owner and append-only update semantics need owner decision before scope migration",
-    "flows": "flow owner source is not declared enough for automated scope_id migration",
     "frontend_block_catalog": "catalog system scope semantics need owner decision before assigning platform scope routing",
     "frontstage_page_schemas": "one-to-one page schema identity semantics need owner decision before adding platform id and scope routing",
     "host_extension_migrations": "host extension migration ledger scope and lifecycle semantics need owner decision",
     "host_infrastructure_provider_configs": "host infrastructure ownership semantics need owner decision before scope migration",
     "js_dependency_registry": "global registry scope semantics need owner decision before assigning platform scope routing",
     "main_source_defaults": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",
-    "mcp_groups": "MCP group owner source is not declared enough for automated scope_id migration",
-    "mcp_tool_bindings": "MCP tool binding owner source is not declared enough for automated scope_id migration",
     "model_catalog_sync_runs": "sync run owner and historical created_at source need owner decision before automated migration",
     "model_change_logs": "model change log owner and append-only update semantics need owner decision before scope migration",
     "model_failover_queue_items": "queue item owner and historical created_at source need owner decision before automated migration",
     "model_failover_queue_snapshots": "queue snapshot owner and append-only update semantics need owner decision before scope migration",
-    "model_fields": "model field owner source is not declared enough for automated scope_id migration",
     "model_provider_catalog_entries": "catalog entry owner and historical created_at source need owner decision before automated migration",
     "model_provider_instance_secrets": "secret identity and ownership semantics need owner decision before adding platform id and scope routing",
     "model_provider_main_instances": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",

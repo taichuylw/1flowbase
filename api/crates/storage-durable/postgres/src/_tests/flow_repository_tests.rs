@@ -303,9 +303,9 @@ async fn save_draft_trim_keeps_current_publication_flow_version() {
         r#"
         insert into flow_compiled_plans (
             id, flow_id, flow_draft_id, schema_version, document_hash,
-            document_updated_at, plan, created_by
+            document_updated_at, plan, scope_id, created_by, updated_by
         )
-        select $1, $2, $3, $4, 'sha256:published', updated_at, $5, $6
+        select $1, $2, $3, $4, 'sha256:published', updated_at, $5, (select scope_id from flows where id = $2), $6, $6
         from flow_drafts
         where id = $3
         "#,

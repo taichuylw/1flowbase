@@ -664,6 +664,46 @@ test('default schema hygiene config declares trace projection owner chain', () =
   }
 });
 
+test('default schema hygiene config declares issue 1074 owner-confirmed scoped readiness tables', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const tableName of [
+    'external_agent_telemetry_events',
+    'flow_compiled_plans',
+    'flows',
+    'mcp_groups',
+    'mcp_tool_bindings',
+    'model_fields',
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.equal(
+      table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'),
+      false
+    );
+    assert.equal(table.platformReadiness.fields.id.present, true);
+    assert.equal(table.platformReadiness.fields.scope_id.present, true);
+    assert.equal(table.platformReadiness.fields.created_at.present, true);
+    assert.equal(table.platformReadiness.hasScopeTimeIdIndex, true);
+    assert.equal(table.platformReadiness.scopeGenerationSource.status, 'declared');
+    assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
+  }
+
+  for (const tableName of [
+    'plugin_installations',
+    'plugin_worker_leases',
+    'user_auth_identities',
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
+    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
+  }
+});
+
 test('main writes JSON and Markdown reports under tmp/test-governance and exits non-zero on fail findings', async () => {
   const repoRoot = createRepoWithMigration(`
     create table audit_events (

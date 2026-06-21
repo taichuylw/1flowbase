@@ -344,10 +344,11 @@ impl McpManagementRepository for PgControlPlaneStore {
                 description_short,
                 enabled,
                 sort_order,
+                scope_id,
                 created_by,
                 updated_by
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, $8
+                $1, $2, $3, $4, $5, $6, $7, (select scope_id from mcp_instances where id = $2), $8, $8
             )
             on conflict (instance_record_id, path) do update
             set
@@ -632,10 +633,11 @@ impl McpManagementRepository for PgControlPlaneStore {
                 display_alias,
                 visible,
                 sort_order,
+                scope_id,
                 created_by,
                 updated_by
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, $8
+                $1, $2, $3, $4, $5, $6, $7, (select scope_id from mcp_instances where id = $2), $8, $8
             )
             returning
                 mcp_tool_bindings.*,
