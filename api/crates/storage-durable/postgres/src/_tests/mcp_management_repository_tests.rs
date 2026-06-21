@@ -148,7 +148,6 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
         })
         .await
         .unwrap();
-
     assert_eq!(tool.des_id.len(), 8);
     assert!(
         service
@@ -186,7 +185,6 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
         })
         .await
         .unwrap();
-
     service
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: actor.id,
@@ -244,6 +242,28 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         })
         .await
         .unwrap();
+    let disabled_tool = service
+        .create_tool(CreateMcpToolCommand {
+            actor_user_id: actor.id,
+            tool_id: Some("disabled_runtime".into()),
+            suggested_group_path: Some("/ops".into()),
+            name: "Disabled Runtime".into(),
+            short_description: "Disabled runtime profile".into(),
+            usage_description: None,
+            full_description: "Disabled runtime profile should not be visible.".into(),
+            interface_id: "settings.system_runtime.get_profile".into(),
+            parameter_schema: serde_json::json!({}),
+            result_schema: serde_json::json!({}),
+            input_mapping: serde_json::json!({}),
+            output_mapping: serde_json::json!({}),
+            permission_code: Some("system_runtime.view.all".into()),
+            risk_level: domain::McpRiskLevel::High,
+            audit_policy: serde_json::json!({}),
+            des_id_required: true,
+            status: domain::McpToolStatus::Disabled,
+        })
+        .await
+        .unwrap();
 
     service
         .upsert_group(UpsertMcpGroupCommand {
@@ -258,6 +278,18 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .await
         .unwrap();
     service
+        .upsert_group(UpsertMcpGroupCommand {
+            actor_user_id: actor.id,
+            instance_id: "default_system".into(),
+            path: "/hidden".into(),
+            display_name: "Hidden".into(),
+            description_short: None,
+            enabled: false,
+            sort_order: 2,
+        })
+        .await
+        .unwrap();
+    service
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: actor.id,
             instance_id: "default_system".into(),
@@ -266,6 +298,30 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
             display_alias: None,
             visible: true,
             sort_order: 1,
+        })
+        .await
+        .unwrap();
+    service
+        .create_tool_binding(CreateMcpToolBindingCommand {
+            actor_user_id: actor.id,
+            instance_id: "default_system".into(),
+            group_path: "/ops".into(),
+            tool_id: disabled_tool.tool_id.clone(),
+            display_alias: Some("Disabled Runtime".into()),
+            visible: true,
+            sort_order: 3,
+        })
+        .await
+        .unwrap();
+    service
+        .create_tool_binding(CreateMcpToolBindingCommand {
+            actor_user_id: actor.id,
+            instance_id: "default_system".into(),
+            group_path: "/ops/hidden".into(),
+            tool_id: tool.tool_id.clone(),
+            display_alias: Some("Invisible Runtime".into()),
+            visible: false,
+            sort_order: 4,
         })
         .await
         .unwrap();
@@ -321,6 +377,10 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
             .count(),
         2
     );
+    assert!(!root_items.iter().any(|item| item.path == "/hidden"));
+    assert!(!root_items
+        .iter()
+        .any(|item| item.id == disabled_tool.tool_id || item.name == "Invisible Runtime"));
 
     let ops_items = service
         .list_items(actor.id, None, Some("/ops"), None)
@@ -329,6 +389,9 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     assert!(ops_items
         .iter()
         .all(|item| item.path == "/ops" || item.path.starts_with("/ops/")));
+    assert!(!ops_items
+        .iter()
+        .any(|item| item.id == disabled_tool.tool_id || item.name == "Invisible Runtime"));
     assert!(service
         .list_items(actor.id, Some(&disabled_instance.instance_id), None, None)
         .await
@@ -336,11 +399,11 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
 
     let directory_export = service.export_instance_directory(actor.id).await.unwrap();
     assert_eq!(directory_export.instances.len(), 2);
-    assert_eq!(directory_export.bindings.len(), 3);
-    assert_eq!(directory_export.groups.len(), 1);
+    assert_eq!(directory_export.bindings.len(), 5);
+    assert_eq!(directory_export.groups.len(), 2);
 
     let full_export = service.export_workspace_catalog(actor.id).await.unwrap();
-    assert_eq!(full_export.tools.len(), 1);
+    assert_eq!(full_export.tools.len(), 2);
 
     service
         .delete_group(actor.id, "default_system", "/ops")
