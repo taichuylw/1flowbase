@@ -61,6 +61,7 @@ describe('style boundary registry', () => {
       'page.embedded-apps',
       'page.templates',
       'page.settings',
+      'page.settings-mcp-management',
       'page.settings-docs',
       'page.me'
     ]);
@@ -73,6 +74,7 @@ describe('style boundary registry', () => {
       'page.application-detail',
       'page.application-api',
       'page.settings',
+      'page.settings-mcp-management',
       'page.settings-docs',
       'page.me'
     ]);
@@ -80,12 +82,16 @@ describe('style boundary registry', () => {
       getSceneIdsForFiles([
         'web/app/src/shared/ui/scrollable-surface/ScrollableSurface.tsx'
       ])
-    ).toEqual(['page.settings']);
+    ).toEqual(['page.settings', 'page.settings-mcp-management']);
     expect(
       getSceneIdsForFiles([
         'web/app/src/features/settings/components/settings-section-surface.css'
       ])
-    ).toEqual(['page.settings', 'page.settings-docs']);
+    ).toEqual([
+      'page.settings',
+      'page.settings-mcp-management',
+      'page.settings-docs'
+    ]);
     expect(
       getSceneIdsForFiles(['web/app/src/features/me/pages/me-page.css'])
     ).toEqual(['page.me']);

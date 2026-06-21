@@ -11,6 +11,7 @@ pub mod frontend_block_catalog;
 pub mod frontstage;
 pub mod host_extension;
 pub mod js_dependency;
+pub mod mcp_management;
 pub mod model_provider;
 pub mod modeling;
 pub mod node_contribution;
@@ -57,6 +58,12 @@ pub use host_extension::{
 };
 pub use js_dependency::{
     ApplicationJsDependencySelection, JsDependencyPermissions, JsDependencyRegistryEntry,
+};
+pub use mcp_management::{
+    McpCatalogSnapshot, McpDescriptionCheckResult, McpExportPackage, McpGroupRecord,
+    McpInstanceRecord, McpInstanceStatus, McpInterfaceCatalogEntry, McpListItemKind,
+    McpListItemSummary, McpMetaToolConfigRecord, McpRiskLevel, McpToolBindingRecord, McpToolRecord,
+    McpToolStatus,
 };
 pub use model_provider::{
     ModelCatalogSyncRunRecord, ModelFailoverQueueItemRecord, ModelFailoverQueueSnapshotRecord,

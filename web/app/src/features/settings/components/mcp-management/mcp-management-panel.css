@@ -1,0 +1,48 @@
+.mcp-management {
+  min-height: 0;
+}
+
+.mcp-management__stack {
+  width: 100%;
+}
+
+.mcp-management__form-pane {
+  flex: 1 1 320px;
+  min-width: 280px;
+  max-width: 520px;
+}
+
+.mcp-management__instance-select {
+  min-width: 280px;
+}
+
+.mcp-management__directory-tree {
+  flex: 0 0 320px;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.mcp-management__directory-config {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+
+.mcp-management__segmented {
+  margin: 16px 0;
+}
+
+.mcp-management__meta-form {
+  max-width: 760px;
+}
+
+@media (max-width: 768px) {
+  .mcp-management__directory-tree,
+  .mcp-management__directory-config,
+  .mcp-management__instance-select {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}

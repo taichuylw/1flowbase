@@ -147,6 +147,7 @@ fn console_router(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::file_storages::router())
         .nest("/api/console", routes::file_tables::router())
         .nest("/api/console", routes::host_infrastructure::router())
+        .nest("/api/console", routes::mcp_management::router())
         .nest("/api/console", routes::api_keys::router())
         .nest("/api/console", routes::me::router())
         .nest("/api/console", routes::workspace::router())
@@ -258,6 +259,9 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             bootstrap_result.root_user_id,
             bootstrap_result.workspace_id,
         )
+        .await?;
+    control_plane::mcp_management::McpManagementService::new(store.clone())
+        .ensure_default_workspace_catalog(bootstrap_result.root_user_id)
         .await?;
     let provider_runtime = Arc::new(ApiRuntimeServices::new(
         Arc::new(RwLock::new(

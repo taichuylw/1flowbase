@@ -20,6 +20,11 @@ const SettingsModelProvidersSection = lazy(() =>
     default: module.SettingsModelProvidersSection
   }))
 );
+const SettingsMcpManagementSection = lazy(() =>
+  import('./SettingsMcpManagementSection').then((module) => ({
+    default: module.SettingsMcpManagementSection
+  }))
+);
 const HostInfrastructurePanel = lazy(() =>
   import('../../components/host-infrastructure/HostInfrastructurePanel').then(
     (module) => ({
@@ -51,7 +56,8 @@ export function SettingsSectionBody({
   canManageRoles,
   canManageDataModels,
   canManageModelProviders,
-  canManageHostInfrastructure
+  canManageHostInfrastructure,
+  canManageMcpManagement
 }: {
   sectionKey: SettingsSectionKey;
   isRoot: boolean;
@@ -61,6 +67,7 @@ export function SettingsSectionBody({
   canManageDataModels: boolean;
   canManageModelProviders: boolean;
   canManageHostInfrastructure: boolean;
+  canManageMcpManagement: boolean;
 }) {
   switch (sectionKey) {
     case 'members':
@@ -82,6 +89,12 @@ export function SettingsSectionBody({
       );
     case 'data-models':
       return <SettingsDataModelsSection canManage={canManageDataModels} />;
+    case 'mcp-management':
+      return (
+        <SettingsSectionBoundary>
+          <SettingsMcpManagementSection canManage={canManageMcpManagement} />
+        </SettingsSectionBoundary>
+      );
     case 'host-infrastructure':
       return (
         <SettingsSectionBoundary>

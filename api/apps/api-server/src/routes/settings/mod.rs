@@ -2,6 +2,7 @@ pub mod docs;
 pub mod file_storages;
 pub mod file_tables;
 pub mod host_infrastructure;
+pub mod mcp_management;
 pub mod members;
 pub mod permissions;
 mod release_status;

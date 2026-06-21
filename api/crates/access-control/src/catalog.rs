@@ -158,6 +158,11 @@ pub fn permission_catalog() -> Vec<PermissionDefinition> {
     );
     push_permissions(&mut permissions, "system_runtime", &[("view", &["all"])]);
     push_permissions(&mut permissions, "api_reference", &[("view", &["all"])]);
+    push_permissions(
+        &mut permissions,
+        "mcp_management",
+        &[("view", &["all"]), ("manage", &["all"])],
+    );
 
     permissions
 }

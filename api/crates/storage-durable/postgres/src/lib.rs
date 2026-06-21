@@ -13,6 +13,7 @@ pub mod host_extension_migration_repository;
 pub mod host_infrastructure_config_repository;
 pub mod js_dependency_repository;
 pub mod mappers;
+pub mod mcp_management_repository;
 pub mod member_repository;
 pub mod model_definition_repository;
 pub mod model_provider_repository;

@@ -12,6 +12,7 @@ export * from './console-file-management';
 export * from './console/frontend-blocks';
 export * from './console/frontstage';
 export * from './console-model-providers';
+export * from './console-mcp-management';
 export * from './console-node-contributions';
 export * from './console-me';
 export * from './console-members';

@@ -381,6 +381,13 @@ const settingsModelProvidersRoute = createRoute({
   component: () => renderSettingsRoute('model-providers')
 });
 
+const settingsMcpManagementRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/mcp-management',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('mcp-management')
+});
+
 const settingsMembersRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/settings/members',
@@ -462,6 +469,7 @@ const routeTree = rootRoute.addChildren([
     settingsFilesRoute,
     settingsDataModelsRoute,
     settingsModelProvidersRoute,
+    settingsMcpManagementRoute,
     settingsMembersRoute,
     settingsRolesRoute,
     meIndexRoute,

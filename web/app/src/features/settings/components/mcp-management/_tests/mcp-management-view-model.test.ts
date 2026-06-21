@@ -1,0 +1,95 @@
+import { describe, expect, test } from 'vitest';
+
+import {
+  buildMcpDirectoryTreeData,
+  buildReadableToolId
+} from '../mcp-management-view-model';
+
+describe('mcp management view model', () => {
+  test('builds a readable tool id from path and name', () => {
+    expect(buildReadableToolId('Create Customer', '/crm/accounts')).toBe(
+      'crm_accounts_create_customer'
+    );
+    expect(buildReadableToolId('', '/', 'A_b9Zx10')).toBe('A_b9Zx10');
+    expect(buildReadableToolId('', '/', 'too-long-random-value')).toHaveLength(8);
+  });
+
+  test('represents groups and multi-path tool bindings in the directory tree', () => {
+    const treeData = buildMcpDirectoryTreeData({
+      instance: {
+        id: 'instance-record-1',
+        instance_id: 'default_system',
+        name: 'Default System',
+        default_entry_path: '/'
+      },
+      groups: [
+        {
+          id: 'group-1',
+          instance_record_id: 'instance-record-1',
+          path: '/crm',
+          display_name: 'CRM',
+          enabled: true,
+          sort_order: 0
+        }
+      ],
+      bindings: [
+        {
+          id: 'binding-1',
+          instance_record_id: 'instance-record-1',
+          tool_record_id: 'tool-record-1',
+          group_path: '/crm',
+          tool_id: 'customer_create',
+          display_alias: null,
+          visible: true,
+          sort_order: 0
+        },
+        {
+          id: 'binding-2',
+          instance_record_id: 'instance-record-1',
+          tool_record_id: 'tool-record-1',
+          group_path: '/ops',
+          tool_id: 'customer_create',
+          display_alias: 'Customer Create Ops',
+          visible: true,
+          sort_order: 1
+        }
+      ],
+      tools: [
+        {
+          id: 'tool-record-1',
+          tool_id: 'customer_create',
+          name: 'Create customer'
+        }
+      ]
+    });
+
+    expect(treeData).toEqual([
+      {
+        key: 'instance:default_system:/',
+        title: 'Default System /',
+        children: [
+          {
+            key: 'group:/crm',
+            title: 'CRM /crm',
+            children: [
+              {
+                key: 'binding:binding-1',
+                title: 'Create customer customer_create'
+              }
+            ]
+          },
+          {
+            key: 'group:/ops',
+            title: '/ops',
+            children: [
+              {
+                key: 'binding:binding-2',
+                title: 'Customer Create Ops customer_create'
+              }
+            ]
+          }
+        ]
+      }
+    ]);
+  });
+});

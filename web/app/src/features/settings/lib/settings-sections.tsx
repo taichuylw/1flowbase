@@ -7,6 +7,7 @@ export type SettingsSectionKey =
   | 'memory-observation'
   | 'files'
   | 'data-models'
+  | 'mcp-management'
   | 'model-providers'
   | 'members'
   | 'roles';
@@ -76,6 +77,15 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
       'state_model.view.own',
       'state_model.manage.all',
       'state_model.manage.own'
+    ]
+  },
+  {
+    key: 'mcp-management',
+    labelKey: 'auto.mcp_management',
+    to: '/settings/mcp-management',
+    requiredPermissions: [
+      'mcp_management.view.all',
+      'mcp_management.manage.all'
     ]
   },
   {
