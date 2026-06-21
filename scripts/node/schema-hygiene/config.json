@@ -153,6 +153,12 @@
       "updated_byGeneration": "telemetry rows are append-only system observations; actor fields are nullable until a repository write path exists",
       "writePathSource": "temporary migration trigger fills scope_id; replace with telemetry repository-owned scope_id writes by 2026-09-30"
     },
+    "file_storages": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed root/system storage catalog routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "writePathSource": "file storage repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
     "file_tables": {
       "scopeGenerationSource": "existing file table write path stores scope_id from workspace storage context"
     },
@@ -197,6 +203,36 @@
     "frontstage_pages": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
+    },
+    "frontend_block_catalog": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed root/system frontend block catalog routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "catalog rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "updated_byGeneration": "catalog rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "writePathSource": "frontend block catalog repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "host_extension_migrations": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed host extension migration ledger routing",
+      "backfillSource": "SYSTEM_SCOPE_ID with created_at backfilled from applied_at",
+      "created_byGeneration": "host extension migration ledger rows are system bootstrap observations; actor fields remain nullable",
+      "updated_byGeneration": "host extension migration ledger rows are system bootstrap observations; actor fields remain nullable",
+      "writePathSource": "host extension migration repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "host_infrastructure_provider_configs": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed host infrastructure provider config routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "writePathSource": "host infrastructure config repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "js_dependency_registry": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed JavaScript dependency registry routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "updated_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "writePathSource": "JavaScript dependency repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
     },
     "mcp_instances": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
@@ -257,8 +293,22 @@
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
     },
+    "node_contribution_registry": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed node contribution registry routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "updated_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "writePathSource": "node contribution repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
     "node_runs": {
       "scopeGenerationSource": "existing node run write path stores scope_id from flow run context"
+    },
+    "permission_definitions": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed permission catalog routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "writePathSource": "permission catalog repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
     },
     "plugin_assignments": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
@@ -311,6 +361,22 @@
     "scope_data_model_grants": {
       "scopeGenerationSource": "existing data model grant write path stores scope_id from grant owner context"
     },
+    "system_default_upgrade_items": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed system default upgrade item routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "system default upgrade items inherit nullable requester context from their run when available",
+      "updated_byGeneration": "system default upgrade items inherit nullable requester context from their run when available",
+      "writePathSource": "system default upgrade ledger uses database default and check constraint to guard SYSTEM_SCOPE_ID bootstrap writes"
+    },
+    "system_default_upgrade_runs": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed system default upgrade run routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "system default upgrade runs use nullable requested_by context when available",
+      "updated_byGeneration": "system default upgrade runs use nullable requested_by context when available",
+      "writePathSource": "system default upgrade ledger uses database default and check constraint to guard SYSTEM_SCOPE_ID bootstrap writes"
+    },
     "workspace_memberships": {
       "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
       "backfillSource": "workspace_id"
@@ -325,13 +391,8 @@
     "authenticators": "system or tenant ownership semantics need owner decision before assigning platform scope routing",
     "data_source_catalog_caches": "cache identity and refresh lifecycle semantics need owner decision before adding platform id and scope routing",
     "data_source_secrets": "secret ownership and key semantics need owner decision before adding platform id and scope routing",
-    "file_storages": "system storage ownership needs owner decision before assigning platform scope routing",
     "flow_drafts": "draft owner and historical created_at source need owner decision before automated migration",
-    "frontend_block_catalog": "catalog system scope semantics need owner decision before assigning platform scope routing",
     "frontstage_page_schemas": "one-to-one page schema identity semantics need owner decision before adding platform id and scope routing",
-    "host_extension_migrations": "host extension migration ledger scope and lifecycle semantics need owner decision",
-    "host_infrastructure_provider_configs": "host infrastructure ownership semantics need owner decision before scope migration",
-    "js_dependency_registry": "global registry scope semantics need owner decision before assigning platform scope routing",
     "main_source_defaults": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",
     "model_catalog_sync_runs": "sync run owner and historical created_at source need owner decision before automated migration",
     "model_change_logs": "model change log owner and append-only update semantics need owner decision before scope migration",
@@ -339,16 +400,12 @@
     "model_provider_catalog_entries": "catalog entry owner and historical created_at source need owner decision before automated migration",
     "model_provider_instance_secrets": "secret identity and ownership semantics need owner decision before adding platform id and scope routing",
     "model_provider_main_instances": "workspace singleton identity semantics need owner decision before adding platform id and scope routing",
-    "node_contribution_registry": "node contribution registry scope semantics need owner decision before assigning platform scope routing",
-    "permission_definitions": "permission catalog system scope semantics need owner decision before assigning platform scope routing",
     "plugin_installations": "plugin installation owner source is not declared enough for automated scope_id migration",
     "plugin_tasks": "workspace_id is nullable and plugin task scope semantics need owner decision before automatic scope migration",
     "plugin_worker_leases": "plugin worker lease owner source is not declared enough for automated scope_id migration",
     "provider_instance_model_catalog_cache": "provider cache identity semantics need owner decision before adding platform id and scope routing",
     "role_permissions": "role permission owner source is not declared enough for automated scope_id migration",
     "roles": "mixed system and workspace role scope semantics need owner decision before automatic scope migration",
-    "system_default_upgrade_items": "system default upgrade item scope semantics need owner decision before assigning platform scope routing",
-    "system_default_upgrade_runs": "system default upgrade run scope semantics need owner decision before assigning platform scope routing",
     "tenants": "tenant root scope semantics need owner decision before assigning platform scope routing",
     "user_auth_identities": "user auth identity owner source is not declared enough for automated scope_id migration",
     "user_role_bindings": "user role binding owner source is not declared enough for automated scope_id migration",

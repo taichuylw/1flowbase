@@ -147,13 +147,14 @@ impl BootstrapRepository for PgControlPlaneStore {
         for permission in permissions {
             let inserted_permission_id: Option<Uuid> = sqlx::query_scalar(
                 r#"
-                insert into permission_definitions (id, resource, action, scope, code, name, introduction)
-                values ($1, $2, $3, $4, $5, $6, '')
+                insert into permission_definitions (id, scope_id, resource, action, scope, code, name, introduction)
+                values ($1, $2, $3, $4, $5, $6, $7, '')
                 on conflict (code) do nothing
                 returning id
                 "#,
             )
             .bind(Uuid::now_v7())
+            .bind(domain::SYSTEM_SCOPE_ID)
             .bind(&permission.resource)
             .bind(&permission.action)
             .bind(&permission.scope)

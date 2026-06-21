@@ -49,6 +49,7 @@ impl HostInfrastructureConfigRepository for PgControlPlaneStore {
             r#"
             insert into host_infrastructure_provider_configs (
                 id,
+                scope_id,
                 installation_id,
                 extension_id,
                 provider_code,
@@ -56,8 +57,9 @@ impl HostInfrastructureConfigRepository for PgControlPlaneStore {
                 enabled_contracts,
                 config_json,
                 status,
+                created_by,
                 updated_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
             on conflict (installation_id, provider_code) do update
             set
                 extension_id = excluded.extension_id,
@@ -82,6 +84,7 @@ impl HostInfrastructureConfigRepository for PgControlPlaneStore {
             "#,
         )
         .bind(Uuid::now_v7())
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(input.installation_id)
         .bind(&input.extension_id)
         .bind(&input.provider_code)

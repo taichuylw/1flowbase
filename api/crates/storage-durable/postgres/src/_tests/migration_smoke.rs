@@ -291,6 +291,141 @@ async fn migration_smoke_creates_lifecycle_scoped_readiness_columns_and_indexes(
 }
 
 #[tokio::test]
+async fn migration_smoke_creates_system_global_scoped_readiness_columns_and_indexes() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let schema: String = sqlx::query_scalar("select current_schema()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let system_scope_id = "00000000-0000-0000-0000-000000000000";
+
+    for table in [
+        "file_storages",
+        "frontend_block_catalog",
+        "host_extension_migrations",
+        "host_infrastructure_provider_configs",
+        "js_dependency_registry",
+        "node_contribution_registry",
+        "permission_definitions",
+        "system_default_upgrade_items",
+        "system_default_upgrade_runs",
+    ] {
+        let columns: Vec<String> = sqlx::query_scalar(
+            r#"
+            select column_name
+            from information_schema.columns
+            where table_schema = $1
+              and table_name = $2
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        for expected_column in [
+            "id",
+            "scope_id",
+            "created_at",
+            "created_by",
+            "updated_at",
+            "updated_by",
+        ] {
+            assert!(
+                columns.contains(&expected_column.to_string()),
+                "missing {table}.{expected_column}"
+            );
+        }
+
+        let (scope_nullable, scope_default): (String, Option<String>) = sqlx::query_as(
+            r#"
+            select is_nullable, column_default
+            from information_schema.columns
+            where table_schema = $1
+              and table_name = $2
+              and column_name = 'scope_id'
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(scope_nullable, "NO", "{table}.scope_id must be not null");
+        assert!(
+            scope_default
+                .as_deref()
+                .is_some_and(|default| default.contains(system_scope_id)),
+            "missing {table}.scope_id SYSTEM_SCOPE_ID default"
+        );
+
+        let check_constraint: String = sqlx::query_scalar(
+            r#"
+            select pg_get_constraintdef(c.oid)
+            from pg_constraint c
+            join pg_class r on r.oid = c.conrelid
+            join pg_namespace n on n.oid = r.relnamespace
+            where n.nspname = $1
+              and r.relname = $2
+              and c.conname = $3
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .bind(format!("{table}_system_scope_id_check"))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(check_constraint.contains("scope_id"));
+        assert!(check_constraint.contains(system_scope_id));
+
+        let scope_index_count: i64 = sqlx::query_scalar(
+            r#"
+            select count(*)
+            from pg_indexes
+            where schemaname = $1
+              and tablename = $2
+              and indexdef ilike '%(scope_id, created_at, id)%'
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            scope_index_count, 1,
+            "missing {table} scope readiness index"
+        );
+    }
+
+    for excluded_table in ["authenticators", "tenants", "users", "workspaces"] {
+        let system_scope_check_count: i64 = sqlx::query_scalar(
+            r#"
+            select count(*)
+            from pg_constraint c
+            join pg_class r on r.oid = c.conrelid
+            join pg_namespace n on n.oid = r.relnamespace
+            where n.nspname = $1
+              and r.relname = $2
+              and c.conname = $3
+            "#,
+        )
+        .bind(&schema)
+        .bind(excluded_table)
+        .bind(format!("{excluded_table}_system_scope_id_check"))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            system_scope_check_count, 0,
+            "{excluded_table} must remain outside #1075 system/global migration"
+        );
+    }
+}
+
+#[tokio::test]
 async fn bootstrap_repository_upserts_password_local_and_root_user() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

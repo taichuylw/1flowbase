@@ -78,6 +78,7 @@ impl JsDependencyRepository for PgControlPlaneStore {
                 r#"
                 insert into js_dependency_registry (
                     id,
+                    scope_id,
                     installation_id,
                     provider_code,
                     plugin_id,
@@ -92,11 +93,12 @@ impl JsDependencyRepository for PgControlPlaneStore {
                     permission_filesystem,
                     permission_env
                 ) values (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
                 )
                 "#,
             )
             .bind(Uuid::now_v7())
+            .bind(domain::SYSTEM_SCOPE_ID)
             .bind(input.installation_id)
             .bind(&input.provider_code)
             .bind(&input.plugin_id)
