@@ -2,10 +2,12 @@ import {
   createConsoleMcpInstance,
   createConsoleMcpTool,
   createConsoleMcpToolBinding,
+  deleteConsoleMcpGroup,
   deleteConsoleMcpInstance,
   deleteConsoleMcpTool,
   deleteConsoleMcpToolBinding,
   exportConsoleMcpCatalog,
+  exportConsoleMcpInstanceDirectory,
   fetchConsoleMcpCatalog,
   fetchConsoleMcpInterfaceCapabilities,
   refreshConsoleMcpToolDescription,
@@ -51,6 +53,10 @@ export function exportSettingsMcpCatalog() {
   return exportConsoleMcpCatalog();
 }
 
+export function exportSettingsMcpInstanceDirectory() {
+  return exportConsoleMcpInstanceDirectory();
+}
+
 export function createSettingsMcpInstance(
   body: SaveConsoleMcpInstanceBody,
   csrfToken: string
@@ -76,6 +82,14 @@ export function upsertSettingsMcpGroup(
   csrfToken: string
 ) {
   return upsertConsoleMcpGroup(instanceId, body, csrfToken);
+}
+
+export function deleteSettingsMcpGroup(
+  instanceId: string,
+  path: string,
+  csrfToken: string
+) {
+  return deleteConsoleMcpGroup(instanceId, path, csrfToken);
 }
 
 export function createSettingsMcpTool(

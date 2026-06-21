@@ -120,6 +120,31 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
             .is_none()
     );
 
+    let upsert_group_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/mcp/instances/default_system/groups")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "path": "/system",
+                        "display_name": "System",
+                        "description_short": "System tools",
+                        "enabled": true,
+                        "sort_order": 1
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(upsert_group_response.status(), StatusCode::OK);
+
     let get_tool_response = app
         .clone()
         .oneshot(
@@ -157,6 +182,42 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
         refresh_payload["data"]["des_id"].as_str().unwrap(),
         first_des_id
     );
+
+    let directory_export_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/mcp/instances/export")
+                .header("cookie", &root_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(directory_export_response.status(), StatusCode::OK);
+    let directory_export_payload = response_json(directory_export_response).await;
+    assert!(directory_export_payload["data"].get("tools").is_none());
+    assert!(directory_export_payload["data"]["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|group| group["path"].as_str() == Some("/system")));
+
+    let delete_group_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/api/console/mcp/instances/default_system/groups?path=%2Fsystem")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(delete_group_response.status(), StatusCode::NO_CONTENT);
 
     let delete_tool_response = app
         .clone()

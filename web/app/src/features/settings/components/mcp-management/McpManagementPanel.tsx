@@ -36,6 +36,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type {
   ConsoleMcpCatalog,
   ConsoleMcpExportPackage,
+  ConsoleMcpInstanceDirectoryExportPackage,
   ConsoleMcpInstance,
   ConsoleMcpInterfaceCapability,
   ConsoleMcpMetaToolConfig,
@@ -49,10 +50,12 @@ import {
   createSettingsMcpInstance,
   createSettingsMcpTool,
   createSettingsMcpToolBinding,
+  deleteSettingsMcpGroup,
   deleteSettingsMcpInstance,
   deleteSettingsMcpTool,
   deleteSettingsMcpToolBinding,
   exportSettingsMcpCatalog,
+  exportSettingsMcpInstanceDirectory,
   refreshSettingsMcpToolDescription,
   settingsMcpCatalogQueryKey,
   updateSettingsMcpInstance,
@@ -148,7 +151,9 @@ function statusColor(status: string) {
   return status === 'enabled' ? 'green' : status === 'disabled' ? 'default' : 'blue';
 }
 
-function downloadMcpExportPackage(exportPackage: ConsoleMcpExportPackage) {
+function downloadMcpExportPackage(
+  exportPackage: ConsoleMcpExportPackage | ConsoleMcpInstanceDirectoryExportPackage
+) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return;
   }
@@ -317,6 +322,15 @@ function McpInstancesTab({
       invalidateCatalog();
     }
   });
+  const deleteGroupMutation = useMutation({
+    mutationFn: (values: { instanceId: string; path: string }) =>
+      deleteSettingsMcpGroup(values.instanceId, values.path, csrfToken),
+    onSuccess: () => {
+      message.success(i18nText('settings', 'auto.mcp_deleted'));
+      groupForm.resetFields();
+      invalidateCatalog();
+    }
+  });
   const saveBindingMutation = useMutation({
     mutationFn: (values: BindingFormValues) => {
       const body = {
@@ -349,7 +363,7 @@ function McpInstancesTab({
     }
   });
   const exportMutation = useMutation({
-    mutationFn: exportSettingsMcpCatalog,
+    mutationFn: exportSettingsMcpInstanceDirectory,
     onSuccess: (exportPackage) => {
       downloadMcpExportPackage(exportPackage);
       message.success(i18nText('settings', 'auto.mcp_export_ready'));
@@ -666,24 +680,46 @@ function McpInstancesTab({
           {
             title: i18nText('settings', 'auto.operation'),
             render: (_, record) => (
-              <Button
-                icon={<EditOutlined />}
-                size="small"
-                disabled={!canManage}
-                onClick={() => {
-                  const instance = catalog.instances.find(
-                    (item) => item.id === record.instance_record_id
-                  );
-                  groupForm.setFieldsValue({
-                    instance_id: instance?.instance_id ?? selectedInstance?.instance_id ?? '',
-                    path: record.path,
-                    display_name: record.display_name,
-                    description_short: record.description_short,
-                    enabled: record.enabled,
-                    sort_order: record.sort_order
-                  });
-                }}
-              />
+              <Space>
+                <Button
+                  icon={<EditOutlined />}
+                  size="small"
+                  disabled={!canManage}
+                  onClick={() => {
+                    const instance = catalog.instances.find(
+                      (item) => item.id === record.instance_record_id
+                    );
+                    groupForm.setFieldsValue({
+                      instance_id: instance?.instance_id ?? selectedInstance?.instance_id ?? '',
+                      path: record.path,
+                      display_name: record.display_name,
+                      description_short: record.description_short,
+                      enabled: record.enabled,
+                      sort_order: record.sort_order
+                    });
+                  }}
+                />
+                <Popconfirm
+                  title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
+                  disabled={!canManage}
+                  onConfirm={() => {
+                    const instance = catalog.instances.find(
+                      (item) => item.id === record.instance_record_id
+                    );
+                    deleteGroupMutation.mutate({
+                      instanceId: instance?.instance_id ?? selectedInstance?.instance_id ?? '',
+                      path: record.path
+                    });
+                  }}
+                >
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    disabled={!canManage}
+                  />
+                </Popconfirm>
+              </Space>
             )
           }
         ]}

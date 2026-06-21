@@ -112,6 +112,13 @@ export interface ConsoleMcpExportPackage {
   meta_tool_config: ConsoleMcpMetaToolConfig;
 }
 
+export interface ConsoleMcpInstanceDirectoryExportPackage {
+  instances: ConsoleMcpInstance[];
+  groups: ConsoleMcpGroup[];
+  bindings: ConsoleMcpToolBinding[];
+  meta_tool_config: ConsoleMcpMetaToolConfig;
+}
+
 export interface SaveConsoleMcpInstanceBody {
   instance_id: string;
   name: string;
@@ -216,6 +223,13 @@ export function exportConsoleMcpCatalog(baseUrl?: string) {
   });
 }
 
+export function exportConsoleMcpInstanceDirectory(baseUrl?: string) {
+  return apiFetch<ConsoleMcpInstanceDirectoryExportPackage>({
+    path: '/api/console/mcp/instances/export',
+    baseUrl
+  });
+}
+
 export function fetchConsoleMcpTool(toolId: string, baseUrl?: string) {
   return apiFetch<ConsoleMcpTool>({
     path: `/api/console/mcp/tools/${encodeURIComponent(toolId)}`,
@@ -275,6 +289,21 @@ export function upsertConsoleMcpGroup(
     path: `/api/console/mcp/instances/${encodeURIComponent(instanceId)}/groups`,
     method: 'POST',
     body,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function deleteConsoleMcpGroup(
+  instanceId: string,
+  path: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  const params = new URLSearchParams({ path });
+  return apiFetchVoid({
+    path: `/api/console/mcp/instances/${encodeURIComponent(instanceId)}/groups?${params.toString()}`,
+    method: 'DELETE',
     csrfToken,
     baseUrl
   });

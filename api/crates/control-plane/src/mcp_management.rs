@@ -260,6 +260,29 @@ where
             .await
     }
 
+    pub async fn delete_group(
+        &self,
+        actor_user_id: Uuid,
+        instance_id: &str,
+        path: &str,
+    ) -> Result<()> {
+        let actor = self.authorize_manage(actor_user_id).await?;
+        validate_path(path)?;
+        let instance = self
+            .repository
+            .get_mcp_instance(actor.current_workspace_id, instance_id)
+            .await?
+            .ok_or(ControlPlaneError::NotFound("mcp_instance"))?;
+        let group = self
+            .repository
+            .list_mcp_groups(&[instance.id])
+            .await?
+            .into_iter()
+            .find(|group| group.path == path)
+            .ok_or(ControlPlaneError::NotFound("mcp_group"))?;
+        self.repository.delete_mcp_group(group.id).await
+    }
+
     pub async fn create_tool(
         &self,
         command: CreateMcpToolCommand,
@@ -555,6 +578,19 @@ where
             instances: snapshot.instances,
             groups: snapshot.groups,
             tools: snapshot.tools,
+            bindings: snapshot.bindings,
+            meta_tool_config: snapshot.meta_tool_config,
+        })
+    }
+
+    pub async fn export_instance_directory(
+        &self,
+        actor_user_id: Uuid,
+    ) -> Result<domain::McpInstanceDirectoryExportPackage> {
+        let snapshot = self.read_workspace_catalog(actor_user_id).await?;
+        Ok(domain::McpInstanceDirectoryExportPackage {
+            instances: snapshot.instances,
+            groups: snapshot.groups,
             bindings: snapshot.bindings,
             meta_tool_config: snapshot.meta_tool_config,
         })

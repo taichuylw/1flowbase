@@ -157,6 +157,14 @@ pub struct McpExportPackageResponse {
     pub meta_tool_config: McpMetaToolConfigResponse,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct McpInstanceDirectoryExportPackageResponse {
+    pub instances: Vec<McpInstanceResponse>,
+    pub groups: Vec<McpGroupResponse>,
+    pub bindings: Vec<McpToolBindingResponse>,
+    pub meta_tool_config: McpMetaToolConfigResponse,
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateMcpInstanceBody {
     pub instance_id: String,
@@ -174,6 +182,11 @@ pub struct UpsertMcpGroupBody {
     pub description_short: Option<String>,
     pub enabled: bool,
     pub sort_order: i32,
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct DeleteMcpGroupQuery {
+    pub path: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -286,11 +299,15 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/mcp/instances",
             get(list_mcp_instances).post(create_mcp_instance),
         )
+        .route("/mcp/instances/export", get(export_mcp_instance_directory))
         .route(
             "/mcp/instances/:instance_id",
             put(update_mcp_instance).delete(delete_mcp_instance),
         )
-        .route("/mcp/instances/:instance_id/groups", post(upsert_mcp_group))
+        .route(
+            "/mcp/instances/:instance_id/groups",
+            post(upsert_mcp_group).delete(delete_mcp_group),
+        )
         .route(
             "/mcp/instances/:instance_id/tool-bindings",
             post(create_mcp_tool_binding),
@@ -388,6 +405,20 @@ pub async fn export_mcp_catalog(
     Ok(Json(ApiSuccess::new(to_export_response(export))))
 }
 
+#[utoipa::path(get, path = "/api/console/mcp/instances/export", responses((status = 200, body = McpInstanceDirectoryExportPackageResponse)))]
+pub async fn export_mcp_instance_directory(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<McpInstanceDirectoryExportPackageResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let export = McpManagementService::new(state.store.clone())
+        .export_instance_directory(context.user.id)
+        .await?;
+    Ok(Json(ApiSuccess::new(
+        to_instance_directory_export_response(export),
+    )))
+}
+
 #[utoipa::path(get, path = "/api/console/mcp/instances", responses((status = 200, body = [McpInstanceResponse])))]
 pub async fn list_mcp_instances(
     State(state): State<Arc<ApiState>>,
@@ -474,6 +505,21 @@ pub async fn upsert_mcp_group(
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_group_response(record))))
+}
+
+#[utoipa::path(delete, path = "/api/console/mcp/instances/{instance_id}/groups", params(DeleteMcpGroupQuery), responses((status = 204)))]
+pub async fn delete_mcp_group(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(instance_id): Path<String>,
+    Query(query): Query<DeleteMcpGroupQuery>,
+) -> Result<StatusCode, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+    McpManagementService::new(state.store.clone())
+        .delete_group(context.user.id, &instance_id, &query.path)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(get, path = "/api/console/mcp/tools", responses((status = 200, body = [McpToolResponse])))]
@@ -813,6 +859,25 @@ fn to_export_response(export: domain::McpExportPackage) -> McpExportPackageRespo
             .collect(),
         groups: export.groups.into_iter().map(to_group_response).collect(),
         tools: export.tools.into_iter().map(to_tool_response).collect(),
+        bindings: export
+            .bindings
+            .into_iter()
+            .map(to_binding_response)
+            .collect(),
+        meta_tool_config: to_meta_config_response(export.meta_tool_config),
+    }
+}
+
+fn to_instance_directory_export_response(
+    export: domain::McpInstanceDirectoryExportPackage,
+) -> McpInstanceDirectoryExportPackageResponse {
+    McpInstanceDirectoryExportPackageResponse {
+        instances: export
+            .instances
+            .into_iter()
+            .map(to_instance_response)
+            .collect(),
+        groups: export.groups.into_iter().map(to_group_response).collect(),
         bindings: export
             .bindings
             .into_iter()

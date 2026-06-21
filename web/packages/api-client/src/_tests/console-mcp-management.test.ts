@@ -5,10 +5,12 @@ import {
   createConsoleMcpInstance,
   createConsoleMcpTool,
   createConsoleMcpToolBinding,
+  deleteConsoleMcpGroup,
   deleteConsoleMcpInstance,
   deleteConsoleMcpTool,
   deleteConsoleMcpToolBinding,
   exportConsoleMcpCatalog,
+  exportConsoleMcpInstanceDirectory,
   fetchConsoleMcpCatalog,
   fetchConsoleMcpInterfaceCapabilities,
   fetchConsoleMcpListItems,
@@ -54,6 +56,11 @@ describe('console-mcp-management client', () => {
       name: 'export package',
       request: () => exportConsoleMcpCatalog(),
       expected: { path: '/api/console/mcp/export' }
+    },
+    {
+      name: 'instance directory export package',
+      request: () => exportConsoleMcpInstanceDirectory(),
+      expected: { path: '/api/console/mcp/instances/export' }
     },
     {
       name: 'single tool',
@@ -277,6 +284,15 @@ describe('console-mcp-management client', () => {
       request: () => deleteConsoleMcpTool('runtime.get', 'csrf-123'),
       expected: {
         path: '/api/console/mcp/tools/runtime.get',
+        method: 'DELETE',
+        csrfToken: 'csrf-123'
+      }
+    },
+    {
+      name: 'group deletion',
+      request: () => deleteConsoleMcpGroup('default_system', '/ops', 'csrf-123'),
+      expected: {
+        path: '/api/console/mcp/instances/default_system/groups?path=%2Fops',
         method: 'DELETE',
         csrfToken: 'csrf-123'
       }
