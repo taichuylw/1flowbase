@@ -422,12 +422,14 @@ impl DataSourceRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             insert into main_source_defaults (
+                id,
                 workspace_id,
                 default_data_model_status,
                 default_api_exposure_status,
+                created_by,
                 updated_by
             ) values (
-                $1, $2, $3, $4
+                $1, $2, $3, $4, $5, $5
             )
             on conflict (workspace_id) do update
             set
@@ -438,6 +440,7 @@ impl DataSourceRepository for PgControlPlaneStore {
             returning default_data_model_status, default_api_exposure_status
             "#,
         )
+        .bind(Uuid::now_v7())
         .bind(input.workspace_id)
         .bind(input.defaults.data_model_status.as_str())
         .bind(input.defaults.api_exposure_status.as_str())

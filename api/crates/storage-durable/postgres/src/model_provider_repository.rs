@@ -326,22 +326,41 @@ impl ModelProviderRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             insert into provider_instance_model_catalog_cache (
+                id,
                 provider_instance_id,
+                scope_id,
                 model_discovery_mode,
                 refresh_status,
                 source,
                 models_json,
                 last_error_message,
-                refreshed_at
-            ) values ($1, $2, $3, $4, $5, $6, $7)
+                refreshed_at,
+                created_by,
+                updated_by
+            )
+            select
+                $1,
+                instances.id,
+                instances.scope_id,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                instances.updated_by,
+                instances.updated_by
+            from model_provider_instances instances
+            where instances.id = $8
             on conflict (provider_instance_id) do update
-            set
+            set scope_id = excluded.scope_id,
                 model_discovery_mode = excluded.model_discovery_mode,
                 refresh_status = excluded.refresh_status,
                 source = excluded.source,
                 models_json = excluded.models_json,
                 last_error_message = excluded.last_error_message,
                 refreshed_at = excluded.refreshed_at,
+                updated_by = excluded.updated_by,
                 updated_at = now()
             returning
                 provider_instance_id,
@@ -354,13 +373,14 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 updated_at
             "#,
         )
-        .bind(input.provider_instance_id)
+        .bind(Uuid::now_v7())
         .bind(input.model_discovery_mode.as_str())
         .bind(input.refresh_status.as_str())
         .bind(input.source.as_str())
         .bind(&input.models_json)
         .bind(input.last_error_message.as_deref())
         .bind(input.refreshed_at)
+        .bind(input.provider_instance_id)
         .fetch_one(self.pool())
         .await?;
 
@@ -402,21 +422,37 @@ impl ModelProviderRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             insert into model_provider_instance_secrets (
+                id,
                 provider_instance_id,
+                scope_id,
                 encrypted_secret_json,
-                secret_version
-            ) values ($1, $2, $3)
+                secret_version,
+                created_by,
+                updated_by
+            )
+            select
+                $1,
+                instances.id,
+                instances.scope_id,
+                $2,
+                $3,
+                instances.updated_by,
+                instances.updated_by
+            from model_provider_instances instances
+            where instances.id = $4
             on conflict (provider_instance_id) do update
-            set
+            set scope_id = excluded.scope_id,
                 encrypted_secret_json = excluded.encrypted_secret_json,
                 secret_version = excluded.secret_version,
+                updated_by = excluded.updated_by,
                 updated_at = now()
             returning provider_instance_id, encrypted_secret_json, secret_version, updated_at
             "#,
         )
-        .bind(input.provider_instance_id)
+        .bind(Uuid::now_v7())
         .bind(&encrypted_secret_json)
         .bind(input.secret_version)
+        .bind(input.provider_instance_id)
         .fetch_one(self.pool())
         .await?;
 
@@ -430,12 +466,13 @@ impl ModelProviderRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             insert into model_provider_main_instances (
+                id,
                 workspace_id,
                 provider_code,
                 auto_include_new_instances,
                 created_by,
                 updated_by
-            ) values ($1, $2, $3, $4, $4)
+            ) values ($1, $2, $3, $4, $5, $5)
             on conflict (workspace_id, provider_code) do update
             set
                 auto_include_new_instances = excluded.auto_include_new_instances,
@@ -451,6 +488,7 @@ impl ModelProviderRepository for PgControlPlaneStore {
                 updated_at
             "#,
         )
+        .bind(Uuid::now_v7())
         .bind(input.workspace_id)
         .bind(&input.provider_code)
         .bind(input.auto_include_new_instances)

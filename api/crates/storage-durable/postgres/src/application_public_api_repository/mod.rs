@@ -42,17 +42,31 @@ impl ApplicationApiMappingRepository for PgControlPlaneStore {
         let row = sqlx::query_scalar::<_, serde_json::Value>(
             r#"
             insert into application_api_mappings (
+                id,
                 application_id,
+                scope_id,
                 mapping_config,
+                created_by,
                 updated_by
-            ) values ($1, $2, $3)
+            )
+            select
+                $1,
+                applications.id,
+                applications.scope_id,
+                $3,
+                $4,
+                $4
+            from applications
+            where applications.id = $2
             on conflict (application_id) do update
-            set mapping_config = excluded.mapping_config,
+            set scope_id = excluded.scope_id,
+                mapping_config = excluded.mapping_config,
                 updated_by = excluded.updated_by,
                 updated_at = now()
             returning mapping_config
             "#,
         )
+        .bind(Uuid::now_v7())
         .bind(input.application_id)
         .bind(mapping)
         .bind(input.actor_user_id)

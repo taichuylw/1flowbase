@@ -426,6 +426,160 @@ async fn migration_smoke_creates_system_global_scoped_readiness_columns_and_inde
 }
 
 #[tokio::test]
+async fn migration_smoke_creates_identity_join_scoped_readiness_without_replacing_business_keys() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let schema: String = sqlx::query_scalar("select current_schema()")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    for (table, expected_primary_key_columns) in [
+        (
+            "api_key_data_model_permissions",
+            vec!["api_key_id", "data_model_id"],
+        ),
+        ("application_api_mappings", vec!["application_id"]),
+        (
+            "application_environment_variables",
+            vec!["application_id", "name"],
+        ),
+        ("application_tag_bindings", vec!["application_id", "tag_id"]),
+        ("frontstage_page_schemas", vec!["page_id"]),
+        ("main_source_defaults", vec!["workspace_id"]),
+        (
+            "model_provider_instance_secrets",
+            vec!["provider_instance_id"],
+        ),
+        (
+            "model_provider_main_instances",
+            vec!["workspace_id", "provider_code"],
+        ),
+        (
+            "provider_instance_model_catalog_cache",
+            vec!["provider_instance_id"],
+        ),
+    ] {
+        let columns: Vec<String> = sqlx::query_scalar(
+            r#"
+            select column_name
+            from information_schema.columns
+            where table_schema = $1
+              and table_name = $2
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        for expected_column in [
+            "id",
+            "scope_id",
+            "created_at",
+            "created_by",
+            "updated_at",
+            "updated_by",
+        ] {
+            assert!(
+                columns.contains(&expected_column.to_string()),
+                "missing {table}.{expected_column}"
+            );
+        }
+
+        let scope_nullable: String = sqlx::query_scalar(
+            r#"
+            select is_nullable
+            from information_schema.columns
+            where table_schema = $1
+              and table_name = $2
+              and column_name = 'scope_id'
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(scope_nullable, "NO", "{table}.scope_id must be not null");
+
+        let primary_key_columns: Vec<String> = sqlx::query_scalar(
+            r#"
+            select a.attname
+            from pg_constraint c
+            join pg_class r on r.oid = c.conrelid
+            join pg_namespace n on n.oid = r.relnamespace
+            join unnest(c.conkey) with ordinality as cols(attnum, ord) on true
+            join pg_attribute a on a.attrelid = r.oid and a.attnum = cols.attnum
+            where n.nspname = $1
+              and r.relname = $2
+              and c.contype = 'p'
+            order by cols.ord
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            primary_key_columns,
+            expected_primary_key_columns
+                .into_iter()
+                .map(String::from)
+                .collect::<Vec<_>>(),
+            "{table} primary key must remain the business identity"
+        );
+        assert!(
+            !primary_key_columns.contains(&"id".to_string()),
+            "{table}.id must remain a platform tie-breaker, not the functional identity"
+        );
+
+        let scope_index_count: i64 = sqlx::query_scalar(
+            r#"
+            select count(*)
+            from pg_indexes
+            where schemaname = $1
+              and tablename = $2
+              and indexdef ilike '%(scope_id, created_at, id)%'
+            "#,
+        )
+        .bind(&schema)
+        .bind(table)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            scope_index_count, 1,
+            "missing {table} scope readiness index"
+        );
+    }
+
+    for excluded_table in ["role_permissions", "user_role_bindings"] {
+        let has_scope_id: bool = sqlx::query_scalar(
+            r#"
+            select exists(
+                select 1
+                from information_schema.columns
+                where table_schema = $1
+                  and table_name = $2
+                  and column_name = 'scope_id'
+            )
+            "#,
+        )
+        .bind(&schema)
+        .bind(excluded_table)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(
+            !has_scope_id,
+            "{excluded_table} must remain outside #1076 identity/join migration"
+        );
+    }
+}
+
+#[tokio::test]
 async fn bootstrap_repository_upserts_password_local_and_root_user() {
     let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();

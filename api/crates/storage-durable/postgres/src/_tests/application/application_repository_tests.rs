@@ -225,8 +225,9 @@ async fn delete_application_cascades_flow_runtime_and_tag_bindings() {
     .await
     .unwrap();
     sqlx::query(
-        "insert into application_tag_bindings (application_id, tag_id, created_by) values ($1, $2, $3)",
+        "insert into application_tag_bindings (id, scope_id, application_id, tag_id, created_by, updated_by) values ($1, (select scope_id from applications where id = $2), $2, $3, $4, $4)",
     )
+    .bind(Uuid::now_v7())
     .bind(created.id)
     .bind(tag_id)
     .bind(actor_user_id)

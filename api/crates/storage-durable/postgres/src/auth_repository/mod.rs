@@ -807,15 +807,41 @@ impl ApiKeyRepository for PgControlPlaneStore {
             .await?;
 
         for permission in permissions {
-            sqlx::query(
+            let inserted = sqlx::query(
                 r#"
                 insert into api_key_data_model_permissions (
-                    api_key_id, data_model_id, allow_list, allow_get, allow_create,
-                    allow_update, allow_delete
+                    id,
+                    api_key_id,
+                    data_model_id,
+                    scope_id,
+                    allow_list,
+                    allow_get,
+                    allow_create,
+                    allow_update,
+                    allow_delete,
+                    created_by,
+                    updated_by
                 )
-                values ($1, $2, $3, $4, $5, $6, $7)
+                select
+                    $1,
+                    keys.id,
+                    models.id,
+                    keys.scope_id,
+                    $4,
+                    $5,
+                    $6,
+                    $7,
+                    $8,
+                    keys.creator_user_id,
+                    keys.creator_user_id
+                from api_keys keys
+                join model_definitions models
+                  on models.id = $3
+                 and models.scope_id = keys.scope_id
+                where keys.id = $2
                 "#,
             )
+            .bind(Uuid::now_v7())
             .bind(permission.api_key_id)
             .bind(permission.data_model_id)
             .bind(permission.allow_list)
@@ -824,7 +850,13 @@ impl ApiKeyRepository for PgControlPlaneStore {
             .bind(permission.allow_update)
             .bind(permission.allow_delete)
             .execute(&mut *tx)
-            .await?;
+            .await?
+            .rows_affected();
+            if inserted != 1 {
+                return Err(anyhow!(
+                    "api_key_data_model_permission owner scope mismatch"
+                ));
+            }
         }
         tx.commit().await?;
 

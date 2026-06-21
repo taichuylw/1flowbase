@@ -308,6 +308,7 @@ where
             .repository
             .save_frontstage_page_content(&SaveFrontstagePageContentInput {
                 workspace_id: command.workspace_id,
+                actor_user_id: command.actor_user_id,
                 page_id: command.page_id,
                 schema_payload: command.schema_payload,
                 root_payload: command.root_payload,

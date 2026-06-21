@@ -802,6 +802,52 @@ test('default schema hygiene config declares issue 1075 system global scoped rea
   }
 });
 
+test('default schema hygiene config declares issue 1076 identity join scoped readiness tables', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const inventory = collectSchemaInventory({ repoRoot });
+  const report = evaluateSchemaHygiene({
+    inventory,
+    config: loadConfig(repoRoot),
+  });
+
+  for (const tableName of [
+    'api_key_data_model_permissions',
+    'application_api_mappings',
+    'application_environment_variables',
+    'application_tag_bindings',
+    'frontstage_page_schemas',
+    'main_source_defaults',
+    'model_provider_instance_secrets',
+    'model_provider_main_instances',
+    'provider_instance_model_catalog_cache',
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.equal(
+      table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'),
+      false
+    );
+    assert.equal(table.platformReadiness.category, 'join_or_child');
+    assert.equal(table.platformReadiness.fields.id.present, true);
+    assert.equal(table.platformReadiness.fields.scope_id.present, true);
+    assert.equal(table.platformReadiness.fields.created_at.present, true);
+    assert.equal(table.platformReadiness.fields.created_by.present, true);
+    assert.equal(table.platformReadiness.fields.updated_at.present, true);
+    assert.equal(table.platformReadiness.fields.updated_by.present, true);
+    assert.equal(table.platformReadiness.hasScopeTimeIdIndex, true);
+    assert.equal(table.platformReadiness.scopeGenerationSource.status, 'declared');
+    assert.equal(table.platformReadiness.recommendedActions.includes('needs_owner_review'), false);
+  }
+
+  for (const tableName of [
+    'role_permissions',
+    'user_role_bindings',
+  ]) {
+    const table = report.tables.find((candidate) => candidate.name === tableName);
+    assert.ok(table.findings.some((finding) => finding.rule === 'managed-table-needs-owner-review'));
+    assert.deepEqual(table.platformReadiness.recommendedActions, ['needs_owner_review']);
+  }
+});
+
 test('main writes JSON and Markdown reports under tmp/test-governance and exits non-zero on fail findings', async () => {
   const repoRoot = createRepoWithMigration(`
     create table audit_events (

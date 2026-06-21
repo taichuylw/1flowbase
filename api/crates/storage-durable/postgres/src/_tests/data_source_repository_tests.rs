@@ -516,3 +516,39 @@ async fn updates_data_source_default_status_and_exposure() {
         ApiExposureStatus::Draft
     );
 }
+
+#[tokio::test]
+async fn updates_main_source_defaults_with_workspace_scoped_readiness_fields() {
+    let (store, workspace, actor, _) = seed_store().await;
+
+    let updated = <PgControlPlaneStore as DataSourceRepository>::update_main_source_defaults(
+        &store,
+        &control_plane::ports::UpdateMainSourceDefaultsInput {
+            workspace_id: workspace.id,
+            defaults: DataSourceDefaults {
+                data_model_status: DataModelStatus::Draft,
+                api_exposure_status: ApiExposureStatus::Draft,
+            },
+            updated_by: actor.id,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.data_model_status, DataModelStatus::Draft);
+    assert_eq!(updated.api_exposure_status, ApiExposureStatus::Draft);
+
+    let (row_id, scope_id, row_count): (Uuid, Uuid, i64) = sqlx::query_as(
+        r#"
+        select id, scope_id, count(*) over ()::bigint as row_count
+        from main_source_defaults
+        where workspace_id = $1
+        "#,
+    )
+    .bind(workspace.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_ne!(row_id, Uuid::nil());
+    assert_eq!(scope_id, workspace.id);
+    assert_eq!(row_count, 1);
+}
