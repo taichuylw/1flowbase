@@ -175,6 +175,51 @@ async fn console_user_api_key_authenticates_console_get_and_mutation_without_csr
 }
 
 #[tokio::test]
+async fn console_user_api_key_reuses_bound_user_permissions_and_denies_missing_permission() {
+    let app = test_app().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let member_id = create_member(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        "pat-no-permission",
+        "temp-pass",
+    )
+    .await;
+    create_role(&app, &root_cookie, &root_csrf, "pat_no_permission").await;
+    replace_role_permissions(&app, &root_cookie, &root_csrf, "pat_no_permission", &[]).await;
+    replace_member_roles(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        &member_id,
+        &["pat_no_permission"],
+    )
+    .await;
+
+    let (member_cookie, member_csrf) =
+        login_and_capture_cookie(&app, "pat-no-permission", "temp-pass").await;
+    let token = create_user_api_key(&app, &member_cookie, &member_csrf, "no permission pat").await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/members")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(payload["code"], json!("permission_denied"));
+}
+
+#[tokio::test]
 async fn console_user_api_key_rejects_expired_disabled_key_and_disabled_user() {
     let (app, database_url) = test_app_with_database_url().await;
     let pool = PgPool::connect(&database_url).await.unwrap();
