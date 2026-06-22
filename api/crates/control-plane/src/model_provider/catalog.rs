@@ -15,13 +15,13 @@ use crate::{
         ModelProviderCatalogEntry, ModelProviderCatalogView, ModelProviderMainInstanceSummary,
         ModelProviderOptionEntry, ModelProviderOptionGroup, ModelProviderOptionsView,
     },
-    plugin_lifecycle::reconcile_installation_snapshot,
     ports::{AuthRepository, ModelProviderRepository, PluginRepository},
 };
 
 use super::shared::{
     ensure_state_model_permission, load_actor_context_for_user, load_provider_package,
-    localized_model_descriptor,
+    localized_model_descriptor, model_provider_installation_from_current_snapshot,
+    ModelProviderNodeArtifactContext,
 };
 
 #[derive(Debug)]
@@ -121,6 +121,7 @@ pub(super) async fn options<R>(
     repository: &R,
     actor_user_id: Uuid,
     locales: RequestedLocales,
+    node_artifact_context: Option<ModelProviderNodeArtifactContext<'_>>,
 ) -> Result<ModelProviderOptionsView>
 where
     R: AuthRepository + PluginRepository + ModelProviderRepository,
@@ -129,7 +130,15 @@ where
     ensure_state_model_permission(&actor, "view")?;
     let mut installation_map = HashMap::new();
     for installation in repository.list_installations().await? {
-        let installation = reconcile_installation_snapshot(repository, installation.id).await?;
+        let Some(installation) = model_provider_installation_from_current_snapshot(
+            repository,
+            node_artifact_context,
+            installation,
+        )
+        .await?
+        else {
+            continue;
+        };
         installation_map.insert(installation.id, installation);
     }
     let mut instances_by_provider =

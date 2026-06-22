@@ -141,6 +141,47 @@ async fn terminal_published_run_projects_application_conversation_messages_once(
     .await
     .unwrap();
     assert_eq!(projected_count, 3);
+
+    sqlx::query(
+        r#"
+        update flow_runs
+        set input_payload = '{"node-start":{"query":"raw list query must not leak"}}'::jsonb,
+            output_payload = '{"answer":"raw list answer must not leak"}'::jsonb,
+            error_payload = '{"error":{"message":"raw list error must not leak"}}'::jsonb
+        where id = $1
+        "#,
+    )
+    .bind(run.id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let conversation_runs =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::list_application_conversation_runs_page(
+            &store,
+            seeded.application_id,
+            ListApplicationConversationRunsPageInput {
+                external_conversation_id: "conversation-1".to_string(),
+                around_run_id: Some(run.id),
+                before_run_id: None,
+                after_run_id: None,
+                limit: 20,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(conversation_runs.items.len(), 1);
+    assert_eq!(conversation_runs.items[0].id, run.id);
+    assert_eq!(
+        conversation_runs.items[0].query.as_deref(),
+        Some("退款政策是什么？")
+    );
+    assert_eq!(
+        conversation_runs.items[0].answer.as_deref(),
+        Some("7 天内可申请退款。")
+    );
+    assert_eq!(conversation_runs.items[0].model, None);
 }
 
 #[tokio::test]

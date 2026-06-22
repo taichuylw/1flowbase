@@ -27,6 +27,14 @@ export interface CreateConsoleMemberInput {
   phone_login_enabled: boolean;
 }
 
+export interface UpdateConsoleMemberInput {
+  email: string;
+  phone: string | null;
+  name: string;
+  nickname: string;
+  introduction: string;
+}
+
 export interface ResetConsoleMemberPasswordInput {
   new_password: string;
 }
@@ -56,6 +64,21 @@ export function createConsoleMember(
   });
 }
 
+export function updateConsoleMember(
+  memberId: string,
+  input: UpdateConsoleMemberInput,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<ConsoleMember> {
+  return apiFetch<ConsoleMember>({
+    path: `/api/console/members/${memberId}`,
+    method: 'PATCH',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
 export function disableConsoleMember(
   memberId: string,
   csrfToken: string,
@@ -64,6 +87,32 @@ export function disableConsoleMember(
   return apiFetchVoid({
     path: `/api/console/members/${memberId}/actions/disable`,
     method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function enableConsoleMember(
+  memberId: string,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<void> {
+  return apiFetchVoid({
+    path: `/api/console/members/${memberId}/actions/enable`,
+    method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function deleteConsoleMember(
+  memberId: string,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<void> {
+  return apiFetchVoid({
+    path: `/api/console/members/${memberId}`,
+    method: 'DELETE',
     csrfToken,
     baseUrl
   });

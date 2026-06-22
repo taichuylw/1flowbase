@@ -22,6 +22,7 @@ function statusTone(status: string) {
       return 'success';
     case 'failed':
       return 'error';
+    case 'intercepted':
     case 'waiting_human':
     case 'waiting_callback':
       return 'warning';
@@ -131,6 +132,9 @@ function metricText(item: AgentFlowTraceItem) {
     }
     if (statusTone(item.status) === 'error') {
       return i18nText('agentFlow', 'auto.execution_failed');
+    }
+    if (item.status === 'intercepted') {
+      return i18nText('agentFlow', 'auto.execution_intercepted');
     }
     return i18nText('agentFlow', 'auto.in_progress');
   }

@@ -579,8 +579,8 @@ async fn published_run_control_lists_waiting_callback_runs_for_conversation() {
     .await
     .unwrap();
 
-    let waiting_runs =
-        <PgControlPlaneStore as control_plane::application_public_api::run_service::ApplicationPublishedRunControlRepository>::list_waiting_callback_published_flow_runs_for_conversation(
+    let waiting_run_ids =
+        <PgControlPlaneStore as control_plane::application_public_api::run_service::ApplicationPublishedRunControlRepository>::list_waiting_callback_published_flow_run_ids_for_conversation(
             &store,
             &control_plane::application_public_api::run_service::ListWaitingCallbackPublishedRunsInput {
                 application_id: matching.application_id,
@@ -593,8 +593,7 @@ async fn published_run_control_lists_waiting_callback_runs_for_conversation() {
         .await
         .unwrap();
 
-    assert_eq!(waiting_runs.len(), 1);
-    assert_eq!(waiting_runs[0].id, matching.id);
+    assert_eq!(waiting_run_ids, vec![matching.id]);
 }
 
 #[tokio::test]

@@ -68,10 +68,10 @@ pub trait ApplicationPublishedRunControlRepository: Send + Sync {
         completed_at: OffsetDateTime,
     ) -> Result<Vec<domain::CallbackTaskRecord>>;
 
-    async fn list_waiting_callback_published_flow_runs_for_conversation(
+    async fn list_waiting_callback_published_flow_run_ids_for_conversation(
         &self,
         input: &ListWaitingCallbackPublishedRunsInput,
-    ) -> Result<Vec<domain::FlowRunRecord>>;
+    ) -> Result<Vec<Uuid>>;
 
     async fn get_published_callback_task(
         &self,

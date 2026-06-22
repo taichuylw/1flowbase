@@ -225,8 +225,9 @@ async fn delete_application_cascades_flow_runtime_and_tag_bindings() {
     .await
     .unwrap();
     sqlx::query(
-        "insert into application_tag_bindings (application_id, tag_id, created_by) values ($1, $2, $3)",
+        "insert into application_tag_bindings (id, scope_id, application_id, tag_id, created_by, updated_by) values ($1, (select scope_id from applications where id = $2), $2, $3, $4, $4)",
     )
+    .bind(Uuid::now_v7())
     .bind(created.id)
     .bind(tag_id)
     .bind(actor_user_id)
@@ -239,7 +240,7 @@ async fn delete_application_cascades_flow_runtime_and_tag_bindings() {
     let plan_id = Uuid::now_v7();
     let run_id = Uuid::now_v7();
     sqlx::query(
-        "insert into flows (id, application_id, created_by, updated_by) values ($1, $2, $3, $3)",
+        "insert into flows (id, application_id, scope_id, created_by, updated_by) values ($1, $2, (select scope_id from applications where id = $2), $3, $3)",
     )
     .bind(flow_id)
     .bind(created.id)
@@ -262,8 +263,8 @@ async fn delete_application_cascades_flow_runtime_and_tag_bindings() {
     sqlx::query(
         r#"
         insert into flow_compiled_plans (
-            id, flow_id, flow_draft_id, schema_version, document_updated_at, plan, created_by
-        ) values ($1, $2, $3, '1', now(), '{}'::jsonb, $4)
+            id, flow_id, flow_draft_id, schema_version, document_updated_at, plan, scope_id, created_by, updated_by
+        ) values ($1, $2, $3, '1', now(), '{}'::jsonb, (select scope_id from flows where id = $2), $4, $4)
         "#,
     )
     .bind(plan_id)

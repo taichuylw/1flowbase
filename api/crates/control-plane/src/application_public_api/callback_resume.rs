@@ -337,9 +337,9 @@ where
         if agent_results.is_empty() {
             return Ok(());
         }
-        let waiting_runs = self
+        let waiting_run_ids = self
             .repository
-            .list_waiting_callback_published_flow_runs_for_conversation(
+            .list_waiting_callback_published_flow_run_ids_for_conversation(
                 &super::run_service::ListWaitingCallbackPublishedRunsInput {
                     application_id: actor.application_id,
                     api_key_id: actor.api_key_id,
@@ -349,6 +349,16 @@ where
                 },
             )
             .await?;
+        let mut waiting_runs = Vec::with_capacity(waiting_run_ids.len());
+        for waiting_run_id in waiting_run_ids {
+            if let Some(waiting_run) = self
+                .repository
+                .get_published_flow_run(waiting_run_id)
+                .await?
+            {
+                waiting_runs.push(waiting_run);
+            }
+        }
 
         for agent_result in agent_results {
             let matching_runs = waiting_runs

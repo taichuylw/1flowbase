@@ -473,42 +473,13 @@ impl PgControlPlaneStore {
 
         let rows = sqlx::query(&format!(
             r#"
-            with selected_logs as (
-                select
-                    flow_run_id as id,
-                    run_mode,
-                    status,
-                    target_node_id,
-                    title,
-                    input_payload,
-                    external_user,
-                    authorized_account,
-                    api_key_id,
-                    publication_version_id,
-                    external_conversation_id,
-                    external_trace_id,
-                    compatibility_mode,
-                    idempotency_key,
-                    total_tokens,
-                    input_tokens, output_tokens, input_cache_hit_tokens,
-                    unique_node_count,
-                    tool_callback_count,
-                    started_at,
-                    finished_at,
-                    created_at,
-                    updated_at
-                from application_run_log_summaries
-                where application_id = $1
-                  and ($2::timestamptz is null or created_at >= $2)
-                  and {visible_filter}
-            )
             select
-                id,
+                flow_run_id as id,
                 run_mode,
                 status,
                 target_node_id,
                 title,
-                input_payload,
+                '{{}}'::jsonb as input_payload,
                 external_user,
                 authorized_account,
                 api_key_id,
@@ -525,11 +496,14 @@ impl PgControlPlaneStore {
                 finished_at,
                 created_at,
                 updated_at
-            from selected_logs
-            order by {}
+            from application_run_log_summaries
+            where application_id = $1
+              and ($2::timestamptz is null or created_at >= $2)
+              and {visible_filter}
+            order by {order_by}
             limit $3 offset $4
             "#,
-            order_by,
+            order_by = order_by,
             visible_filter = visible_filter
         ))
         .bind(application_id)

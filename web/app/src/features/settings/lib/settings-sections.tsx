@@ -2,11 +2,13 @@ import type { SectionNavItem } from '../../../shared/ui/section-page-layout/Sect
 
 export type SettingsSectionKey =
   | 'docs'
+  | 'api-key-authentication'
   | 'system-runtime'
   | 'host-infrastructure'
   | 'memory-observation'
   | 'files'
   | 'data-models'
+  | 'mcp-management'
   | 'model-providers'
   | 'members'
   | 'roles';
@@ -15,8 +17,10 @@ export interface SettingsSectionNavItem extends SectionNavItem {
   key: SettingsSectionKey;
 }
 
-export interface SettingsSectionDefinition
-  extends Omit<SettingsSectionNavItem, 'label'> {
+export interface SettingsSectionDefinition extends Omit<
+  SettingsSectionNavItem,
+  'label'
+> {
   labelKey: string;
   requiredPermissions: string[];
 }
@@ -27,6 +31,12 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
     labelKey: 'auto.api_documentation',
     to: '/settings/docs',
     requiredPermissions: ['api_reference.view.all']
+  },
+  {
+    key: 'api-key-authentication',
+    labelKey: 'auto.api_key_authentication',
+    to: '/settings/api-key-authentication',
+    requiredPermissions: []
   },
   {
     key: 'system-runtime',
@@ -76,6 +86,15 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
       'state_model.view.own',
       'state_model.manage.all',
       'state_model.manage.own'
+    ]
+  },
+  {
+    key: 'mcp-management',
+    labelKey: 'auto.mcp_management',
+    to: '/settings/mcp-management',
+    requiredPermissions: [
+      'mcp_management.view.all',
+      'mcp_management.manage.all'
     ]
   },
   {

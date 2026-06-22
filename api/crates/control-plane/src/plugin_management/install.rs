@@ -73,7 +73,7 @@ pub(super) fn load_provider_package(path: impl AsRef<Path>) -> Result<ProviderPa
     ProviderPackage::load_from_dir(path.as_ref()).map_err(map_framework_error)
 }
 
-fn load_plugin_manifest(path: impl AsRef<Path>) -> Result<PluginManifestV1> {
+pub(super) fn load_plugin_manifest(path: impl AsRef<Path>) -> Result<PluginManifestV1> {
     let manifest_path = path.as_ref().join("manifest.yaml");
     let raw = fs::read_to_string(&manifest_path).with_context(|| {
         format!(
@@ -247,7 +247,9 @@ pub(super) fn map_catalog_source(
     }
 }
 
-fn map_framework_error(error: plugin_framework::error::PluginFrameworkError) -> anyhow::Error {
+pub(super) fn map_framework_error(
+    error: plugin_framework::error::PluginFrameworkError,
+) -> anyhow::Error {
     use plugin_framework::error::PluginFrameworkErrorKind;
 
     match error.kind() {
@@ -291,13 +293,20 @@ where
 
     pub async fn reconcile_all_installations(&self) -> Result<()> {
         for installation in self.repository.list_installations().await? {
-            let installation =
-                reconcile_installation_snapshot(&self.repository, installation.id).await?;
+            let local_artifact = self
+                .refresh_current_node_artifact_snapshot(&installation)
+                .await?;
             if !is_model_provider_installation(&installation) {
                 continue;
             }
+            if !local_artifact.artifact_status.is_ready() {
+                continue;
+            }
+            let Some(installed_path) = local_artifact.installed_path.as_deref() else {
+                continue;
+            };
 
-            match load_provider_package(&installation.installed_path) {
+            match load_provider_package(installed_path) {
                 Ok(package) => {
                     refresh_provider_package_catalog_projection(
                         &self.repository,
@@ -587,6 +596,13 @@ where
                 compute_manifest_fingerprint(&install_path.join("manifest.yaml"))
                     .await
                     .map_err(map_framework_error)?;
+            write_artifact_marker(
+                &install_path,
+                &package_id,
+                &manifest.version,
+                source_metadata.checksum.as_deref(),
+                Some(&manifest_fingerprint),
+            )?;
             match package_kind {
                 RoutedPluginPackageKind::HostExtension => {
                     ensure_root_actor(&actor)?;
@@ -888,6 +904,20 @@ where
 
         match installation_result {
             Ok(installation) => {
+                if let Err(error) = self.record_ready_current_node_artifact(&installation).await {
+                    let _ = self
+                        .transition_task(
+                            &running_task,
+                            domain::PluginTaskStatus::Failed,
+                            Some(error.to_string()),
+                            json!({
+                                "installation_id": installation.id,
+                                "provider_code": installation.provider_code,
+                            }),
+                        )
+                        .await;
+                    return Err(error);
+                }
                 let installed_message = if is_host_extension_installation(&installation) {
                     "installed; restart required"
                 } else {

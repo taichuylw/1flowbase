@@ -179,6 +179,16 @@ pub trait AuthRepository: Send + Sync {
         workspace_id: Uuid,
         display_role: Option<&str>,
     ) -> anyhow::Result<ActorContext>;
+    async fn load_actor_context_for_bound_role(
+        &self,
+        user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+        role_code: &str,
+    ) -> anyhow::Result<ActorContext> {
+        self.load_actor_context(user_id, tenant_id, workspace_id, Some(role_code))
+            .await
+    }
     async fn update_password_hash(
         &self,
         user_id: Uuid,
@@ -200,6 +210,7 @@ pub struct CreateApiKeyInput {
     pub token_prefix: String,
     pub key_kind: domain::ApiKeyKind,
     pub application_id: Option<Uuid>,
+    pub role_code: Option<String>,
     pub creator_user_id: Uuid,
     pub tenant_id: Uuid,
     pub scope_kind: DataModelScopeKind,
@@ -232,6 +243,19 @@ pub trait ApiKeyRepository: Send + Sync {
         token_hash: &str,
     ) -> anyhow::Result<Option<ApiKeyRecord>>;
     async fn mark_api_key_used(&self, api_key_id: Uuid) -> anyhow::Result<()>;
+    async fn list_user_api_keys(
+        &self,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<ApiKeyRecord>>;
+    async fn revoke_user_api_key(
+        &self,
+        api_key_id: Uuid,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> anyhow::Result<()>;
     async fn list_application_api_keys(
         &self,
         application_id: Uuid,
@@ -286,6 +310,17 @@ pub struct CreateMemberInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateMemberInput {
+    pub actor_user_id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub nickname: String,
+    pub email: String,
+    pub phone: Option<String>,
+    pub introduction: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpdateProfileInput {
     pub actor_user_id: Uuid,
     pub user_id: Uuid,
@@ -337,8 +372,11 @@ pub trait MemberRepository: Send + Sync {
         &self,
         input: &CreateMemberInput,
     ) -> anyhow::Result<UserRecord>;
+    async fn update_member_profile(&self, input: &UpdateMemberInput) -> anyhow::Result<UserRecord>;
     async fn disable_member(&self, actor_user_id: Uuid, target_user_id: Uuid)
         -> anyhow::Result<()>;
+    async fn enable_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> anyhow::Result<()>;
+    async fn delete_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> anyhow::Result<()>;
     async fn reset_member_password(
         &self,
         actor_user_id: Uuid,

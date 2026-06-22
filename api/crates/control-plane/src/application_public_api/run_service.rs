@@ -401,9 +401,9 @@ where
             return Ok(());
         };
 
-        let waiting_runs = self
+        let waiting_run_ids = self
             .repository
-            .list_waiting_callback_published_flow_runs_for_conversation(
+            .list_waiting_callback_published_flow_run_ids_for_conversation(
                 &ListWaitingCallbackPublishedRunsInput {
                     application_id: actor.application_id,
                     api_key_id: actor.api_key_id,
@@ -415,7 +415,15 @@ where
             .await
             .map_err(|_| NativeRunValidationError::InvalidState)?;
 
-        for waiting_run in waiting_runs {
+        for waiting_run_id in waiting_run_ids {
+            let Some(waiting_run) = self
+                .repository
+                .get_published_flow_run(waiting_run_id)
+                .await
+                .map_err(|_| NativeRunValidationError::InvalidState)?
+            else {
+                continue;
+            };
             if current_request_is_claude_code_control
                 && !is_claude_code_control_flow_run(&waiting_run)
             {

@@ -968,6 +968,36 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       cwd: repoRoot,
     },
     {
+      label: 'repo-schema-hygiene',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'schema-hygiene'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-growth-table-report',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'growth-table-report'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-raw-jsonb-report',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'raw-jsonb-report'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-log-query-contract-report',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'log-query-contract-report'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-capacity-report',
+      command: nodeBinary,
+      args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'capacity-report'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-security-risk',
       command: nodeBinary,
       args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'security-risk'],

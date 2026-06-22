@@ -230,6 +230,7 @@ async fn test_state_with_runtime_profile_state(
             plugin_runner_system,
             official_plugin_source: Arc::new(InMemoryOfficialPluginSource),
             official_agent_flow_template_source: Arc::new(InMemoryOfficialAgentFlowTemplateSource),
+            api_node_id: config.api_node_id.clone(),
             provider_install_root: config.provider_install_root.clone(),
             provider_secret_master_key: config.provider_secret_master_key.clone(),
             host_extension_dropin_root: config.host_extension_dropin_root.clone(),

@@ -6,7 +6,8 @@ use control_plane::{
         CreatePluginAssignmentInput, CreatePluginTaskInput, PluginRepository,
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput,
-        UpsertPluginInstallationInput, UpsertPluginPackageCatalogProjectionInput,
+        UpsertPluginArtifactInstanceInput, UpsertPluginInstallationInput,
+        UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use sqlx::Row;
@@ -14,8 +15,8 @@ use uuid::Uuid;
 
 use crate::{
     mappers::plugin_mapper::{
-        PgPluginMapper, StoredPluginAssignmentRow, StoredPluginInstallationRow,
-        StoredPluginPackageCatalogProjectionRow, StoredPluginTaskRow,
+        PgPluginMapper, StoredPluginArtifactInstanceRow, StoredPluginAssignmentRow,
+        StoredPluginInstallationRow, StoredPluginPackageCatalogProjectionRow, StoredPluginTaskRow,
     },
     repositories::PgControlPlaneStore,
 };
@@ -62,6 +63,22 @@ fn map_assignment(row: sqlx::postgres::PgRow) -> Result<domain::PluginAssignment
     })
 }
 
+fn map_artifact_instance(
+    row: sqlx::postgres::PgRow,
+) -> Result<domain::PluginArtifactInstanceRecord> {
+    PgPluginMapper::to_artifact_instance_record(StoredPluginArtifactInstanceRow {
+        node_id: row.get("node_id"),
+        installation_id: row.get("installation_id"),
+        local_version: row.get("local_version"),
+        local_checksum: row.get("local_checksum"),
+        installed_path: row.get("installed_path"),
+        artifact_status: row.get("artifact_status"),
+        runtime_status: row.get("runtime_status"),
+        checked_at: row.get("checked_at"),
+        last_error: row.get("last_error"),
+    })
+}
+
 fn map_task(row: sqlx::postgres::PgRow) -> Result<domain::PluginTaskRecord> {
     PgPluginMapper::to_task_record(StoredPluginTaskRow {
         id: row.get("id"),
@@ -104,6 +121,7 @@ impl PluginRepository for PgControlPlaneStore {
             r#"
             insert into plugin_installations (
                 id,
+                scope_id,
                 provider_code,
                 plugin_id,
                 plugin_version,
@@ -126,11 +144,12 @@ impl PluginRepository for PgControlPlaneStore {
                 signing_key_id,
                 last_load_error,
                 metadata_json,
-                created_by
+                created_by,
+                updated_by
             ) values (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                $21, $22, $23, $24
+                $21, $22, $23, $24, $25, $26
             )
             on conflict (plugin_id) do update
             set
@@ -155,6 +174,7 @@ impl PluginRepository for PgControlPlaneStore {
                 signing_key_id = excluded.signing_key_id,
                 last_load_error = excluded.last_load_error,
                 metadata_json = excluded.metadata_json,
+                updated_by = excluded.updated_by,
                 updated_at = now()
             returning
                 id,
@@ -186,6 +206,7 @@ impl PluginRepository for PgControlPlaneStore {
             "#,
         )
         .bind(input.installation_id)
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(&input.provider_code)
         .bind(&input.plugin_id)
         .bind(&input.plugin_version)
@@ -208,6 +229,7 @@ impl PluginRepository for PgControlPlaneStore {
         .bind(input.signing_key_id.as_deref())
         .bind(input.last_load_error.as_deref())
         .bind(&input.metadata_json)
+        .bind(input.actor_user_id)
         .bind(input.actor_user_id)
         .fetch_one(self.pool())
         .await?;
@@ -628,6 +650,116 @@ impl PluginRepository for PgControlPlaneStore {
         }
     }
 
+    async fn upsert_artifact_instance(
+        &self,
+        input: &UpsertPluginArtifactInstanceInput,
+    ) -> Result<domain::PluginArtifactInstanceRecord> {
+        let row = sqlx::query(
+            r#"
+            insert into plugin_artifact_instances (
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            on conflict (node_id, installation_id) do update
+            set
+                local_version = excluded.local_version,
+                local_checksum = excluded.local_checksum,
+                installed_path = excluded.installed_path,
+                artifact_status = excluded.artifact_status,
+                runtime_status = excluded.runtime_status,
+                checked_at = excluded.checked_at,
+                last_error = excluded.last_error
+            returning
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            "#,
+        )
+        .bind(&input.node_id)
+        .bind(input.installation_id)
+        .bind(input.local_version.as_deref())
+        .bind(input.local_checksum.as_deref())
+        .bind(input.installed_path.as_deref())
+        .bind(input.artifact_status.as_str())
+        .bind(input.runtime_status.as_str())
+        .bind(input.checked_at)
+        .bind(input.last_error.as_deref())
+        .fetch_one(self.pool())
+        .await?;
+
+        map_artifact_instance(row)
+    }
+
+    async fn get_artifact_instance(
+        &self,
+        node_id: &str,
+        installation_id: Uuid,
+    ) -> Result<Option<domain::PluginArtifactInstanceRecord>> {
+        let row = sqlx::query(
+            r#"
+            select
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            from plugin_artifact_instances
+            where node_id = $1 and installation_id = $2
+            "#,
+        )
+        .bind(node_id)
+        .bind(installation_id)
+        .fetch_optional(self.pool())
+        .await?;
+
+        row.map(map_artifact_instance).transpose()
+    }
+
+    async fn list_artifact_instances(
+        &self,
+        node_id: &str,
+    ) -> Result<Vec<domain::PluginArtifactInstanceRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select
+                node_id,
+                installation_id,
+                local_version,
+                local_checksum,
+                installed_path,
+                artifact_status,
+                runtime_status,
+                checked_at,
+                last_error
+            from plugin_artifact_instances
+            where node_id = $1
+            order by checked_at desc, installation_id desc
+            "#,
+        )
+        .bind(node_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        rows.into_iter().map(map_artifact_instance).collect()
+    }
+
     async fn create_assignment(
         &self,
         input: &CreatePluginAssignmentInput,
@@ -691,13 +823,29 @@ impl PluginRepository for PgControlPlaneStore {
                 id,
                 installation_id,
                 workspace_id,
+                scope_kind,
+                scope_id,
                 provider_code,
                 task_kind,
                 status,
                 status_message,
                 detail_json,
-                created_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                created_by,
+                updated_by
+            ) values (
+                $1,
+                $2,
+                $3,
+                case when $5 in ('assign', 'unassign') then 'workspace' else 'system' end,
+                case when $5 in ('assign', 'unassign') then $3 else $4 end,
+                $6,
+                $5,
+                $7,
+                $8,
+                $9,
+                $10,
+                $10
+            )
             returning
                 id,
                 installation_id,
@@ -716,8 +864,9 @@ impl PluginRepository for PgControlPlaneStore {
         .bind(input.task_id)
         .bind(input.installation_id)
         .bind(input.workspace_id)
-        .bind(&input.provider_code)
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(input.task_kind.as_str())
+        .bind(&input.provider_code)
         .bind(input.status.as_str())
         .bind(input.status_message.as_deref())
         .bind(&input.detail_json)

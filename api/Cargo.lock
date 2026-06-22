@@ -884,6 +884,7 @@ dependencies = [
  "orchestration-runtime",
  "plugin-framework",
  "rand_core 0.6.4",
+ "regex",
  "runtime-core",
  "runtime-profile",
  "serde",

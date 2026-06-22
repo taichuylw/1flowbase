@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 7;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 8;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -451,7 +451,8 @@ impl TraceProjectionBuilder {
             node_type: Some("tool".to_string()),
             node_mode,
             node_alias: tool_name,
-            status: callback_task_trace_node_status(task),
+            status: route_trace_tool_callback_status(route_trace.as_ref())
+                .unwrap_or_else(|| callback_task_trace_node_status(task)),
             started_at: task.created_at,
             finished_at: task.completed_at,
             duration_ms: trace_node_duration_ms(task.created_at, task.completed_at),
@@ -584,9 +585,11 @@ impl TraceProjectionBuilder {
             node_type: Some("tool".to_string()),
             node_mode,
             node_alias: tool_name,
-            status: trace_node_group_status(parent_node_runs)
-                .as_str()
-                .to_string(),
+            status: route_trace_tool_callback_status(route_trace.as_ref()).unwrap_or_else(|| {
+                trace_node_group_status(parent_node_runs)
+                    .as_str()
+                    .to_string()
+            }),
             started_at: parent_node_runs[0].started_at,
             finished_at: trace_node_group_finished_at(parent_node_runs),
             duration_ms: None,
@@ -1127,9 +1130,9 @@ use tool_callbacks::{
     callback_task_trace_node_status, callback_tasks_for_node_run_ids, node_run_group_content,
     route_trace_branch_traces, route_trace_for_tool_call, route_trace_locator_component,
     route_trace_metrics_payload, route_trace_node_alias, route_trace_node_kind, route_trace_status,
-    synthetic_tool_calls_not_in_callback_tasks, tool_callback_content_payload,
-    tool_callback_metrics_payload, tool_calls_from_callback_task, tool_group_status,
-    tool_result_for_call, tool_result_for_call_from_node_runs,
+    route_trace_tool_callback_status, synthetic_tool_calls_not_in_callback_tasks,
+    tool_callback_content_payload, tool_callback_metrics_payload, tool_calls_from_callback_task,
+    tool_group_status, tool_result_for_call, tool_result_for_call_from_node_runs,
 };
 
 fn root_order_key(index: usize) -> String {

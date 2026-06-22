@@ -9,6 +9,7 @@ mod frontend_block_catalog_routes;
 mod frontstage_routes;
 mod host_extensions;
 mod host_infrastructure;
+mod mcp_management_routes;
 mod me_routes;
 mod member_routes;
 mod model_provider_icon_routes;

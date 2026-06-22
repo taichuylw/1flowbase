@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use control_plane::{
     errors::ControlPlaneError,
-    ports::{AuthRepository, CreateMemberInput, MemberRepository},
+    ports::{AuthRepository, CreateMemberInput, MemberRepository, UpdateMemberInput},
 };
 use domain::{ActorContext, AuditLogRecord};
 use uuid::Uuid;
@@ -28,9 +28,9 @@ impl MemberRepository for PgControlPlaneStore {
         &self,
         input: &CreateMemberInput,
     ) -> Result<domain::UserRecord> {
-        let default_role: (Uuid, String) = sqlx::query_as(
+        let default_role: (Uuid, String, Uuid) = sqlx::query_as(
             r#"
-            select id, code
+            select id, code, scope_id
             from roles
             where scope_kind = 'workspace'
               and workspace_id = $1
@@ -116,14 +116,15 @@ impl MemberRepository for PgControlPlaneStore {
 
         sqlx::query(
             r#"
-            insert into user_role_bindings (id, user_id, role_id, created_by, updated_by)
-            values ($1, $2, $3, $4, $4)
+            insert into user_role_bindings (id, user_id, role_id, scope_id, created_by, updated_by)
+            values ($1, $2, $3, $4, $5, $5)
             on conflict (user_id, role_id) do nothing
             "#,
         )
         .bind(Uuid::now_v7())
         .bind(user_id)
         .bind(default_role.0)
+        .bind(default_role.2)
         .bind(input.actor_user_id)
         .execute(&mut *tx)
         .await?;
@@ -133,6 +134,37 @@ impl MemberRepository for PgControlPlaneStore {
         self.find_user_by_id(user_id)
             .await?
             .ok_or_else(|| anyhow!("member missing after creation"))
+    }
+
+    async fn update_member_profile(&self, input: &UpdateMemberInput) -> Result<domain::UserRecord> {
+        let row = sqlx::query(
+            r#"
+            update users
+            set name = $2,
+                nickname = $3,
+                email = $4,
+                phone = $5,
+                introduction = $6,
+                updated_by = $7,
+                updated_at = now()
+            where id = $1
+            returning id, account, email, phone, password_hash, name, nickname, avatar_url,
+                      introduction, preferred_locale, meta, default_display_role, email_login_enabled, phone_login_enabled,
+                      status, session_version
+            "#,
+        )
+        .bind(input.user_id)
+        .bind(&input.name)
+        .bind(&input.nickname)
+        .bind(&input.email)
+        .bind(&input.phone)
+        .bind(&input.introduction)
+        .bind(input.actor_user_id)
+        .fetch_optional(self.pool())
+        .await?
+        .ok_or(ControlPlaneError::NotFound("user"))?;
+
+        map_user_row(self.pool(), row).await
     }
 
     async fn disable_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> Result<()> {
@@ -154,6 +186,61 @@ impl MemberRepository for PgControlPlaneStore {
         .bind(actor_user_id)
         .execute(self.pool())
         .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(ControlPlaneError::NotFound("user").into());
+        }
+
+        Ok(())
+    }
+
+    async fn enable_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            update users
+            set status = 'active',
+                session_version = session_version + 1,
+                updated_by = $2,
+                updated_at = now()
+            where id = $1
+            "#,
+        )
+        .bind(target_user_id)
+        .bind(actor_user_id)
+        .execute(self.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(ControlPlaneError::NotFound("user").into());
+        }
+
+        Ok(())
+    }
+
+    async fn delete_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> Result<()> {
+        if is_root_user(self.pool(), target_user_id).await? {
+            return Err(ControlPlaneError::PermissionDenied("root_user_immutable").into());
+        }
+        if actor_user_id == target_user_id {
+            return Err(ControlPlaneError::PermissionDenied("member_self_delete_forbidden").into());
+        }
+
+        let result = sqlx::query("delete from users where id = $1")
+            .bind(target_user_id)
+            .execute(self.pool())
+            .await
+            .map_err(|err| {
+                if matches!(
+                    err.as_database_error().and_then(|db| db.code()).as_deref(),
+                    Some("23503")
+                ) {
+                    anyhow::Error::from(ControlPlaneError::Conflict(
+                        "member_has_referenced_resources",
+                    ))
+                } else {
+                    anyhow::Error::from(err)
+                }
+            })?;
 
         if result.rows_affected() == 0 {
             return Err(ControlPlaneError::NotFound("user").into());
@@ -202,11 +289,8 @@ impl MemberRepository for PgControlPlaneStore {
         target_user_id: Uuid,
         role_codes: &[String],
     ) -> Result<()> {
-        if is_root_user(self.pool(), target_user_id).await? {
-            return Err(ControlPlaneError::PermissionDenied("root_user_immutable").into());
-        }
-
-        let normalized_codes = role_codes
+        let is_root_target = is_root_user(self.pool(), target_user_id).await?;
+        let mut normalized_codes = role_codes
             .iter()
             .map(|code| code.trim())
             .filter(|code| !code.is_empty())
@@ -214,6 +298,12 @@ impl MemberRepository for PgControlPlaneStore {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
+        if is_root_target {
+            if !normalized_codes.iter().any(|code| code == "root") {
+                return Err(ControlPlaneError::PermissionDenied("root_user_immutable").into());
+            }
+            normalized_codes.retain(|code| code != "root");
+        }
 
         let mut role_ids = Vec::new();
         for role_code in &normalized_codes {
@@ -247,8 +337,10 @@ impl MemberRepository for PgControlPlaneStore {
         for role_id in role_ids {
             sqlx::query(
                 r#"
-                insert into user_role_bindings (id, user_id, role_id, created_by, updated_by)
-                values ($1, $2, $3, $4, $4)
+                insert into user_role_bindings (id, user_id, role_id, scope_id, created_by, updated_by)
+                select $1, $2, roles.id, roles.scope_id, $4, $4
+                from roles
+                where roles.id = $3
                 on conflict (user_id, role_id) do nothing
                 "#,
             )

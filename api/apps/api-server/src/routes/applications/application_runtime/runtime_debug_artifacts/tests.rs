@@ -157,6 +157,38 @@ fn llm_tool_callback_execution_status_requires_explicit_execution_fact() {
 }
 
 #[test]
+fn llm_tool_callback_execution_status_prefers_intercepted_route_trace() {
+    assert_eq!(
+        execution_status_from_callback_payload_and_route_trace(
+            Some(&json!({
+                "tool_call_id": "call_image",
+                "execution_status": "succeeded"
+            })),
+            Some(&json!({
+                "kind": "visible_internal_llm_tool_trace",
+                "tool_call_id": "call_image",
+                "status": "intercepted"
+            })),
+        ),
+        "intercepted"
+    );
+    assert_eq!(
+        execution_status_from_callback_payload_and_route_trace(
+            Some(&json!({
+                "tool_call_id": "call_weather",
+                "content": "{\"temperature\":21}"
+            })),
+            Some(&json!({
+                "kind": "visible_internal_llm_tool_trace",
+                "tool_call_id": "call_weather",
+                "status": "failed"
+            })),
+        ),
+        "failed"
+    );
+}
+
+#[test]
 fn llm_tool_callback_payloads_keep_context_usage_without_token_delta() {
     let rounds = json!([
         {

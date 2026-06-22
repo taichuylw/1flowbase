@@ -9,7 +9,7 @@ export function SettingsSectionSurface({
   description,
   children,
   titleLevel = 3,
-  hideHeader = false,
+  hideHeader = true,
   headerActions,
   toolbar,
   status,

@@ -638,8 +638,16 @@ export interface RuntimeDebugStreamPart {
   payload: unknown;
 }
 
+export interface RuntimeDebugStreamQuery {
+  from_sequence?: number;
+  limit?: number;
+}
+
 export interface RuntimeDebugStreamResponse {
   parts: RuntimeDebugStreamPart[];
+  page_size: number;
+  next_sequence?: number | null;
+  has_more: boolean;
 }
 
 export interface ConsoleFlowDebugStreamCursor {

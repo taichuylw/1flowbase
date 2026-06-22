@@ -533,4 +533,5 @@ mod basic_lifecycle;
 mod exposure_status;
 mod external_source;
 mod protection_advisor;
+mod registered_system_table;
 mod scope_grants;

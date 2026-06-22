@@ -714,6 +714,68 @@
     ]
   },
   {
+    "id": "page.settings-mcp-management",
+    "kind": "page",
+    "title": "Settings MCP Management Page",
+    "impactFiles": [
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/app-shell/app-shell.css",
+      "web/packages/ui/src/index.tsx",
+      "web/app/src/app-shell/AppShellFrame.tsx",
+      "web/app/src/app-shell/Navigation.tsx",
+      "web/app/src/app-shell/AccountMenu.tsx",
+      "web/app/src/app-shell/account-menu-items.tsx",
+      "web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx",
+      "web/app/src/shared/ui/section-page-layout/SectionSidebarNav.tsx",
+      "web/app/src/shared/ui/section-page-layout/section-page-layout.css",
+      "web/app/src/shared/ui/scrollable-surface/ScrollableSurface.tsx",
+      "web/app/src/shared/ui/scrollable-surface/scrollable-surface.css",
+      "web/app/src/shared/ui/data-table/DataTable.tsx",
+      "web/app/src/shared/ui/data-table/data-table.css",
+      "web/app/src/shared/ui/data-table/user-preference-data-table.ts",
+      "web/app/src/features/settings/pages/SettingsPage.tsx",
+      "web/app/src/features/settings/pages/settings-page/SettingsMcpManagementSection.tsx",
+      "web/app/src/features/settings/pages/settings-page/SettingsNavigation.tsx",
+      "web/app/src/features/settings/pages/settings-page/SettingsRouteShell.tsx",
+      "web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx",
+      "web/app/src/features/settings/pages/settings-page/use-settings-sections.ts",
+      "web/app/src/features/settings/lib/settings-sections.tsx",
+      "web/app/src/features/settings/components/SettingsSectionSurface.tsx",
+      "web/app/src/features/settings/components/settings-section-surface.css",
+      "web/app/src/features/settings/components/mcp-management/McpManagementPanel.tsx",
+      "web/app/src/features/settings/components/mcp-management/mcp-management-panel.css",
+      "web/app/src/features/settings/components/mcp-management/mcp-management-view-model.ts",
+      "web/app/src/features/settings/api/mcp-management.ts",
+      "web/app/src/features/settings/i18n/zh_Hans.json",
+      "web/app/src/features/settings/i18n/en_US.json",
+      "web/app/src/app/router.tsx",
+      "web/packages/api-client/src/console-mcp-management.ts"
+    ],
+    "boundaryNodes": [
+      {
+        "id": "section-shell",
+        "selector": ".section-page-layout__shell",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "mcp-management-directory-tree",
+        "selector": ".mcp-management__directory-tree",
+        "propertyAssertions": [
+          {
+            "property": "overflow",
+            "expected": "auto"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "page.settings-docs",
     "kind": "page",
     "title": "Settings API Docs Page",

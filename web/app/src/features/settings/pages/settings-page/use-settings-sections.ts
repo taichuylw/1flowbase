@@ -22,6 +22,7 @@ export function useSettingsSections({
       settingsSectionDefinitions
         .filter(
           (section) =>
+            section.requiredPermissions.length === 0 ||
             isRoot ||
             section.requiredPermissions.some((permission) =>
               permissions.includes(permission)

@@ -13,8 +13,10 @@ impl PgControlPlaneStore {
                 document_hash,
                 document_updated_at,
                 plan,
-                created_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+                scope_id,
+                created_by,
+                updated_by
+            ) values ($1, $2, $3, $4, $5, $6, $7, (select scope_id from flows where id = $2), $8, $8)
             returning
                 id,
                 flow_id,

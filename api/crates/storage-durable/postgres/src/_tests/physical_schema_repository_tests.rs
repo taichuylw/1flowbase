@@ -163,7 +163,7 @@ async fn create_main_source_table_adds_platform_columns_and_scope_indexes() {
     let index_defs = runtime_index_defs(&store, &model.physical_table_name).await;
     assert!(index_defs
         .iter()
-        .any(|def| def.contains("(scope_id, created_at)")));
+        .any(|def| def.contains("(scope_id, created_at, id)")));
     assert!(index_defs
         .iter()
         .any(|def| def.contains("(scope_id, created_by)")));
@@ -616,7 +616,27 @@ async fn add_many_to_many_field_creates_host_managed_join_table() {
     .await
     .unwrap();
 
-    assert!(tables.iter().any(|name| name.starts_with("rtm_rel_")));
+    let join_table_name = tables
+        .iter()
+        .find(|name| name.starts_with("rtm_rel_"))
+        .expect("many_to_many field should create a runtime join table");
+
+    let columns = runtime_columns(&store, join_table_name).await;
+    for expected in [
+        "id",
+        "scope_id",
+        "created_by",
+        "updated_by",
+        "created_at",
+        "updated_at",
+    ] {
+        assert!(columns.contains(&expected.to_string()));
+    }
+
+    let index_defs = runtime_index_defs(&store, join_table_name).await;
+    assert!(index_defs
+        .iter()
+        .any(|def| def.contains("(scope_id, created_at, id)")));
 }
 
 #[tokio::test]

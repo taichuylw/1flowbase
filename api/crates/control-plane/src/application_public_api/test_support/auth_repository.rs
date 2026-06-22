@@ -60,12 +60,28 @@ impl AuthRepository for ApplicationPublicApiTestRepository {
         workspace_id: Uuid,
         _display_role: Option<&str>,
     ) -> Result<domain::ActorContext> {
+        if user_id == TEST_ROOT_USER_ID {
+            return Ok(domain::ActorContext::root_in_scope(
+                user_id,
+                tenant_id,
+                workspace_id,
+                "root",
+            ));
+        }
+
+        let permissions = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .actor_permissions
+            .clone();
+
         Ok(domain::ActorContext::scoped_in_scope(
             user_id,
             tenant_id,
             workspace_id,
             "manager",
-            Vec::<String>::new(),
+            permissions,
         ))
     }
 

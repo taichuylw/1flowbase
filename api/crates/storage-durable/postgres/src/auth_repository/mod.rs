@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use control_plane::ports::{
-    ApiKeyRepository, AuthRepository, BootstrapRepository, CreateApiKeyInput, UpdateProfileInput,
-    UpdateUserMetaInput, UpsertApiKeyDataModelPermissionInput,
+use control_plane::{
+    errors::ControlPlaneError,
+    ports::{
+        ApiKeyRepository, AuthRepository, BootstrapRepository, CreateApiKeyInput,
+        UpdateProfileInput, UpdateUserMetaInput, UpsertApiKeyDataModelPermissionInput,
+    },
 };
 use domain::{
     ActorContext, ApiKeyDataModelPermissionRecord, ApiKeyRecord, AuditLogRecord,
@@ -56,6 +59,7 @@ fn map_api_key_row(row: sqlx::postgres::PgRow) -> ApiKeyRecord {
         token_prefix: row.get("token_prefix"),
         key_kind: domain::ApiKeyKind::from_db(row.get::<String, _>("key_kind").as_str()),
         application_id: row.get("application_id"),
+        role_code: row.get("role_code"),
         creator_user_id: row.get("creator_user_id"),
         tenant_id: row.get("tenant_id"),
         scope_kind: domain::DataModelScopeKind::from_db(
@@ -147,13 +151,14 @@ impl BootstrapRepository for PgControlPlaneStore {
         for permission in permissions {
             let inserted_permission_id: Option<Uuid> = sqlx::query_scalar(
                 r#"
-                insert into permission_definitions (id, resource, action, scope, code, name, introduction)
-                values ($1, $2, $3, $4, $5, $6, '')
+                insert into permission_definitions (id, scope_id, resource, action, scope, code, name, introduction)
+                values ($1, $2, $3, $4, $5, $6, $7, '')
                 on conflict (code) do nothing
                 returning id
                 "#,
             )
             .bind(Uuid::now_v7())
+            .bind(domain::SYSTEM_SCOPE_ID)
             .bind(&permission.resource)
             .bind(&permission.action)
             .bind(&permission.scope)
@@ -187,9 +192,9 @@ impl BootstrapRepository for PgControlPlaneStore {
         }
 
         for permission_id in inserted_permission_ids {
-            let role_ids: Vec<Uuid> = sqlx::query_scalar(
+            let role_scopes: Vec<(Uuid, Uuid)> = sqlx::query_as(
                 r#"
-                select id
+                select id, scope_id
                 from roles
                 where auto_grant_new_permissions = true
                 "#,
@@ -197,17 +202,18 @@ impl BootstrapRepository for PgControlPlaneStore {
             .fetch_all(&mut *tx)
             .await?;
 
-            for role_id in role_ids {
+            for (role_id, scope_id) in role_scopes {
                 sqlx::query(
                     r#"
-                    insert into role_permissions (id, role_id, permission_id)
-                    values ($1, $2, $3)
+                    insert into role_permissions (id, role_id, permission_id, scope_id)
+                    values ($1, $2, $3, $4)
                     on conflict (role_id, permission_id) do nothing
                     "#,
                 )
                 .bind(Uuid::now_v7())
                 .bind(role_id)
                 .bind(permission_id)
+                .bind(scope_id)
                 .execute(&mut *tx)
                 .await?;
             }
@@ -324,6 +330,7 @@ impl BootstrapRepository for PgControlPlaneStore {
                 r#"
                 insert into roles (
                     id,
+                    scope_id,
                     scope_kind,
                     workspace_id,
                     code,
@@ -335,12 +342,16 @@ impl BootstrapRepository for PgControlPlaneStore {
                     is_default_member_role,
                     system_kind
                 )
-                values ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, $10)
+                values ($1, $2, $3, $4, $5, $6, '', $7, $8, $9, $10, $11)
                 on conflict do nothing
                 returning id
                 "#,
             )
             .bind(Uuid::now_v7())
+            .bind(match role.scope_kind {
+                RoleScopeKind::System => domain::SYSTEM_SCOPE_ID,
+                RoleScopeKind::Workspace => workspace_id,
+            })
             .bind(scope_kind)
             .bind(scoped_workspace_id)
             .bind(&role.code)
@@ -375,10 +386,11 @@ impl BootstrapRepository for PgControlPlaneStore {
                 for permission_code in role.permissions {
                     sqlx::query(
                         r#"
-                        insert into role_permissions (id, role_id, permission_id)
-                        select $1, $2, id
-                        from permission_definitions
-                        where code = $3
+                        insert into role_permissions (id, role_id, permission_id, scope_id)
+                        select $1, roles.id, permission_definitions.id, roles.scope_id
+                        from roles
+                        join permission_definitions on permission_definitions.code = $3
+                        where roles.id = $2
                         on conflict (role_id, permission_id) do nothing
                         "#,
                     )
@@ -440,8 +452,8 @@ impl BootstrapRepository for PgControlPlaneStore {
 
         sqlx::query(
             r#"
-            insert into user_role_bindings (id, user_id, role_id)
-            select $1, $2, id from roles where code = 'root' and scope_kind = 'system'
+            insert into user_role_bindings (id, user_id, role_id, scope_id)
+            select $1, $2, id, scope_id from roles where code = 'root' and scope_kind = 'system'
             on conflict (user_id, role_id) do nothing
             "#,
         )
@@ -613,6 +625,63 @@ impl AuthRepository for PgControlPlaneStore {
         ))
     }
 
+    async fn load_actor_context_for_bound_role(
+        &self,
+        user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+        role_code: &str,
+    ) -> Result<ActorContext> {
+        let role: Option<(Uuid, String)> = sqlx::query_as(
+            r#"
+            select r.id, r.code
+            from user_role_bindings urb
+            join roles r on r.id = urb.role_id
+            where urb.user_id = $1
+              and r.code = $2
+              and (r.scope_kind = 'system' or r.workspace_id = $3)
+            limit 1
+            "#,
+        )
+        .bind(user_id)
+        .bind(role_code)
+        .bind(workspace_id)
+        .fetch_optional(self.pool())
+        .await?;
+        let (role_id, bound_role_code) =
+            role.ok_or(ControlPlaneError::InvalidInput("role_code"))?;
+
+        if bound_role_code == "root" {
+            return Ok(ActorContext::root_in_scope(
+                user_id,
+                tenant_id,
+                workspace_id,
+                &bound_role_code,
+            ));
+        }
+
+        let permissions: Vec<String> = sqlx::query_scalar(
+            r#"
+            select distinct pd.code
+            from role_permissions rp
+            join permission_definitions pd on pd.id = rp.permission_id
+            where rp.role_id = $1
+            order by pd.code asc
+            "#,
+        )
+        .bind(role_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(ActorContext::scoped_in_scope(
+            user_id,
+            tenant_id,
+            workspace_id,
+            &bound_role_code,
+            permissions,
+        ))
+    }
+
     async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
         let scope = self.default_scope_for_user(actor_user_id).await?;
         self.load_actor_context(actor_user_id, scope.tenant_id, scope.workspace_id, None)
@@ -740,14 +809,29 @@ impl AuthRepository for PgControlPlaneStore {
     }
 
     async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        let scope_id = event.workspace_id.unwrap_or(domain::SYSTEM_SCOPE_ID);
         sqlx::query(
             r#"
-            insert into audit_logs (id, workspace_id, actor_user_id, target_type, target_id, event_code, payload, created_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8)
+            insert into audit_logs (
+                id,
+                workspace_id,
+                scope_id,
+                actor_user_id,
+                target_type,
+                target_id,
+                event_code,
+                payload,
+                created_by,
+                updated_by,
+                created_at,
+                updated_at
+            )
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $4, $4, $9, $9)
             "#,
         )
         .bind(event.id)
         .bind(event.workspace_id)
+        .bind(scope_id)
         .bind(event.actor_user_id)
         .bind(&event.target_type)
         .bind(event.target_id)
@@ -768,11 +852,11 @@ impl ApiKeyRepository for PgControlPlaneStore {
             r#"
             insert into api_keys (
                 id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                scope_kind, scope_id, key_kind, application_id, enabled, expires_at
+                scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at
             )
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             returning id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                      scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                      scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
                       last_used_at, created_at, updated_at
             "#,
         )
@@ -786,6 +870,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
         .bind(input.scope_id)
         .bind(input.key_kind.as_str())
         .bind(input.application_id)
+        .bind(&input.role_code)
         .bind(input.enabled)
         .bind(input.expires_at)
         .fetch_one(self.pool())
@@ -806,15 +891,43 @@ impl ApiKeyRepository for PgControlPlaneStore {
             .await?;
 
         for permission in permissions {
-            sqlx::query(
+            let inserted = sqlx::query(
                 r#"
                 insert into api_key_data_model_permissions (
-                    api_key_id, data_model_id, allow_list, allow_get, allow_create,
-                    allow_update, allow_delete
+                    id,
+                    api_key_id,
+                    data_model_id,
+                    scope_id,
+                    allow_list,
+                    allow_get,
+                    allow_create,
+                    allow_update,
+                    allow_delete,
+                    created_by,
+                    updated_by
                 )
-                values ($1, $2, $3, $4, $5, $6, $7)
+                select
+                    $1,
+                    keys.id,
+                    grants.data_model_id,
+                    keys.scope_id,
+                    $4,
+                    $5,
+                    $6,
+                    $7,
+                    $8,
+                    keys.creator_user_id,
+                    keys.creator_user_id
+                from api_keys keys
+                join scope_data_model_grants grants
+                  on grants.scope_kind = keys.scope_kind
+                 and grants.scope_id = keys.scope_id
+                 and grants.data_model_id = $3
+                 and grants.enabled = true
+                where keys.id = $2
                 "#,
             )
+            .bind(Uuid::now_v7())
             .bind(permission.api_key_id)
             .bind(permission.data_model_id)
             .bind(permission.allow_list)
@@ -823,7 +936,13 @@ impl ApiKeyRepository for PgControlPlaneStore {
             .bind(permission.allow_update)
             .bind(permission.allow_delete)
             .execute(&mut *tx)
-            .await?;
+            .await?
+            .rows_affected();
+            if inserted != 1 {
+                return Err(anyhow!(
+                    "api_key_data_model_permission scope grant mismatch"
+                ));
+            }
         }
         tx.commit().await?;
 
@@ -834,7 +953,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             select id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                   scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                   scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
                    last_used_at, created_at, updated_at
             from api_keys
             where token_hash = $1
@@ -863,6 +982,66 @@ impl ApiKeyRepository for PgControlPlaneStore {
         Ok(())
     }
 
+    async fn list_user_api_keys(
+        &self,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<Vec<ApiKeyRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select id, name, token_hash, token_prefix, creator_user_id, tenant_id,
+                   scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
+                   last_used_at, created_at, updated_at
+            from api_keys
+            where key_kind = 'user_api_key'
+              and creator_user_id = $1
+              and tenant_id = $2
+              and scope_id = $3
+            order by created_at desc, id desc
+            "#,
+        )
+        .bind(creator_user_id)
+        .bind(tenant_id)
+        .bind(workspace_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows.into_iter().map(map_api_key_row).collect())
+    }
+
+    async fn revoke_user_api_key(
+        &self,
+        api_key_id: Uuid,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            update api_keys
+            set enabled = false,
+                updated_at = now()
+            where id = $1
+              and key_kind = 'user_api_key'
+              and creator_user_id = $2
+              and tenant_id = $3
+              and scope_id = $4
+            "#,
+        )
+        .bind(api_key_id)
+        .bind(creator_user_id)
+        .bind(tenant_id)
+        .bind(workspace_id)
+        .execute(self.pool())
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(anyhow!("user_api_key not found"));
+        }
+
+        Ok(())
+    }
+
     async fn list_application_api_keys(
         &self,
         application_id: Uuid,
@@ -871,7 +1050,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
         let rows = sqlx::query(
             r#"
             select id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                   scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                   scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
                    last_used_at, created_at, updated_at
             from api_keys
             where key_kind = 'application_api_key'

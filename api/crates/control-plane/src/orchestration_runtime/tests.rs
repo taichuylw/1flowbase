@@ -127,6 +127,8 @@ async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selec
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
@@ -168,6 +170,8 @@ async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selec
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
@@ -205,6 +209,8 @@ async fn orchestration_runtime_resolve_llm_instance_uses_selected_child_instance
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
@@ -251,6 +257,8 @@ async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_i
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
@@ -286,6 +294,8 @@ async fn orchestration_runtime_textualizes_user_media_when_selected_model_is_not
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
     let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {
@@ -348,6 +358,8 @@ async fn orchestration_runtime_keeps_user_media_when_configured_model_supports_m
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
     let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {
@@ -451,6 +463,8 @@ async fn orchestration_runtime_canonicalizes_live_provider_tool_call_names() {
         flow_run_id: None,
         active_node_id: Some("node-llm".to_string()),
         active_node_run_id: Some(Uuid::now_v7()),
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
     let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {

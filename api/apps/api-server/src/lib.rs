@@ -147,7 +147,9 @@ fn console_router(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::file_storages::router())
         .nest("/api/console", routes::file_tables::router())
         .nest("/api/console", routes::host_infrastructure::router())
+        .nest("/api/console", routes::mcp_management::router())
         .nest("/api/console", routes::api_keys::router())
+        .nest("/api/console", routes::user_api_keys::router())
         .nest("/api/console", routes::me::router())
         .nest("/api/console", routes::workspace::router())
         .nest("/api/console", routes::members::router())
@@ -259,6 +261,9 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             bootstrap_result.workspace_id,
         )
         .await?;
+    control_plane::mcp_management::McpManagementService::new(store.clone())
+        .read_workspace_catalog(bootstrap_result.root_user_id)
+        .await?;
     let provider_runtime = Arc::new(ApiRuntimeServices::new(
         Arc::new(RwLock::new(
             plugin_runner::provider_host::ProviderHost::default(),
@@ -317,6 +322,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
                 official_agent_flow_template_cache,
             ),
         ),
+        api_node_id: config.api_node_id.clone(),
         provider_install_root: config.provider_install_root.clone(),
         provider_secret_master_key: config.provider_secret_master_key.clone(),
         host_extension_dropin_root: config.host_extension_dropin_root.clone(),
@@ -336,6 +342,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         state.official_plugin_source.clone(),
         state.provider_install_root.clone(),
     )
+    .with_node_id(state.api_node_id.clone())
     .with_allow_uploaded_host_extensions(state.allow_uploaded_host_extensions)
     .reconcile_all_installations()
     .await?;

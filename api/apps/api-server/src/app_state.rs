@@ -27,6 +27,7 @@ pub struct ApiState {
     pub plugin_runner_system: Arc<dyn PluginRunnerSystemPort>,
     pub official_plugin_source: Arc<dyn OfficialPluginSourcePort>,
     pub official_agent_flow_template_source: Arc<dyn OfficialAgentFlowTemplateSourcePort>,
+    pub api_node_id: String,
     pub provider_install_root: String,
     pub provider_secret_master_key: String,
     pub host_extension_dropin_root: String,

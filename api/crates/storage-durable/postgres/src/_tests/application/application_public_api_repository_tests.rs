@@ -8,6 +8,7 @@ use control_plane::{
     ports::{
         ApplicationApiMappingRepository, ApplicationPublicationRepository,
         CreateApplicationPublicationVersionInput, ReplaceApplicationApiMappingInput,
+        SetApplicationApiEnabledInput,
     },
 };
 use sqlx::PgPool;
@@ -130,7 +131,7 @@ async fn seed_flow_version_and_compiled_plan(
     let document = domain::default_flow_document(flow_id);
 
     sqlx::query(
-        "insert into flows (id, application_id, created_by, updated_by) values ($1, $2, $3, $3)",
+        "insert into flows (id, application_id, scope_id, created_by, updated_by) values ($1, $2, (select scope_id from applications where id = $2), $3, $3)",
     )
     .bind(flow_id)
     .bind(application_id)
@@ -152,9 +153,9 @@ async fn seed_flow_version_and_compiled_plan(
     sqlx::query(
         r#"
         insert into flow_versions (
-            id, flow_id, sequence, trigger, change_kind, summary,
-            summary_is_custom, is_protected, document, created_by
-        ) values ($1, $2, 1, 'autosave', 'logical', 'published', false, true, $3, $4)
+            id, flow_id, scope_id, sequence, trigger, change_kind, summary,
+            summary_is_custom, is_protected, document, created_by, updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), 1, 'autosave', 'logical', 'published', false, true, $3, $4, $4)
         "#,
     )
     .bind(version_id)
@@ -168,9 +169,9 @@ async fn seed_flow_version_and_compiled_plan(
         r#"
         insert into flow_compiled_plans (
             id, flow_id, flow_draft_id, schema_version, document_hash,
-            document_updated_at, plan, created_by
+            document_updated_at, plan, scope_id, created_by, updated_by
         )
-        select $1, $2, $3, $4, 'sha256:test', updated_at, $5, $6
+        select $1, $2, $3, $4, 'sha256:test', updated_at, $5, (select scope_id from flows where id = $2), $6, $6
         from flow_drafts
         where id = $3
         "#,
@@ -204,9 +205,9 @@ async fn seed_publication_revision(
     sqlx::query(
         r#"
         insert into flow_versions (
-            id, flow_id, sequence, trigger, change_kind, summary,
-            summary_is_custom, is_protected, document, created_by
-        ) values ($1, $2, $3, 'autosave', 'logical', 'published', false, true, $4, $5)
+            id, flow_id, scope_id, sequence, trigger, change_kind, summary,
+            summary_is_custom, is_protected, document, created_by, updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), $3, 'autosave', 'logical', 'published', false, true, $4, $5, $5)
         "#,
     )
     .bind(version_id)
@@ -222,9 +223,9 @@ async fn seed_publication_revision(
         r#"
         insert into flow_compiled_plans (
             id, flow_id, flow_draft_id, schema_version, document_hash,
-            document_updated_at, plan, created_by
+            document_updated_at, plan, scope_id, created_by, updated_by
         )
-        select $1, $2, $3, $4, $5, updated_at, $6, $7
+        select $1, $2, $3, $4, $5, updated_at, $6, (select scope_id from flows where id = $2), $7, $7
         from flow_drafts
         where id = $3
         "#,
@@ -279,7 +280,9 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
             ($1, 'Data Model Key', 'dmk-hash', 'dmk_prefix', $2, $3,
              'workspace', $4, 'data_model_api_key', null, true),
             ($5, 'Application Key', 'apk-hash', 'apk_prefix', $2, $3,
-             'workspace', $4, 'application_api_key', $6, true)
+             'workspace', $4, 'application_api_key', $6, true),
+            ($7, 'User Key', 'pat-hash', 'pat_prefix', $2, $3,
+             'workspace', $4, 'user_api_key', null, true)
         "#,
     )
     .bind(Uuid::now_v7())
@@ -288,6 +291,7 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
     .bind(workspace_id)
     .bind(Uuid::now_v7())
     .bind(application_id)
+    .bind(Uuid::now_v7())
     .execute(&pool)
     .await
     .unwrap();
@@ -309,6 +313,7 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
         vec![
             ("application_api_key".to_string(), 1),
             ("data_model_api_key".to_string(), 1),
+            ("user_api_key".to_string(), 1),
         ]
     );
 
@@ -333,6 +338,30 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
     assert!(
         invalid_application_key.is_err(),
         "application_api_key rows must carry an application_id"
+    );
+
+    let invalid_user_key = sqlx::query(
+        r#"
+        insert into api_keys (
+            id, name, token_hash, token_prefix, creator_user_id, tenant_id,
+            scope_kind, scope_id, key_kind, application_id, enabled
+        ) values (
+            $1, 'Broken User Key', 'pat-broken', 'pat_broken', $2, $3,
+            'workspace', $4, 'user_api_key', $5, true
+        )
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(actor_user_id)
+    .bind(root_tenant_id(&store).await)
+    .bind(workspace_id)
+    .bind(application_id)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        invalid_user_key.is_err(),
+        "user_api_key rows must not carry an application_id"
     );
 }
 
@@ -503,6 +532,16 @@ async fn application_public_api_repository_republish_updates_single_current_publ
         )
         .await
         .unwrap();
+    ApplicationPublicationRepository::set_application_api_enabled(
+        &store,
+        &SetApplicationApiEnabledInput {
+            actor_user_id,
+            application_id,
+            api_enabled: true,
+        },
+    )
+    .await
+    .unwrap();
 
     let publications = ApplicationPublicationRepository::list_application_publication_versions(
         &store,
@@ -517,6 +556,13 @@ async fn application_public_api_repository_republish_updates_single_current_publ
     .fetch_one(&pool)
     .await
     .unwrap();
+    let publication_audit: (bool, Uuid) = sqlx::query_as(
+        "select api_enabled, updated_by from application_publication_versions where application_id = $1",
+    )
+    .bind(application_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
 
     assert_eq!(second_publication.id, first_publication.id);
     assert_eq!(second_publication.version_sequence, 1);
@@ -524,8 +570,11 @@ async fn application_public_api_repository_republish_updates_single_current_publ
     assert_eq!(second_publication.compiled_plan_id, second_compiled_plan_id);
     assert_eq!(second_publication.document_snapshot, second_document);
     assert!(!second_publication.api_enabled);
-    assert_eq!(publications, vec![second_publication]);
+    assert_eq!(publications.len(), 1);
+    assert_eq!(publications[0].id, second_publication.id);
+    assert!(publications[0].api_enabled);
     assert_eq!(row_count, 1);
+    assert_eq!(publication_audit, (true, actor_user_id));
 }
 
 #[tokio::test]

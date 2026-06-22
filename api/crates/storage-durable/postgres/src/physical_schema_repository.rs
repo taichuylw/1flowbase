@@ -128,6 +128,7 @@ pub async fn create_join_table(
           id uuid primary key,
           left_model_id uuid not null,
           right_model_id uuid not null,
+          scope_id uuid not null,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now(),
           created_by uuid,
@@ -139,6 +140,7 @@ pub async fn create_join_table(
     );
 
     sqlx::query(&statement).execute(&mut **tx).await?;
+    create_join_table_scope_indexes(tx, &join_table_name, model.id, relation_target.id).await?;
     Ok(join_table_name)
 }
 
@@ -220,12 +222,33 @@ async fn create_runtime_scope_indexes(
     let scope_created_by_index = quote_identifier(&full_uuid_name("idx_scope_creator", model.id))?;
 
     sqlx::query(&format!(
-        "create index {scope_created_at_index} on {table_name} (scope_id, created_at)"
+        "create index {scope_created_at_index} on {table_name} (scope_id, created_at, id)"
     ))
     .execute(&mut **tx)
     .await?;
     sqlx::query(&format!(
         "create index {scope_created_by_index} on {table_name} (scope_id, created_by)"
+    ))
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn create_join_table_scope_indexes(
+    tx: &mut Transaction<'_, Postgres>,
+    join_table_name: &str,
+    left_model_id: uuid::Uuid,
+    right_model_id: uuid::Uuid,
+) -> Result<()> {
+    let table_name = quote_identifier(join_table_name)?;
+    let scope_created_at_index = quote_identifier(&join_index_name(
+        "idx_rel_scope_created",
+        left_model_id,
+        right_model_id,
+    ))?;
+
+    sqlx::query(&format!(
+        "create index {scope_created_at_index} on {table_name} (scope_id, created_at, id)"
     ))
     .execute(&mut **tx)
     .await?;
@@ -274,6 +297,14 @@ pub fn join_table_name(
 fn short_random_suffix(id: uuid::Uuid) -> String {
     let simple = id.simple().to_string();
     simple[simple.len() - 6..].to_string()
+}
+
+fn join_index_name(prefix: &str, left_id: uuid::Uuid, right_id: uuid::Uuid) -> String {
+    format!(
+        "{prefix}_{}_{}",
+        short_random_suffix(left_id),
+        short_random_suffix(right_id)
+    )
 }
 
 fn truncate_identifier_fragment(value: &str, max_len: usize) -> &str {

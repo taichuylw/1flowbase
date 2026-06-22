@@ -416,6 +416,10 @@ async fn resume_anthropic_tool_call(
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
+    )
     .with_file_storage_registry(state.file_storage_registry.clone())
     .with_runtime_event_stream(state.runtime_event_stream.clone());
     let result =
@@ -701,9 +705,9 @@ async fn resolve_plain_anthropic_tool_resume(
         .authenticate_bearer_token(bearer_token)
         .await
         .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let waiting_runs = state
+    let waiting_run_ids = state
         .store
-        .list_waiting_callback_published_flow_runs_for_conversation(
+        .list_waiting_callback_published_flow_run_ids_for_conversation(
             &ListWaitingCallbackPublishedRunsInput {
                 application_id: actor.application_id,
                 api_key_id: actor.api_key_id,
@@ -715,10 +719,10 @@ async fn resolve_plain_anthropic_tool_resume(
         .await
         .map_err(native::service_error)?;
 
-    for waiting_run in waiting_runs.iter().rev() {
+    for waiting_run_id in waiting_run_ids.iter().rev() {
         let Some(detail) = state
             .store
-            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .get_published_run_detail(actor.application_id, *waiting_run_id)
             .await
             .map_err(native::service_error)?
         else {
@@ -758,9 +762,9 @@ async fn resolve_embedded_anthropic_encoded_tool_resume(
         .authenticate_bearer_token(bearer_token)
         .await
         .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let waiting_runs = state
+    let waiting_run_ids = state
         .store
-        .list_waiting_callback_published_flow_runs_for_conversation(
+        .list_waiting_callback_published_flow_run_ids_for_conversation(
             &ListWaitingCallbackPublishedRunsInput {
                 application_id: actor.application_id,
                 api_key_id: actor.api_key_id,
@@ -772,10 +776,10 @@ async fn resolve_embedded_anthropic_encoded_tool_resume(
         .await
         .map_err(native::service_error)?;
 
-    for waiting_run in waiting_runs.iter().rev() {
+    for waiting_run_id in waiting_run_ids.iter().rev() {
         let Some(detail) = state
             .store
-            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .get_published_run_detail(actor.application_id, *waiting_run_id)
             .await
             .map_err(native::service_error)?
         else {
@@ -897,9 +901,9 @@ async fn anthropic_plain_stdout_resume_request_for_route(
         .authenticate_bearer_token(bearer_token)
         .await
         .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let waiting_runs = state
+    let waiting_run_ids = state
         .store
-        .list_waiting_callback_published_flow_runs_for_conversation(
+        .list_waiting_callback_published_flow_run_ids_for_conversation(
             &ListWaitingCallbackPublishedRunsInput {
                 application_id: actor.application_id,
                 api_key_id: actor.api_key_id,
@@ -911,10 +915,10 @@ async fn anthropic_plain_stdout_resume_request_for_route(
         .await
         .map_err(native::service_error)?;
 
-    for waiting_run in waiting_runs.iter().rev() {
+    for waiting_run_id in waiting_run_ids.iter().rev() {
         let Some(detail) = state
             .store
-            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .get_published_run_detail(actor.application_id, *waiting_run_id)
             .await
             .map_err(native::service_error)?
         else {

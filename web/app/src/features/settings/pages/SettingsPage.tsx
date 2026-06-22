@@ -34,6 +34,8 @@ export function SettingsPage({
   const canManageDataModels = canManageModelProviders;
   const canManageHostInfrastructure =
     isRoot || permissionSet.has('plugin_config.configure.all');
+  const canManageMcpManagement =
+    isRoot || permissionSet.has('mcp_management.manage.all');
   const { activeSection, redirectSection, visibleSections } =
     useSettingsSections({
       requestedSectionKey,
@@ -60,6 +62,7 @@ export function SettingsPage({
           canManageDataModels={canManageDataModels}
           canManageModelProviders={canManageModelProviders}
           canManageHostInfrastructure={canManageHostInfrastructure}
+          canManageMcpManagement={canManageMcpManagement}
         />
       ) : null}
     </SettingsRouteShell>

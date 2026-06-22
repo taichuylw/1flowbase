@@ -140,6 +140,19 @@ async fn application_runtime_routes_start_node_preview_and_query_logs() {
         list_payload["data"]["items"][0]["title"].as_str(),
         Some("总结退款政策")
     );
+    let list_item = list_payload["data"]["items"][0].as_object().unwrap();
+    assert!(
+        !list_item.contains_key("input_payload"),
+        "run list summary must not return full raw input payload"
+    );
+    assert!(
+        !list_item.contains_key("output_payload"),
+        "run list summary must not return full raw output payload"
+    );
+    assert!(
+        !list_item.contains_key("error_payload"),
+        "run list summary must not return full raw error payload"
+    );
     assert!(list_payload["data"]["items"][0]["created_at"].is_string());
     assert!(list_payload["data"]["items"][0]["updated_at"].is_string());
 

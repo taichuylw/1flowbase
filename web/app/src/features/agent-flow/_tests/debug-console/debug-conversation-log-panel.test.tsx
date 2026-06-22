@@ -138,6 +138,61 @@ describe('debug conversation log panel', () => {
     expect(within(panel).queryByText('provider')).not.toBeInTheDocument();
   });
 
+  test('shows intercepted tool trace nodes instead of success', () => {
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '看这张图',
+          rawOutput: null,
+          traceSummary: []
+        },
+        {
+          ...assistantMessage,
+          traceSummary: [
+            {
+              nodeId: 'tool-image-llm',
+              nodeRunId: 'tool-image-llm-run',
+              nodeAlias: 'image_llm',
+              nodeType: 'tool',
+              status: 'intercepted',
+              startedAt: '2026-04-25T10:00:01Z',
+              finishedAt: '2026-04-25T10:00:02Z',
+              durationMs: null,
+              inputPayload: {},
+              outputPayload: {
+                error: {
+                  details: {
+                    error_code: 'visible_internal_llm_tool_media_unavailable'
+                  }
+                }
+              },
+              errorPayload: null,
+              metricsPayload: {},
+              debugPayload: {
+                route_trace: {
+                  route_kind: 'route',
+                  status: 'intercepted'
+                }
+              }
+            }
+          ]
+        }
+      ]
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+
+    const toolNode = within(panel).getByRole('button', { name: /image_llm/ });
+    expect(toolNode).toHaveTextContent('拦截');
+    expect(toolNode).not.toHaveTextContent('执行成功');
+  });
+
   test('loads lazy overview for application log details before trace root', async () => {
     const loadOverview = vi.fn().mockResolvedValue({
       run: {
@@ -549,10 +604,7 @@ describe('debug conversation log panel', () => {
       loadChildren: vi
         .fn()
         .mockImplementation(
-          async (
-            _runId: string,
-            parentTraceNodeId: string
-          ) => ({
+          async (_runId: string, parentTraceNodeId: string) => ({
             items:
               parentTraceNodeId === rootNode.trace_node_id
                 ? [toolsNode]
@@ -560,7 +612,7 @@ describe('debug conversation log panel', () => {
                   ? [toolCallbackNode]
                   : parentTraceNodeId === toolCallbackNode.trace_node_id
                     ? [fusionNode]
-                  : [],
+                    : [],
             page_info: {
               has_more: false,
               next_cursor: null,

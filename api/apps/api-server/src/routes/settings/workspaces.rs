@@ -49,7 +49,7 @@ pub async fn list_workspaces(
     let workspaces = WorkspaceService::new(state.store.clone())
         .list_accessible_workspaces(context.user.id)
         .await?;
-    let current_workspace_id = context.session.current_workspace_id;
+    let current_workspace_id = context.actor.current_workspace_id;
 
     let mut current = Vec::new();
     let mut remaining = Vec::new();

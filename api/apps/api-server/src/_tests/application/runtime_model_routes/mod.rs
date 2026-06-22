@@ -471,6 +471,33 @@ async fn create_api_key(
     payload["data"]["token"].as_str().unwrap().to_string()
 }
 
+async fn create_user_api_key(app: &axum::Router, cookie: &str, csrf: &str, name: &str) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/user-api-keys")
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": name,
+                        "expiration_policy": "never"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    payload["data"]["token"].as_str().unwrap().to_string()
+}
+
 async fn list_records_with_api_key(
     app: &axum::Router,
     model_code: &str,

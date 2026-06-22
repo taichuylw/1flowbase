@@ -1,4 +1,3 @@
-
 import {
   fireEvent,
   render,
@@ -18,6 +17,8 @@ const membersApi = vi.hoisted(() => ({
   fetchSettingsMembers: vi.fn(),
   createSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  enableSettingsMember: vi.fn(),
+  deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   replaceSettingsMemberRoles: vi.fn()
 }));
@@ -111,6 +112,8 @@ const pluginsApi = vi.hoisted(() => ({
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
   deleteSettingsPluginFamily: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -285,6 +288,17 @@ describe('ModelProvidersPage - official install and upload', () => {
         model_discovery_mode: 'hybrid',
         current_installation_id: 'installation-1',
         current_version: '0.1.0',
+        current_local_artifact: {
+          node_id: 'test-node',
+          installation_id: 'installation-1',
+          local_version: '0.1.0',
+          local_checksum: null,
+          installed_path: '/tmp/plugins/openai_compatible/0.1.0',
+          artifact_status: 'ready',
+          runtime_status: 'inactive',
+          checked_at: '2026-04-18T10:00:00Z',
+          last_error: null
+        },
         latest_version: '0.2.0',
         has_update: true,
         installed_versions: [
@@ -309,8 +323,8 @@ describe('ModelProvidersPage - official install and upload', () => {
     ]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
-page: { limit: 20, next_cursor: null },
-entries: []
+      page: { limit: 20, next_cursor: null },
+      entries: []
     });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {
@@ -674,6 +688,17 @@ entries: []
         model_discovery_mode: 'hybrid',
         current_installation_id: 'installation-upload-1',
         current_version: '0.2.0',
+        current_local_artifact: {
+          node_id: 'test-node',
+          installation_id: 'installation-upload-1',
+          local_version: '0.2.0',
+          local_checksum: null,
+          installed_path: '/tmp/plugins/uploaded/0.2.0',
+          artifact_status: 'ready',
+          runtime_status: 'inactive',
+          checked_at: '2026-04-19T10:00:00Z',
+          last_error: null
+        },
         latest_version: '0.2.0',
         has_update: false,
         installed_versions: [

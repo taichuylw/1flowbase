@@ -67,6 +67,11 @@ use runtime_debug_artifacts::{
     RuntimeDebugArtifactPreviewRequest,
 };
 
+pub(super) const APPLICATION_RUN_LOG_DEFAULT_TIME_RANGE_DAYS: i64 = 7;
+pub(super) const RUNTIME_DEBUG_STREAM_DEFAULT_PAGE_SIZE: usize = 500;
+pub(super) const RUNTIME_DEBUG_STREAM_MAX_PAGE_SIZE: usize = 1_000;
+pub(super) const RUNTIME_DEBUG_ARTIFACT_RESOLVE_MAX_REFS: usize = 50;
+
 fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
     ApiProviderRuntime::new_with_activity(
         state.provider_runtime.clone(),

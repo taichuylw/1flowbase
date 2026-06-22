@@ -1,9 +1,11 @@
 import {
   deleteConsolePluginFamily,
   getConsolePluginTask,
+  installConsolePluginCurrentNodeArtifact,
   installConsoleOfficialPlugin,
   listConsolePluginFamilies,
   listConsoleOfficialPluginCatalog,
+  refreshConsolePluginCurrentNodeArtifact,
   uploadConsolePluginPackage,
   type ConsolePluginFamilyCatalogResponse,
   type ConsoleOfficialPluginCatalogResponse,
@@ -237,6 +239,20 @@ export function installSettingsOfficialPlugin(
 
 export function uploadSettingsPluginPackage(file: File, csrfToken: string) {
   return uploadConsolePluginPackage(file, csrfToken);
+}
+
+export function refreshSettingsPluginCurrentNodeArtifact(
+  installationId: string,
+  csrfToken: string
+) {
+  return refreshConsolePluginCurrentNodeArtifact(installationId, csrfToken);
+}
+
+export function installSettingsPluginCurrentNodeArtifact(
+  installationId: string,
+  csrfToken: string
+) {
+  return installConsolePluginCurrentNodeArtifact(installationId, csrfToken);
 }
 
 export function upgradeSettingsPluginFamilyLatest(

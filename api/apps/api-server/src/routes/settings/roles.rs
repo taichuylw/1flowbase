@@ -119,7 +119,7 @@ pub async fn create_role(
     Json(body): Json<CreateRoleBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<RoleResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     RoleService::new(state.store.clone())
         .create_role(CreateRoleCommand {
@@ -162,7 +162,7 @@ pub async fn update_role(
     Json(body): Json<UpdateRoleBody>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     RoleService::new(state.store.clone())
         .update_role(UpdateRoleCommand {
@@ -190,7 +190,7 @@ pub async fn delete_role(
     Path(role_code): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     RoleService::new(state.store.clone())
         .delete_role(DeleteRoleCommand {
@@ -238,7 +238,7 @@ pub async fn replace_role_permissions(
     Json(body): Json<ReplaceRolePermissionsBody>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     RoleService::new(state.store.clone())
         .replace_permissions(ReplaceRolePermissionsCommand {

@@ -73,6 +73,62 @@ test('tooling index dispatches hotspot-review subcommand', async () => {
   assert.deepEqual(capturedArgv, ['--since', '1 day ago']);
 });
 
+test('tooling index dispatches growth-table-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['growth-table-report', '--max-evidence', '2'], {
+    runGrowthTableReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--max-evidence', '2']);
+});
+
+test('tooling index dispatches raw-jsonb-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['raw-jsonb-report', '--max-evidence', '2'], {
+    runRawJsonbReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--max-evidence', '2']);
+});
+
+test('tooling index dispatches log-query-contract-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['log-query-contract-report'], {
+    runLogQueryContractReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, []);
+});
+
+test('tooling index dispatches capacity-report subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['capacity-report', '--inspection-input', 'tmp/capacity.json'], {
+    runCapacityReportImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--inspection-input', 'tmp/capacity.json']);
+});
+
 test('tooling index dispatches repo-hygiene subcommand', async () => {
   let capturedArgv = null;
 
@@ -92,6 +148,20 @@ test('tooling index dispatches i18n-hygiene subcommand', async () => {
 
   const status = await main(['i18n-hygiene', '--max-findings', '10'], {
     runI18nHygieneImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--max-findings', '10']);
+});
+
+test('tooling index dispatches schema-hygiene subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['schema-hygiene', '--max-findings', '10'], {
+    runSchemaHygieneImpl(argv) {
       capturedArgv = argv;
       return 0;
     },

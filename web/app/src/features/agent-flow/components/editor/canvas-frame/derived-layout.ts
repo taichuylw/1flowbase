@@ -119,7 +119,7 @@ export function deriveCanvasFrameLayout(input: CanvasFrameLayoutInput) {
     16 + nodeDetailOccupiedWidth + sideDockOccupiedWidth;
   const variableCacheCenterLeft = Math.max(
     120,
-    (canvasFrameWidth - variableCacheRightOffset) / 2
+    (canvasFrameWidth - nodeDetailOccupiedWidth - sideDockOccupiedWidth) / 2
   );
   const variableCacheMaxHeight = Math.max(
     VARIABLE_CACHE_MIN_HEIGHT,

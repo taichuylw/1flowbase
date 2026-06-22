@@ -148,6 +148,14 @@ const BUILTIN_RUNTIME_READ_MODEL_CODES: [&str; 7] = [
     "flow_run_callback_tasks",
 ];
 
+fn registered_system_table_protection() -> domain::DataModelProtection {
+    domain::DataModelProtection {
+        owner_kind: domain::DataModelOwnerKind::Core,
+        owner_id: None,
+        is_protected: true,
+    }
+}
+
 pub struct SystemMetadataBootstrapService<R> {
     repository: R,
 }
@@ -253,7 +261,7 @@ where
                 external_capability_snapshot: None,
                 status: domain::DataModelStatus::Published,
                 api_exposure_status: domain::ApiExposureStatus::PublishedNotExposed,
-                protection: domain::DataModelProtection::default(),
+                protection: registered_system_table_protection(),
                 code: template.code.to_string(),
                 title: template.title.to_string(),
             })

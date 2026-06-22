@@ -8,12 +8,12 @@ use axum::{
 };
 use control_plane::plugin_management::{
     AssignPluginCommand, DeletePluginFamilyCommand, EnablePluginCommand,
-    InstallOfficialPluginCommand, InstallPluginCommand, InstallPluginResult,
-    InstallUploadedPluginCommand, OfficialPluginCatalogEntry, OfficialPluginCatalogFilter,
-    OfficialPluginCatalogView, PluginCatalogEntry, PluginCatalogFilter, PluginFamilyView,
-    PluginInstalledVersionView, PluginManagementService,
-    RefreshPluginPackageCatalogProjectionCommand, SwitchPluginVersionCommand,
-    UpgradeLatestPluginFamilyCommand,
+    InstallCurrentNodePluginArtifactCommand, InstallOfficialPluginCommand, InstallPluginCommand,
+    InstallPluginResult, InstallUploadedPluginCommand, OfficialPluginCatalogEntry,
+    OfficialPluginCatalogFilter, OfficialPluginCatalogView, PluginCatalogEntry,
+    PluginCatalogFilter, PluginFamilyView, PluginInstalledVersionView, PluginManagementService,
+    RefreshCurrentNodePluginArtifactCommand, RefreshPluginPackageCatalogProjectionCommand,
+    SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
 };
 use control_plane::resource_action::{
     ActionDefinition, ResourceActionKernel, ResourceActionRegistry, ResourceDefinition,
@@ -95,16 +95,31 @@ pub struct PluginInstallationResponse {
     pub signature_algorithm: Option<String>,
     pub signing_key_id: Option<String>,
     pub last_load_error: Option<String>,
+    pub local_artifact: Option<PluginArtifactInstanceResponse>,
     #[schema(value_type = Object)]
     pub metadata_json: serde_json::Value,
     pub created_at: String,
     pub updated_at: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct PluginArtifactInstanceResponse {
+    pub node_id: String,
+    pub installation_id: String,
+    pub local_version: Option<String>,
+    pub local_checksum: Option<String>,
+    pub installed_path: Option<String>,
+    pub artifact_status: String,
+    pub runtime_status: String,
+    pub checked_at: String,
+    pub last_error: Option<String>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 #[schema(description = "Catalog entry returned by the plugin API.")]
 pub struct PluginCatalogEntryResponse {
     pub installation: PluginInstallationResponse,
+    pub local_artifact: PluginArtifactInstanceResponse,
     pub plugin_type: String,
     pub namespace: String,
     pub label_key: String,
@@ -191,6 +206,7 @@ pub struct PluginInstalledVersionResponse {
     pub trust_level: String,
     pub desired_state: String,
     pub availability_status: String,
+    pub local_artifact: PluginArtifactInstanceResponse,
     pub created_at: String,
     pub is_current: bool,
 }
@@ -211,6 +227,7 @@ pub struct PluginFamilyResponse {
     pub model_discovery_mode: String,
     pub current_installation_id: String,
     pub current_version: String,
+    pub current_local_artifact: PluginArtifactInstanceResponse,
     pub latest_version: Option<String>,
     pub has_update: bool,
     pub installed_versions: Vec<PluginInstalledVersionResponse>,
@@ -273,6 +290,14 @@ pub fn router() -> Router<Arc<ApiState>> {
             "/plugins/:installation_id/catalog-projection/refresh",
             post(refresh_catalog_projection),
         )
+        .route(
+            "/plugins/:installation_id/artifact/refresh",
+            post(refresh_current_node_artifact),
+        )
+        .route(
+            "/plugins/:installation_id/artifact/install-current-node",
+            post(install_current_node_artifact),
+        )
         .route("/plugins/:installation_id/enable", post(enable_plugin))
         .route("/plugins/:installation_id/assign", post(assign_plugin))
         .route("/plugins/tasks", get(list_tasks))
@@ -286,6 +311,7 @@ fn service(state: &ApiState) -> PluginManagementService<MainDurableStore, ApiPro
         state.official_plugin_source.clone(),
         state.provider_install_root.clone(),
     )
+    .with_node_id(state.api_node_id.clone())
     .with_allow_uploaded_host_extensions(state.allow_uploaded_host_extensions)
 }
 
@@ -365,6 +391,13 @@ async fn read_upload_file(multipart: &mut Multipart) -> Result<(String, Vec<u8>)
 fn to_installation_response(
     installation: domain::PluginInstallationRecord,
 ) -> PluginInstallationResponse {
+    to_installation_response_with_artifact(installation, None)
+}
+
+fn to_installation_response_with_artifact(
+    installation: domain::PluginInstallationRecord,
+    local_artifact: Option<domain::PluginArtifactInstanceRecord>,
+) -> PluginInstallationResponse {
     PluginInstallationResponse {
         id: installation.id.to_string(),
         provider_code: installation.provider_code,
@@ -389,9 +422,26 @@ fn to_installation_response(
         signature_algorithm: installation.signature_algorithm,
         signing_key_id: installation.signing_key_id,
         last_load_error: installation.last_load_error,
+        local_artifact: local_artifact.map(to_artifact_instance_response),
         metadata_json: installation.metadata_json,
         created_at: format_time(installation.created_at),
         updated_at: format_time(installation.updated_at),
+    }
+}
+
+fn to_artifact_instance_response(
+    artifact: domain::PluginArtifactInstanceRecord,
+) -> PluginArtifactInstanceResponse {
+    PluginArtifactInstanceResponse {
+        node_id: artifact.node_id,
+        installation_id: artifact.installation_id.to_string(),
+        local_version: artifact.local_version,
+        local_checksum: artifact.local_checksum,
+        installed_path: artifact.installed_path,
+        artifact_status: artifact.artifact_status.as_str().to_string(),
+        runtime_status: artifact.runtime_status.as_str().to_string(),
+        checked_at: format_time(artifact.checked_at),
+        last_error: artifact.last_error,
     }
 }
 
@@ -411,8 +461,13 @@ fn to_install_response(result: InstallPluginResult) -> InstallPluginResponse {
 }
 
 fn to_catalog_response(entry: PluginCatalogEntry) -> PluginCatalogEntryResponse {
+    let local_artifact = entry.local_artifact;
     PluginCatalogEntryResponse {
-        installation: to_installation_response(entry.installation),
+        installation: to_installation_response_with_artifact(
+            entry.installation,
+            Some(local_artifact.clone()),
+        ),
+        local_artifact: to_artifact_instance_response(local_artifact),
         plugin_type: entry.plugin_type,
         namespace: entry.namespace,
         label_key: entry.label_key,
@@ -506,6 +561,7 @@ fn to_installed_version_response(
         trust_level: version.trust_level,
         desired_state: version.desired_state,
         availability_status: version.availability_status,
+        local_artifact: to_artifact_instance_response(version.local_artifact),
         created_at: format_time(version.created_at),
         is_current: version.is_current,
     }
@@ -526,6 +582,7 @@ fn to_family_response(entry: PluginFamilyView) -> PluginFamilyResponse {
         model_discovery_mode: entry.model_discovery_mode,
         current_installation_id: entry.current_installation_id.to_string(),
         current_version: entry.current_version,
+        current_local_artifact: to_artifact_instance_response(entry.current_local_artifact),
         latest_version: entry.latest_version,
         has_update: entry.has_update,
         installed_versions: entry
@@ -741,7 +798,7 @@ pub async fn install_plugin(
     Json(body): Json<InstallPluginBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let output = install_plugin_action_kernel(state.clone())?
         .dispatch_json(
             "plugins",
@@ -771,7 +828,7 @@ pub async fn install_uploaded_plugin(
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let (file_name, package_bytes) = read_upload_file(&mut multipart).await?;
     let result = service(&state)
         .install_uploaded_plugin(InstallUploadedPluginCommand {
@@ -800,7 +857,7 @@ pub async fn install_official_plugin(
     Json(body): Json<InstallOfficialPluginBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = service(&state)
         .install_official_plugin(InstallOfficialPluginCommand {
             actor_user_id: context.user.id,
@@ -826,7 +883,7 @@ pub async fn refresh_catalog_projection(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginCatalogProjectionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let projection = service(&state)
         .refresh_catalog_projection(RefreshPluginPackageCatalogProjectionCommand {
             actor_user_id: context.user.id,
@@ -835,6 +892,54 @@ pub async fn refresh_catalog_projection(
         .await?;
     Ok(Json(ApiSuccess::new(to_catalog_projection_response(
         projection,
+    ))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/plugins/{installation_id}/artifact/refresh",
+    operation_id = "plugin_refresh_current_node_artifact",
+    responses((status = 200, body = PluginArtifactInstanceResponse), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn refresh_current_node_artifact(
+    State(state): State<Arc<ApiState>>,
+    Path(installation_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<PluginArtifactInstanceResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+    let artifact = service(&state)
+        .refresh_current_node_artifact(RefreshCurrentNodePluginArtifactCommand {
+            actor_user_id: context.user.id,
+            installation_id: parse_uuid(&installation_id, "installation_id")?,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_artifact_instance_response(
+        artifact,
+    ))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/plugins/{installation_id}/artifact/install-current-node",
+    operation_id = "plugin_install_current_node_artifact",
+    responses((status = 200, body = PluginArtifactInstanceResponse), (status = 403, body = crate::error_response::ErrorBody), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn install_current_node_artifact(
+    State(state): State<Arc<ApiState>>,
+    Path(installation_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<PluginArtifactInstanceResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+    let artifact = service(&state)
+        .install_current_node_artifact(InstallCurrentNodePluginArtifactCommand {
+            actor_user_id: context.user.id,
+            installation_id: parse_uuid(&installation_id, "installation_id")?,
+        })
+        .await?;
+    Ok(Json(ApiSuccess::new(to_artifact_instance_response(
+        artifact,
     ))))
 }
 
@@ -850,7 +955,7 @@ pub async fn upgrade_latest(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .upgrade_latest(UpgradeLatestPluginFamilyCommand {
             actor_user_id: context.user.id,
@@ -874,7 +979,7 @@ pub async fn switch_version(
     Json(body): Json<SwitchPluginVersionBody>,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .switch_version(SwitchPluginVersionCommand {
             actor_user_id: context.user.id,
@@ -897,7 +1002,7 @@ pub async fn delete_family(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .delete_family(DeletePluginFamilyCommand {
             actor_user_id: context.user.id,
@@ -919,7 +1024,7 @@ pub async fn enable_plugin(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .enable_plugin(EnablePluginCommand {
             actor_user_id: context.user.id,
@@ -941,7 +1046,7 @@ pub async fn assign_plugin(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .assign_plugin(AssignPluginCommand {
             actor_user_id: context.user.id,

@@ -370,7 +370,10 @@ async fn docs_routes_allow_root_and_granted_members() {
     assert_eq!(operation_payload["servers"][0]["url"], "/");
     assert_eq!(
         operation_payload["security"],
-        json!([{ "sessionCookie": [], "csrfHeader": [] }])
+        json!([
+            { "sessionCookie": [], "csrfHeader": [] },
+            { "patBearer": [] }
+        ])
     );
     assert_eq!(
         operation_payload["components"]["securitySchemes"]["sessionCookie"]["in"],
@@ -379,6 +382,10 @@ async fn docs_routes_allow_root_and_granted_members() {
     assert_eq!(
         operation_payload["components"]["securitySchemes"]["csrfHeader"]["name"],
         "x-csrf-token"
+    );
+    assert_eq!(
+        operation_payload["components"]["securitySchemes"]["patBearer"]["scheme"],
+        "bearer"
     );
 
     let member_id = create_member(&app, &root_cookie, &root_csrf, "docs-viewer", "temp-pass").await;
@@ -737,6 +744,10 @@ async fn docs_routes_append_dynamic_data_model_api_category_and_specs() {
     );
     assert_eq!(
         operation_spec["components"]["securitySchemes"]["apiKeyBearer"]["scheme"],
+        json!("bearer")
+    );
+    assert_eq!(
+        operation_spec["components"]["securitySchemes"]["patBearer"]["scheme"],
         json!("bearer")
     );
 }

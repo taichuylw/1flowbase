@@ -87,6 +87,16 @@ async fn bootstrap_creates_builtin_user_and_role_models_once() {
     assert_eq!(users.scope_kind, DataModelScopeKind::System);
     assert_eq!(users.scope_id, SYSTEM_SCOPE_ID);
     assert_eq!(users.source_kind, DataModelSourceKind::MainSource);
+    assert_eq!(
+        users.protection.owner_kind,
+        domain::DataModelOwnerKind::Core
+    );
+    assert_eq!(users.protection.is_protected, true);
+    assert_eq!(
+        roles.protection.owner_kind,
+        domain::DataModelOwnerKind::Core
+    );
+    assert_eq!(roles.protection.is_protected, true);
     assert_eq!(users.fields.len(), 8);
     assert_eq!(roles.fields.len(), 6);
 

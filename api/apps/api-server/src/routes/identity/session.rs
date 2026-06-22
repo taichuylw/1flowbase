@@ -90,11 +90,12 @@ pub async fn get_session(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<SessionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
+    let session = context.cookie_session()?;
 
     Ok(Json(ApiSuccess::new(to_session_response(
         &context.user.account,
         &context.actor,
-        &context.session,
+        session,
         &state.cookie_name,
     ))))
 }
@@ -109,11 +110,12 @@ pub async fn delete_session(
     headers: HeaderMap,
 ) -> Result<(CookieJar, StatusCode), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
+    let session = context.cookie_session()?;
 
     SessionSecurityService::new(state.store.clone(), state.session_store.clone())
         .logout_current_session(LogoutCurrentSessionCommand {
-            session_id: context.session.session_id,
+            session_id: session.session_id.clone(),
         })
         .await?;
 
@@ -136,12 +138,13 @@ pub async fn revoke_all_sessions(
     headers: HeaderMap,
 ) -> Result<(CookieJar, StatusCode), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
+    let session = context.cookie_session()?;
 
     SessionSecurityService::new(state.store.clone(), state.session_store.clone())
         .revoke_all_sessions(RevokeAllSessionsCommand {
             actor_user_id: context.user.id,
-            session_id: context.session.session_id,
+            session_id: session.session_id.clone(),
         })
         .await?;
 
@@ -170,7 +173,8 @@ pub async fn switch_workspace(
     Json(body): Json<SwitchWorkspaceBody>,
 ) -> Result<Json<ApiSuccess<SessionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
+    let session = context.cookie_session()?;
     let workspace_id = parse_workspace_id(&body.workspace_id)?;
 
     let result = WorkspaceSessionService::new(
@@ -180,7 +184,7 @@ pub async fn switch_workspace(
     )
     .switch_workspace(SwitchWorkspaceCommand {
         actor_user_id: context.user.id,
-        session_id: context.session.session_id.clone(),
+        session_id: session.session_id.clone(),
         target_workspace_id: workspace_id,
     })
     .await?;

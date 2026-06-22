@@ -28,6 +28,98 @@ const styleBoundaryProviderInstances = [
   }
 ];
 
+const styleBoundaryMcpCatalog = {
+  instances: [
+    {
+      id: 'mcp-instance-record-1',
+      workspace_id: 'workspace-1',
+      instance_id: 'workspace_ops',
+      name: 'Workspace Ops',
+      description_short: 'Workspace MCP instance',
+      status: 'enabled',
+      default_entry_path: '/',
+      created_by: 'user-1',
+      updated_by: 'user-1',
+      created_at: '2026-06-21T00:00:00Z',
+      updated_at: '2026-06-21T00:00:00Z'
+    }
+  ],
+  groups: [
+    {
+      id: 'mcp-group-1',
+      instance_record_id: 'mcp-instance-record-1',
+      path: '/ops',
+      display_name: 'Operations',
+      description_short: 'Operational tools',
+      enabled: true,
+      sort_order: 0
+    }
+  ],
+  tools: [
+    {
+      id: 'mcp-tool-record-1',
+      workspace_id: 'workspace-1',
+      tool_id: 'runtime_profile_get',
+      name: 'Runtime profile',
+      short_description: 'Read runtime profile',
+      usage_description: null,
+      full_description: 'Read the current system runtime profile.',
+      interface_id: 'settings.system_runtime.get_profile',
+      parameter_schema: { type: 'object' },
+      result_schema: { type: 'object' },
+      input_mapping: {},
+      output_mapping: {},
+      permission_code: 'system_runtime.view.all',
+      risk_level: 'high',
+      audit_policy: { enabled: true },
+      des_id: 'Abc_1234',
+      des_id_required: true,
+      status: 'enabled',
+      revision: 1
+    }
+  ],
+  bindings: [
+    {
+      id: 'mcp-binding-1',
+      instance_record_id: 'mcp-instance-record-1',
+      tool_record_id: 'mcp-tool-record-1',
+      group_path: '/ops',
+      tool_id: 'runtime_profile_get',
+      display_alias: null,
+      visible: true,
+      sort_order: 0
+    }
+  ],
+  meta_tool_config: {
+    id: 'mcp-meta-1',
+    workspace_id: 'workspace-1',
+    list_default_limit: 20,
+    list_max_depth: 3,
+    list_regex_enabled: false,
+    list_regex_max_length: 128,
+    list_return_fields: ['path', 'name', 'risk_level'],
+    get_include_mapping_summary: true,
+    get_include_interface_summary: true,
+    call_default_des_id_policy: 'required',
+    call_high_risk_requires_des_id: true,
+    call_validation_error_format: 'field_errors'
+  }
+};
+
+const styleBoundaryMcpInterfaceCapabilities = [
+  {
+    interface_id: 'settings.system_runtime.get_profile',
+    name: 'System runtime profile',
+    short_description: 'Read current runtime profile',
+    parameter_schema: { type: 'object' },
+    result_schema: { type: 'object' },
+    permission_code: 'system_runtime.view.all',
+    risk_level: 'high',
+    bindable: true,
+    disabled_reason: null
+  }
+];
+
 export const styleBoundaryNodeContributions = [
   {
     installation_id: 'installation-1',
@@ -144,6 +236,17 @@ const styleBoundaryPluginFamiliesCatalog = {
     model_discovery_mode: entry.model_discovery_mode,
     current_installation_id: entry.installation_id,
     current_version: entry.plugin_version,
+    current_local_artifact: {
+      node_id: 'style-boundary-node',
+      installation_id: entry.installation_id,
+      local_version: entry.plugin_version,
+      local_checksum: null,
+      installed_path: `/tmp/1flowbase/plugins/${entry.provider_code}/${entry.plugin_version}`,
+      artifact_status: 'ready',
+      runtime_status: 'inactive',
+      checked_at: '2026-04-20T10:00:00Z',
+      last_error: null
+    },
     latest_version: entry.plugin_version,
     has_update: false,
     installed_versions: [
@@ -152,6 +255,19 @@ const styleBoundaryPluginFamiliesCatalog = {
         plugin_version: entry.plugin_version,
         source_kind: 'official_registry',
         trust_level: 'verified_official',
+        desired_state: 'active',
+        availability_status: 'available',
+        local_artifact: {
+          node_id: 'style-boundary-node',
+          installation_id: entry.installation_id,
+          local_version: entry.plugin_version,
+          local_checksum: null,
+          installed_path: `/tmp/1flowbase/plugins/${entry.provider_code}/${entry.plugin_version}`,
+          artifact_status: 'ready',
+          runtime_status: 'inactive',
+          checked_at: '2026-04-20T10:00:00Z',
+          last_error: null
+        },
         created_at: '2026-04-20T10:00:00Z',
         is_current: true
       }
@@ -229,6 +345,8 @@ export function seedStyleBoundaryAuth() {
         'file_object.view.all',
         'file_storage.view.all',
         'frontstage.page.design',
+        'mcp_management.view.all',
+        'mcp_management.manage.all',
         'user.view.all',
         'user.manage.all',
         'role_permission.view.all',
@@ -401,7 +519,8 @@ export function seedStyleBoundaryTemplateFetch() {
             {
               workflow_id: 'boundary-template',
               schema_version: '1flowbase.application-template/v1',
-              application: createStyleBoundaryOfficialTemplatePackage().application,
+              application:
+                createStyleBoundaryOfficialTemplatePackage().application,
               template_url:
                 'https://example.com/agent-flow/workflows/boundary-template/template.json',
               template_sha256: 'sha256:boundary-template',
@@ -556,6 +675,38 @@ export function seedStyleBoundarySettingsFetch() {
       return new Response(
         JSON.stringify({
           data: modelProviderCatalogContract,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      requestUrl.pathname === '/api/console/mcp/catalog'
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryMcpCatalog,
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (
+      method.toUpperCase() === 'GET' &&
+      requestUrl.pathname === '/api/console/mcp/interface-capabilities'
+    ) {
+      return new Response(
+        JSON.stringify({
+          data: styleBoundaryMcpInterfaceCapabilities,
           meta: null
         }),
         {

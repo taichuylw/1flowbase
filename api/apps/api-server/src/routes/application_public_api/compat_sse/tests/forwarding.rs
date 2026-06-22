@@ -156,6 +156,7 @@ async fn anthropic_live_flow_started_is_not_duplicated_by_durable_drain() {
         plugin_runner_system: base_state.plugin_runner_system.clone(),
         official_plugin_source: base_state.official_plugin_source.clone(),
         official_agent_flow_template_source: base_state.official_agent_flow_template_source.clone(),
+        api_node_id: base_state.api_node_id.clone(),
         provider_install_root: base_state.provider_install_root.clone(),
         provider_secret_master_key: base_state.provider_secret_master_key.clone(),
         host_extension_dropin_root: base_state.host_extension_dropin_root.clone(),

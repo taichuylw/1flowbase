@@ -409,6 +409,7 @@
     "node_input_output": "节点输入输出",
     "zoom_edit": "放大编辑{{value1}}",
     "execution_failed": "执行失败",
+    "execution_intercepted": "拦截",
     "add_parallel_node": "添加并行节点",
     "orchestration_loading": "正在加载编排",
     "parse_results": "解析结果",

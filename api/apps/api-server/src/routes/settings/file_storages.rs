@@ -128,7 +128,7 @@ pub async fn create_file_storage(
     Json(body): Json<CreateFileStorageBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<FileStorageResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let created = FileStorageService::new(state.store.clone())
         .create_storage(CreateFileStorageCommand {
@@ -163,7 +163,7 @@ pub async fn update_file_storage(
     Json(body): Json<UpdateFileStorageBody>,
 ) -> Result<Json<ApiSuccess<FileStorageResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let updated = FileStorageService::new(state.store.clone())
         .update_storage(UpdateFileStorageCommand {
@@ -192,7 +192,7 @@ pub async fn delete_file_storage(
     Path(file_storage_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     FileStorageService::new(state.store.clone())
         .delete_storage(DeleteFileStorageCommand {

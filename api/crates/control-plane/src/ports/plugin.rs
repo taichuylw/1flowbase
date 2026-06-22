@@ -84,6 +84,19 @@ pub struct UpdatePluginRuntimeSnapshotInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpsertPluginArtifactInstanceInput {
+    pub node_id: String,
+    pub installation_id: Uuid,
+    pub local_version: Option<String>,
+    pub local_checksum: Option<String>,
+    pub installed_path: Option<String>,
+    pub artifact_status: domain::PluginArtifactInstanceStatus,
+    pub runtime_status: domain::PluginRuntimeStatus,
+    pub checked_at: time::OffsetDateTime,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct UpsertPluginPackageCatalogProjectionInput {
     pub installation_id: Uuid,
     pub package_code: String,
@@ -209,6 +222,19 @@ pub trait PluginRepository: Send + Sync {
         &self,
         input: &UpdatePluginRuntimeSnapshotInput,
     ) -> anyhow::Result<domain::PluginInstallationRecord>;
+    async fn upsert_artifact_instance(
+        &self,
+        input: &UpsertPluginArtifactInstanceInput,
+    ) -> anyhow::Result<domain::PluginArtifactInstanceRecord>;
+    async fn get_artifact_instance(
+        &self,
+        node_id: &str,
+        installation_id: Uuid,
+    ) -> anyhow::Result<Option<domain::PluginArtifactInstanceRecord>>;
+    async fn list_artifact_instances(
+        &self,
+        node_id: &str,
+    ) -> anyhow::Result<Vec<domain::PluginArtifactInstanceRecord>>;
     async fn create_assignment(
         &self,
         input: &CreatePluginAssignmentInput,

@@ -373,6 +373,113 @@ fn builder_projects_tool_route_fusion_and_branch_nodes() {
 }
 
 #[test]
+fn builder_projects_intercepted_route_tool_callback_status() {
+    let flow_run_id = Uuid::now_v7();
+    let node_run_id = Uuid::now_v7();
+    let callback_task_id = Uuid::now_v7();
+    let now = OffsetDateTime::UNIX_EPOCH;
+    let detail = domain::ApplicationRunDetail {
+        flow_run: flow_run(flow_run_id, now),
+        node_runs: vec![domain::NodeRunRecord {
+            id: node_run_id,
+            flow_run_id,
+            node_id: "node-llm".to_string(),
+            node_type: "llm".to_string(),
+            node_alias: "Main LLM".to_string(),
+            status: domain::NodeRunStatus::Succeeded,
+            input_payload: json!({ "prompt": "describe image" }),
+            output_payload: json!({ "answer": "done" }),
+            error_payload: None,
+            metrics_payload: json!({}),
+            debug_payload: json!({
+                "visible_internal_llm_tool_trace": [
+                    {
+                        "kind": "visible_internal_llm_tool_trace",
+                        "route_kind": "route",
+                        "tool_call_id": "call-image",
+                        "tool_name": "image_llm",
+                        "status": "failed",
+                        "events": [
+                            {
+                                "event_type": "visible_internal_llm_tool_failed",
+                                "error_payload": {
+                                    "error_code": "visible_internal_llm_tool_failed",
+                                    "details": {
+                                        "error_code": "visible_internal_llm_tool_media_unavailable",
+                                        "recoverable": true
+                                    }
+                                }
+                            }
+                        ],
+                        "tool_result": {
+                            "tool_call_id": "call-image",
+                            "name": "image_llm",
+                            "content": "read the file with a client file tool first"
+                        }
+                    }
+                ]
+            }),
+            started_at: now,
+            finished_at: Some(now + time::Duration::seconds(3)),
+        }],
+        checkpoints: Vec::new(),
+        callback_tasks: vec![domain::CallbackTaskRecord {
+            id: callback_task_id,
+            flow_run_id,
+            node_run_id,
+            callback_kind: "llm_tool_calls".to_string(),
+            status: domain::CallbackTaskStatus::Completed,
+            request_payload: json!({
+                "tool_calls": [
+                    { "id": "call-image", "name": "image_llm" }
+                ]
+            }),
+            response_payload: Some(json!({
+                "tool_results": [
+                    {
+                        "tool_call_id": "call-image",
+                        "content": "read the file with a client file tool first"
+                    }
+                ]
+            })),
+            external_ref_payload: None,
+            created_at: now + time::Duration::seconds(1),
+            completed_at: Some(now + time::Duration::seconds(3)),
+        }],
+        events: Vec::new(),
+        stitched_trace: Vec::new(),
+    };
+
+    let projection = build_application_run_trace_projection(&detail).unwrap();
+    let tool_callback = projection
+        .nodes
+        .iter()
+        .find(|node| node.node_kind == "tool_callback")
+        .expect("tool callback node should be projected");
+    let route = projection
+        .nodes
+        .iter()
+        .find(|node| node.parent_trace_node_id == Some(tool_callback.trace_node_id))
+        .expect("route child node should be projected");
+    let tool_callback_content = projection
+        .contents
+        .iter()
+        .find(|content| content.trace_node_id == tool_callback.trace_node_id)
+        .expect("tool callback content should be projected");
+
+    assert_eq!(tool_callback.status, "intercepted");
+    assert_eq!(route.status, "intercepted");
+    assert_eq!(
+        tool_callback_content.payload["execution_status"],
+        json!("intercepted")
+    );
+    assert_eq!(
+        tool_callback_content.payload["route_trace"]["status"],
+        json!("failed")
+    );
+}
+
+#[test]
 fn builder_merges_callback_task_tools_with_internal_route_tools() {
     let flow_run_id = Uuid::now_v7();
     let callback_node_run_id = Uuid::now_v7();

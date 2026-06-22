@@ -130,6 +130,10 @@ export const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
     seedStyleBoundarySettingsFetch();
     return renderRouterScene('/settings/model-providers');
   },
+  'page.settings-mcp-management': () => {
+    seedStyleBoundarySettingsFetch();
+    return renderRouterScene('/settings/mcp-management');
+  },
   'page.settings-docs': () => {
     seedStyleBoundarySettingsFetch();
     return renderRouterScene('/settings/docs?category=console');

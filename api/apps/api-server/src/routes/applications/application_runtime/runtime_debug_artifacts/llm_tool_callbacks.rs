@@ -34,7 +34,10 @@ impl LlmToolCallbackArtifact {
             "id": self.id,
             "name": self.name,
             "callback_status": self.callback_status(),
-            "execution_status": execution_status_from_callback_payload(self.callback_payload.as_ref()),
+            "execution_status": execution_status_from_callback_payload_and_route_trace(
+                self.callback_payload.as_ref(),
+                self.route_trace.as_ref()
+            ),
             "request_payload": self.request_payload,
             "callback_payload": self.callback_payload,
             "parsed_result": self.callback_payload.as_ref().map(parsed_tool_callback_payload),
@@ -52,7 +55,10 @@ impl LlmToolCallbackArtifact {
             "id": self.id,
             "name": self.name,
             "callback_status": self.callback_status(),
-            "execution_status": execution_status_from_callback_payload(self.callback_payload.as_ref()),
+            "execution_status": execution_status_from_callback_payload_and_route_trace(
+                self.callback_payload.as_ref(),
+                self.route_trace.as_ref()
+            ),
             "request_round_index": self.request_round_index,
             "result_round_index": self.result_round_index,
             "call_usage": self.call_usage,
@@ -409,9 +415,36 @@ pub(super) fn execution_status_from_callback_payload(
     "unknown"
 }
 
+pub(super) fn execution_status_from_callback_payload_and_route_trace(
+    callback_payload: Option<&Value>,
+    route_trace: Option<&Value>,
+) -> &'static str {
+    execution_status_from_route_trace(route_trace)
+        .unwrap_or_else(|| execution_status_from_callback_payload(callback_payload))
+}
+
+fn execution_status_from_route_trace(route_trace: Option<&Value>) -> Option<&'static str> {
+    let status = route_trace?
+        .get("status")
+        .and_then(Value::as_str)
+        .and_then(normalized_route_trace_execution_status)?;
+
+    Some(status)
+}
+
+fn normalized_route_trace_execution_status(status: &str) -> Option<&'static str> {
+    match status {
+        "intercepted" => Some("intercepted"),
+        "failed" => Some("failed"),
+        "succeeded" | "returned_to_main" | "route_completed" => Some("succeeded"),
+        _ => None,
+    }
+}
+
 fn normalized_execution_status(status: &str) -> Option<&'static str> {
     match status {
         "succeeded" => Some("succeeded"),
+        "intercepted" => Some("intercepted"),
         "failed" => Some("failed"),
         "timed_out" => Some("timed_out"),
         "cancelled" | "canceled" => Some("cancelled"),

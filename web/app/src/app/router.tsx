@@ -38,9 +38,11 @@ import { useAuthStore } from '../state/auth-store';
 import { i18nText } from '../shared/i18n/text';
 
 const ApplicationDetailPage = lazy(() =>
-  import('../features/applications/pages/ApplicationDetailPage').then((module) => ({
-    default: module.ApplicationDetailPage
-  }))
+  import('../features/applications/pages/ApplicationDetailPage').then(
+    (module) => ({
+      default: module.ApplicationDetailPage
+    })
+  )
 );
 const SettingsPage = lazy(() =>
   import('../features/settings/pages/SettingsPage').then((module) => ({
@@ -49,7 +51,7 @@ const SettingsPage = lazy(() =>
 );
 
 function NotFoundPage() {
-  return <Result status="404" title={i18nText("app", "auto.page_not_found")} />;
+  return <Result status="404" title={i18nText('app', 'auto.page_not_found')} />;
 }
 
 function RouteLoadingFallback() {
@@ -156,7 +158,10 @@ const applicationApiRoute = createRoute({
     const { applicationId } = applicationApiRoute.useParams();
 
     return (
-      <ApplicationSectionRoute applicationId={applicationId} requestedSectionKey="api" />
+      <ApplicationSectionRoute
+        applicationId={applicationId}
+        requestedSectionKey="api"
+      />
     );
   }
 });
@@ -169,7 +174,10 @@ const applicationLogsRoute = createRoute({
     const { applicationId } = applicationLogsRoute.useParams();
 
     return (
-      <ApplicationSectionRoute applicationId={applicationId} requestedSectionKey="logs" />
+      <ApplicationSectionRoute
+        applicationId={applicationId}
+        requestedSectionKey="logs"
+      />
     );
   }
 });
@@ -339,6 +347,13 @@ const settingsDocsRoute = createRoute({
   component: () => renderSettingsRoute('docs')
 });
 
+const settingsApiKeyAuthenticationRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/api-key-authentication',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('api-key-authentication')
+});
+
 const settingsSystemRuntimeRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/settings/system-runtime',
@@ -379,6 +394,13 @@ const settingsModelProvidersRoute = createRoute({
   path: '/settings/model-providers',
   notFoundComponent: NotFoundPage,
   component: () => renderSettingsRoute('model-providers')
+});
+
+const settingsMcpManagementRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/mcp-management',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('mcp-management')
 });
 
 const settingsMembersRoute = createRoute({
@@ -456,12 +478,14 @@ const routeTree = rootRoute.addChildren([
     templatesRoute,
     settingsIndexRoute,
     settingsDocsRoute,
+    settingsApiKeyAuthenticationRoute,
     settingsSystemRuntimeRoute,
     settingsHostInfrastructureRoute,
     settingsMemoryObservationRoute,
     settingsFilesRoute,
     settingsDataModelsRoute,
     settingsModelProvidersRoute,
+    settingsMcpManagementRoute,
     settingsMembersRoute,
     settingsRolesRoute,
     meIndexRoute,

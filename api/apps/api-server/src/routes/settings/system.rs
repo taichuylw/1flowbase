@@ -106,6 +106,7 @@ pub struct SystemRuntimeHostResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SystemRuntimeProfileResponse {
+    pub api_node_id: String,
     pub provider_install_root: String,
     pub host_extension_dropin_root: String,
     pub locale_meta: LocaleMetaResponse,
@@ -184,6 +185,7 @@ pub async fn get_runtime_profile(
         locale,
         api_profile,
         runner_profile,
+        state.api_node_id.clone(),
         state.provider_install_root.clone(),
         state.host_extension_dropin_root.clone(),
     ))))
@@ -207,6 +209,7 @@ fn merge_runtime_profiles(
     locale_meta: LocaleResolution,
     api_profile: RuntimeProfile,
     runner_profile: Option<RuntimeProfile>,
+    api_node_id: String,
     provider_install_root: String,
     host_extension_dropin_root: String,
 ) -> SystemRuntimeProfileResponse {
@@ -233,6 +236,7 @@ fn merge_runtime_profiles(
     };
 
     SystemRuntimeProfileResponse {
+        api_node_id,
         provider_install_root,
         host_extension_dropin_root,
         locale_meta: locale_meta.into(),

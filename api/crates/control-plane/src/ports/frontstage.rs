@@ -37,6 +37,7 @@ pub struct MoveFrontstagePageInput {
 #[derive(Debug, Clone)]
 pub struct SaveFrontstagePageContentInput {
     pub workspace_id: Uuid,
+    pub actor_user_id: Uuid,
     pub page_id: Uuid,
     pub schema_payload: serde_json::Value,
     pub root_payload: serde_json::Value,

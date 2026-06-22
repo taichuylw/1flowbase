@@ -64,6 +64,8 @@ const pluginsApi = vi.hoisted(() => ({
   uploadSettingsPluginPackage: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -97,6 +99,7 @@ vi.mock('@scalar/api-reference-react', () => ({
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
+import { SettingsSectionSurface } from '../components/SettingsSectionSurface';
 
 const useBreakpointSpy = vi.spyOn(Grid, 'useBreakpoint');
 
@@ -197,8 +200,8 @@ describe('settings section surface', () => {
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
-page: { limit: 20, next_cursor: null },
-entries: []
+      page: { limit: 20, next_cursor: null },
+      entries: []
     });
     pluginsApi.fetchSettingsPluginTask.mockResolvedValue({
       id: 'task-1',
@@ -215,6 +218,37 @@ entries: []
     });
     fileManagementApi.fetchSettingsFileStorages.mockResolvedValue([]);
     fileManagementApi.fetchSettingsFileTables.mockResolvedValue([]);
+  });
+
+  test('hides the section hero header by default', () => {
+    const view = render(
+      <SettingsSectionSurface title="Section title">
+        <div>Section body</div>
+      </SettingsSectionSurface>
+    );
+
+    expect(screen.getByText('Section body')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Section title' })
+    ).not.toBeInTheDocument();
+    expect(
+      view.container.querySelector('.settings-section-surface__hero')
+    ).toBeNull();
+  });
+
+  test('can still render the section hero header explicitly', () => {
+    const view = render(
+      <SettingsSectionSurface title="Section title" hideHeader={false}>
+        <div>Section body</div>
+      </SettingsSectionSurface>
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Section title' })
+    ).toBeInTheDocument();
+    expect(
+      view.container.querySelector('.settings-section-surface__hero')
+    ).toBeInTheDocument();
   });
 
   test.each([
@@ -281,9 +315,9 @@ entries: []
 
       if (visibleText) {
         await waitFor(() => {
-          expect(within(surface).getAllByText(visibleText).length).toBeGreaterThan(
-            0
-          );
+          expect(
+            within(surface).getAllByText(visibleText).length
+          ).toBeGreaterThan(0);
         });
       }
     }

@@ -1086,7 +1086,7 @@ pub struct ListApplicationConversationRunsPageInput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplicationConversationRunsPage {
-    pub items: Vec<domain::FlowRunRecord>,
+    pub items: Vec<domain::ApplicationConversationRunSummary>,
     pub has_before: bool,
     pub has_after: bool,
     pub before_cursor: Option<Uuid>,

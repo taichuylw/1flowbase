@@ -397,6 +397,8 @@ async fn application_public_api_dmk_keys_still_authenticate_only_for_data_model_
     let dmk = data_model_key_service
         .create_api_key(CreateApiKeyCommand {
             actor_user_id: actor_user_id(),
+            tenant_id: Uuid::from_u128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa),
+            current_workspace_id: Uuid::from_u128(0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb),
             name: "Data Model runtime".into(),
             scope_kind: None,
             scope_id: None,

@@ -409,6 +409,7 @@
     "node_input_output": "Node input and output",
     "zoom_edit": "Zoom in and edit {{value1}}",
     "execution_failed": "Execution failed",
+    "execution_intercepted": "Intercepted",
     "add_parallel_node": "Add parallel node",
     "orchestration_loading": "Loading orchestration",
     "parse_results": "Parse results",

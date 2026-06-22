@@ -17,7 +17,9 @@ import {
 } from '../../../api/model-providers';
 import {
   deleteSettingsPluginFamily,
+  installSettingsPluginCurrentNodeArtifact,
   installSettingsOfficialPlugin,
+  refreshSettingsPluginCurrentNodeArtifact,
   settingsOfficialPluginsQueryKey,
   settingsPluginFamiliesQueryKey,
   switchSettingsPluginFamilyVersion,
@@ -52,11 +54,15 @@ export function useModelProviderMutations({
   csrfToken: string | null;
   queryClient: QueryClient;
   setDrawerState: Dispatch<SetStateAction<ModelProviderDrawerState>>;
-  setInstanceModalState: Dispatch<SetStateAction<ModelProviderInstanceModalState>>;
+  setInstanceModalState: Dispatch<
+    SetStateAction<ModelProviderInstanceModalState>
+  >;
   setOfficialInstallState: Dispatch<SetStateAction<OfficialInstallState>>;
   setUploadValidationMessage: Dispatch<SetStateAction<string | null>>;
   setUploadResultSummary: Dispatch<SetStateAction<UploadResultSummary>>;
-  setRecentVersionSwitchNotice: Dispatch<SetStateAction<RecentVersionSwitchNotice>>;
+  setRecentVersionSwitchNotice: Dispatch<
+    SetStateAction<RecentVersionSwitchNotice>
+  >;
 }) {
   async function invalidateModelProviderQueries() {
     await Promise.all([
@@ -352,6 +358,34 @@ export function useModelProviderMutations({
     }
   });
 
+  const refreshCurrentNodeArtifactMutation = useMutation({
+    mutationFn: async (installationId: string) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return refreshSettingsPluginCurrentNodeArtifact(
+        installationId,
+        csrfToken
+      );
+    },
+    onSuccess: invalidateModelProviderQueries
+  });
+
+  const installCurrentNodeArtifactMutation = useMutation({
+    mutationFn: async (installationId: string) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return installSettingsPluginCurrentNodeArtifact(
+        installationId,
+        csrfToken
+      );
+    },
+    onSuccess: invalidateModelProviderQueries
+  });
+
   const versionMutation = useMutation({
     mutationFn: async (
       input:
@@ -376,7 +410,10 @@ export function useModelProviderMutations({
         isTaskTerminal(resolvedTask.status) &&
         !isTaskSucceeded(resolvedTask.status)
       ) {
-        throw new Error(resolvedTask.status_message ?? i18nText("settings", "auto.version_switching_failed"));
+        throw new Error(
+          resolvedTask.status_message ??
+            i18nText('settings', 'auto.version_switching_failed')
+        );
       }
 
       return resolvedTask;
@@ -412,6 +449,8 @@ export function useModelProviderMutations({
     familyDeleteMutation,
     officialInstallMutation,
     uploadMutation,
+    refreshCurrentNodeArtifactMutation,
+    installCurrentNodeArtifactMutation,
     versionMutation
   };
 }

@@ -101,6 +101,7 @@ Dev Acceptance Gate 和 Project Health Gate 都必须把代码体检问题绑定
 - Frontend quality gates: `references/frontend-quality-gates.md`
 - Route-scoped runtime evidence: `node scripts/node/page-debug.js snapshot|open ...`
 - Backend regression and API evidence steps: `references/backend-regression-steps.md`
+- Scope_id routing semantics: `references/scope-id-routing.md`
 - Authenticated backend API evidence: `node scripts/node/tooling.js api-debug [METHOD] <api-path-or-url> ...`
 - Rust backend quality checks: `references/rust-backend-quality-gates.md`
 - Report output: `references/report-template.md`

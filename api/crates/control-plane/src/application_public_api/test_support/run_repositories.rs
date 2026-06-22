@@ -290,10 +290,10 @@ impl run_service::ApplicationPublishedRunControlRepository for ApplicationPublic
         Ok(cancelled)
     }
 
-    async fn list_waiting_callback_published_flow_runs_for_conversation(
+    async fn list_waiting_callback_published_flow_run_ids_for_conversation(
         &self,
         input: &run_service::ListWaitingCallbackPublishedRunsInput,
-    ) -> Result<Vec<domain::FlowRunRecord>> {
+    ) -> Result<Vec<Uuid>> {
         let mut runs = self
             .inner
             .lock()
@@ -310,14 +310,10 @@ impl run_service::ApplicationPublishedRunControlRepository for ApplicationPublic
                         == Some(input.external_conversation_id.as_str())
                     && run.compatibility_mode.as_deref() == Some(input.compatibility_mode.as_str())
             })
-            .cloned()
+            .map(|run| (run.started_at, run.id))
             .collect::<Vec<_>>();
-        runs.sort_by(|left, right| {
-            left.started_at
-                .cmp(&right.started_at)
-                .then(left.id.cmp(&right.id))
-        });
-        Ok(runs)
+        runs.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(&right.1)));
+        Ok(runs.into_iter().map(|(_, id)| id).collect())
     }
 
     async fn get_published_callback_task(

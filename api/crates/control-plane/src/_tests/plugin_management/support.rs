@@ -33,8 +33,8 @@ use crate::{
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpsertHostInfrastructureProviderConfigInput, UpsertModelProviderCatalogCacheInput,
-        UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
-        UpsertPluginPackageCatalogProjectionInput,
+        UpsertModelProviderSecretInput, UpsertPluginArtifactInstanceInput,
+        UpsertPluginInstallationInput, UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use domain::{
@@ -42,10 +42,10 @@ use domain::{
     ModelProviderCatalogCacheRecord, ModelProviderCatalogRefreshStatus, ModelProviderCatalogSource,
     ModelProviderDiscoveryMode, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
     ModelProviderSecretRecord, NodeContributionDependencyStatus, PermissionDefinition,
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
-    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskRecord, PluginTaskStatus,
-    ScopeContext, UserRecord,
+    PluginArtifactInstanceRecord, PluginArtifactStatus, PluginAssignmentRecord,
+    PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginPackageCatalogProjectionRecord, PluginPackageCatalogProjectionStatus,
+    PluginRuntimeStatus, PluginTaskRecord, PluginTaskStatus, ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{
     ProviderInvocationInput, ProviderInvocationResult, ProviderModelDescriptor,

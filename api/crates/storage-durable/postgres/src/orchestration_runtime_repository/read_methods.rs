@@ -340,7 +340,7 @@ impl PgControlPlaneStore {
                 status,
                 target_node_id,
                 title,
-                input_payload,
+                '{}'::jsonb as input_payload,
                 external_user,
                 api_key_id,
                 publication_version_id,
@@ -404,7 +404,7 @@ impl PgControlPlaneStore {
                 status,
                 target_node_id,
                 title,
-                input_payload,
+                '{{}}'::jsonb as input_payload,
                 external_user,
                 api_key_id,
                 publication_version_id,
@@ -501,56 +501,58 @@ impl PgControlPlaneStore {
             return Ok(empty_application_conversation_runs_page());
         }
 
-        let hidden_internal_run_filter = hidden_anthropic_claude_code_internal_run_sql("flow_runs");
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(
             r#"
-            with ordered as (
+            with grouped as (
+                select
+                    runs.id,
+                    runs.status,
+                    (
+                        array_agg(messages.content order by messages.sequence asc)
+                        filter (where messages.role = 'user')
+                    )[1] as query,
+                    null::text as model,
+                    (
+                        array_agg(messages.content order by messages.sequence asc)
+                        filter (where messages.role = 'assistant')
+                    )[1] as answer,
+                    runs.started_at,
+                    runs.finished_at,
+                    min(messages.sequence) as order_sequence
+                from application_conversation_messages messages
+                join application_conversations conversations
+                  on conversations.id = messages.conversation_id
+                join flow_runs runs
+                  on runs.id = messages.flow_run_id
+                where messages.application_id = $1
+                  and conversations.external_conversation_id = $2
+                group by runs.id, runs.status, runs.started_at, runs.finished_at
+            ),
+            ordered as (
                 select
                     id,
-                    application_id,
-                    flow_id,
-                    flow_draft_id,
-                    compiled_plan_id,
-                    debug_session_id,
-                    flow_schema_version,
-                    document_hash,
-                    run_mode,
-                    target_node_id,
-                    title,
                     status,
-                    input_payload,
-                    output_payload,
-                    error_payload,
-                    created_by,
-                    (
-                        select users.account
-                        from users
-                        where users.id = flow_runs.created_by
-                    ) as authorized_account,
-                    api_key_id,
-                    publication_version_id,
-                    external_user,
-                    external_conversation_id,
-                    external_trace_id,
-                    compatibility_mode,
-                    idempotency_key,
+                    query,
+                    model,
+                    answer,
                     started_at,
                     finished_at,
-                    created_at,
-                    updated_at,
-                    row_number() over (order by created_at asc, id asc) as rn
-                from flow_runs
-                where application_id = $1
-                  and external_conversation_id = $2
-                  and not ({hidden_internal_run_filter})
+                    row_number() over (order by order_sequence asc, id asc) as rn
+                from grouped
             )
-            select *
+            select
+                id,
+                status,
+                query,
+                model,
+                answer,
+                started_at,
+                finished_at
             from ordered
             where rn between $3 and $4
             order by rn asc
-            "#,
-            hidden_internal_run_filter = hidden_internal_run_filter
-        ))
+            "#
+        )
         .bind(application_id)
         .bind(&input.external_conversation_id)
         .bind(start_rn)
@@ -560,7 +562,7 @@ impl PgControlPlaneStore {
 
         let items = rows
             .into_iter()
-            .map(map_flow_run_record)
+            .map(map_application_conversation_run_summary)
             .collect::<Result<Vec<_>>>()?;
         let before_cursor = items.first().map(|run| run.id);
         let after_cursor = items.last().map(|run| run.id);
@@ -580,25 +582,33 @@ impl PgControlPlaneStore {
         external_conversation_id: &str,
         flow_run_id: Uuid,
     ) -> Result<Option<(i64, i64)>> {
-        let hidden_internal_run_filter = hidden_anthropic_claude_code_internal_run_sql("flow_runs");
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(
             r#"
-            with ordered as (
+            with grouped as (
+                select
+                    runs.id,
+                    min(messages.sequence) as order_sequence
+                from application_conversation_messages messages
+                join application_conversations conversations
+                  on conversations.id = messages.conversation_id
+                join flow_runs runs
+                  on runs.id = messages.flow_run_id
+                where messages.application_id = $1
+                  and conversations.external_conversation_id = $2
+                group by runs.id
+            ),
+            ordered as (
                 select
                     id,
-                    row_number() over (order by created_at asc, id asc) as rn,
+                    row_number() over (order by order_sequence asc, id asc) as rn,
                     count(*) over () as total
-                from flow_runs
-                where application_id = $1
-                  and external_conversation_id = $2
-                  and not ({hidden_internal_run_filter})
+                from grouped
             )
             select rn, total
             from ordered
             where id = $3
-            "#,
-            hidden_internal_run_filter = hidden_internal_run_filter
-        ))
+            "#
+        )
         .bind(application_id)
         .bind(external_conversation_id)
         .bind(flow_run_id)

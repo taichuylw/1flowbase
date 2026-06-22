@@ -42,4 +42,11 @@ describe('vite config', () => {
     expect(source).toContain('monaco-vendor');
     expect(source).toContain('chunkSizeWarningLimit: 3500');
   });
+
+  test('pre-optimizes API docs dependencies used by lazy application pages', async () => {
+    const source = await readFile(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+
+    expect(source).toContain('optimizeDeps');
+    expect(source).toContain("'@scalar/api-reference-react'");
+  });
 });

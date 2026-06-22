@@ -146,6 +146,13 @@ async fn get_or_create_editor_state_bootstraps_default_draft_and_first_version()
     assert_eq!(start_node["config"]["input_fields"], json!([]));
     assert_eq!(state.versions.len(), 1);
     assert_eq!(state.versions[0].trigger, FlowVersionTrigger::Autosave);
+    let draft_scope: (Uuid, Uuid) =
+        sqlx::query_as("select scope_id, created_by from flow_drafts where id = $1")
+            .bind(state.draft.id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(draft_scope, (workspace_id, actor_user_id));
 
     let detail = <PgControlPlaneStore as ApplicationRepository>::get_application(
         &store,
@@ -303,9 +310,9 @@ async fn save_draft_trim_keeps_current_publication_flow_version() {
         r#"
         insert into flow_compiled_plans (
             id, flow_id, flow_draft_id, schema_version, document_hash,
-            document_updated_at, plan, created_by
+            document_updated_at, plan, scope_id, created_by, updated_by
         )
-        select $1, $2, $3, $4, 'sha256:published', updated_at, $5, $6
+        select $1, $2, $3, $4, 'sha256:published', updated_at, $5, (select scope_id from flows where id = $2), $6, $6
         from flow_drafts
         where id = $3
         "#,
@@ -325,6 +332,7 @@ async fn save_draft_trim_keeps_current_publication_flow_version() {
         insert into application_publication_versions (
             id,
             application_id,
+            scope_id,
             flow_id,
             flow_version_id,
             compiled_plan_id,
@@ -338,10 +346,11 @@ async fn save_draft_trim_keeps_current_publication_flow_version() {
             runtime_profile_snapshot,
             output_selector,
             dependency_snapshot,
-            created_by
+            created_by,
+            updated_by
         ) values (
-            $1, $2, $3, $4, $5, 1, true, true, $6, 'sha256:published',
-            $7, $8, '{}', '{}', '[]', $9
+            $1, $2, (select scope_id from applications where id = $2), $3, $4, $5, 1, true, true, $6, 'sha256:published',
+            $7, $8, '{}', '{}', '[]', $9, $9
         )
         "#,
     )

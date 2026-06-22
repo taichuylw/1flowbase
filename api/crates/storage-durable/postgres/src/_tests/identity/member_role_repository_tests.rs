@@ -1,13 +1,15 @@
 use control_plane::{
     errors::ControlPlaneError,
     ports::{
-        CreateMemberInput, CreateWorkspaceRoleInput, MemberRepository, RoleRepository,
-        UpdateWorkspaceRoleInput,
+        AuthRepository, CreateMemberInput, CreateWorkspaceRoleInput, MemberRepository,
+        RoleRepository, UpdateWorkspaceRoleInput,
     },
 };
-use domain::{PermissionDefinition, RoleScopeKind, UserStatus};
+use domain::{AuditLogRecord, PermissionDefinition, RoleScopeKind, UserStatus};
+use serde_json::json;
 use sqlx::PgPool;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 fn base_database_url() -> String {
@@ -161,6 +163,34 @@ async fn create_member_with_default_role_assigns_default_role_and_login_identiti
         role_codes_for_user(&store, member.id).await,
         vec!["manager"]
     );
+    let member_role_scope: Uuid = sqlx::query_scalar(
+        r#"
+        select urb.scope_id
+        from user_role_bindings urb
+        join roles r on r.id = urb.role_id
+        where urb.user_id = $1
+          and r.code = 'manager'
+        "#,
+    )
+    .bind(member.id)
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(member_role_scope, workspace_id);
+
+    let root_role_scope: Uuid = sqlx::query_scalar(
+        r#"
+        select urb.scope_id
+        from user_role_bindings urb
+        join roles r on r.id = urb.role_id
+        where r.scope_kind = 'system'
+          and r.code = 'root'
+        "#,
+    )
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(root_role_scope, domain::SYSTEM_SCOPE_ID);
 
     let membership_count: i64 = sqlx::query_scalar(
         "select count(*) from workspace_memberships where workspace_id = $1 and user_id = $2",
@@ -428,6 +458,21 @@ async fn replace_role_permissions_normalizes_codes_and_replaces_existing_permiss
     .unwrap();
 
     assert_eq!(permissions, vec!["workspace.support.write"]);
+
+    let workspace_role_permission_scopes: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        select rp.scope_id
+        from role_permissions rp
+        join roles r on r.id = rp.role_id
+        where r.code = 'support'
+          and r.workspace_id = $1
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_all(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(workspace_role_permission_scopes, vec![workspace_id]);
 }
 
 #[tokio::test]
@@ -493,4 +538,62 @@ async fn role_deletion_rejects_default_and_bound_roles_before_deleting_unused_cu
     .await
     .unwrap();
     assert_eq!(role_count, 0);
+}
+
+#[tokio::test]
+async fn append_audit_log_writes_workspace_and_system_scope_routing() {
+    let (store, workspace_id, actor_user_id) = bootstrapped_store().await;
+    let workspace_event_id = Uuid::now_v7();
+    let system_event_id = Uuid::now_v7();
+
+    <PgControlPlaneStore as AuthRepository>::append_audit_log(
+        &store,
+        &AuditLogRecord {
+            id: workspace_event_id,
+            workspace_id: Some(workspace_id),
+            actor_user_id: Some(actor_user_id),
+            target_type: "workspace".into(),
+            target_id: Some(workspace_id),
+            event_code: "workspace.test".into(),
+            payload: json!({"kind": "workspace"}),
+            created_at: OffsetDateTime::now_utc(),
+        },
+    )
+    .await
+    .unwrap();
+
+    <PgControlPlaneStore as AuthRepository>::append_audit_log(
+        &store,
+        &AuditLogRecord {
+            id: system_event_id,
+            workspace_id: None,
+            actor_user_id: None,
+            target_type: "system".into(),
+            target_id: None,
+            event_code: "system.test".into(),
+            payload: json!({"kind": "system"}),
+            created_at: OffsetDateTime::now_utc(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let workspace_scope: (Uuid, Option<Uuid>, Option<Uuid>) =
+        sqlx::query_as("select scope_id, created_by, updated_by from audit_logs where id = $1")
+            .bind(workspace_event_id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(
+        workspace_scope,
+        (workspace_id, Some(actor_user_id), Some(actor_user_id))
+    );
+
+    let system_scope: (Uuid, Option<Uuid>, Option<Uuid>) =
+        sqlx::query_as("select scope_id, created_by, updated_by from audit_logs where id = $1")
+            .bind(system_event_id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(system_scope, (domain::SYSTEM_SCOPE_ID, None, None));
 }

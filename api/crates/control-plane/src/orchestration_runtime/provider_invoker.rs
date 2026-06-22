@@ -28,8 +28,7 @@ where
         );
 
         let installation_reconcile_started = std::time::Instant::now();
-        let installation =
-            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        let installation = self.ready_installation(instance.installation_id).await?;
         tracing::debug!(
             installation_reconcile_ms = installation_reconcile_started.elapsed().as_millis() as u64,
             "installation reconcile finished"
@@ -437,6 +436,33 @@ fn partial_tag_prefix_len(buffer: &str, tag: &str) -> usize {
 
 impl<R, H> RuntimeProviderInvoker<R, H>
 where
+    R: PluginRepository + Clone + Send + Sync,
+    H: ProviderRuntimePort + Clone + Send + Sync,
+{
+    async fn ready_installation(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<domain::PluginInstallationRecord> {
+        match (
+            self.api_node_id.as_deref(),
+            self.provider_install_root.as_deref(),
+        ) {
+            (Some(node_id), Some(install_root)) => {
+                ready_current_node_plugin_installation(
+                    &self.repository,
+                    node_id,
+                    install_root,
+                    installation_id,
+                )
+                .await
+            }
+            _ => reconcile_installation_snapshot(&self.repository, installation_id).await,
+        }
+    }
+}
+
+impl<R, H> RuntimeProviderInvoker<R, H>
+where
     R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
     H: ProviderRuntimePort + Clone + Send + Sync,
 {
@@ -452,6 +478,8 @@ where
             flow_run_id: Some(flow_run_id),
             active_node_id: self.active_node_id.clone(),
             active_node_run_id: self.active_node_run_id,
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: self.answer_presentation.clone(),
         }
     }
@@ -471,6 +499,8 @@ where
             flow_run_id: self.flow_run_id,
             active_node_id: self.active_node_id.clone(),
             active_node_run_id: self.active_node_run_id,
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: Some(answer_presentation),
         }
     }
@@ -492,6 +522,8 @@ where
             flow_run_id: self.flow_run_id,
             active_node_id: Some(node_id),
             active_node_run_id: Some(node_run_id),
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: self.answer_presentation.clone(),
         }
     }
@@ -559,8 +591,7 @@ where
         config_payload: Value,
         input_payload: Value,
     ) -> Result<orchestration_runtime::execution_engine::CapabilityInvocationOutput> {
-        let installation =
-            reconcile_installation_snapshot(&self.repository, runtime.installation_id).await?;
+        let installation = self.ready_installation(runtime.installation_id).await?;
         let assigned = self
             .repository
             .list_assignments(self.workspace_id)

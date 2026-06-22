@@ -469,7 +469,7 @@ pub async fn save_draft(
     Json(body): Json<SaveDraftBody>,
 ) -> Result<Json<ApiSuccess<OrchestrationStateResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let flow_state = FlowService::new(state.store.clone())
         .save_draft(SaveFlowDraftCommand {
@@ -567,7 +567,7 @@ pub async fn import_agent_flow_template(
     ApiError,
 > {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let service = FlowService::new(state.store.clone());
     let resources = service
@@ -662,7 +662,7 @@ pub async fn restore_version(
     Path((id, version_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<ApiSuccess<OrchestrationStateResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let flow_state = FlowService::new(state.store.clone())
         .restore_version(context.user.id, id, version_id)
@@ -694,7 +694,7 @@ pub async fn update_version(
     Json(body): Json<UpdateVersionBody>,
 ) -> Result<Json<ApiSuccess<OrchestrationStateResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let flow_state = FlowService::new(state.store.clone())
         .update_version_metadata(UpdateFlowVersionMetadataCommand {

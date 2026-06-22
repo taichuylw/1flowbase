@@ -100,10 +100,12 @@ pub async fn create_api_key(
     Json(payload): Json<CreateApiKeyRequest>,
 ) -> Result<(StatusCode, Json<ApiSuccess<CreateApiKeyResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = ApiKeyService::new(state.store.clone())
         .create_api_key(CreateApiKeyCommand {
             actor_user_id: context.actor.user_id,
+            tenant_id: context.actor.tenant_id,
+            current_workspace_id: context.actor.current_workspace_id,
             name: payload.name,
             scope_kind: parse_scope_kind(payload.scope_kind)?,
             scope_id: payload.scope_id,
