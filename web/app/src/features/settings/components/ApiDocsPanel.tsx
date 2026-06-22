@@ -72,9 +72,18 @@ const scalarPreferredSecurityScheme = [
   'csrfHeader',
   'patBearer'
 ] as const;
+type ScalarPreferredSecurityScheme =
+  (typeof scalarPreferredSecurityScheme)[number];
+
+function isScalarPreferredSecurityScheme(
+  schemeName: string
+): schemeName is ScalarPreferredSecurityScheme {
+  return scalarPreferredSecurityScheme.some(
+    (candidate) => candidate === schemeName
+  );
+}
 
 function collectPreferredSecuritySchemes(operationSpec: unknown) {
-  const requiredSchemes = new Set<string>();
   const securityRequirements =
     isRecord(operationSpec) && Array.isArray(operationSpec.security)
       ? operationSpec.security
@@ -85,14 +94,19 @@ function collectPreferredSecuritySchemes(operationSpec: unknown) {
       continue;
     }
 
-    for (const schemeName of Object.keys(requirement)) {
-      requiredSchemes.add(schemeName);
+    const requirementSchemes = Object.keys(requirement);
+
+    if (
+      requirementSchemes.length > 0 &&
+      requirementSchemes.every(isScalarPreferredSecurityScheme)
+    ) {
+      return scalarPreferredSecurityScheme.filter((schemeName) =>
+        requirementSchemes.includes(schemeName)
+      );
     }
   }
 
-  return scalarPreferredSecurityScheme.filter((schemeName) =>
-    requiredSchemes.has(schemeName)
-  );
+  return [];
 }
 
 function buildScalarAuthenticationConfig(
@@ -125,22 +139,35 @@ function buildScalarAuthenticationConfig(
     return undefined;
   }
 
+  const authenticationSecuritySchemes: Record<
+    string,
+    Record<string, unknown>
+  > = {};
+
+  if (Object.keys(sessionCookieScheme).length > 0) {
+    authenticationSecuritySchemes.sessionCookie = {
+      ...sessionCookieScheme,
+      value: sessionSnapshot?.session.id ?? ''
+    };
+  }
+
+  if (Object.keys(csrfHeaderScheme).length > 0) {
+    authenticationSecuritySchemes.csrfHeader = {
+      ...csrfHeaderScheme,
+      value: sessionSnapshot?.csrf_token ?? ''
+    };
+  }
+
+  if (Object.keys(patBearerScheme).length > 0) {
+    authenticationSecuritySchemes.patBearer = {
+      ...patBearerScheme,
+      value: ''
+    };
+  }
+
   return {
     preferredSecurityScheme,
-    securitySchemes: {
-      sessionCookie: {
-        ...sessionCookieScheme,
-        value: sessionSnapshot?.session.id ?? ''
-      },
-      csrfHeader: {
-        ...csrfHeaderScheme,
-        value: sessionSnapshot?.csrf_token ?? ''
-      },
-      patBearer: {
-        ...patBearerScheme,
-        value: ''
-      }
-    }
+    securitySchemes: authenticationSecuritySchemes
   };
 }
 

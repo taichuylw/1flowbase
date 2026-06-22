@@ -232,18 +232,28 @@ const operationSpecById = {
   list_runtime_jobs: {
     openapi: '3.1.0',
     info: { title: '1flowbase API', version: '0.1.0' },
+    security: [{ patBearer: [] }],
     paths: {
       '/api/runtime/jobs': {
         get: {
           operationId: 'list_runtime_jobs',
           summary: 'Enumerate runtime jobs',
+          security: [{ patBearer: [] }],
           responses: {
             '200': { description: 'ok' }
           }
         }
       }
     },
-    components: {}
+    components: {
+      securitySchemes: {
+        patBearer: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'pat_'
+        }
+      }
+    }
   },
   health: {
     openapi: '3.1.0',
@@ -389,7 +399,7 @@ describe('ApiDocsPanel', () => {
       '"baseServerURL":"http://127.0.0.1:3100"'
     );
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
-      '"preferredSecurityScheme":["sessionCookie","patBearer"]'
+      '"preferredSecurityScheme":["sessionCookie"]'
     );
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
       '"value":"session-123"'
@@ -457,7 +467,7 @@ describe('ApiDocsPanel', () => {
     });
 
     expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
-      '"preferredSecurityScheme":["sessionCookie","csrfHeader","patBearer"]'
+      '"preferredSecurityScheme":["sessionCookie","csrfHeader"]'
     );
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
       '"name":"flowbase_console_session"'
@@ -470,6 +480,34 @@ describe('ApiDocsPanel', () => {
     );
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
       '"scheme":"bearer"'
+    );
+  });
+
+  test('uses PAT bearer as the default only for PAT-only operations', async () => {
+    renderApp('/settings/docs');
+
+    await selectCategory('runtime');
+    fireEvent.click(
+      await screen.findByRole('button', { name: /get \/api\/runtime\/jobs/i })
+    );
+
+    await waitFor(() => {
+      expect(window.location.search).toBe(
+        '?category=runtime&operation=list_runtime_jobs'
+      );
+    });
+
+    expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
+      '"preferredSecurityScheme":["patBearer"]'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"bearerFormat":"pat_"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
+      '"sessionCookie"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
+      '"csrfHeader"'
     );
   });
 
