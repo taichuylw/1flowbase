@@ -283,7 +283,11 @@ async fn model_definition_routes_expose_advisor_findings_and_dynamic_openapi_doc
     );
     assert_eq!(
         docs["components"]["securitySchemes"]["apiKeyBearer"]["description"],
-        json!("Use Authorization: Bearer <api_key> for Data Model runtime APIs.")
+        json!("Compatibility path: use Authorization: Bearer dmk_... for Data Model runtime key action permissions.")
+    );
+    assert_eq!(
+        docs["components"]["securitySchemes"]["patBearer"]["scheme"],
+        json!("bearer")
     );
     assert_eq!(
         docs["x-data-model"]["api_exposure_status"],

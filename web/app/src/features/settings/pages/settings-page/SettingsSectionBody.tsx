@@ -15,6 +15,11 @@ const ApiDocsPanel = lazy(() =>
     default: module.ApiDocsPanel
   }))
 );
+const PersonalAccessTokensPanel = lazy(() =>
+  import('../../components/PersonalAccessTokensPanel').then((module) => ({
+    default: module.PersonalAccessTokensPanel
+  }))
+);
 const SettingsModelProvidersSection = lazy(() =>
   import('./SettingsModelProvidersSection').then((module) => ({
     default: module.SettingsModelProvidersSection
@@ -104,7 +109,11 @@ export function SettingsSectionBody({
     case 'memory-observation':
       return (
         <SettingsSectionBoundary>
-          <SettingsSectionSurface title={i18nText("settings", "auto.memory_observation")} hideHeader heightMode="fill">
+          <SettingsSectionSurface
+            title={i18nText('settings', 'auto.memory_observation')}
+            hideHeader
+            heightMode="fill"
+          >
             <HostInfrastructureMemoryObservationPanel
               canManage={canManageHostInfrastructure}
             />
@@ -113,6 +122,12 @@ export function SettingsSectionBody({
       );
     case 'roles':
       return <RolePermissionPanel canManageRoles={canManageRoles} />;
+    case 'api-key-authentication':
+      return (
+        <SettingsSectionBoundary>
+          <PersonalAccessTokensPanel />
+        </SettingsSectionBoundary>
+      );
     case 'docs':
     default:
       return (

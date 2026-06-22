@@ -159,7 +159,7 @@ pub async fn create_member(
     Json(body): Json<CreateMemberBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<MemberResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let user = MemberService::new(state.store.clone())
         .create_member(CreateMemberCommand {
@@ -194,7 +194,7 @@ pub async fn disable_member(
     Path(member_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     MemberService::new(state.store.clone())
         .disable_member(DisableMemberCommand {
@@ -220,7 +220,7 @@ pub async fn reset_member(
     Json(body): Json<ResetMemberPasswordBody>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     MemberService::new(state.store.clone())
         .reset_member_password(ResetMemberPasswordCommand {
@@ -247,7 +247,7 @@ pub async fn replace_member_roles(
     Json(body): Json<ReplaceMemberRolesBody>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     MemberService::new(state.store.clone())
         .replace_member_roles(ReplaceMemberRolesCommand {

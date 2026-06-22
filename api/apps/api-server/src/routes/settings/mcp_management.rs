@@ -459,7 +459,7 @@ pub async fn create_mcp_instance(
     Json(body): Json<CreateMcpInstanceBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<McpInstanceResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .create_instance(to_instance_command(context.user.id, body)?)
         .await?;
@@ -477,7 +477,7 @@ pub async fn update_mcp_instance(
     Json(mut body): Json<CreateMcpInstanceBody>,
 ) -> Result<Json<ApiSuccess<McpInstanceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     body.instance_id = instance_id;
     let record = McpManagementService::new(state.store.clone())
         .update_instance(to_instance_command(context.user.id, body)?)
@@ -492,7 +492,7 @@ pub async fn delete_mcp_instance(
     Path(instance_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     McpManagementService::new(state.store.clone())
         .delete_instance(context.user.id, &instance_id)
         .await?;
@@ -507,7 +507,7 @@ pub async fn upsert_mcp_group(
     Json(body): Json<UpsertMcpGroupBody>,
 ) -> Result<Json<ApiSuccess<McpGroupResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .upsert_group(UpsertMcpGroupCommand {
             actor_user_id: context.user.id,
@@ -530,7 +530,7 @@ pub async fn delete_mcp_group(
     Query(query): Query<DeleteMcpGroupQuery>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     McpManagementService::new(state.store.clone())
         .delete_group(context.user.id, &instance_id, &query.path)
         .await?;
@@ -558,7 +558,7 @@ pub async fn create_mcp_tool(
     Json(body): Json<CreateMcpToolBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<McpToolResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .create_tool(to_create_tool_command(context.user.id, body)?)
         .await?;
@@ -589,7 +589,7 @@ pub async fn update_mcp_tool(
     Json(body): Json<UpdateMcpToolBody>,
 ) -> Result<Json<ApiSuccess<McpToolResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .update_tool(to_update_tool_command(context.user.id, tool_id, body)?)
         .await?;
@@ -603,7 +603,7 @@ pub async fn delete_mcp_tool(
     Path(tool_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     McpManagementService::new(state.store.clone())
         .delete_tool(context.user.id, &tool_id)
         .await?;
@@ -617,7 +617,7 @@ pub async fn refresh_mcp_tool_description(
     Path(tool_id): Path<String>,
 ) -> Result<Json<ApiSuccess<McpToolResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .refresh_tool_description(RefreshMcpToolDescriptionCommand {
             actor_user_id: context.user.id,
@@ -652,7 +652,7 @@ pub async fn create_mcp_tool_binding(
     Json(body): Json<CreateMcpToolBindingBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<McpToolBindingResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: context.user.id,
@@ -678,7 +678,7 @@ pub async fn update_mcp_tool_binding(
     Json(body): Json<UpdateMcpToolBindingBody>,
 ) -> Result<Json<ApiSuccess<McpToolBindingResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .update_tool_binding(UpdateMcpToolBindingCommand {
             actor_user_id: context.user.id,
@@ -699,7 +699,7 @@ pub async fn delete_mcp_tool_binding(
     Path(binding_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     McpManagementService::new(state.store.clone())
         .delete_tool_binding(context.user.id, parse_uuid(&binding_id, "binding_id")?)
         .await?;
@@ -727,7 +727,7 @@ pub async fn update_mcp_meta_tool_config(
     Json(body): Json<UpdateMcpMetaToolConfigBody>,
 ) -> Result<Json<ApiSuccess<McpMetaToolConfigResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let record = McpManagementService::new(state.store.clone())
         .update_meta_tool_config(UpdateMcpMetaToolConfigCommand {
             actor_user_id: context.user.id,

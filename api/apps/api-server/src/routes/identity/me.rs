@@ -118,8 +118,8 @@ pub async fn get_me(
     let profile = ProfileService::new(state.store.clone())
         .get_me(
             context.user.id,
-            context.session.tenant_id,
-            context.session.current_workspace_id,
+            context.actor.tenant_id,
+            context.actor.current_workspace_id,
         )
         .await?;
     Ok(Json(ApiSuccess::new(to_me_response(profile))))
@@ -137,13 +137,13 @@ pub async fn patch_me(
     Json(body): Json<PatchMeBody>,
 ) -> Result<Json<ApiSuccess<MeResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let profile = ProfileService::new(state.store.clone())
         .update_me(UpdateMeCommand {
             actor_user_id: context.user.id,
-            tenant_id: context.session.tenant_id,
-            workspace_id: context.session.current_workspace_id,
+            tenant_id: context.actor.tenant_id,
+            workspace_id: context.actor.current_workspace_id,
             name: body.name,
             nickname: body.nickname,
             email: body.email,
@@ -172,13 +172,13 @@ pub async fn patch_me_meta(
     Json(body): Json<PatchMeMetaBody>,
 ) -> Result<Json<ApiSuccess<MeResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let profile = ProfileService::new(state.store.clone())
         .update_me_meta(UpdateMeMetaCommand {
             actor_user_id: context.user.id,
-            tenant_id: context.session.tenant_id,
-            workspace_id: context.session.current_workspace_id,
+            tenant_id: context.actor.tenant_id,
+            workspace_id: context.actor.current_workspace_id,
             meta_patch: body.meta,
         })
         .await?;
@@ -198,12 +198,13 @@ pub async fn change_password(
     Json(body): Json<ChangePasswordBody>,
 ) -> Result<(CookieJar, StatusCode), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
+    let session = context.cookie_session()?;
 
     SessionSecurityService::new(state.store.clone(), state.session_store.clone())
         .change_own_password(ChangeOwnPasswordCommand {
             actor_user_id: context.user.id,
-            session_id: context.session.session_id,
+            session_id: session.session_id.clone(),
             old_password: body.old_password,
             new_password_hash: hash_password(&body.new_password)?,
         })

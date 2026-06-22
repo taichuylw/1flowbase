@@ -531,7 +531,7 @@ pub async fn create_model(
     Json(body): Json<CreateModelDefinitionBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ModelDefinitionResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let scope_kind = parse_scope_kind(&body.scope_kind)?;
     let requested_status = body.status.as_deref().map(parse_model_status).transpose()?;
 
@@ -637,7 +637,7 @@ pub async fn update_model(
     Json(body): Json<UpdateModelDefinitionBody>,
 ) -> Result<Json<ApiSuccess<ModelDefinitionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let model_id = helpers::parse_uuid(&model_id, "model_id")?;
     let requested_status = body.status.as_deref().map(parse_model_status).transpose()?;
@@ -713,7 +713,7 @@ pub async fn delete_model(
     Query(query): Query<ConfirmationQuery>,
 ) -> Result<Json<ApiSuccess<serde_json::Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     mutation_service(&state)
         .delete_model(DeleteModelDefinitionCommand {
@@ -740,7 +740,7 @@ pub async fn batch_delete_models(
     Json(body): Json<BatchDeleteModelDefinitionsBody>,
 ) -> Result<Json<ApiSuccess<BatchDeletedResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let models = ModelDefinitionService::new(state.store.clone())
         .list_models(context.user.id)
@@ -787,7 +787,7 @@ pub async fn create_field(
     Json(body): Json<CreateModelFieldBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ModelFieldResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let field = mutation_service(&state)
         .add_field(AddModelFieldCommand {
@@ -834,7 +834,7 @@ pub async fn update_field(
     Json(body): Json<UpdateModelFieldBody>,
 ) -> Result<Json<ApiSuccess<ModelFieldResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let field = mutation_service(&state)
         .update_field(UpdateModelFieldCommand {
@@ -871,7 +871,7 @@ pub async fn delete_field(
     Query(query): Query<ConfirmationQuery>,
 ) -> Result<Json<ApiSuccess<serde_json::Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     mutation_service(&state)
         .delete_field(DeleteModelFieldCommand {
@@ -901,7 +901,7 @@ pub async fn create_scope_grant(
     Json(body): Json<CreateScopeGrantBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ScopeGrantResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let grant = ModelDefinitionService::new(state.store.clone())
         .create_scope_grant(CreateScopeDataModelGrantCommand {
@@ -939,7 +939,7 @@ pub async fn update_scope_grant(
     Json(body): Json<UpdateScopeGrantBody>,
 ) -> Result<Json<ApiSuccess<ScopeGrantResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     if body.enabled.is_none() && body.permission_profile.is_none() {
         return Err(
             control_plane::errors::ControlPlaneError::InvalidInput("scope_grant_update").into(),
@@ -976,7 +976,7 @@ pub async fn delete_scope_grant(
     Path((model_id, grant_id)): Path<(String, String)>,
 ) -> Result<Json<ApiSuccess<serde_json::Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     ModelDefinitionService::new(state.store.clone())
         .delete_scope_grant(DeleteScopeDataModelGrantCommand {

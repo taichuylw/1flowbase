@@ -798,7 +798,7 @@ pub async fn install_plugin(
     Json(body): Json<InstallPluginBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let output = install_plugin_action_kernel(state.clone())?
         .dispatch_json(
             "plugins",
@@ -828,7 +828,7 @@ pub async fn install_uploaded_plugin(
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let (file_name, package_bytes) = read_upload_file(&mut multipart).await?;
     let result = service(&state)
         .install_uploaded_plugin(InstallUploadedPluginCommand {
@@ -857,7 +857,7 @@ pub async fn install_official_plugin(
     Json(body): Json<InstallOfficialPluginBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<InstallPluginResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = service(&state)
         .install_official_plugin(InstallOfficialPluginCommand {
             actor_user_id: context.user.id,
@@ -883,7 +883,7 @@ pub async fn refresh_catalog_projection(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginCatalogProjectionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let projection = service(&state)
         .refresh_catalog_projection(RefreshPluginPackageCatalogProjectionCommand {
             actor_user_id: context.user.id,
@@ -907,7 +907,7 @@ pub async fn refresh_current_node_artifact(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginArtifactInstanceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let artifact = service(&state)
         .refresh_current_node_artifact(RefreshCurrentNodePluginArtifactCommand {
             actor_user_id: context.user.id,
@@ -931,7 +931,7 @@ pub async fn install_current_node_artifact(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginArtifactInstanceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let artifact = service(&state)
         .install_current_node_artifact(InstallCurrentNodePluginArtifactCommand {
             actor_user_id: context.user.id,
@@ -955,7 +955,7 @@ pub async fn upgrade_latest(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .upgrade_latest(UpgradeLatestPluginFamilyCommand {
             actor_user_id: context.user.id,
@@ -979,7 +979,7 @@ pub async fn switch_version(
     Json(body): Json<SwitchPluginVersionBody>,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .switch_version(SwitchPluginVersionCommand {
             actor_user_id: context.user.id,
@@ -1002,7 +1002,7 @@ pub async fn delete_family(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .delete_family(DeletePluginFamilyCommand {
             actor_user_id: context.user.id,
@@ -1024,7 +1024,7 @@ pub async fn enable_plugin(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .enable_plugin(EnablePluginCommand {
             actor_user_id: context.user.id,
@@ -1046,7 +1046,7 @@ pub async fn assign_plugin(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let task = service(&state)
         .assign_plugin(AssignPluginCommand {
             actor_user_id: context.user.id,

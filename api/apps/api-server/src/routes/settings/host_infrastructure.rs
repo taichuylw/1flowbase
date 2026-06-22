@@ -632,7 +632,7 @@ pub async fn reveal_host_infrastructure_memory_entry(
     Json(body): Json<MemoryEntryRevealBody>,
 ) -> Result<Json<ApiSuccess<MemoryEntryValueResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ensure_memory_manage(&context.actor)?;
     let _label = memory_contract_label(&contract_code)?;
     let target = memory_inspection_target(&state, &contract_code)?;
@@ -760,7 +760,7 @@ pub async fn reveal_host_infrastructure_cache_entry(
     Json(body): Json<CacheEntryKeyBody>,
 ) -> Result<Json<ApiSuccess<CacheEntryValueResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ensure_cache_manage(&context.actor)?;
     let cache = state.infrastructure.cache_store();
     let capabilities = cache.inspection_capabilities();
@@ -804,7 +804,7 @@ pub async fn clear_host_infrastructure_cache_entry(
     Json(body): Json<CacheEntryKeyBody>,
 ) -> Result<Json<ApiSuccess<ClearCacheEntryResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ensure_cache_manage(&context.actor)?;
     let cache = state.infrastructure.cache_store();
     let capabilities = cache.inspection_capabilities();
@@ -840,7 +840,7 @@ pub async fn clear_host_infrastructure_cache_domain(
     Path(domain_code): Path<String>,
 ) -> Result<Json<ApiSuccess<ClearCacheDomainResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ensure_cache_manage(&context.actor)?;
     let cache = state.infrastructure.cache_store();
     let capabilities = cache.inspection_capabilities();
@@ -900,7 +900,7 @@ pub async fn save_host_infrastructure_provider_config(
     Json(body): Json<SaveHostInfrastructureProviderConfigBody>,
 ) -> Result<Json<ApiSuccess<SaveHostInfrastructureProviderConfigResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let installation_id = Uuid::parse_str(&installation_id)
         .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput("installation_id"))?;
 

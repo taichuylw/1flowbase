@@ -2,6 +2,7 @@ import type { SectionNavItem } from '../../../shared/ui/section-page-layout/Sect
 
 export type SettingsSectionKey =
   | 'docs'
+  | 'api-key-authentication'
   | 'system-runtime'
   | 'host-infrastructure'
   | 'memory-observation'
@@ -16,8 +17,10 @@ export interface SettingsSectionNavItem extends SectionNavItem {
   key: SettingsSectionKey;
 }
 
-export interface SettingsSectionDefinition
-  extends Omit<SettingsSectionNavItem, 'label'> {
+export interface SettingsSectionDefinition extends Omit<
+  SettingsSectionNavItem,
+  'label'
+> {
   labelKey: string;
   requiredPermissions: string[];
 }
@@ -28,6 +31,12 @@ export const settingsSectionDefinitions: SettingsSectionDefinition[] = [
     labelKey: 'auto.api_documentation',
     to: '/settings/docs',
     requiredPermissions: ['api_reference.view.all']
+  },
+  {
+    key: 'api-key-authentication',
+    labelKey: 'auto.api_key_authentication',
+    to: '/settings/api-key-authentication',
+    requiredPermissions: []
   },
   {
     key: 'system-runtime',

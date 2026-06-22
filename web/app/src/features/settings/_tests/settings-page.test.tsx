@@ -69,6 +69,13 @@ const docsApi = vi.hoisted(() => ({
   fetchSettingsApiDocsOperationSpec: vi.fn()
 }));
 
+const personalAccessTokensApi = vi.hoisted(() => ({
+  settingsPersonalAccessTokensQueryKey: ['settings', 'personal-access-tokens'],
+  fetchSettingsPersonalAccessTokens: vi.fn(),
+  createSettingsPersonalAccessToken: vi.fn(),
+  revokeSettingsPersonalAccessToken: vi.fn()
+}));
+
 const modelProvidersApi = vi.hoisted(() => ({
   settingsModelProviderCatalogQueryKey: [
     'settings',
@@ -250,6 +257,7 @@ vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
 vi.mock('../api/api-docs', () => docsApi);
+vi.mock('../api/personal-access-tokens', () => personalAccessTokensApi);
 vi.mock('../api/model-providers', () => modelProvidersApi);
 vi.mock('../api/plugins', () => pluginsApi);
 vi.mock('../api/system-runtime', () => systemRuntimeApi);
@@ -386,6 +394,31 @@ describe('SettingsPage', () => {
       paths: {},
       components: {}
     });
+    personalAccessTokensApi.fetchSettingsPersonalAccessTokens.mockResolvedValue(
+      []
+    );
+    personalAccessTokensApi.createSettingsPersonalAccessToken.mockResolvedValue(
+      {
+        id: 'key-1',
+        name: 'CI diagnostics',
+        token: 'pat_new_secret',
+        token_prefix: 'pat_new',
+        key_kind: 'user_api_key',
+        creator_user_id: 'user-1',
+        tenant_id: 'tenant-1',
+        scope_kind: 'workspace',
+        scope_id: 'workspace-1',
+        enabled: true,
+        revoked: false,
+        expires_at: null,
+        last_used_at: null,
+        created_at: '2026-06-22T00:00:00Z',
+        updated_at: '2026-06-22T00:00:00Z'
+      }
+    );
+    personalAccessTokensApi.revokeSettingsPersonalAccessToken.mockResolvedValue(
+      undefined
+    );
     modelProvidersApi.fetchSettingsModelProviderCatalog.mockResolvedValue([]);
     modelProvidersApi.fetchSettingsModelProviderInstances.mockResolvedValue([]);
     modelProvidersApi.fetchSettingsModelProviderOptions.mockResolvedValue({
@@ -665,11 +698,14 @@ describe('SettingsPage', () => {
     renderApp('/settings');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/members');
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
     expect(
       screen.queryByRole('heading', { name: 'API 文档', level: 3 })
     ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
+    ).toBeInTheDocument();
   }, 10000);
 
   test('renders /settings/members when user.view.all is present', async () => {
@@ -692,6 +728,25 @@ describe('SettingsPage', () => {
     expect(
       screen.queryByRole('button', { name: '新建用户' })
     ).not.toBeInTheDocument();
+  });
+
+  test('renders API Key 认证 for signed-in users without management permissions', async () => {
+    authenticateWithPermissions([]);
+
+    renderApp('/settings/api-key-authentication');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
+    });
+    expect(
+      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /新建 API Key/ })
+    ).toBeInTheDocument();
+    expect(
+      personalAccessTokensApi.fetchSettingsPersonalAccessTokens
+    ).toHaveBeenCalled();
   });
 
   test('disables root member write actions while leaving normal members operable', async () => {
@@ -766,31 +821,29 @@ describe('SettingsPage', () => {
     ).toBeEnabled();
   }, 10000);
 
-  test('redirects /settings/docs to /settings/members when docs is hidden but members is visible', async () => {
+  test('redirects /settings/docs to API Key 认证 when docs is hidden', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);
 
     renderApp('/settings/docs');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/members');
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
     expect(screen.getByTestId('section-page-layout')).toHaveClass(
       'section-page-layout--viewport'
     );
     expect(
-      await screen.findByText(
-        '重置密码会将目标账号密码重置为默认临时密码，并要求用户登录后立即修改。'
-      )
+      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
     ).toBeInTheDocument();
   });
 
-  test('shows 数据源 when state_model.view.all is the only visible settings section', async () => {
+  test('shows 数据源 when state_model.view.all is present', async () => {
     authenticateWithPermissions([
       'route_page.view.all',
       'state_model.view.all'
     ]);
 
-    renderApp('/settings');
+    renderApp('/settings/data-models');
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/data-models');
@@ -805,13 +858,13 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
   });
 
-  test('shows 系统运行 when system_runtime.view.all is the only visible settings section', async () => {
+  test('shows 系统运行 when system_runtime.view.all is present', async () => {
     authenticateWithPermissions([
       'route_page.view.all',
       'system_runtime.view.all'
     ]);
 
-    renderApp('/settings');
+    renderApp('/settings/system-runtime');
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/system-runtime');
@@ -832,7 +885,7 @@ describe('SettingsPage', () => {
       'plugin_config.view.all'
     ]);
 
-    renderApp('/settings');
+    renderApp('/settings/host-infrastructure');
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/host-infrastructure');
@@ -1014,10 +1067,10 @@ describe('SettingsPage', () => {
     ).not.toBeInTheDocument();
   }, 10000);
 
-  test('shows 文件管理 when file_table.view.own is the only visible settings section', async () => {
+  test('shows 文件管理 when file_table.view.own is present', async () => {
     authenticateWithPermissions(['route_page.view.all', 'file_table.view.own']);
 
-    renderApp('/settings');
+    renderApp('/settings/files');
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/files');
@@ -1027,19 +1080,19 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
   });
 
-  test('renders the empty settings state when no section is visible', async () => {
+  test('uses API Key 认证 as the baseline settings section', async () => {
     authenticateWithPermissions(['route_page.view.all']);
 
     renderApp('/settings');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings');
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
     expect(
-      await screen.findByText(/当前账号暂无可访问内容/)
+      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('navigation', { name: 'Section navigation' })
-    ).not.toBeInTheDocument();
+      screen.getByRole('navigation', { name: 'Section navigation' })
+    ).toBeInTheDocument();
   });
 });

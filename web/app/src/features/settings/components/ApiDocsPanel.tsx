@@ -67,7 +67,11 @@ const docsViewerSessionQueryKey = [
   'docs',
   'viewer-session'
 ] as const;
-const scalarPreferredSecurityScheme = ['sessionCookie', 'csrfHeader'] as const;
+const scalarPreferredSecurityScheme = [
+  'sessionCookie',
+  'csrfHeader',
+  'patBearer'
+] as const;
 
 function collectPreferredSecuritySchemes(operationSpec: unknown) {
   const requiredSchemes = new Set<string>();
@@ -107,12 +111,16 @@ function buildScalarAuthenticationConfig(
   const csrfHeaderScheme = isRecord(securitySchemes.csrfHeader)
     ? securitySchemes.csrfHeader
     : {};
+  const patBearerScheme = isRecord(securitySchemes.patBearer)
+    ? securitySchemes.patBearer
+    : {};
   const preferredSecurityScheme =
     collectPreferredSecuritySchemes(operationSpec);
 
   if (
     Object.keys(sessionCookieScheme).length === 0 &&
-    Object.keys(csrfHeaderScheme).length === 0
+    Object.keys(csrfHeaderScheme).length === 0 &&
+    Object.keys(patBearerScheme).length === 0
   ) {
     return undefined;
   }
@@ -127,6 +135,10 @@ function buildScalarAuthenticationConfig(
       csrfHeader: {
         ...csrfHeaderScheme,
         value: sessionSnapshot?.csrf_token ?? ''
+      },
+      patBearer: {
+        ...patBearerScheme,
+        value: ''
       }
     }
   };
@@ -154,7 +166,7 @@ export function ApiDocsPanel() {
 
   return (
     <SettingsSectionSurface
-      title={i18nText("settings", "auto.api_documentation")}
+      title={i18nText('settings', 'auto.api_documentation')}
       titleLevel={3}
       hideHeader
       heightMode="fill"

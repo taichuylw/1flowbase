@@ -51,7 +51,7 @@ pub async fn get_workspace(
 ) -> Result<Json<ApiSuccess<WorkspaceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let workspace = WorkspaceService::new(state.store.clone())
-        .get_workspace(context.session.current_workspace_id)
+        .get_workspace(context.actor.current_workspace_id)
         .await?;
 
     Ok(Json(ApiSuccess::new(to_workspace_response(workspace))))
@@ -69,12 +69,13 @@ pub async fn patch_workspace(
     Json(body): Json<PatchWorkspaceBody>,
 ) -> Result<Json<ApiSuccess<WorkspaceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
+    let workspace_id = context.actor.current_workspace_id;
 
     let workspace = WorkspaceService::new(state.store.clone())
         .update_workspace(UpdateWorkspaceCommand {
             actor: context.actor,
-            workspace_id: context.session.current_workspace_id,
+            workspace_id,
             name: body.name,
             logo_url: body.logo_url,
             introduction: body.introduction,

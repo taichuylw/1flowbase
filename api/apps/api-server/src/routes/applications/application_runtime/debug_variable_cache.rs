@@ -64,7 +64,7 @@ pub async fn upsert_debug_variable_cache_entry(
     Json(body): Json<UpsertDebugVariableCacheEntryBody>,
 ) -> Result<Json<ApiSuccess<serde_json::Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ensure_application_visible(&state, context.user.id, id).await?;
     let editor_state = FlowService::new(state.store.clone())
         .get_or_create_editor_state(context.user.id, id)
@@ -111,7 +111,7 @@ pub async fn delete_debug_variable_cache_entries(
     Json(body): Json<DeleteDebugVariableCacheEntriesBody>,
 ) -> Result<Json<ApiSuccess<serde_json::Value>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ensure_application_visible(&state, context.user.id, id).await?;
     let editor_state = FlowService::new(state.store.clone())
         .get_or_create_editor_state(context.user.id, id)

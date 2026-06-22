@@ -232,6 +232,19 @@ pub trait ApiKeyRepository: Send + Sync {
         token_hash: &str,
     ) -> anyhow::Result<Option<ApiKeyRecord>>;
     async fn mark_api_key_used(&self, api_key_id: Uuid) -> anyhow::Result<()>;
+    async fn list_user_api_keys(
+        &self,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> anyhow::Result<Vec<ApiKeyRecord>>;
+    async fn revoke_user_api_key(
+        &self,
+        api_key_id: Uuid,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> anyhow::Result<()>;
     async fn list_application_api_keys(
         &self,
         application_id: Uuid,

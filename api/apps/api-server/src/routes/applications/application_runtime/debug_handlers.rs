@@ -65,7 +65,7 @@ pub async fn start_flow_debug_run(
         .runtime_activity
         .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runtime_service = OrchestrationRuntimeService::new(
@@ -163,7 +163,7 @@ pub async fn start_flow_debug_run_stream(
         .start(id, ApplicationActivityKind::HttpRequest);
     let request_received_at = std::time::Instant::now();
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let runtime_service = OrchestrationRuntimeService::new(
         state.store.clone(),
@@ -409,7 +409,7 @@ pub async fn cancel_flow_run(
     Path((id, run_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<ApiSuccess<ApplicationRunDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let runtime_service = OrchestrationRuntimeService::new(
@@ -469,7 +469,7 @@ pub async fn resume_flow_run(
         .runtime_activity
         .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let checkpoint_id = Uuid::parse_str(&body.checkpoint_id)
@@ -533,7 +533,7 @@ pub async fn complete_callback_task(
         .runtime_activity
         .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
 
     let detail = scope_application_activity(
@@ -594,7 +594,7 @@ pub async fn start_node_debug_preview(
         .runtime_activity
         .start(id, ApplicationActivityKind::HttpRequest);
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let outcome = scope_application_activity(
         id,

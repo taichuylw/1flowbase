@@ -469,7 +469,7 @@ pub async fn create_application_api_key(
     ApiError,
 > {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = ApplicationApiKeyService::new(state.store.clone())
         .create_api_key(CreateApplicationApiKeyCommand {
             actor_user_id: context.user.id,
@@ -508,7 +508,7 @@ pub async fn revoke_application_api_key(
     Path((application_id, key_id)): Path<(Uuid, Uuid)>,
 ) -> Result<impl IntoResponse, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ApplicationApiKeyService::new(state.store.clone())
         .revoke_api_key(RevokeApplicationApiKeyCommand {
             actor_user_id: context.user.id,
@@ -568,7 +568,7 @@ pub async fn replace_application_api_mapping(
     Json(body): Json<ApplicationApiMappingBody>,
 ) -> Result<Json<ApiSuccess<ApplicationApiMappingBody>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let mapping = ApplicationApiMappingService::new(state.store.clone())
         .replace_mapping(ReplaceApplicationApiMappingCommand {
             actor_user_id: context.user.id,
@@ -628,7 +628,7 @@ pub async fn publish_application_api(
     Json(body): Json<PublishApplicationApiBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ApplicationPublicationResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let publication = ApplicationPublicationService::new(state.store.clone())
         .publish_active_version(PublishApplicationCommand {
             actor_user_id: context.user.id,
@@ -663,7 +663,7 @@ pub async fn patch_application_api_status(
     Json(body): Json<PatchApplicationApiStatusBody>,
 ) -> Result<Json<ApiSuccess<ApplicationApiStatusResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     ApplicationPublicationService::new(state.store.clone())
         .set_api_enabled(SetApplicationApiEnabledCommand {
             actor_user_id: context.user.id,

@@ -127,7 +127,7 @@ pub async fn create_file_table(
     Json(body): Json<CreateFileTableBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<FileTableResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let created = FileTableService::new(state.store.clone())
         .create_table(CreateFileTableCommand {
@@ -160,7 +160,7 @@ pub async fn bind_file_table_storage(
     Json(body): Json<BindFileTableStorageBody>,
 ) -> Result<Json<ApiSuccess<FileTableResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let updated = FileTableService::new(state.store.clone())
         .bind_storage(BindFileTableStorageCommand {
@@ -187,7 +187,7 @@ pub async fn delete_file_table(
     Path(file_table_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     FileTableService::new(state.store.clone())
         .delete_table(DeleteFileTableCommand {

@@ -212,6 +212,7 @@ impl ApiKeyDataModelAction {
 pub enum ApiKeyKind {
     DataModelApiKey,
     ApplicationApiKey,
+    UserApiKey,
 }
 
 impl ApiKeyKind {
@@ -219,12 +220,14 @@ impl ApiKeyKind {
         match self {
             Self::DataModelApiKey => "data_model_api_key",
             Self::ApplicationApiKey => "application_api_key",
+            Self::UserApiKey => "user_api_key",
         }
     }
 
     pub fn from_db(value: &str) -> Self {
         match value {
             "application_api_key" => Self::ApplicationApiKey,
+            "user_api_key" => Self::UserApiKey,
             _ => Self::DataModelApiKey,
         }
     }

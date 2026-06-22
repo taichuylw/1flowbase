@@ -110,7 +110,10 @@ fn operation_spec_builder_keeps_servers_and_security_schemes_for_try_it_out() {
     assert_eq!(spec["servers"][0]["url"], "/");
     assert_eq!(
         spec["security"],
-        json!([{ "sessionCookie": [], "csrfHeader": [] }])
+        json!([
+            { "sessionCookie": [], "csrfHeader": [] },
+            { "patBearer": [] }
+        ])
     );
     assert_eq!(
         spec["components"]["securitySchemes"]["sessionCookie"]["type"],
@@ -123,6 +126,10 @@ fn operation_spec_builder_keeps_servers_and_security_schemes_for_try_it_out() {
     assert_eq!(
         spec["components"]["securitySchemes"]["csrfHeader"]["name"],
         "x-csrf-token"
+    );
+    assert_eq!(
+        spec["components"]["securitySchemes"]["patBearer"]["scheme"],
+        "bearer"
     );
     assert!(spec["components"]["schemas"]["PatchMeBody"].is_object());
 }

@@ -196,9 +196,8 @@ impl RuntimeCredential {
         permissions.sort();
 
         match self {
-            Self::Session(context) => serde_json::json!({
+            Self::Session(_context) => serde_json::json!({
                 "kind": "session",
-                "session_id": context.session.session_id,
                 "user_id": actor.user_id,
                 "tenant_id": actor.tenant_id,
                 "workspace_id": actor.current_workspace_id,
@@ -209,10 +208,13 @@ impl RuntimeCredential {
             Self::ApiKey(context) => serde_json::json!({
                 "kind": "api_key",
                 "api_key_id": context.api_key.id,
+                "key_kind": context.api_key.key_kind.as_str(),
                 "user_id": actor.user_id,
                 "tenant_id": actor.tenant_id,
                 "workspace_id": actor.current_workspace_id,
+                "role": actor.effective_display_role,
                 "is_root": actor.is_root,
+                "permissions": permissions,
             }),
         }
     }
@@ -526,6 +528,11 @@ async fn runtime_authorization(
         return Ok((credential, None));
     };
     if let RuntimeCredential::ApiKey(api_key) = &credential {
+        if api_key.api_key.key_kind != domain::ApiKeyKind::DataModelApiKey {
+            let scope_grant =
+                load_runtime_scope_grant(state, credential.actor(), model.model_id).await?;
+            return Ok((credential, scope_grant));
+        }
         if let Err(error) = ensure_api_key_action_allowed(api_key, model.model_id, action) {
             append_api_key_runtime_audit(
                 state,
@@ -541,7 +548,9 @@ async fn runtime_authorization(
     }
 
     let scope_grant = match &credential {
-        RuntimeCredential::ApiKey(api_key) => {
+        RuntimeCredential::ApiKey(api_key)
+            if api_key.api_key.key_kind == domain::ApiKeyKind::DataModelApiKey =>
+        {
             let grant =
                 control_plane::model_definition::ModelDefinitionService::new(state.store.clone())
                     .load_runtime_scope_grant_for_scope(
@@ -567,7 +576,7 @@ async fn runtime_authorization(
             }
             grant
         }
-        RuntimeCredential::Session(_) => {
+        RuntimeCredential::ApiKey(_) | RuntimeCredential::Session(_) => {
             load_runtime_scope_grant(state, credential.actor(), model.model_id).await?
         }
     };
@@ -579,7 +588,7 @@ fn require_session_csrf_for_write(
     credential: &RuntimeCredential,
 ) -> Result<(), ApiError> {
     if let RuntimeCredential::Session(context) = credential {
-        require_csrf(headers, &context.session)?;
+        require_csrf(headers, &context)?;
     }
     Ok(())
 }

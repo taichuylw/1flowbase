@@ -847,7 +847,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
                 select
                     $1,
                     keys.id,
-                    models.id,
+                    grants.data_model_id,
                     keys.scope_id,
                     $4,
                     $5,
@@ -857,9 +857,11 @@ impl ApiKeyRepository for PgControlPlaneStore {
                     keys.creator_user_id,
                     keys.creator_user_id
                 from api_keys keys
-                join model_definitions models
-                  on models.id = $3
-                 and models.scope_id = keys.scope_id
+                join scope_data_model_grants grants
+                  on grants.scope_kind = keys.scope_kind
+                 and grants.scope_id = keys.scope_id
+                 and grants.data_model_id = $3
+                 and grants.enabled = true
                 where keys.id = $2
                 "#,
             )
@@ -876,7 +878,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
             .rows_affected();
             if inserted != 1 {
                 return Err(anyhow!(
-                    "api_key_data_model_permission owner scope mismatch"
+                    "api_key_data_model_permission scope grant mismatch"
                 ));
             }
         }
@@ -914,6 +916,66 @@ impl ApiKeyRepository for PgControlPlaneStore {
         .bind(api_key_id)
         .execute(self.pool())
         .await?;
+
+        Ok(())
+    }
+
+    async fn list_user_api_keys(
+        &self,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<Vec<ApiKeyRecord>> {
+        let rows = sqlx::query(
+            r#"
+            select id, name, token_hash, token_prefix, creator_user_id, tenant_id,
+                   scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                   last_used_at, created_at, updated_at
+            from api_keys
+            where key_kind = 'user_api_key'
+              and creator_user_id = $1
+              and tenant_id = $2
+              and scope_id = $3
+            order by created_at desc, id desc
+            "#,
+        )
+        .bind(creator_user_id)
+        .bind(tenant_id)
+        .bind(workspace_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(rows.into_iter().map(map_api_key_row).collect())
+    }
+
+    async fn revoke_user_api_key(
+        &self,
+        api_key_id: Uuid,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            update api_keys
+            set enabled = false,
+                updated_at = now()
+            where id = $1
+              and key_kind = 'user_api_key'
+              and creator_user_id = $2
+              and tenant_id = $3
+              and scope_id = $4
+            "#,
+        )
+        .bind(api_key_id)
+        .bind(creator_user_id)
+        .bind(tenant_id)
+        .bind(workspace_id)
+        .execute(self.pool())
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(anyhow!("user_api_key not found"));
+        }
 
         Ok(())
     }

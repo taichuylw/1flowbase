@@ -89,6 +89,57 @@ impl ApiKeyRepository for ApplicationPublicApiTestRepository {
         Ok(())
     }
 
+    async fn list_user_api_keys(
+        &self,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<Vec<domain::ApiKeyRecord>> {
+        let mut keys = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned")
+            .api_keys
+            .values()
+            .filter(|api_key| api_key.key_kind == domain::ApiKeyKind::UserApiKey)
+            .filter(|api_key| api_key.creator_user_id == creator_user_id)
+            .filter(|api_key| api_key.tenant_id == tenant_id)
+            .filter(|api_key| api_key.scope_id == workspace_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        keys.sort_by(|left, right| {
+            right
+                .created_at
+                .cmp(&left.created_at)
+                .then(right.id.cmp(&left.id))
+        });
+        Ok(keys)
+    }
+
+    async fn revoke_user_api_key(
+        &self,
+        api_key_id: Uuid,
+        creator_user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+    ) -> Result<()> {
+        let mut inner = self
+            .inner
+            .lock()
+            .expect("application public api test repo mutex poisoned");
+        let api_key = inner
+            .api_keys
+            .get_mut(&api_key_id)
+            .filter(|api_key| api_key.key_kind == domain::ApiKeyKind::UserApiKey)
+            .filter(|api_key| api_key.creator_user_id == creator_user_id)
+            .filter(|api_key| api_key.tenant_id == tenant_id)
+            .filter(|api_key| api_key.scope_id == workspace_id)
+            .ok_or(ControlPlaneError::NotFound("user_api_key"))?;
+        api_key.enabled = false;
+        api_key.updated_at = OffsetDateTime::now_utc();
+        Ok(())
+    }
+
     async fn list_application_api_keys(
         &self,
         application_id: Uuid,
