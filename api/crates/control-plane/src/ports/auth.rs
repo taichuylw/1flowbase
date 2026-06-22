@@ -375,6 +375,7 @@ pub trait MemberRepository: Send + Sync {
     async fn update_member_profile(&self, input: &UpdateMemberInput) -> anyhow::Result<UserRecord>;
     async fn disable_member(&self, actor_user_id: Uuid, target_user_id: Uuid)
         -> anyhow::Result<()>;
+    async fn enable_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> anyhow::Result<()>;
     async fn delete_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> anyhow::Result<()>;
     async fn reset_member_password(
         &self,

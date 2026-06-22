@@ -590,6 +590,10 @@
     "create": "create",
     "built_in_source": "Built-in source",
     "deactivate_account": "Deactivate account",
+    "restore": "restore",
+    "restore_account": "Restore account",
+    "sure_want_restore_s_account_user_able_log": "Restore {{value1}}'s account? After restoration, the user will be able to log in.",
+    "confirm_restore": "Confirm restore",
     "upgrading": "Upgrading",
     "view_entry": "View entry",
     "no_expiry": "No expiry",
@@ -646,15 +650,12 @@
     "tool_name": "Tool name",
     "edit_profile": "Edit profile",
     "edit_user_profile": "Edit user profile {{value1}}",
-    "change_login_password": "Change password",
-    "change_login_password_for_user": "Change login password {{value1}}",
     "current_password": "Current password",
     "enter_current_password": "Please enter the current password",
     "new_password": "New password",
     "enter_new_password": "Please enter a new password",
     "confirm_new_password": "Confirm new password",
     "enter_new_password_again": "Please enter the new password again",
-    "passwords_do_not_match": "The new passwords do not match",
-    "confirm_change": "Confirm change"
+    "passwords_do_not_match": "The new passwords do not match"
   }
 }

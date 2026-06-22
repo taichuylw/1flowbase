@@ -13,6 +13,7 @@ const membersApi = vi.hoisted(() => ({
   createSettingsMember: vi.fn(),
   updateSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  enableSettingsMember: vi.fn(),
   deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   changeCurrentUserPassword: vi.fn(),
@@ -103,6 +104,20 @@ describe('MemberManagementPanel', () => {
         phone_login_enabled: false,
         status: 'active',
         role_codes: ['manager']
+      },
+      {
+        id: 'user-3',
+        account: 'disabled-user',
+        email: 'disabled-user@example.com',
+        phone: null,
+        name: 'Disabled User',
+        nickname: 'Disabled Nick',
+        introduction: '',
+        default_display_role: 'manager',
+        email_login_enabled: true,
+        phone_login_enabled: false,
+        status: 'disabled',
+        role_codes: ['manager']
       }
     ]);
     membersApi.updateSettingsMember.mockResolvedValue({
@@ -120,6 +135,7 @@ describe('MemberManagementPanel', () => {
       role_codes: ['root', 'manager', 'operator']
     });
     membersApi.replaceSettingsMemberRoles.mockResolvedValue(undefined);
+    membersApi.enableSettingsMember.mockResolvedValue(undefined);
     membersApi.deleteSettingsMember.mockResolvedValue(undefined);
     rolesApi.fetchSettingsRoles.mockResolvedValue([
       {
@@ -201,6 +217,29 @@ describe('MemberManagementPanel', () => {
     await waitFor(() => {
       expect(membersApi.deleteSettingsMember).toHaveBeenCalledWith(
         'user-2',
+        'csrf-123'
+      );
+    });
+  });
+
+  test('restores disabled members after confirmation', async () => {
+    renderPanel();
+
+    const disabledRow = (await screen.findByText('disabled-user')).closest(
+      'tr'
+    ) as HTMLElement;
+
+    expect(
+      within(disabledRow).getByRole('button', { name: /恢复$/ })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(disabledRow).getByRole('button', { name: /恢复$/ }));
+    const confirm = await screen.findByRole('button', { name: /确认恢复/ });
+    fireEvent.click(confirm);
+
+    await waitFor(() => {
+      expect(membersApi.enableSettingsMember).toHaveBeenCalledWith(
+        'user-3',
         'csrf-123'
       );
     });

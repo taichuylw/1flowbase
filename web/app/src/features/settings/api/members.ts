@@ -3,6 +3,7 @@ import {
   createConsoleMember,
   deleteConsoleMember,
   disableConsoleMember,
+  enableConsoleMember,
   listConsoleMembers,
   replaceConsoleMemberRoles,
   resetConsoleMemberPassword,
@@ -43,6 +44,10 @@ export function updateSettingsMember(
 
 export function disableSettingsMember(memberId: string, csrfToken: string): Promise<void> {
   return disableConsoleMember(memberId, csrfToken);
+}
+
+export function enableSettingsMember(memberId: string, csrfToken: string): Promise<void> {
+  return enableConsoleMember(memberId, csrfToken);
 }
 
 export function deleteSettingsMember(memberId: string, csrfToken: string): Promise<void> {

@@ -590,6 +590,10 @@
     "create": "创建",
     "built_in_source": "内建",
     "deactivate_account": "停用账号",
+    "restore": "恢复",
+    "restore_account": "恢复账号",
+    "sure_want_restore_s_account_user_able_log": "确定要恢复 {{value1}} 的账号吗？恢复后该用户将可以登录。",
+    "confirm_restore": "确认恢复",
     "upgrading": "升级中",
     "view_entry": "查看条目",
     "no_expiry": "无过期",
@@ -646,15 +650,12 @@
     "tool_name": "Tool 名称",
     "edit_profile": "编辑资料",
     "edit_user_profile": "编辑用户资料 {{value1}}",
-    "change_login_password": "修改密码",
-    "change_login_password_for_user": "修改登录密码 {{value1}}",
     "current_password": "当前密码",
     "enter_current_password": "请输入当前密码",
     "new_password": "新密码",
     "enter_new_password": "请输入新密码",
     "confirm_new_password": "确认新密码",
     "enter_new_password_again": "请再次输入新密码",
-    "passwords_do_not_match": "两次输入的新密码不一致",
-    "confirm_change": "确认修改"
+    "passwords_do_not_match": "两次输入的新密码不一致"
   }
 }

@@ -3,6 +3,7 @@ import * as transport from '../transport';
 
 import {
   deleteConsoleMember,
+  enableConsoleMember,
   updateConsoleMember,
   type UpdateConsoleMemberInput
 } from '../console-members';
@@ -40,6 +41,16 @@ describe('console members client', () => {
     ).resolves.toMatchObject({
       path: '/api/console/members/member-1',
       method: 'DELETE',
+      csrfToken: 'csrf-123'
+    });
+  });
+
+  test('enables member through the member enable route', async () => {
+    await expect(
+      enableConsoleMember('member-1', 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/console/members/member-1/actions/enable',
+      method: 'POST',
       csrfToken: 'csrf-123'
     });
   });

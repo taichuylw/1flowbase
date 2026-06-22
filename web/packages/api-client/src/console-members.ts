@@ -92,6 +92,19 @@ export function disableConsoleMember(
   });
 }
 
+export function enableConsoleMember(
+  memberId: string,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<void> {
+  return apiFetchVoid({
+    path: `/api/console/members/${memberId}/actions/enable`,
+    method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
 export function deleteConsoleMember(
   memberId: string,
   csrfToken: string,

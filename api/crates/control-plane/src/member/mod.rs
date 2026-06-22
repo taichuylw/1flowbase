@@ -26,6 +26,11 @@ pub struct DisableMemberCommand {
     pub target_user_id: Uuid,
 }
 
+pub struct EnableMemberCommand {
+    pub actor_user_id: Uuid,
+    pub target_user_id: Uuid,
+}
+
 pub struct DeleteMemberCommand {
     pub actor_user_id: Uuid,
     pub target_user_id: Uuid,
@@ -165,6 +170,29 @@ where
                 "user",
                 Some(command.target_user_id),
                 "member.disabled",
+                serde_json::json!({}),
+            ))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn enable_member(&self, command: EnableMemberCommand) -> Result<()> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        ensure_permission(&actor, "user.manage.all")
+            .map_err(ControlPlaneError::PermissionDenied)?;
+        self.repository
+            .enable_member(command.actor_user_id, command.target_user_id)
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "user",
+                Some(command.target_user_id),
+                "member.enabled",
                 serde_json::json!({}),
             ))
             .await?;

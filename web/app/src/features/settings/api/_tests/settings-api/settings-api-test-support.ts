@@ -79,6 +79,7 @@ vi.mock('@1flowbase/api-client', () => ({
   createConsoleMember: vi.fn().mockResolvedValue({ id: 'member-1' }),
   updateConsoleMember: vi.fn().mockResolvedValue({ id: 'member-1' }),
   disableConsoleMember: vi.fn().mockResolvedValue(undefined),
+  enableConsoleMember: vi.fn().mockResolvedValue(undefined),
   deleteConsoleMember: vi.fn().mockResolvedValue(undefined),
   resetConsoleMemberPassword: vi.fn().mockResolvedValue(undefined),
   changeConsolePassword: vi.fn().mockResolvedValue(undefined),

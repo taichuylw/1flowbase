@@ -561,6 +561,82 @@ async fn delete_member_physically_removes_identity_records() {
 }
 
 #[tokio::test]
+async fn enable_member_restores_disabled_member_login() {
+    let app = test_app().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let member_id = create_member(&app, &root_cookie, &root_csrf, "restore-me", "temp-pass").await;
+
+    let disable_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/members/{member_id}/actions/disable"))
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(disable_response.status(), StatusCode::NO_CONTENT);
+
+    let disabled_login_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/public/auth/providers/password-local/sign-in")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "identifier": "restore-me",
+                        "password": "temp-pass"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(disabled_login_response.status(), StatusCode::FORBIDDEN);
+
+    let enable_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/console/members/{member_id}/actions/enable"))
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(enable_response.status(), StatusCode::NO_CONTENT);
+
+    let enabled_login_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/public/auth/providers/password-local/sign-in")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "identifier": "restore-me",
+                        "password": "temp-pass"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(enabled_login_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
 async fn disable_root_member_is_forbidden() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

@@ -13,6 +13,7 @@ import {
   createConsoleMember,
   updateConsoleMember,
   disableConsoleMember,
+  enableConsoleMember,
   deleteConsoleMember,
   resetConsoleMemberPassword,
   changeConsolePassword,
@@ -90,6 +91,7 @@ import {
   createSettingsMember,
   updateSettingsMember,
   disableSettingsMember,
+  enableSettingsMember,
   deleteSettingsMember,
   resetSettingsMemberPassword,
   changeCurrentUserPassword,
@@ -260,6 +262,7 @@ describe('settings api wrappers', () => {
     await createSettingsMember(memberInput as never, 'csrf-123');
     await updateSettingsMember('member-1', memberUpdateInput, 'csrf-123');
     await disableSettingsMember('member-1', 'csrf-123');
+    await enableSettingsMember('member-1', 'csrf-123');
     await deleteSettingsMember('member-1', 'csrf-123');
     await resetSettingsMemberPassword(
       'member-1',
@@ -292,6 +295,7 @@ describe('settings api wrappers', () => {
       'csrf-123'
     );
     expect(disableConsoleMember).toHaveBeenCalledWith('member-1', 'csrf-123');
+    expect(enableConsoleMember).toHaveBeenCalledWith('member-1', 'csrf-123');
     expect(deleteConsoleMember).toHaveBeenCalledWith('member-1', 'csrf-123');
     expect(resetConsoleMemberPassword).toHaveBeenCalledWith(
       'member-1',

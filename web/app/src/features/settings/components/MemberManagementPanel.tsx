@@ -17,6 +17,7 @@ import {
   Typography
 } from 'antd';
 import {
+  CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   KeyOutlined,
@@ -30,6 +31,7 @@ import {
   createSettingsMember,
   deleteSettingsMember,
   disableSettingsMember,
+  enableSettingsMember,
   fetchSettingsMembers,
   replaceSettingsMemberRoles,
   resetSettingsMemberPassword,
@@ -113,6 +115,17 @@ export function MemberManagementPanel({
       }
 
       return disableSettingsMember(memberId, csrfToken);
+    },
+    onSuccess: invalidateMembers
+  });
+
+  const enableMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return enableSettingsMember(memberId, csrfToken);
     },
     onSuccess: invalidateMembers
   });
@@ -387,11 +400,43 @@ export function MemberManagementPanel({
                       onClick={() => handleOpenProfileEdit(member)}
                     >
                       {i18nText("settings", "auto.edit")}</Button>
+                    {isRootMember ? (
+                      <Button
+                        size="small"
+                        icon={<KeyOutlined />}
+                        disabled={!isCurrentUser}
+                        loading={changePasswordMutation.isPending}
+                        onClick={
+                          isCurrentUser
+                            ? () => handleOpenPasswordEdit(member)
+                            : undefined
+                        }
+                      >
+                        {i18nText("settings", "auto.reset_password")}</Button>
+                    ) : (
+                      <Popconfirm
+                        title={i18nText("settings", "auto.reset_password")}
+                        description={i18nText("settings", "auto.reset_password_temporary_password_needs_changed_immediately_user_logs", { value1: member.name })}
+                        onConfirm={() =>
+                          resetPasswordMutation.mutate(member.id)
+                        }
+                        okText={i18nText("settings", "auto.confirm_reset")}
+                        cancelText={i18nText("settings", "auto.cancel")}
+                      >
+                        <Button
+                          size="small"
+                          icon={<KeyOutlined />}
+                          loading={resetPasswordMutation.isPending}
+                        >
+                          {i18nText("settings", "auto.reset_password")}</Button>
+                      </Popconfirm>
+                    )}
                     {member.status === 'active' ? (
                       isRootMember ? (
                         <Button
                           size="small"
-                          danger
+                          color="orange"
+                          variant="outlined"
                           icon={<StopOutlined />}
                           disabled
                         >
@@ -403,18 +448,43 @@ export function MemberManagementPanel({
                           onConfirm={() => disableMutation.mutate(member.id)}
                           okText={i18nText("settings", "auto.confirm_deactivation")}
                           cancelText={i18nText("settings", "auto.cancel")}
-                          okButtonProps={{ danger: true }}
+                          okButtonProps={{
+                            color: 'orange',
+                            variant: 'solid'
+                          }}
                         >
                           <Button
                             size="small"
-                            danger
+                            color="orange"
+                            variant="outlined"
                             icon={<StopOutlined />}
                             loading={disableMutation.isPending}
                           >
                             {i18nText("settings", "auto.deactivate")}</Button>
                         </Popconfirm>
                       )
-                    ) : null}
+                    ) : (
+                      <Popconfirm
+                        title={i18nText("settings", "auto.restore_account")}
+                        description={i18nText("settings", "auto.sure_want_restore_s_account_user_able_log", { value1: member.name })}
+                        onConfirm={() => enableMutation.mutate(member.id)}
+                        okText={i18nText("settings", "auto.confirm_restore")}
+                        cancelText={i18nText("settings", "auto.cancel")}
+                        okButtonProps={{
+                          color: 'green',
+                          variant: 'solid'
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          color="green"
+                          variant="outlined"
+                          icon={<CheckCircleOutlined />}
+                          loading={enableMutation.isPending}
+                        >
+                          {i18nText("settings", "auto.restore")}</Button>
+                      </Popconfirm>
+                    )}
                     {isRootMember || isCurrentUser ? (
                       <Button
                         size="small"
@@ -441,37 +511,6 @@ export function MemberManagementPanel({
                           {i18nText("settings", "auto.delete")}</Button>
                       </Popconfirm>
                     )}
-                    {isRootMember ? (
-                      <Button
-                        size="small"
-                        icon={<KeyOutlined />}
-                        disabled={!isCurrentUser}
-                        loading={changePasswordMutation.isPending}
-                        onClick={
-                          isCurrentUser
-                            ? () => handleOpenPasswordEdit(member)
-                            : undefined
-                        }
-                      >
-                        {i18nText("settings", "auto.change_login_password")}</Button>
-                    ) : (
-                      <Popconfirm
-                        title={i18nText("settings", "auto.reset_password")}
-                        description={i18nText("settings", "auto.reset_password_temporary_password_needs_changed_immediately_user_logs", { value1: member.name })}
-                        onConfirm={() =>
-                          resetPasswordMutation.mutate(member.id)
-                        }
-                        okText={i18nText("settings", "auto.confirm_reset")}
-                        cancelText={i18nText("settings", "auto.cancel")}
-                      >
-                        <Button
-                          size="small"
-                          icon={<KeyOutlined />}
-                          loading={resetPasswordMutation.isPending}
-                        >
-                          {i18nText("settings", "auto.reset_password")}</Button>
-                      </Popconfirm>
-                    )}
                   </Space>
                 );
               }
@@ -483,6 +522,7 @@ export function MemberManagementPanel({
       canManageMembers,
       deleteMutation,
       disableMutation,
+      enableMutation,
       resetPasswordMutation,
       changePasswordMutation,
       actor?.id,
@@ -691,11 +731,7 @@ export function MemberManagementPanel({
 
         {/* Change Password Modal */}
         <Modal
-          title={
-            passwordEditMember
-              ? i18nText("settings", "auto.change_login_password_for_user", { value1: passwordEditMember.name })
-              : i18nText("settings", "auto.change_login_password")
-          }
+          title={i18nText("settings", "auto.reset_password")}
           open={Boolean(passwordEditMember)}
           onCancel={() => {
             setPasswordEditMember(null);
@@ -703,7 +739,7 @@ export function MemberManagementPanel({
           }}
           onOk={() => passwordForm.submit()}
           confirmLoading={changePasswordMutation.isPending}
-          okText={i18nText("settings", "auto.confirm_change")}
+          okText={i18nText("settings", "auto.confirm_reset")}
           cancelText={i18nText("settings", "auto.cancel")}
           width={480}
           destroyOnHidden

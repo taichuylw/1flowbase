@@ -194,6 +194,29 @@ impl MemberRepository for PgControlPlaneStore {
         Ok(())
     }
 
+    async fn enable_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> Result<()> {
+        let result = sqlx::query(
+            r#"
+            update users
+            set status = 'active',
+                session_version = session_version + 1,
+                updated_by = $2,
+                updated_at = now()
+            where id = $1
+            "#,
+        )
+        .bind(target_user_id)
+        .bind(actor_user_id)
+        .execute(self.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(ControlPlaneError::NotFound("user").into());
+        }
+
+        Ok(())
+    }
+
     async fn delete_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> Result<()> {
         if is_root_user(self.pool(), target_user_id).await? {
             return Err(ControlPlaneError::PermissionDenied("root_user_immutable").into());

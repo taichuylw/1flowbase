@@ -24,6 +24,7 @@ const membersApi = vi.hoisted(() => ({
   createSettingsMember: vi.fn(),
   updateSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  enableSettingsMember: vi.fn(),
   deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   changeCurrentUserPassword: vi.fn(),
@@ -855,7 +856,7 @@ describe('SettingsPage', () => {
       within(rootRow).getByRole('button', { name: /停用$/ })
     ).toBeDisabled();
     expect(
-      within(rootRow).getByRole('button', { name: /修改密码$/ })
+      within(rootRow).getByRole('button', { name: /重置密码$/ })
     ).toBeEnabled();
     expect(
       within(managerRow).getByRole('button', { name: /停用$/ })
@@ -911,9 +912,9 @@ describe('SettingsPage', () => {
       ).not.toBeInTheDocument();
     });
 
-    fireEvent.click(within(rootRow).getByRole('button', { name: /修改密码$/ }));
+    fireEvent.click(within(rootRow).getByRole('button', { name: /重置密码$/ }));
     const passwordDialog = await screen.findByRole('dialog', {
-      name: /修改登录密码/
+      name: /重置密码/
     });
     fireEvent.change(within(passwordDialog).getByLabelText('当前密码'), {
       target: { value: 'change-me' }
