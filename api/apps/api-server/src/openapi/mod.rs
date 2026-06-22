@@ -94,6 +94,7 @@ use utoipa::OpenApi;
         crate::routes::members::list_members,
         crate::routes::members::create_member,
         crate::routes::members::update_member,
+        crate::routes::members::delete_member,
         crate::routes::members::disable_member,
         crate::routes::members::reset_member,
         crate::routes::members::replace_member_roles,

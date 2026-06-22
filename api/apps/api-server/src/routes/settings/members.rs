@@ -11,8 +11,8 @@ use axum::{
     Json, Router,
 };
 use control_plane::member::{
-    CreateMemberCommand, DisableMemberCommand, MemberService, ReplaceMemberRolesCommand,
-    ResetMemberPasswordCommand, UpdateMemberCommand,
+    CreateMemberCommand, DeleteMemberCommand, DisableMemberCommand, MemberService,
+    ReplaceMemberRolesCommand, ResetMemberPasswordCommand, UpdateMemberCommand,
 };
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
@@ -129,7 +129,7 @@ fn to_member_response(user: domain::UserRecord) -> MemberResponse {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/members", get(list_members).post(create_member))
-        .route("/members/:id", patch(update_member))
+        .route("/members/:id", patch(update_member).delete(delete_member))
         .route("/members/:id/actions/disable", post(disable_member))
         .route("/members/:id/actions/reset-password", post(reset_member))
         .route("/members/:id/roles", put(replace_member_roles))
@@ -239,6 +239,30 @@ pub async fn disable_member(
 
     MemberService::new(state.store.clone())
         .disable_member(DisableMemberCommand {
+            actor_user_id: context.user.id,
+            target_user_id: parse_member_id(&member_id)?,
+        })
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/console/members/{id}",
+    params(("id" = String, Path, description = "Member user id")),
+    responses((status = 204), (status = 403, body = crate::error_response::ErrorBody), (status = 409, body = crate::error_response::ErrorBody))
+)]
+pub async fn delete_member(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(member_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+
+    MemberService::new(state.store.clone())
+        .delete_member(DeleteMemberCommand {
             actor_user_id: context.user.id,
             target_user_id: parse_member_id(&member_id)?,
         })

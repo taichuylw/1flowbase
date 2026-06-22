@@ -17,6 +17,7 @@ import {
   Typography
 } from 'antd';
 import {
+  DeleteOutlined,
   EditOutlined,
   KeyOutlined,
   StopOutlined,
@@ -27,6 +28,7 @@ import { useAuthStore } from '../../../state/auth-store';
 import {
   changeCurrentUserPassword,
   createSettingsMember,
+  deleteSettingsMember,
   disableSettingsMember,
   fetchSettingsMembers,
   replaceSettingsMemberRoles,
@@ -62,10 +64,6 @@ export function MemberManagementPanel({
     useState<SettingsMember | null>(null);
   const [passwordEditMember, setPasswordEditMember] =
     useState<SettingsMember | null>(null);
-  const [roleEditMember, setRoleEditMember] = useState<SettingsMember | null>(
-    null
-  );
-  const [editingRoleCodes, setEditingRoleCodes] = useState<string[]>([]);
 
   const membersQuery = useQuery({
     queryKey: settingsMembersQueryKey,
@@ -119,6 +117,17 @@ export function MemberManagementPanel({
     onSuccess: invalidateMembers
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return deleteSettingsMember(memberId, csrfToken);
+    },
+    onSuccess: invalidateMembers
+  });
+
   const resetPasswordMutation = useMutation({
     mutationFn: async (memberId: string) => {
       if (!csrfToken) {
@@ -136,16 +145,18 @@ export function MemberManagementPanel({
   const updateMemberMutation = useMutation({
     mutationFn: async ({
       memberId,
-      values
+      values,
+      roleCodes
     }: {
       memberId: string;
       values: Record<string, unknown>;
+      roleCodes: string[] | null;
     }) => {
       if (!csrfToken) {
         throw new Error('missing csrf token');
       }
 
-      return updateSettingsMember(
+      const member = await updateSettingsMember(
         memberId,
         {
           name: String(values.name ?? ''),
@@ -156,6 +167,16 @@ export function MemberManagementPanel({
         },
         csrfToken
       );
+
+      if (roleCodes) {
+        await replaceSettingsMemberRoles(
+          memberId,
+          { role_codes: roleCodes },
+          csrfToken
+        );
+      }
+
+      return member;
     },
     onSuccess: async () => {
       await invalidateMembers();
@@ -186,41 +207,12 @@ export function MemberManagementPanel({
     }
   });
 
-  const replaceRolesMutation = useMutation({
-    mutationFn: async ({
-      memberId,
-      roleCodes
-    }: {
-      memberId: string;
-      roleCodes: string[];
-    }) => {
-      if (!csrfToken) {
-        throw new Error('missing csrf token');
-      }
-
-      return replaceSettingsMemberRoles(
-        memberId,
-        { role_codes: roleCodes },
-        csrfToken
-      );
-    },
-    onSuccess: async () => {
-      await invalidateMembers();
-      setRoleEditMember(null);
-    }
-  });
-
   const handleCreateSubmit = useCallback(
     (values: Record<string, unknown>) => {
       createMutation.mutate(values);
     },
     [createMutation]
   );
-
-  const handleOpenRoleEdit = useCallback((member: SettingsMember) => {
-    setRoleEditMember(member);
-    setEditingRoleCodes(member.role_codes);
-  }, []);
 
   const handleOpenProfileEdit = useCallback(
     (member: SettingsMember) => {
@@ -230,7 +222,8 @@ export function MemberManagementPanel({
         nickname: member.nickname,
         email: member.email,
         phone: member.phone,
-        introduction: member.introduction
+        introduction: member.introduction,
+        role_codes: member.role_codes
       });
     },
     [profileForm]
@@ -239,13 +232,21 @@ export function MemberManagementPanel({
   const handleProfileEditSubmit = useCallback(
     (values: Record<string, unknown>) => {
       if (profileEditMember) {
+        const submittedRoleCodes = Array.isArray(values.role_codes)
+          ? values.role_codes.map(String)
+          : profileEditMember.role_codes;
+        const nextRoleCodes = profileEditMember.role_codes.includes('root')
+          ? Array.from(new Set(['root', ...submittedRoleCodes]))
+          : submittedRoleCodes;
+
         updateMemberMutation.mutate({
           memberId: profileEditMember.id,
-          values
+          values,
+          roleCodes: canManageRoleBindings ? nextRoleCodes : null
         });
       }
     },
-    [profileEditMember, updateMemberMutation]
+    [canManageRoleBindings, profileEditMember, updateMemberMutation]
   );
 
   const handleOpenPasswordEdit = useCallback(
@@ -256,18 +257,6 @@ export function MemberManagementPanel({
     [passwordForm]
   );
 
-  const handleRoleEditOk = useCallback(() => {
-    if (roleEditMember) {
-      const nextRoleCodes = roleEditMember.role_codes.includes('root')
-        ? Array.from(new Set(['root', ...editingRoleCodes]))
-        : editingRoleCodes;
-      replaceRolesMutation.mutate({
-        memberId: roleEditMember.id,
-        roleCodes: nextRoleCodes
-      });
-    }
-  }, [roleEditMember, editingRoleCodes, replaceRolesMutation]);
-
   const roleOptions = useMemo(
     () => {
       const options = (rolesQuery.data ?? []).map((role) => ({
@@ -276,7 +265,7 @@ export function MemberManagementPanel({
       }));
 
       if (
-        roleEditMember?.role_codes.includes('root') &&
+        profileEditMember?.role_codes.includes('root') &&
         !options.some((option) => option.value === 'root')
       ) {
         return [
@@ -287,46 +276,71 @@ export function MemberManagementPanel({
 
       return options;
     },
-    [roleEditMember, rolesQuery.data]
+    [profileEditMember, rolesQuery.data]
   );
 
   const handleRoleSelectionChange = useCallback(
     (roleCodes: string[]) => {
-      if (roleEditMember?.role_codes.includes('root')) {
-        setEditingRoleCodes(Array.from(new Set(['root', ...roleCodes])));
+      if (profileEditMember?.role_codes.includes('root')) {
+        profileForm.setFieldValue(
+          'role_codes',
+          Array.from(new Set(['root', ...roleCodes]))
+        );
         return;
       }
 
-      setEditingRoleCodes(roleCodes);
+      profileForm.setFieldValue('role_codes', roleCodes);
     },
-    [roleEditMember]
+    [profileEditMember, profileForm]
   );
 
   const columns = useMemo(
     () => [
       {
-        title: i18nText("settings", "auto.user_alt"),
-        key: 'user',
+        title: i18nText("settings", "auto.avatar"),
+        key: 'avatar',
+        width: 72,
+        align: 'center' as const,
         render: (_: unknown, member: SettingsMember) => (
-          <Space>
-            <Avatar
-              size="small"
-              style={{ backgroundColor: '#00d084', flexShrink: 0 }}
-            >
-              {(member.name ?? member.account).charAt(0).toUpperCase()}
-            </Avatar>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography.Text strong style={{ fontSize: 14 }}>
-                {member.name}
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {member.account}
-                {member.nickname && member.nickname !== member.name
-                  ? ` · ${member.nickname}`
-                  : ''}
-              </Typography.Text>
-            </div>
-          </Space>
+          <Avatar
+            size="small"
+            style={{ backgroundColor: '#00d084', flexShrink: 0 }}
+          >
+            {member.account.charAt(0).toUpperCase()}
+          </Avatar>
+        )
+      },
+      {
+        title: i18nText("settings", "auto.account_number"),
+        dataIndex: 'account',
+        key: 'account',
+        width: 160,
+        render: (account: SettingsMember['account']) => (
+          <Typography.Text strong style={{ fontSize: 14 }}>
+            {account}
+          </Typography.Text>
+        )
+      },
+      {
+        title: i18nText("settings", "auto.name_alt"),
+        dataIndex: 'name',
+        key: 'name',
+        width: 160,
+        render: (name: SettingsMember['name']) => (
+          <Typography.Text style={{ fontSize: 14 }}>
+            {name}
+          </Typography.Text>
+        )
+      },
+      {
+        title: i18nText("settings", "auto.nickname"),
+        dataIndex: 'nickname',
+        key: 'nickname',
+        width: 160,
+        render: (nickname: SettingsMember['nickname']) => (
+          <Typography.Text style={{ fontSize: 14 }}>
+            {nickname}
+          </Typography.Text>
         )
       },
       {
@@ -355,41 +369,12 @@ export function MemberManagementPanel({
           </Tag>
         )
       },
-      {
-        title: i18nText("settings", "auto.role"),
-        key: 'roles',
-        render: (_: unknown, member: SettingsMember) => {
-          const isRootMember = member.role_codes.includes('root');
-
-          return canManageRoleBindings ? (
-            <Space wrap size={4}>
-              {member.role_codes.map((roleCode) => (
-                <Tag key={roleCode}>{roleCode}</Tag>
-              ))}
-              <Button
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                style={{ padding: '0 4px', fontSize: 12 }}
-                onClick={() => handleOpenRoleEdit(member)}
-              >
-                {i18nText("settings", "auto.edit")}</Button>
-            </Space>
-          ) : (
-            <Space wrap size={4}>
-              {member.role_codes.map((roleCode) => (
-                <Tag key={roleCode}>{roleCode}</Tag>
-              ))}
-            </Space>
-          );
-        }
-      },
       ...(canManageMembers
         ? [
             {
               title: i18nText("settings", "auto.operation"),
               key: 'action',
-              width: 160,
+              width: 240,
               render: (_: unknown, member: SettingsMember) => {
                 const isRootMember = member.role_codes.includes('root');
                 const isCurrentUser = member.id === actor?.id;
@@ -401,7 +386,7 @@ export function MemberManagementPanel({
                       icon={<EditOutlined />}
                       onClick={() => handleOpenProfileEdit(member)}
                     >
-                      {i18nText("settings", "auto.edit_profile")}</Button>
+                      {i18nText("settings", "auto.edit")}</Button>
                     {member.status === 'active' ? (
                       isRootMember ? (
                         <Button
@@ -430,6 +415,32 @@ export function MemberManagementPanel({
                         </Popconfirm>
                       )
                     ) : null}
+                    {isRootMember || isCurrentUser ? (
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        disabled
+                      >
+                        {i18nText("settings", "auto.delete")}</Button>
+                    ) : (
+                      <Popconfirm
+                        title={i18nText("settings", "auto.delete_member")}
+                        description={i18nText("settings", "auto.sure_want_delete_member_account_physical_delete", { value1: member.name })}
+                        onConfirm={() => deleteMutation.mutate(member.id)}
+                        okText={i18nText("settings", "auto.confirm_delete")}
+                        cancelText={i18nText("settings", "auto.cancel")}
+                        okButtonProps={{ danger: true }}
+                      >
+                        <Button
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          loading={deleteMutation.isPending}
+                        >
+                          {i18nText("settings", "auto.delete")}</Button>
+                      </Popconfirm>
+                    )}
                     {isRootMember ? (
                       <Button
                         size="small"
@@ -470,14 +481,13 @@ export function MemberManagementPanel({
     ],
     [
       canManageMembers,
-      canManageRoleBindings,
+      deleteMutation,
       disableMutation,
       resetPasswordMutation,
       changePasswordMutation,
       actor?.id,
       handleOpenProfileEdit,
-      handleOpenPasswordEdit,
-      handleOpenRoleEdit
+      handleOpenPasswordEdit
     ]
   );
 
@@ -662,6 +672,17 @@ export function MemberManagementPanel({
                 <Input />
               </Form.Item>
             </div>
+            {canManageRoleBindings ? (
+              <Form.Item label={i18nText("settings", "auto.role")} name="role_codes">
+                <Select
+                  mode="multiple"
+                  options={roleOptions}
+                  loading={rolesQuery.isLoading}
+                  onChange={handleRoleSelectionChange}
+                  placeholder={i18nText("settings", "auto.select_role")}
+                />
+              </Form.Item>
+            ) : null}
             <Form.Item label={i18nText("settings", "auto.personal_introduction")} name="introduction">
               <Input.TextArea rows={3} />
             </Form.Item>
@@ -729,38 +750,6 @@ export function MemberManagementPanel({
           </Form>
         </Modal>
 
-        {/* Role Edit Modal */}
-        <Modal
-          title={
-            roleEditMember ? i18nText("settings", "auto.edit_role", { value1: roleEditMember.name }) : i18nText("settings", "auto.edit_role_alt")
-          }
-          open={Boolean(roleEditMember)}
-          onCancel={() => setRoleEditMember(null)}
-          onOk={handleRoleEditOk}
-          confirmLoading={replaceRolesMutation.isPending}
-          okText={i18nText("settings", "auto.save")}
-          cancelText={i18nText("settings", "auto.cancel")}
-          width={480}
-          destroyOnHidden
-        >
-          {roleEditMember ? (
-            <div style={{ marginTop: 16 }}>
-              <Typography.Text
-                type="secondary"
-                style={{ display: 'block', marginBottom: 12, fontSize: 13 }}
-              >
-                {i18nText("settings", "auto.for_users")}{roleEditMember.name}（{roleEditMember.account}{i18nText("settings", "auto.assign_roles")}</Typography.Text>
-              <Select
-                mode="multiple"
-                style={{ width: '100%' }}
-                value={editingRoleCodes}
-                onChange={handleRoleSelectionChange}
-                options={roleOptions}
-                placeholder={i18nText("settings", "auto.select_role")}
-              />
-            </div>
-          ) : null}
-        </Modal>
       </div>
     </SettingsSectionSurface>
   );

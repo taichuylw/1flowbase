@@ -130,6 +130,10 @@ impl MemberRepository for MemoryMemberRepository {
         Ok(())
     }
 
+    async fn delete_member(&self, _actor_user_id: Uuid, _target_user_id: Uuid) -> Result<()> {
+        Ok(())
+    }
+
     async fn reset_member_password(
         &self,
         _actor_user_id: Uuid,

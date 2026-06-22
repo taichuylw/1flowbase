@@ -24,6 +24,7 @@ const membersApi = vi.hoisted(() => ({
   createSettingsMember: vi.fn(),
   updateSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   changeCurrentUserPassword: vi.fn(),
   replaceSettingsMemberRoles: vi.fn()
@@ -831,6 +832,9 @@ describe('SettingsPage', () => {
     renderApp('/settings/members');
 
     await waitFor(() => {
+      expect(window.location.pathname).toBe('/settings/members');
+    });
+    await waitFor(() => {
       expect(membersApi.fetchSettingsMembers).toHaveBeenCalled();
     });
 
@@ -848,16 +852,10 @@ describe('SettingsPage', () => {
       within(rootRow).getByRole('button', { name: /编辑$/ })
     ).toBeEnabled();
     expect(
-      within(rootRow).getByRole('button', { name: /编辑资料$/ })
-    ).toBeEnabled();
-    expect(
       within(rootRow).getByRole('button', { name: /停用$/ })
     ).toBeDisabled();
     expect(
       within(rootRow).getByRole('button', { name: /修改密码$/ })
-    ).toBeEnabled();
-    expect(
-      within(managerRow).getByRole('button', { name: /编辑$/ })
     ).toBeEnabled();
     expect(
       within(managerRow).getByRole('button', { name: /停用$/ })
@@ -865,8 +863,11 @@ describe('SettingsPage', () => {
     expect(
       within(managerRow).getByRole('button', { name: /重置密码$/ })
     ).toBeEnabled();
+    expect(
+      screen.queryByRole('columnheader', { name: '角色' })
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(within(rootRow).getByRole('button', { name: /编辑资料$/ }));
+    fireEvent.click(within(rootRow).getByRole('button', { name: /编辑$/ }));
     const profileDialog = await screen.findByRole('dialog', {
       name: /编辑用户资料/
     });
@@ -885,6 +886,9 @@ describe('SettingsPage', () => {
     fireEvent.change(within(profileDialog).getByLabelText('个人介绍'), {
       target: { value: 'updated root profile' }
     });
+    expect(
+      within(profileDialog).getByRole('combobox', { name: '角色' })
+    ).toBeInTheDocument();
     fireEvent.click(
       within(profileDialog).getByRole('button', { name: /保\s*存/ })
     );
@@ -901,33 +905,10 @@ describe('SettingsPage', () => {
         'csrf-123'
       );
     });
-
-    fireEvent.click(within(rootRow).getByRole('button', { name: /编辑$/ }));
-    const roleDialog = await screen.findByRole('dialog', { name: /编辑角色/ });
-    fireEvent.mouseDown(within(roleDialog).getByRole('combobox'));
-    const [operatorOption] = await screen.findAllByText((_, element) => {
-      if (!element) {
-        return false;
-      }
-
-      return (
-        element.matches('.ant-select-item-option-content') &&
-        element.textContent === 'Operator'
-      );
-    });
-    fireEvent.click(operatorOption);
     await waitFor(() => {
-      expect(within(roleDialog).getByText('Operator')).toBeInTheDocument();
-    });
-    fireEvent.click(
-      within(roleDialog).getByRole('button', { name: /保\s*存/ })
-    );
-    await waitFor(() => {
-      expect(membersApi.replaceSettingsMemberRoles).toHaveBeenCalledWith(
-        'user-1',
-        { role_codes: ['root', 'operator'] },
-        'csrf-123'
-      );
+      expect(
+        screen.queryByRole('dialog', { name: /编辑用户资料/ })
+      ).not.toBeInTheDocument();
     });
 
     fireEvent.click(within(rootRow).getByRole('button', { name: /修改密码$/ }));

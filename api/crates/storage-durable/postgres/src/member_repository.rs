@@ -194,6 +194,38 @@ impl MemberRepository for PgControlPlaneStore {
         Ok(())
     }
 
+    async fn delete_member(&self, actor_user_id: Uuid, target_user_id: Uuid) -> Result<()> {
+        if is_root_user(self.pool(), target_user_id).await? {
+            return Err(ControlPlaneError::PermissionDenied("root_user_immutable").into());
+        }
+        if actor_user_id == target_user_id {
+            return Err(ControlPlaneError::PermissionDenied("member_self_delete_forbidden").into());
+        }
+
+        let result = sqlx::query("delete from users where id = $1")
+            .bind(target_user_id)
+            .execute(self.pool())
+            .await
+            .map_err(|err| {
+                if matches!(
+                    err.as_database_error().and_then(|db| db.code()).as_deref(),
+                    Some("23503")
+                ) {
+                    anyhow::Error::from(ControlPlaneError::Conflict(
+                        "member_has_referenced_resources",
+                    ))
+                } else {
+                    anyhow::Error::from(err)
+                }
+            })?;
+
+        if result.rows_affected() == 0 {
+            return Err(ControlPlaneError::NotFound("user").into());
+        }
+
+        Ok(())
+    }
+
     async fn reset_member_password(
         &self,
         actor_user_id: Uuid,

@@ -2,12 +2,16 @@ import { describe, expect, test, vi } from 'vitest';
 import * as transport from '../transport';
 
 import {
+  deleteConsoleMember,
   updateConsoleMember,
   type UpdateConsoleMemberInput
 } from '../console-members';
 
 describe('console members client', () => {
   vi.spyOn(transport, 'apiFetch').mockImplementation(
+    async (input) => input as never
+  );
+  vi.spyOn(transport, 'apiFetchVoid').mockImplementation(
     async (input) => input as never
   );
 
@@ -27,6 +31,16 @@ describe('console members client', () => {
       method: 'PATCH',
       csrfToken: 'csrf-123',
       body: input
+    });
+  });
+
+  test('deletes member through the member delete route', async () => {
+    await expect(
+      deleteConsoleMember('member-1', 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/console/members/member-1',
+      method: 'DELETE',
+      csrfToken: 'csrf-123'
     });
   });
 });

@@ -1,6 +1,7 @@
 import {
   changeConsolePassword,
   createConsoleMember,
+  deleteConsoleMember,
   disableConsoleMember,
   listConsoleMembers,
   replaceConsoleMemberRoles,
@@ -42,6 +43,10 @@ export function updateSettingsMember(
 
 export function disableSettingsMember(memberId: string, csrfToken: string): Promise<void> {
   return disableConsoleMember(memberId, csrfToken);
+}
+
+export function deleteSettingsMember(memberId: string, csrfToken: string): Promise<void> {
+  return deleteConsoleMember(memberId, csrfToken);
 }
 
 export function resetSettingsMemberPassword(

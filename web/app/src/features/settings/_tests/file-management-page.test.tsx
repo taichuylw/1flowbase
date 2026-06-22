@@ -7,6 +7,7 @@ const membersApi = vi.hoisted(() => ({
   fetchSettingsMembers: vi.fn(),
   createSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   replaceSettingsMemberRoles: vi.fn()
 }));
