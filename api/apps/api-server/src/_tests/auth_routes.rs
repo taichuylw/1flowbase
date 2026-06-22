@@ -8,6 +8,7 @@ use axum::{
 };
 use serde_json::json;
 use sqlx::PgPool;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tower::ServiceExt;
 
 #[tokio::test]
@@ -104,6 +105,26 @@ async fn console_user_api_key_create_list_and_revoke_hides_plaintext_after_creat
         .await
         .unwrap();
     assert_eq!(revoked.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn console_user_api_key_create_maps_expiration_policies() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let thirty_days =
+        create_user_api_key_payload(&app, &cookie, &csrf, "thirty day pat", "30d").await;
+    assert_expiration_days_between(&thirty_days["expires_at"], 29, 31);
+
+    let one_year = create_user_api_key_payload(&app, &cookie, &csrf, "one year pat", "1y").await;
+    assert_expiration_days_between(&one_year["expires_at"], 364, 366);
+
+    let three_years =
+        create_user_api_key_payload(&app, &cookie, &csrf, "three year pat", "3y").await;
+    assert_expiration_days_between(&three_years["expires_at"], 1094, 1096);
+
+    let never = create_user_api_key_payload(&app, &cookie, &csrf, "never pat", "never").await;
+    assert_eq!(never["expires_at"], serde_json::Value::Null);
 }
 
 #[tokio::test]
@@ -441,6 +462,18 @@ async fn create_minimal_model(app: &axum::Router, cookie: &str, csrf: &str, code
 }
 
 async fn create_user_api_key(app: &axum::Router, cookie: &str, csrf: &str, name: &str) -> String {
+    let payload = create_user_api_key_payload(app, cookie, csrf, name, "never").await;
+
+    payload["token"].as_str().unwrap().to_string()
+}
+
+async fn create_user_api_key_payload(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    name: &str,
+    expiration_policy: &str,
+) -> serde_json::Value {
     let response = app
         .clone()
         .oneshot(
@@ -453,7 +486,7 @@ async fn create_user_api_key(app: &axum::Router, cookie: &str, csrf: &str, name:
                 .body(Body::from(
                     json!({
                         "name": name,
-                        "expiration_policy": "never"
+                        "expiration_policy": expiration_policy
                     })
                     .to_string(),
                 ))
@@ -466,7 +499,18 @@ async fn create_user_api_key(app: &axum::Router, cookie: &str, csrf: &str, name:
     let payload: serde_json::Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(status, StatusCode::CREATED, "{payload}");
-    payload["data"]["token"].as_str().unwrap().to_string()
+    payload["data"].clone()
+}
+
+fn assert_expiration_days_between(value: &serde_json::Value, min_days: i64, max_days: i64) {
+    let expires_at = OffsetDateTime::parse(value.as_str().unwrap(), &Rfc3339).unwrap();
+    let now = OffsetDateTime::now_utc();
+    let delta = expires_at - now;
+
+    assert!(
+        delta >= time::Duration::days(min_days) && delta <= time::Duration::days(max_days),
+        "expected expires_at {expires_at} to be between {min_days} and {max_days} days from {now}"
+    );
 }
 
 async fn get_console_me_with_bearer(app: &axum::Router, token: &str) -> StatusCode {

@@ -280,7 +280,9 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
             ($1, 'Data Model Key', 'dmk-hash', 'dmk_prefix', $2, $3,
              'workspace', $4, 'data_model_api_key', null, true),
             ($5, 'Application Key', 'apk-hash', 'apk_prefix', $2, $3,
-             'workspace', $4, 'application_api_key', $6, true)
+             'workspace', $4, 'application_api_key', $6, true),
+            ($7, 'User Key', 'pat-hash', 'pat_prefix', $2, $3,
+             'workspace', $4, 'user_api_key', null, true)
         "#,
     )
     .bind(Uuid::now_v7())
@@ -289,6 +291,7 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
     .bind(workspace_id)
     .bind(Uuid::now_v7())
     .bind(application_id)
+    .bind(Uuid::now_v7())
     .execute(&pool)
     .await
     .unwrap();
@@ -310,6 +313,7 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
         vec![
             ("application_api_key".to_string(), 1),
             ("data_model_api_key".to_string(), 1),
+            ("user_api_key".to_string(), 1),
         ]
     );
 
@@ -334,6 +338,30 @@ async fn application_public_api_repository_api_keys_key_kind_separates_data_mode
     assert!(
         invalid_application_key.is_err(),
         "application_api_key rows must carry an application_id"
+    );
+
+    let invalid_user_key = sqlx::query(
+        r#"
+        insert into api_keys (
+            id, name, token_hash, token_prefix, creator_user_id, tenant_id,
+            scope_kind, scope_id, key_kind, application_id, enabled
+        ) values (
+            $1, 'Broken User Key', 'pat-broken', 'pat_broken', $2, $3,
+            'workspace', $4, 'user_api_key', $5, true
+        )
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(actor_user_id)
+    .bind(root_tenant_id(&store).await)
+    .bind(workspace_id)
+    .bind(application_id)
+    .execute(&pool)
+    .await;
+
+    assert!(
+        invalid_user_key.is_err(),
+        "user_api_key rows must not carry an application_id"
     );
 }
 
