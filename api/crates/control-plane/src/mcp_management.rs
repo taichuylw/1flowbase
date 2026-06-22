@@ -21,7 +21,6 @@ pub struct CreateMcpInstanceCommand {
     pub description_short: Option<String>,
     pub status: domain::McpInstanceStatus,
     pub default_entry_path: String,
-    pub is_default: bool,
 }
 
 pub struct UpsertMcpGroupCommand {
@@ -123,33 +122,6 @@ where
         Self { repository }
     }
 
-    pub async fn ensure_default_workspace_catalog(
-        &self,
-        actor_user_id: Uuid,
-    ) -> Result<domain::McpCatalogSnapshot> {
-        let actor = self.authorize_view(actor_user_id).await?;
-        let workspace_id = actor.current_workspace_id;
-        let instances = self.repository.list_mcp_instances(workspace_id).await?;
-        if instances.is_empty() {
-            self.repository
-                .create_mcp_instance(&CreateMcpInstanceInput {
-                    id: Uuid::now_v7(),
-                    actor_user_id,
-                    workspace_id,
-                    instance_id: "default_system".into(),
-                    name: "Default System".into(),
-                    description_short: Some("Default workspace MCP instance".into()),
-                    status: domain::McpInstanceStatus::Enabled,
-                    default_entry_path: "/".into(),
-                    is_default: true,
-                })
-                .await?;
-        }
-        self.ensure_meta_tool_config(workspace_id, actor_user_id)
-            .await?;
-        self.read_workspace_catalog(actor_user_id).await
-    }
-
     pub async fn read_workspace_catalog(
         &self,
         actor_user_id: Uuid,
@@ -173,13 +145,8 @@ where
         let meta_tool_config = self
             .ensure_meta_tool_config(workspace_id, actor_user_id)
             .await?;
-        let default_instance = instances
-            .iter()
-            .find(|instance| instance.is_default)
-            .cloned();
 
         Ok(domain::McpCatalogSnapshot {
-            default_instance,
             instances,
             groups,
             tools,
@@ -205,7 +172,6 @@ where
                 description_short: command.description_short,
                 status: command.status,
                 default_entry_path: command.default_entry_path,
-                is_default: command.is_default,
             })
             .await
     }
@@ -226,7 +192,6 @@ where
                 description_short: command.description_short,
                 status: command.status,
                 default_entry_path: command.default_entry_path,
-                is_default: command.is_default,
             })
             .await
     }
@@ -523,13 +488,9 @@ where
                     .get_mcp_instance(workspace_id, instance_id)
                     .await?
             }
-            None => {
-                self.repository
-                    .get_default_mcp_instance(workspace_id)
-                    .await?
-            }
+            None => return Err(ControlPlaneError::InvalidInput("instance_id").into()),
         }
-        .ok_or(ControlPlaneError::NotFound("mcp_default_instance"))?;
+        .ok_or(ControlPlaneError::NotFound("mcp_instance"))?;
         if instance.status != domain::McpInstanceStatus::Enabled {
             return Err(ControlPlaneError::NotFound("mcp_instance").into());
         }

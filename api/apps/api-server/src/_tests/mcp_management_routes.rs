@@ -11,7 +11,7 @@ async fn response_json(response: axum::response::Response) -> Value {
 }
 
 #[tokio::test]
-async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interface_catalog() {
+async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instance() {
     let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
 
@@ -29,14 +29,43 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
         .unwrap();
     assert_eq!(catalog_response.status(), StatusCode::OK);
     let catalog_payload = response_json(catalog_response).await;
+    assert!(catalog_payload["data"].get("default_instance").is_none());
     assert_eq!(
-        catalog_payload["data"]["default_instance"]["instance_id"].as_str(),
-        Some("default_system")
+        catalog_payload["data"]["instances"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
     );
     assert_eq!(
         catalog_payload["data"]["meta_tool_config"]["list_default_limit"].as_i64(),
         Some(50)
     );
+
+    let create_instance_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/mcp/instances")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "instance_id": "workspace_ops",
+                        "name": "Workspace Ops",
+                        "description_short": "Workspace MCP instance",
+                        "status": "enabled",
+                        "default_entry_path": "/"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_instance_response.status(), StatusCode::CREATED);
 
     let interface_response = app
         .clone()
@@ -125,7 +154,7 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/console/mcp/instances/default_system/groups")
+                .uri("/api/console/mcp/instances/workspace_ops/groups")
                 .header("cookie", &root_cookie)
                 .header("x-csrf-token", &root_csrf)
                 .header("content-type", "application/json")
@@ -209,7 +238,7 @@ async fn mcp_management_routes_seed_catalog_and_derive_tool_contract_from_interf
         .oneshot(
             Request::builder()
                 .method("DELETE")
-                .uri("/api/console/mcp/instances/default_system/groups?path=%2Fsystem")
+                .uri("/api/console/mcp/instances/workspace_ops/groups?path=%2Fsystem")
                 .header("cookie", &root_cookie)
                 .header("x-csrf-token", &root_csrf)
                 .body(Body::empty())
@@ -293,6 +322,31 @@ async fn mcp_meta_tool_config_updates_validate_and_shape_list_defaults() {
         .unwrap();
     assert_eq!(catalog_response.status(), StatusCode::OK);
 
+    let create_instance_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/mcp/instances")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "instance_id": "workspace_ops",
+                        "name": "Workspace Ops",
+                        "description_short": null,
+                        "status": "enabled",
+                        "default_entry_path": "/"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_instance_response.status(), StatusCode::CREATED);
+
     for (path, display_name, sort_order) in [
         ("/system", "System", 1),
         ("/system/runtime", "Runtime", 2),
@@ -303,7 +357,7 @@ async fn mcp_meta_tool_config_updates_validate_and_shape_list_defaults() {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/console/mcp/instances/default_system/groups")
+                    .uri("/api/console/mcp/instances/workspace_ops/groups")
                     .header("cookie", &root_cookie)
                     .header("x-csrf-token", &root_csrf)
                     .header("content-type", "application/json")
@@ -439,33 +493,33 @@ async fn mcp_meta_tool_config_updates_validate_and_shape_list_defaults() {
         Some("field_errors")
     );
 
-    let default_list_response = app
+    let instance_list_response = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/console/mcp/list")
+                .uri("/api/console/mcp/list?instance_id=workspace_ops")
                 .header("cookie", &root_cookie)
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(default_list_response.status(), StatusCode::OK);
-    let default_list_payload = response_json(default_list_response).await;
-    let default_items = default_list_payload["data"].as_array().unwrap();
-    assert_eq!(default_items.len(), 1);
-    assert!(default_items[0].get("id").is_some());
-    assert!(default_items[0].get("name").is_some());
-    assert!(default_items[0].get("path").is_none());
-    assert!(default_items[0].get("children_count").is_none());
+    assert_eq!(instance_list_response.status(), StatusCode::OK);
+    let instance_list_payload = response_json(instance_list_response).await;
+    let instance_items = instance_list_payload["data"].as_array().unwrap();
+    assert_eq!(instance_items.len(), 1);
+    assert!(instance_items[0].get("id").is_some());
+    assert!(instance_items[0].get("name").is_some());
+    assert!(instance_items[0].get("path").is_none());
+    assert!(instance_items[0].get("children_count").is_none());
 
     let regex_list_response = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/console/mcp/list?limit=10&path_regex=%5E%2Fsystem")
+                .uri("/api/console/mcp/list?instance_id=workspace_ops&limit=10&path_regex=%5E%2Fsystem")
                 .header("cookie", &root_cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -483,7 +537,7 @@ async fn mcp_meta_tool_config_updates_validate_and_shape_list_defaults() {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/api/console/mcp/list?path_regex=%5E%2Fsystem%2Fruntime-long")
+                .uri("/api/console/mcp/list?instance_id=workspace_ops&path_regex=%5E%2Fsystem%2Fruntime-long")
                 .header("cookie", &root_cookie)
                 .body(Body::empty())
                 .unwrap(),

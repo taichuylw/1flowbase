@@ -2,7 +2,7 @@
 memory_type: project
 title: System-level MCP issue tree redesigned
 created_at: 2026-06-07 17
-updated_at: 2026-06-21 00
+updated_at: 2026-06-22 22
 decision_policy: verify_before_decision
 scope:
   - https://github.com/taichuy/1flowbase/issues/770
@@ -30,6 +30,8 @@ keywords:
 用户在 `2026-06-21 00` 重新收敛 MCP 管理方向：当前只做系统级 / 工作空间级 MCP，应用级 MCP、Flow/Start MCP 和 LLM 节点级 MCP 先从本期关闭。AI 已更新 GitHub issue tree：#770 是 L0 总控，#771 是 L1 ADR，#772 是 L2 workstream，#773 是首个 L3 execution task。
 
 用户随后确认系统级 MCP 不是单一目录，而是多个 `McpInstance` 组成的实例库：系统设置 `MCP 管理` 页面分为 `MCP 实例`、`Tool 配置`、`MCP 配置` 三个 tab。`MCP 实例` 负责组合分组、路径和工具挂载，决定 `mcp.list` 返回什么；`Tool 配置` 负责真实可调用工具；`MCP 配置` 负责三个元工具的默认行为。
+
+用户在 `2026-06-22 22` 进一步收敛：MCP 实例不是必须存在的系统数据，也不需要 workspace 默认实例；用户按需自己创建实例。前端不再暴露 `is_default` 配置或 `default` 标签，后续后端 / issue contract 也应去掉默认 seed 和默认实例兜底假设。
 
 ## 为什么这样做
 
@@ -70,11 +72,11 @@ keywords:
 - `mcp.call` 必须传 `tool_id`；工具开启 `des_id_required` 时必须传当前 `des_id`。
 - MCP 工具全部从后端接口 / service / 领域动作封装而来，可以人为配置参数映射和结果映射。
 - `tool_id` 存储长度上限 255，默认从路径 / 名称生成可读 id；随机生成字符串不得超过 8 位。
-- 默认 seed 一个系统 MCP 实例，例如 `default_system`，默认入口 path 为 `/`。
+- 不默认 seed 系统 MCP 实例；MCP 实例由用户按需创建，空实例列表是合法状态。
 - 一个 `McpTool` 可以挂载到多个 MCP 实例或多个路径。
 - `McpInstance` 状态为 `draft / enabled / disabled / archived`；只有 `enabled` 进入 `mcp.list`。
 - `McpInstance` / `McpTool` / `McpToolBinding` 删除采用硬删除；删除后后续调用返回实例不存在或工具不存在。
-- `mcp.list` 不传 `instance_id` 时使用 workspace 默认实例；没有默认实例时返回明确错误。
+- 不再依赖 workspace 默认实例；`mcp.list` 的无实例或未指定实例行为需要以后端 contract 重新明确，不能假设存在 `default_system` 兜底。
 - 导出只包含 MCP 实例目录、Tool 配置、映射和元工具配置。
 
 ## 执行门禁

@@ -8,7 +8,6 @@ export interface ConsoleMcpInstance {
   description_short: string | null;
   status: string;
   default_entry_path: string;
-  is_default: boolean;
   created_by: string;
   updated_by: string;
   created_at: string;
@@ -74,7 +73,6 @@ export interface ConsoleMcpMetaToolConfig {
 }
 
 export interface ConsoleMcpCatalog {
-  default_instance: ConsoleMcpInstance | null;
   instances: ConsoleMcpInstance[];
   groups: ConsoleMcpGroup[];
   tools: ConsoleMcpTool[];
@@ -125,7 +123,6 @@ export interface SaveConsoleMcpInstanceBody {
   description_short: string | null;
   status: string;
   default_entry_path: string;
-  is_default: boolean;
 }
 
 export interface SaveConsoleMcpGroupBody {

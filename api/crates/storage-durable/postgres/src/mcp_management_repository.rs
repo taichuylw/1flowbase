@@ -52,7 +52,6 @@ fn map_instance(row: sqlx::postgres::PgRow) -> Result<domain::McpInstanceRecord>
         description_short: row.get("description_short"),
         status: parse_instance_status(row.get::<String, _>("status").as_str())?,
         default_entry_path: row.get("default_entry_path"),
-        is_default: row.get("is_default"),
         created_by: row.get("created_by"),
         updated_by: row.get("updated_by"),
         created_at: row.get("created_at"),
@@ -160,7 +159,7 @@ impl McpManagementRepository for PgControlPlaneStore {
             select *
             from mcp_instances
             where workspace_id = $1
-            order by is_default desc, updated_at desc, instance_id asc
+            order by updated_at desc, instance_id asc
             "#,
         )
         .bind(workspace_id)
@@ -190,38 +189,10 @@ impl McpManagementRepository for PgControlPlaneStore {
         row.map(map_instance).transpose()
     }
 
-    async fn get_default_mcp_instance(
-        &self,
-        workspace_id: Uuid,
-    ) -> Result<Option<domain::McpInstanceRecord>> {
-        let row = sqlx::query(
-            r#"
-            select *
-            from mcp_instances
-            where workspace_id = $1 and is_default = true
-            order by created_at asc
-            limit 1
-            "#,
-        )
-        .bind(workspace_id)
-        .fetch_optional(self.pool())
-        .await?;
-
-        row.map(map_instance).transpose()
-    }
-
     async fn create_mcp_instance(
         &self,
         input: &CreateMcpInstanceInput,
     ) -> Result<domain::McpInstanceRecord> {
-        let mut tx = self.pool().begin().await?;
-        if input.is_default {
-            sqlx::query("update mcp_instances set is_default = false where workspace_id = $1")
-                .bind(input.workspace_id)
-                .execute(&mut *tx)
-                .await?;
-        }
-
         let row = sqlx::query(
             r#"
             insert into mcp_instances (
@@ -232,11 +203,10 @@ impl McpManagementRepository for PgControlPlaneStore {
                 description_short,
                 status,
                 default_entry_path,
-                is_default,
                 created_by,
                 updated_by
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $9
+                $1, $2, $3, $4, $5, $6, $7, $8, $8
             )
             returning *
             "#,
@@ -248,11 +218,9 @@ impl McpManagementRepository for PgControlPlaneStore {
         .bind(&input.description_short)
         .bind(input.status.as_str())
         .bind(&input.default_entry_path)
-        .bind(input.is_default)
         .bind(input.actor_user_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(self.pool())
         .await?;
-        tx.commit().await?;
 
         map_instance(row)
     }
@@ -261,14 +229,6 @@ impl McpManagementRepository for PgControlPlaneStore {
         &self,
         input: &UpdateMcpInstanceInput,
     ) -> Result<domain::McpInstanceRecord> {
-        let mut tx = self.pool().begin().await?;
-        if input.is_default {
-            sqlx::query("update mcp_instances set is_default = false where workspace_id = $1")
-                .bind(input.workspace_id)
-                .execute(&mut *tx)
-                .await?;
-        }
-
         let row = sqlx::query(
             r#"
             update mcp_instances
@@ -277,8 +237,7 @@ impl McpManagementRepository for PgControlPlaneStore {
                 description_short = $4,
                 status = $5,
                 default_entry_path = $6,
-                is_default = $7,
-                updated_by = $8,
+                updated_by = $7,
                 updated_at = now()
             where workspace_id = $1 and instance_id = $2
             returning *
@@ -290,11 +249,9 @@ impl McpManagementRepository for PgControlPlaneStore {
         .bind(&input.description_short)
         .bind(input.status.as_str())
         .bind(&input.default_entry_path)
-        .bind(input.is_default)
         .bind(input.actor_user_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(self.pool())
         .await?;
-        tx.commit().await?;
 
         map_instance(row)
     }

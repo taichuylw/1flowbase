@@ -78,7 +78,6 @@ pub struct McpInstanceRecord {
     pub description_short: Option<String>,
     pub status: McpInstanceStatus,
     pub default_entry_path: String,
-    pub is_default: bool,
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub created_at: OffsetDateTime,
@@ -178,7 +177,6 @@ pub struct McpInterfaceCatalogEntry {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpCatalogSnapshot {
-    pub default_instance: Option<McpInstanceRecord>,
     pub instances: Vec<McpInstanceRecord>,
     pub groups: Vec<McpGroupRecord>,
     pub tools: Vec<McpToolRecord>,

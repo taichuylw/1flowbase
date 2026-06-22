@@ -8,7 +8,6 @@ create table if not exists mcp_instances (
         status in ('draft', 'enabled', 'disabled', 'archived')
     ),
     default_entry_path text not null default '/',
-    is_default boolean not null default false,
     created_by uuid not null references users(id),
     updated_by uuid not null references users(id),
     created_at timestamptz not null default now(),
@@ -17,10 +16,6 @@ create table if not exists mcp_instances (
 
 create unique index if not exists mcp_instances_workspace_instance_id_idx
     on mcp_instances (workspace_id, instance_id);
-
-create unique index if not exists mcp_instances_workspace_default_idx
-    on mcp_instances (workspace_id)
-    where is_default = true;
 
 create index if not exists mcp_instances_workspace_status_idx
     on mcp_instances (workspace_id, status, updated_at desc, id desc);

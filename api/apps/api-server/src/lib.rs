@@ -262,7 +262,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         )
         .await?;
     control_plane::mcp_management::McpManagementService::new(store.clone())
-        .ensure_default_workspace_catalog(bootstrap_result.root_user_id)
+        .read_workspace_catalog(bootstrap_result.root_user_id)
         .await?;
     let provider_runtime = Arc::new(ApiRuntimeServices::new(
         Arc::new(RwLock::new(

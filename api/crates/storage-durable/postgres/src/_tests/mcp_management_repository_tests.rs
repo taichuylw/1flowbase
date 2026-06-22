@@ -72,44 +72,21 @@ async fn seed_store() -> (
 }
 
 #[tokio::test]
-async fn mcp_management_seeds_default_instance_without_overwriting_user_changes() {
+async fn mcp_management_catalog_read_does_not_seed_default_instance() {
     let (store, workspace, actor) = seed_store().await;
     let service = McpManagementService::new(store);
 
-    let first = service
-        .ensure_default_workspace_catalog(actor.id)
-        .await
-        .unwrap();
-    assert_eq!(
-        first.default_instance.unwrap().instance_id,
-        "default_system"
-    );
+    let first = service.read_workspace_catalog(actor.id).await.unwrap();
+    assert!(first.instances.is_empty());
+    assert_eq!(first.meta_tool_config.workspace_id, workspace.id);
 
-    let renamed = service
-        .update_instance(CreateMcpInstanceCommand {
-            actor_user_id: actor.id,
-            instance_id: "default_system".into(),
-            name: "Renamed Default".into(),
-            description_short: Some("user edited".into()),
-            status: domain::McpInstanceStatus::Enabled,
-            default_entry_path: "/".into(),
-            is_default: true,
-        })
-        .await
-        .unwrap();
-    assert_eq!(renamed.name, "Renamed Default");
-
-    let second = service
-        .ensure_default_workspace_catalog(actor.id)
-        .await
-        .unwrap();
-    assert_eq!(second.default_instance.unwrap().name, "Renamed Default");
-    assert_eq!(second.instances.len(), 1);
+    let second = service.read_workspace_catalog(actor.id).await.unwrap();
+    assert!(second.instances.is_empty());
     assert_eq!(second.meta_tool_config.workspace_id, workspace.id);
 }
 
 #[tokio::test]
-async fn mcp_default_catalog_seed_allows_view_permission_without_manage() {
+async fn mcp_catalog_read_allows_view_permission_without_manage() {
     let (store, workspace, actor) = seed_store().await;
     RoleRepository::create_team_role(
         &store,
@@ -161,15 +138,9 @@ async fn mcp_default_catalog_seed_allows_view_permission_without_manage() {
     .unwrap();
 
     let service = McpManagementService::new(store);
-    let snapshot = service
-        .ensure_default_workspace_catalog(viewer.id)
-        .await
-        .unwrap();
+    let snapshot = service.read_workspace_catalog(viewer.id).await.unwrap();
 
-    assert_eq!(
-        snapshot.default_instance.unwrap().instance_id,
-        "default_system"
-    );
+    assert!(snapshot.instances.is_empty());
     assert_eq!(snapshot.meta_tool_config.workspace_id, workspace.id);
 }
 
@@ -177,10 +148,6 @@ async fn mcp_default_catalog_seed_allows_view_permission_without_manage() {
 async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
     let (store, _workspace, actor) = seed_store().await;
     let service = McpManagementService::new(store);
-    service
-        .ensure_default_workspace_catalog(actor.id)
-        .await
-        .unwrap();
 
     let instance = service
         .create_instance(CreateMcpInstanceCommand {
@@ -190,7 +157,6 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
             description_short: Some("Operations tools".into()),
             status: domain::McpInstanceStatus::Enabled,
             default_entry_path: "/".into(),
-            is_default: false,
         })
         .await
         .unwrap();
@@ -269,7 +235,7 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
 
     let export = service.export_workspace_catalog(actor.id).await.unwrap();
     assert_eq!(export.tools.len(), 1);
-    assert_eq!(export.instances.len(), 2);
+    assert_eq!(export.instances.len(), 1);
     assert_eq!(export.bindings.len(), 1);
     assert_eq!(export.groups.len(), 1);
 
@@ -304,7 +270,14 @@ async fn mcp_tool_binding_write_scope_is_limited_to_actor_workspace() {
         .unwrap();
     let service = McpManagementService::new(store.clone());
     service
-        .ensure_default_workspace_catalog(actor.id)
+        .create_instance(CreateMcpInstanceCommand {
+            actor_user_id: actor.id,
+            instance_id: "workspace_ops".into(),
+            name: "Workspace Ops".into(),
+            description_short: None,
+            status: domain::McpInstanceStatus::Enabled,
+            default_entry_path: "/".into(),
+        })
         .await
         .unwrap();
     let tool = service
@@ -332,7 +305,7 @@ async fn mcp_tool_binding_write_scope_is_limited_to_actor_workspace() {
     service
         .upsert_group(UpsertMcpGroupCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             path: "/ops".into(),
             display_name: "Operations".into(),
             description_short: None,
@@ -344,7 +317,7 @@ async fn mcp_tool_binding_write_scope_is_limited_to_actor_workspace() {
     let binding = service
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             group_path: "/ops".into(),
             tool_id: tool.tool_id,
             display_alias: None,
@@ -386,7 +359,14 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     let (store, _workspace, actor) = seed_store().await;
     let service = McpManagementService::new(store);
     service
-        .ensure_default_workspace_catalog(actor.id)
+        .create_instance(CreateMcpInstanceCommand {
+            actor_user_id: actor.id,
+            instance_id: "workspace_ops".into(),
+            name: "Workspace Ops".into(),
+            description_short: None,
+            status: domain::McpInstanceStatus::Enabled,
+            default_entry_path: "/".into(),
+        })
         .await
         .unwrap();
 
@@ -438,7 +418,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     service
         .upsert_group(UpsertMcpGroupCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             path: "/ops".into(),
             display_name: "Operations".into(),
             description_short: None,
@@ -450,7 +430,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     service
         .upsert_group(UpsertMcpGroupCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             path: "/hidden".into(),
             display_name: "Hidden".into(),
             description_short: None,
@@ -462,7 +442,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     service
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             group_path: "/ops".into(),
             tool_id: tool.tool_id.clone(),
             display_alias: None,
@@ -474,7 +454,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     service
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             group_path: "/ops".into(),
             tool_id: disabled_tool.tool_id.clone(),
             display_alias: Some("Disabled Runtime".into()),
@@ -486,7 +466,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     service
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             group_path: "/ops/hidden".into(),
             tool_id: tool.tool_id.clone(),
             display_alias: Some("Invisible Runtime".into()),
@@ -498,7 +478,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     service
         .create_tool_binding(CreateMcpToolBindingCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
+            instance_id: "workspace_ops".into(),
             group_path: "/admin".into(),
             tool_id: tool.tool_id.clone(),
             display_alias: Some("Admin Runtime".into()),
@@ -516,7 +496,6 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
             description_short: None,
             status: domain::McpInstanceStatus::Disabled,
             default_entry_path: "/".into(),
-            is_default: false,
         })
         .await
         .unwrap();
@@ -534,7 +513,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .unwrap();
 
     let root_items = service
-        .list_items(actor.id, None, Some("/"), None, None)
+        .list_items(actor.id, Some("workspace_ops"), Some("/"), None, None)
         .await
         .unwrap();
     assert!(root_items
@@ -553,7 +532,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .any(|item| item.id == disabled_tool.tool_id || item.name == "Invisible Runtime"));
 
     let ops_items = service
-        .list_items(actor.id, None, Some("/ops"), None, None)
+        .list_items(actor.id, Some("workspace_ops"), Some("/ops"), None, None)
         .await
         .unwrap();
     assert!(ops_items
@@ -582,7 +561,7 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     assert_eq!(full_export.tools.len(), 2);
 
     service
-        .delete_group(actor.id, "default_system", "/ops")
+        .delete_group(actor.id, "workspace_ops", "/ops")
         .await
         .unwrap();
     let after_group_delete = service.read_workspace_catalog(actor.id).await.unwrap();
@@ -608,12 +587,11 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     service
         .update_instance(CreateMcpInstanceCommand {
             actor_user_id: actor.id,
-            instance_id: "default_system".into(),
-            name: "Default System".into(),
+            instance_id: "workspace_ops".into(),
+            name: "Workspace Ops".into(),
             description_short: None,
             status: domain::McpInstanceStatus::Enabled,
             default_entry_path: "/".into(),
-            is_default: false,
         })
         .await
         .unwrap();

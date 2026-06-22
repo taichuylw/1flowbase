@@ -720,7 +720,7 @@ describe('SettingsPage', () => {
       screen.queryByRole('heading', { name: 'API 文档', level: 3 })
     ).not.toBeInTheDocument();
     expect(
-      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
+      await screen.findByRole('heading', { name: 'API key', level: 3 })
     ).toBeInTheDocument();
   }, 10000);
 
@@ -746,7 +746,7 @@ describe('SettingsPage', () => {
     ).not.toBeInTheDocument();
   });
 
-  test('renders API Key 认证 for signed-in users without management permissions', async () => {
+  test('renders API key for signed-in users without management permissions', async () => {
     authenticateWithPermissions([]);
 
     renderApp('/settings/api-key-authentication');
@@ -755,10 +755,10 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
     expect(
-      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
+      await screen.findByRole('heading', { name: 'API key', level: 3 })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /新建 API Key/ })
+      screen.getByRole('button', { name: /添加/ })
     ).toBeInTheDocument();
     expect(
       personalAccessTokensApi.fetchSettingsPersonalAccessTokens
@@ -939,7 +939,7 @@ describe('SettingsPage', () => {
     });
   }, 10000);
 
-  test('redirects /settings/docs to API Key 认证 when docs is hidden', async () => {
+  test('redirects /settings/docs to API key when docs is hidden', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);
 
     renderApp('/settings/docs');
@@ -951,7 +951,7 @@ describe('SettingsPage', () => {
       'section-page-layout--viewport'
     );
     expect(
-      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
+      await screen.findByRole('heading', { name: 'API key', level: 3 })
     ).toBeInTheDocument();
   });
 
@@ -1198,7 +1198,7 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
   });
 
-  test('uses API Key 认证 as the baseline settings section', async () => {
+  test('uses API key as the baseline settings section', async () => {
     authenticateWithPermissions(['route_page.view.all']);
 
     renderApp('/settings');
@@ -1207,7 +1207,7 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
     expect(
-      await screen.findByRole('heading', { name: 'API Key 认证', level: 3 })
+      await screen.findByRole('heading', { name: 'API key', level: 3 })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('navigation', { name: 'Section navigation' })

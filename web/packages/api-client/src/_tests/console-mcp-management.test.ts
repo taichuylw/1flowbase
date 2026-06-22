@@ -44,13 +44,13 @@ describe('console-mcp-management client', () => {
       name: 'mcp list items',
       request: () =>
         fetchConsoleMcpListItems({
-          instance_id: 'default_system',
+          instance_id: 'workspace_ops',
           path: '/ops',
           path_regex: '^/ops',
           limit: 25
         }),
       expected: {
-        path: '/api/console/mcp/list?instance_id=default_system&path=%2Fops&path_regex=%5E%2Fops&limit=25'
+        path: '/api/console/mcp/list?instance_id=workspace_ops&path=%2Fops&path_regex=%5E%2Fops&limit=25'
       }
     },
     {
@@ -78,12 +78,11 @@ describe('console-mcp-management client', () => {
       request: () =>
         createConsoleMcpInstance(
           {
-            instance_id: 'default_system',
-            name: 'Default System',
+            instance_id: 'workspace_ops',
+            name: 'Workspace Ops',
             description_short: null,
             status: 'enabled',
-            default_entry_path: '/',
-            is_default: true
+            default_entry_path: '/'
           },
           'csrf-123'
         ),
@@ -103,8 +102,7 @@ describe('console-mcp-management client', () => {
             name: 'Slash Instance',
             description_short: null,
             status: 'enabled',
-            default_entry_path: '/',
-            is_default: false
+            default_entry_path: '/'
           },
           'csrf-123'
         ),
@@ -118,7 +116,7 @@ describe('console-mcp-management client', () => {
       name: 'group upsert',
       request: () =>
         upsertConsoleMcpGroup(
-          'default_system',
+          'workspace_ops',
           {
             path: '/ops',
             display_name: 'Operations',
@@ -129,7 +127,7 @@ describe('console-mcp-management client', () => {
           'csrf-123'
         ),
       expected: {
-        path: '/api/console/mcp/instances/default_system/groups',
+        path: '/api/console/mcp/instances/workspace_ops/groups',
         method: 'POST',
         csrfToken: 'csrf-123'
       }
@@ -206,7 +204,7 @@ describe('console-mcp-management client', () => {
       name: 'tool binding creation',
       request: () =>
         createConsoleMcpToolBinding(
-          'default_system',
+          'workspace_ops',
           {
             group_path: '/ops',
             tool_id: 'runtime.get',
@@ -217,7 +215,7 @@ describe('console-mcp-management client', () => {
           'csrf-123'
         ),
       expected: {
-        path: '/api/console/mcp/instances/default_system/tool-bindings',
+        path: '/api/console/mcp/instances/workspace_ops/tool-bindings',
         method: 'POST',
         csrfToken: 'csrf-123'
       }
@@ -273,9 +271,9 @@ describe('console-mcp-management client', () => {
   test.each([
     {
       name: 'instance deletion',
-      request: () => deleteConsoleMcpInstance('default_system', 'csrf-123'),
+      request: () => deleteConsoleMcpInstance('workspace_ops', 'csrf-123'),
       expected: {
-        path: '/api/console/mcp/instances/default_system',
+        path: '/api/console/mcp/instances/workspace_ops',
         method: 'DELETE',
         csrfToken: 'csrf-123'
       }
@@ -291,9 +289,9 @@ describe('console-mcp-management client', () => {
     },
     {
       name: 'group deletion',
-      request: () => deleteConsoleMcpGroup('default_system', '/ops', 'csrf-123'),
+      request: () => deleteConsoleMcpGroup('workspace_ops', '/ops', 'csrf-123'),
       expected: {
-        path: '/api/console/mcp/instances/default_system/groups?path=%2Fops',
+        path: '/api/console/mcp/instances/workspace_ops/groups?path=%2Fops',
         method: 'DELETE',
         csrfToken: 'csrf-123'
       }

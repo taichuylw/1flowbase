@@ -29,30 +29,15 @@ const styleBoundaryProviderInstances = [
 ];
 
 const styleBoundaryMcpCatalog = {
-  default_instance: {
-    id: 'mcp-instance-record-1',
-    workspace_id: 'workspace-1',
-    instance_id: 'default_system',
-    name: 'Default System',
-    description_short: 'Workspace MCP instance',
-    status: 'enabled',
-    default_entry_path: '/',
-    is_default: true,
-    created_by: 'user-1',
-    updated_by: 'user-1',
-    created_at: '2026-06-21T00:00:00Z',
-    updated_at: '2026-06-21T00:00:00Z'
-  },
   instances: [
     {
       id: 'mcp-instance-record-1',
       workspace_id: 'workspace-1',
-      instance_id: 'default_system',
-      name: 'Default System',
+      instance_id: 'workspace_ops',
+      name: 'Workspace Ops',
       description_short: 'Workspace MCP instance',
       status: 'enabled',
       default_entry_path: '/',
-      is_default: true,
       created_by: 'user-1',
       updated_by: 'user-1',
       created_at: '2026-06-21T00:00:00Z',

@@ -18,8 +18,8 @@ describe('mcp management view model', () => {
     const treeData = buildMcpDirectoryTreeData({
       instance: {
         id: 'instance-record-1',
-        instance_id: 'default_system',
-        name: 'Default System',
+        instance_id: 'workspace_ops',
+        name: 'Workspace Ops',
         default_entry_path: '/'
       },
       groups: [
@@ -65,8 +65,8 @@ describe('mcp management view model', () => {
 
     expect(treeData).toEqual([
       {
-        key: 'instance:default_system:/',
-        title: 'Default System /',
+        key: 'instance:workspace_ops:/',
+        title: 'Workspace Ops /',
         children: [
           {
             key: 'group:/crm',

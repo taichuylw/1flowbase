@@ -10,7 +10,6 @@ pub struct CreateMcpInstanceInput {
     pub description_short: Option<String>,
     pub status: domain::McpInstanceStatus,
     pub default_entry_path: String,
-    pub is_default: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -22,7 +21,6 @@ pub struct UpdateMcpInstanceInput {
     pub description_short: Option<String>,
     pub status: domain::McpInstanceStatus,
     pub default_entry_path: String,
-    pub is_default: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -135,10 +133,6 @@ pub trait McpManagementRepository: Send + Sync {
         &self,
         workspace_id: Uuid,
         instance_id: &str,
-    ) -> anyhow::Result<Option<domain::McpInstanceRecord>>;
-    async fn get_default_mcp_instance(
-        &self,
-        workspace_id: Uuid,
     ) -> anyhow::Result<Option<domain::McpInstanceRecord>>;
     async fn create_mcp_instance(
         &self,

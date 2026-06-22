@@ -31,7 +31,6 @@ pub struct McpInstanceResponse {
     pub description_short: Option<String>,
     pub status: String,
     pub default_entry_path: String,
-    pub is_default: bool,
     pub created_by: String,
     pub updated_by: String,
     pub created_at: String,
@@ -108,7 +107,6 @@ pub struct McpMetaToolConfigResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct McpCatalogResponse {
-    pub default_instance: Option<McpInstanceResponse>,
     pub instances: Vec<McpInstanceResponse>,
     pub groups: Vec<McpGroupResponse>,
     pub tools: Vec<McpToolResponse>,
@@ -179,7 +177,6 @@ pub struct CreateMcpInstanceBody {
     pub description_short: Option<String>,
     pub status: String,
     pub default_entry_path: String,
-    pub is_default: bool,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -353,13 +350,6 @@ pub async fn get_mcp_catalog(
     let context = require_session(&state, &headers).await?;
     let service = McpManagementService::new(state.store.clone());
     let snapshot = service.read_workspace_catalog(context.user.id).await?;
-    let snapshot = if snapshot.instances.is_empty() {
-        service
-            .ensure_default_workspace_catalog(context.user.id)
-            .await?
-    } else {
-        snapshot
-    };
     Ok(Json(ApiSuccess::new(to_catalog_response(snapshot))))
 }
 
@@ -792,7 +782,6 @@ fn to_instance_command(
         description_short: body.description_short,
         status: parse_instance_status(&body.status)?,
         default_entry_path: body.default_entry_path,
-        is_default: body.is_default,
     })
 }
 
@@ -848,7 +837,6 @@ fn to_update_tool_command(
 
 fn to_catalog_response(snapshot: domain::McpCatalogSnapshot) -> McpCatalogResponse {
     McpCatalogResponse {
-        default_instance: snapshot.default_instance.map(to_instance_response),
         instances: snapshot
             .instances
             .into_iter()
@@ -911,7 +899,6 @@ fn to_instance_response(record: domain::McpInstanceRecord) -> McpInstanceRespons
         description_short: record.description_short,
         status: record.status.as_str().into(),
         default_entry_path: record.default_entry_path,
-        is_default: record.is_default,
         created_by: record.created_by.to_string(),
         updated_by: record.updated_by.to_string(),
         created_at: record.created_at.to_string(),

@@ -128,7 +128,7 @@ describe('PersonalAccessTokensPanel', () => {
         .length;
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /新建 API Key/ })
+      await screen.findByRole('button', { name: /添加/ })
     );
     fireEvent.change(screen.getByLabelText('名称'), {
       target: { value: 'CI diagnostics' }
@@ -160,14 +160,14 @@ describe('PersonalAccessTokensPanel', () => {
     });
   });
 
-  test('revokes active tokens through the revoke action', async () => {
+  test('deletes active tokens through the revoke action', async () => {
     renderPanel();
 
     const row = (await screen.findByText('Existing automation')).closest(
       'tr'
     ) as HTMLElement;
-    fireEvent.click(within(row).getByRole('button', { name: /撤销/ }));
-    fireEvent.click(await screen.findByRole('button', { name: '确认撤销' }));
+    fireEvent.click(within(row).getByRole('button', { name: /删除/ }));
+    fireEvent.click(await screen.findByRole('button', { name: '确认删除' }));
 
     await waitFor(() => {
       expect(

@@ -15,7 +15,7 @@ import {
   message,
   type TableProps
 } from 'antd';
-import { PlusOutlined, StopOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { copyTextToClipboard } from '../../../shared/ui/clipboard/copy-text';
@@ -209,16 +209,11 @@ export function PersonalAccessTokensPanel() {
         dataIndex: 'name',
         key: 'name',
         render: (_: unknown, token) => (
-          <Space direction="vertical" size={2}>
-            <Typography.Text strong>{token.name}</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {token.id}
-            </Typography.Text>
-          </Space>
+          <Typography.Text strong>{token.name}</Typography.Text>
         )
       },
       {
-        title: i18nText('settings', 'auto.token_prefix'),
+        title: i18nText('settings', 'auto.api_key_prefix'),
         dataIndex: 'token_prefix',
         key: 'token_prefix',
         width: 160,
@@ -262,13 +257,13 @@ export function PersonalAccessTokensPanel() {
         render: (_: unknown, token) =>
           token.revoked || !token.enabled ? null : (
             <Popconfirm
-              title={i18nText('settings', 'auto.revoke_api_key')}
+              title={i18nText('settings', 'auto.delete_api_key')}
               description={i18nText(
                 'settings',
-                'auto.revoke_api_key_description',
+                'auto.delete_api_key_description',
                 { value1: token.name }
               )}
-              okText={i18nText('settings', 'auto.confirm_revoke')}
+              okText={i18nText('settings', 'auto.confirm_delete')}
               cancelText={i18nText('settings', 'auto.cancel')}
               okButtonProps={{ danger: true }}
               onConfirm={() => revokeMutation.mutate(token.id)}
@@ -276,10 +271,10 @@ export function PersonalAccessTokensPanel() {
               <Button
                 danger
                 size="small"
-                icon={<StopOutlined />}
+                icon={<DeleteOutlined />}
                 loading={revokeMutation.isPending}
               >
-                {i18nText('settings', 'auto.revoke')}
+                {i18nText('settings', 'auto.delete')}
               </Button>
             </Popconfirm>
           )

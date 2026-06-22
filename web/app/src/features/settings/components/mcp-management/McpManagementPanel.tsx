@@ -238,10 +238,7 @@ function McpInstancesTab({
     useState<ConsoleMcpToolBinding | null>(null);
   const [instanceModalOpen, setInstanceModalOpen] = useState(false);
   const [selectedInstanceId, setSelectedInstanceId] = useState(
-    () =>
-      catalog.default_instance?.instance_id ??
-      catalog.instances[0]?.instance_id ??
-      ''
+    () => catalog.instances[0]?.instance_id ?? ''
   );
 
   function invalidateCatalog() {
@@ -249,10 +246,7 @@ function McpInstancesTab({
   }
 
   useEffect(() => {
-    const fallbackInstanceId =
-      catalog.default_instance?.instance_id ??
-      catalog.instances[0]?.instance_id ??
-      '';
+    const fallbackInstanceId = catalog.instances[0]?.instance_id ?? '';
 
     if (
       fallbackInstanceId &&
@@ -262,7 +256,7 @@ function McpInstancesTab({
     ) {
       setSelectedInstanceId(fallbackInstanceId);
     }
-  }, [catalog.default_instance?.instance_id, catalog.instances, selectedInstanceId]);
+  }, [catalog.instances, selectedInstanceId]);
 
   useEffect(() => {
     if (!selectedInstanceId) {
@@ -394,10 +388,8 @@ function McpInstancesTab({
     () =>
       catalog.instances.find(
         (instance) => instance.instance_id === selectedInstanceId
-      ) ??
-      catalog.default_instance ??
-      catalog.instances[0],
-    [catalog.default_instance, catalog.instances, selectedInstanceId]
+      ) ?? catalog.instances[0],
+    [catalog.instances, selectedInstanceId]
   );
   const directoryTreeData = useMemo(() => {
     if (!selectedInstance) {
@@ -432,18 +424,18 @@ function McpInstancesTab({
       )
     },
     {
-      title: i18nText('settings', 'auto.default_entry_path'),
-      dataIndex: 'default_entry_path'
+      title: i18nText('settings', 'auto.mcp_instance_description'),
+      dataIndex: 'description_short',
+      render: (description: ConsoleMcpInstance['description_short']) => (
+        <Typography.Text type={description ? undefined : 'secondary'}>
+          {description || '-'}
+        </Typography.Text>
+      )
     },
     {
       title: i18nText('settings', 'auto.status'),
       dataIndex: 'status',
-      render: (status: string, record) => (
-        <Space>
-          <Tag color={statusColor(status)}>{status}</Tag>
-          {record.is_default ? <Tag color="geekblue">default</Tag> : null}
-        </Space>
-      )
+      render: (status: string) => <Tag color={statusColor(status)}>{status}</Tag>
     },
     {
       title: i18nText('settings', 'auto.directory_summary'),
@@ -468,8 +460,7 @@ function McpInstancesTab({
                 name: record.name,
                 description_short: record.description_short,
                 status: record.status,
-                default_entry_path: record.default_entry_path,
-                is_default: record.is_default
+                default_entry_path: record.default_entry_path
               });
               setInstanceModalOpen(true);
             }}
@@ -516,8 +507,7 @@ function McpInstancesTab({
                 name: '',
                 description_short: null,
                 status: 'draft',
-                default_entry_path: '/',
-                is_default: false
+                default_entry_path: '/'
               });
               setInstanceModalOpen(true);
             }}
@@ -532,247 +522,247 @@ function McpInstancesTab({
         dataSource={catalog.instances}
         pagination={false}
       />
-      <Divider />
-      <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
-        <Typography.Title level={5}>
-          {i18nText('settings', 'auto.directory_editor')}
-        </Typography.Title>
-        <Select
-          className="mcp-management__instance-select"
-          value={selectedInstance?.instance_id}
-          options={catalog.instances.map((instance) => ({
-            label: `${instance.name} (${instance.instance_id})`,
-            value: instance.instance_id
-          }))}
-          onChange={(value) => {
-            setSelectedInstanceId(value);
-            groupForm.setFieldValue('instance_id', value);
-            bindingForm.setFieldValue('instance_id', value);
-          }}
-        />
-      </Flex>
-      <Flex gap={16} align="flex-start" wrap="wrap">
-        <div className="mcp-management__directory-tree">
-          <Tree
-            blockNode
-            defaultExpandAll
-            treeData={directoryTreeData}
-          />
-        </div>
-        <div className="mcp-management__directory-config">
-          <Flex gap={16} align="flex-start" wrap="wrap">
-            <Form
-              form={groupForm}
-              layout="vertical"
-              className="mcp-management__form-pane"
-              initialValues={{ enabled: true, sort_order: 0 }}
-              onFinish={(values) => saveGroupMutation.mutate(values)}
-            >
-              <Typography.Text strong>
-                {i18nText('settings', 'auto.add_group')}
-              </Typography.Text>
-              <Form.Item name="instance_id" label="instance_id" rules={[{ required: true }]}>
-                <Select
-                  options={catalog.instances.map((instance) => ({
-                    label: instance.name,
-                    value: instance.instance_id
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item name="path" label="path" rules={[{ required: true }]}>
-                <Input placeholder="/ops" />
-              </Form.Item>
-              <Form.Item name="display_name" label="display_name" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item name="description_short" label="description_short">
-                <Input />
-              </Form.Item>
-              <Form.Item name="enabled" label="enabled" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-              <Form.Item name="sort_order" label="sort_order">
-                <InputNumber />
-              </Form.Item>
-              <Button
-                htmlType="submit"
-                icon={<SaveOutlined />}
-                disabled={!canManage}
-                loading={saveGroupMutation.isPending}
-              >
-                {i18nText('settings', 'auto.save')}
-              </Button>
-            </Form>
-            <Form
-              form={bindingForm}
-              layout="vertical"
-              className="mcp-management__form-pane"
-              initialValues={{ visible: true, sort_order: 0 }}
-              onFinish={(values) => saveBindingMutation.mutate(values)}
-            >
-              <Typography.Text strong>
-                {editingBinding
-                  ? i18nText('settings', 'auto.edit_tool_binding')
-                  : i18nText('settings', 'auto.add_tool_binding')}
-              </Typography.Text>
-              <Form.Item name="instance_id" label="instance_id" rules={[{ required: true }]}>
-                <Select
-                  disabled={Boolean(editingBinding)}
-                  options={catalog.instances.map((instance) => ({
-                    label: instance.name,
-                    value: instance.instance_id
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item name="group_path" label="group_path" rules={[{ required: true }]}>
-                <Input placeholder="/ops" />
-              </Form.Item>
-              <Form.Item name="tool_id" label="tool_id" rules={[{ required: true }]}>
-                <Select
-                  disabled={Boolean(editingBinding)}
-                  options={catalog.tools.map((tool) => ({
-                    label: tool.name,
-                    value: tool.tool_id
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item name="display_alias" label="display_alias">
-                <Input />
-              </Form.Item>
-              <Form.Item name="visible" label="visible" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-              <Form.Item name="sort_order" label="sort_order">
-                <InputNumber />
-              </Form.Item>
-              <Space>
-                <Button
-                  htmlType="submit"
-                  icon={<SaveOutlined />}
-                  disabled={!canManage}
-                  loading={saveBindingMutation.isPending}
-                >
-                  {i18nText('settings', 'auto.save')}
-                </Button>
-                {editingBinding ? (
-                  <Button
-                    onClick={() => {
-                      setEditingBinding(null);
-                      bindingForm.resetFields();
-                      bindingForm.setFieldValue('instance_id', selectedInstance?.instance_id);
-                    }}
-                  >
-                    {i18nText('settings', 'auto.cancel')}
-                  </Button>
-                ) : null}
-              </Space>
-            </Form>
+      {selectedInstance ? (
+        <>
+          <Divider />
+          <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
+            <Typography.Title level={5}>
+              {i18nText('settings', 'auto.directory_editor')}
+            </Typography.Title>
+            <Select
+              className="mcp-management__instance-select"
+              value={selectedInstance.instance_id}
+              options={catalog.instances.map((instance) => ({
+                label: `${instance.name} (${instance.instance_id})`,
+                value: instance.instance_id
+              }))}
+              onChange={(value) => {
+                setSelectedInstanceId(value);
+                groupForm.setFieldValue('instance_id', value);
+                bindingForm.setFieldValue('instance_id', value);
+              }}
+            />
           </Flex>
-        </div>
-      </Flex>
-      <Table
-        rowKey="id"
-        size="small"
-        columns={[
-          { title: 'path', dataIndex: 'path' },
-          { title: 'display_name', dataIndex: 'display_name' },
-          { title: 'enabled', dataIndex: 'enabled', render: (value) => String(value) },
-          {
-            title: i18nText('settings', 'auto.operation'),
-            render: (_, record) => (
-              <Space>
-                <Button
-                  icon={<EditOutlined />}
-                  size="small"
-                  disabled={!canManage}
-                  onClick={() => {
-                    const instance = catalog.instances.find(
-                      (item) => item.id === record.instance_record_id
-                    );
-                    groupForm.setFieldsValue({
-                      instance_id: instance?.instance_id ?? selectedInstance?.instance_id ?? '',
-                      path: record.path,
-                      display_name: record.display_name,
-                      description_short: record.description_short,
-                      enabled: record.enabled,
-                      sort_order: record.sort_order
-                    });
-                  }}
-                />
-                <Popconfirm
-                  title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
-                  disabled={!canManage}
-                  onConfirm={() => {
-                    const instance = catalog.instances.find(
-                      (item) => item.id === record.instance_record_id
-                    );
-                    deleteGroupMutation.mutate({
-                      instanceId: instance?.instance_id ?? selectedInstance?.instance_id ?? '',
-                      path: record.path
-                    });
-                  }}
+          <Flex gap={16} align="flex-start" wrap="wrap">
+            <div className="mcp-management__directory-tree">
+              <Tree blockNode defaultExpandAll treeData={directoryTreeData} />
+            </div>
+            <div className="mcp-management__directory-config">
+              <Flex gap={16} align="flex-start" wrap="wrap">
+                <Form
+                  form={groupForm}
+                  layout="vertical"
+                  className="mcp-management__form-pane"
+                  initialValues={{ enabled: true, sort_order: 0 }}
+                  onFinish={(values) => saveGroupMutation.mutate(values)}
                 >
+                  <Typography.Text strong>
+                    {i18nText('settings', 'auto.add_group')}
+                  </Typography.Text>
+                  <Form.Item name="instance_id" label="instance_id" rules={[{ required: true }]}>
+                    <Select
+                      options={catalog.instances.map((instance) => ({
+                        label: instance.name,
+                        value: instance.instance_id
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="path" label="path" rules={[{ required: true }]}>
+                    <Input placeholder="/ops" />
+                  </Form.Item>
+                  <Form.Item name="display_name" label="display_name" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="description_short" label="description_short">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="enabled" label="enabled" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item name="sort_order" label="sort_order">
+                    <InputNumber />
+                  </Form.Item>
                   <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    size="small"
+                    htmlType="submit"
+                    icon={<SaveOutlined />}
                     disabled={!canManage}
-                  />
-                </Popconfirm>
-              </Space>
-            )
-          }
-        ]}
-        dataSource={catalog.groups}
-        pagination={false}
-      />
-      <Table
-        rowKey="id"
-        size="small"
-        columns={[
-          { title: 'group_path', dataIndex: 'group_path' },
-          { title: 'tool_id', dataIndex: 'tool_id' },
-          { title: 'display_alias', dataIndex: 'display_alias' },
-          { title: 'visible', dataIndex: 'visible', render: (value) => String(value) },
-          {
-            title: i18nText('settings', 'auto.operation'),
-            render: (_, record) => (
-              <Space>
-                <Button
-                  icon={<EditOutlined />}
-                  size="small"
-                  disabled={!canManage}
-                  onClick={() => {
-                    setEditingBinding(record);
-                    bindingForm.setFieldsValue({
-                      instance_id: resolveInstanceId(record),
-                      group_path: record.group_path,
-                      tool_id: record.tool_id,
-                      display_alias: record.display_alias,
-                      visible: record.visible,
-                      sort_order: record.sort_order
-                    });
-                  }}
-                />
-                <Popconfirm
-                  title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
-                  disabled={!canManage}
-                  onConfirm={() => deleteBindingMutation.mutate(record.id)}
+                    loading={saveGroupMutation.isPending}
+                  >
+                    {i18nText('settings', 'auto.save')}
+                  </Button>
+                </Form>
+                <Form
+                  form={bindingForm}
+                  layout="vertical"
+                  className="mcp-management__form-pane"
+                  initialValues={{ visible: true, sort_order: 0 }}
+                  onFinish={(values) => saveBindingMutation.mutate(values)}
                 >
-                  <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    size="small"
-                    disabled={!canManage}
-                  />
-                </Popconfirm>
-              </Space>
-            )
-          }
-        ]}
-        dataSource={catalog.bindings}
-        pagination={false}
-      />
+                  <Typography.Text strong>
+                    {editingBinding
+                      ? i18nText('settings', 'auto.edit_tool_binding')
+                      : i18nText('settings', 'auto.add_tool_binding')}
+                  </Typography.Text>
+                  <Form.Item name="instance_id" label="instance_id" rules={[{ required: true }]}>
+                    <Select
+                      disabled={Boolean(editingBinding)}
+                      options={catalog.instances.map((instance) => ({
+                        label: instance.name,
+                        value: instance.instance_id
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="group_path" label="group_path" rules={[{ required: true }]}>
+                    <Input placeholder="/ops" />
+                  </Form.Item>
+                  <Form.Item name="tool_id" label="tool_id" rules={[{ required: true }]}>
+                    <Select
+                      disabled={Boolean(editingBinding)}
+                      options={catalog.tools.map((tool) => ({
+                        label: tool.name,
+                        value: tool.tool_id
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="display_alias" label="display_alias">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="visible" label="visible" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item name="sort_order" label="sort_order">
+                    <InputNumber />
+                  </Form.Item>
+                  <Space>
+                    <Button
+                      htmlType="submit"
+                      icon={<SaveOutlined />}
+                      disabled={!canManage}
+                      loading={saveBindingMutation.isPending}
+                    >
+                      {i18nText('settings', 'auto.save')}
+                    </Button>
+                    {editingBinding ? (
+                      <Button
+                        onClick={() => {
+                          setEditingBinding(null);
+                          bindingForm.resetFields();
+                          bindingForm.setFieldValue('instance_id', selectedInstance.instance_id);
+                        }}
+                      >
+                        {i18nText('settings', 'auto.cancel')}
+                      </Button>
+                    ) : null}
+                  </Space>
+                </Form>
+              </Flex>
+            </div>
+          </Flex>
+          <Table
+            rowKey="id"
+            size="small"
+            columns={[
+              { title: 'path', dataIndex: 'path' },
+              { title: 'display_name', dataIndex: 'display_name' },
+              { title: 'enabled', dataIndex: 'enabled', render: (value) => String(value) },
+              {
+                title: i18nText('settings', 'auto.operation'),
+                render: (_, record) => (
+                  <Space>
+                    <Button
+                      icon={<EditOutlined />}
+                      size="small"
+                      disabled={!canManage}
+                      onClick={() => {
+                        const instance = catalog.instances.find(
+                          (item) => item.id === record.instance_record_id
+                        );
+                        groupForm.setFieldsValue({
+                          instance_id: instance?.instance_id ?? selectedInstance.instance_id,
+                          path: record.path,
+                          display_name: record.display_name,
+                          description_short: record.description_short,
+                          enabled: record.enabled,
+                          sort_order: record.sort_order
+                        });
+                      }}
+                    />
+                    <Popconfirm
+                      title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
+                      disabled={!canManage}
+                      onConfirm={() => {
+                        const instance = catalog.instances.find(
+                          (item) => item.id === record.instance_record_id
+                        );
+                        deleteGroupMutation.mutate({
+                          instanceId: instance?.instance_id ?? selectedInstance.instance_id,
+                          path: record.path
+                        });
+                      }}
+                    >
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        disabled={!canManage}
+                      />
+                    </Popconfirm>
+                  </Space>
+                )
+              }
+            ]}
+            dataSource={catalog.groups}
+            pagination={false}
+          />
+          <Table
+            rowKey="id"
+            size="small"
+            columns={[
+              { title: 'group_path', dataIndex: 'group_path' },
+              { title: 'tool_id', dataIndex: 'tool_id' },
+              { title: 'display_alias', dataIndex: 'display_alias' },
+              { title: 'visible', dataIndex: 'visible', render: (value) => String(value) },
+              {
+                title: i18nText('settings', 'auto.operation'),
+                render: (_, record) => (
+                  <Space>
+                    <Button
+                      icon={<EditOutlined />}
+                      size="small"
+                      disabled={!canManage}
+                      onClick={() => {
+                        setEditingBinding(record);
+                        bindingForm.setFieldsValue({
+                          instance_id: resolveInstanceId(record),
+                          group_path: record.group_path,
+                          tool_id: record.tool_id,
+                          display_alias: record.display_alias,
+                          visible: record.visible,
+                          sort_order: record.sort_order
+                        });
+                      }}
+                    />
+                    <Popconfirm
+                      title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
+                      disabled={!canManage}
+                      onConfirm={() => deleteBindingMutation.mutate(record.id)}
+                    >
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        disabled={!canManage}
+                      />
+                    </Popconfirm>
+                  </Space>
+                )
+              }
+            ]}
+            dataSource={catalog.bindings}
+            pagination={false}
+          />
+        </>
+      ) : null}
       <Modal
         open={instanceModalOpen}
         title={editingInstance ? i18nText('settings', 'auto.edit') : i18nText('settings', 'auto.new')}
@@ -795,9 +785,6 @@ function McpInstancesTab({
           </Form.Item>
           <Form.Item name="default_entry_path" label="default_entry_path" rules={[{ required: true }]}>
             <Input />
-          </Form.Item>
-          <Form.Item name="is_default" label="is_default" valuePropName="checked">
-            <Switch />
           </Form.Item>
         </Form>
       </Modal>
