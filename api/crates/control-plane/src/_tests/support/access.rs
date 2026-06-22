@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::ports::{
     CreateMemberInput, CreateWorkspaceRoleInput, MemberRepository, RoleRepository,
-    UpdateWorkspaceRoleInput,
+    UpdateMemberInput, UpdateWorkspaceRoleInput,
 };
 use domain::{
     ActorContext, AuditLogRecord, BoundRole, RoleScopeKind, RoleTemplate, UserRecord, UserStatus,
@@ -94,6 +94,32 @@ impl MemberRepository for MemoryMemberRepository {
             session_version: 1,
             roles: vec![BoundRole {
                 code: default_role_code,
+                scope_kind: RoleScopeKind::Workspace,
+                workspace_id: Some(Uuid::nil()),
+            }],
+        })
+    }
+
+    async fn update_member_profile(&self, input: &UpdateMemberInput) -> Result<UserRecord> {
+        Ok(UserRecord {
+            id: input.user_id,
+            account: "member-1".to_string(),
+            email: input.email.clone(),
+            phone: input.phone.clone(),
+            password_hash: "hash".to_string(),
+            name: input.name.clone(),
+            nickname: input.nickname.clone(),
+            avatar_url: None,
+            introduction: input.introduction.clone(),
+            preferred_locale: None,
+            meta: serde_json::json!({}),
+            default_display_role: Some("manager".to_string()),
+            email_login_enabled: true,
+            phone_login_enabled: false,
+            status: UserStatus::Active,
+            session_version: 1,
+            roles: vec![BoundRole {
+                code: "manager".to_string(),
                 scope_kind: RoleScopeKind::Workspace,
                 workspace_id: Some(Uuid::nil()),
             }],

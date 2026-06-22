@@ -9,7 +9,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const personalAccessTokensApi = vi.hoisted(() => ({
   settingsPersonalAccessTokensQueryKey: ['settings', 'personal-access-tokens'],
+  settingsPersonalAccessTokenRoleOptionsQueryKey: [
+    'settings',
+    'personal-access-tokens',
+    'role-options'
+  ],
   fetchSettingsPersonalAccessTokens: vi.fn(),
+  fetchSettingsPersonalAccessTokenRoleOptions: vi.fn(),
   createSettingsPersonalAccessToken: vi.fn(),
   revokeSettingsPersonalAccessToken: vi.fn()
 }));
@@ -64,6 +70,7 @@ describe('PersonalAccessTokensPanel', () => {
           token: null,
           token_prefix: 'pat_abc',
           key_kind: 'user_api_key',
+          role_code: 'root',
           creator_user_id: 'user-1',
           tenant_id: 'tenant-1',
           scope_kind: 'workspace',
@@ -84,6 +91,7 @@ describe('PersonalAccessTokensPanel', () => {
         token: 'pat_new_secret',
         token_prefix: 'pat_new',
         key_kind: 'user_api_key',
+        role_code: 'root',
         creator_user_id: 'user-1',
         tenant_id: 'tenant-1',
         scope_kind: 'workspace',
@@ -95,6 +103,9 @@ describe('PersonalAccessTokensPanel', () => {
         created_at: '2026-06-22T00:00:00Z',
         updated_at: '2026-06-22T00:00:00Z'
       }
+    );
+    personalAccessTokensApi.fetchSettingsPersonalAccessTokenRoleOptions.mockResolvedValue(
+      [{ code: 'root', name: 'Root', scope_kind: 'system' }]
     );
     personalAccessTokensApi.revokeSettingsPersonalAccessToken.mockResolvedValue(
       undefined
@@ -132,15 +143,14 @@ describe('PersonalAccessTokensPanel', () => {
       ).toHaveBeenCalledWith(
         {
           name: 'CI diagnostics',
+          role_code: 'root',
           expiration_policy: 'never'
         },
         'csrf-123'
       );
     });
 
-    expect(
-      await screen.findByDisplayValue('pat_new_secret')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('pat_new_secret')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /复制/ })).toBeInTheDocument();
     await waitFor(() => {
       expect(

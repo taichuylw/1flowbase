@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -15,23 +15,27 @@ import {
   message,
   type TableProps
 } from 'antd';
-import { CopyOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons';
+import { PlusOutlined, StopOutlined } from '@ant-design/icons';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { copyTextToClipboard } from '../../../shared/ui/clipboard/copy-text';
 import {
   createSettingsPersonalAccessToken,
+  fetchSettingsPersonalAccessTokenRoleOptions,
   fetchSettingsPersonalAccessTokens,
   revokeSettingsPersonalAccessToken,
+  settingsPersonalAccessTokenRoleOptionsQueryKey,
   settingsPersonalAccessTokensQueryKey,
   type CreateSettingsPersonalAccessTokenInput,
   type SettingsPersonalAccessToken
 } from '../api/personal-access-tokens';
 import { i18nText } from '../../../shared/i18n/text';
 import { SettingsSectionSurface } from './SettingsSectionSurface';
+import './personal-access-tokens-panel.css';
 
 interface CreatePersonalAccessTokenFormValues {
   name: string;
+  role_code: CreateSettingsPersonalAccessTokenInput['role_code'];
   expiration_policy: CreateSettingsPersonalAccessTokenInput['expiration_policy'];
 }
 
@@ -61,6 +65,7 @@ function formatLastUsedAt(value: string | null) {
 export function PersonalAccessTokensPanel() {
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
+  const actor = useAuthStore((state) => state.actor);
   const [createForm] = Form.useForm<CreatePersonalAccessTokenFormValues>();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createdToken, setCreatedToken] =
@@ -69,6 +74,10 @@ export function PersonalAccessTokensPanel() {
   const tokensQuery = useQuery({
     queryKey: settingsPersonalAccessTokensQueryKey,
     queryFn: fetchSettingsPersonalAccessTokens
+  });
+  const roleOptionsQuery = useQuery({
+    queryKey: settingsPersonalAccessTokenRoleOptionsQueryKey,
+    queryFn: fetchSettingsPersonalAccessTokenRoleOptions
   });
 
   const invalidateTokens = useCallback(
@@ -88,6 +97,7 @@ export function PersonalAccessTokensPanel() {
       return createSettingsPersonalAccessToken(
         {
           name: values.name,
+          role_code: values.role_code,
           expiration_policy: values.expiration_policy
         },
         csrfToken
@@ -133,6 +143,44 @@ export function PersonalAccessTokensPanel() {
     ],
     []
   );
+  const roleOptions = useMemo(() => {
+    const roles = roleOptionsQuery.data ?? [];
+    if (roles.length) {
+      return roles.map((role) => ({
+        value: role.code,
+        label:
+          role.name === role.code ? role.name : `${role.name} (${role.code})`
+      }));
+    }
+
+    return actor?.effective_display_role
+      ? [
+          {
+            value: actor.effective_display_role,
+            label: actor.effective_display_role
+          }
+        ]
+      : [];
+  }, [actor?.effective_display_role, roleOptionsQuery.data]);
+
+  useEffect(() => {
+    if (!createModalOpen || !roleOptions.length) {
+      return;
+    }
+
+    const currentRoleCode = createForm.getFieldValue('role_code') as
+      | string
+      | undefined;
+    if (roleOptions.some((option) => option.value === currentRoleCode)) {
+      return;
+    }
+
+    const preferredRole =
+      roleOptions.find(
+        (option) => option.value === actor?.effective_display_role
+      ) ?? roleOptions[0];
+    createForm.setFieldValue('role_code', preferredRole.value);
+  }, [actor?.effective_display_role, createForm, createModalOpen, roleOptions]);
 
   const handleCreateSubmit = useCallback(
     (values: CreatePersonalAccessTokenFormValues) => {
@@ -245,21 +293,21 @@ export function PersonalAccessTokensPanel() {
       title={i18nText('settings', 'auto.api_key_authentication')}
       description={i18nText('settings', 'auto.user_api_key_description')}
       titleLevel={3}
-      hideHeader={false}
+      hideHeader
       heightMode="fill"
-      headerActions={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setCreateModalOpen(true)}
-        >
-          {i18nText('settings', 'auto.create_api_key')}
-        </Button>
-      }
       status={
-        <Typography.Text type="secondary">
-          {i18nText('settings', 'auto.user_api_key_security_notice')}
-        </Typography.Text>
+        <div className="personal-access-tokens-panel__action-row">
+          <Typography.Text type="secondary">
+            {i18nText('settings', 'auto.user_api_key_security_notice')}
+          </Typography.Text>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateModalOpen(true)}
+          >
+            {i18nText('settings', 'auto.create_api_key')}
+          </Button>
+        </div>
       }
     >
       <Table<SettingsPersonalAccessToken>
@@ -305,6 +353,23 @@ export function PersonalAccessTokensPanel() {
             <Input autoFocus />
           </Form.Item>
           <Form.Item
+            label={i18nText('settings', 'auto.role')}
+            name="role_code"
+            rules={[
+              {
+                required: true,
+                message: i18nText('settings', 'auto.please_select_role')
+              }
+            ]}
+          >
+            <Select
+              options={roleOptions}
+              loading={roleOptionsQuery.isLoading}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+          <Form.Item
             label={i18nText('settings', 'auto.expiration_policy')}
             name="expiration_policy"
             rules={[
@@ -323,24 +388,34 @@ export function PersonalAccessTokensPanel() {
         title={i18nText('settings', 'auto.api_key_created')}
         open={Boolean(createdToken?.token)}
         onCancel={() => setCreatedToken(null)}
-        onOk={() => setCreatedToken(null)}
-        okText={i18nText('settings', 'auto.done')}
-        cancelButtonProps={{ style: { display: 'none' } }}
+        footer={[
+          <Button key="close" type="text" onClick={() => setCreatedToken(null)}>
+            {i18nText('settings', 'auto.off')}
+          </Button>,
+          <Button
+            key="copy"
+            aria-label={i18nText('settings', 'auto.copy')}
+            className="personal-access-tokens-panel__created-token-copy"
+            onClick={handleCopyCreatedToken}
+          >
+            {i18nText('settings', 'auto.copy')}
+          </Button>
+        ]}
         destroyOnHidden
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Typography.Text type="secondary">
+        <Space
+          direction="vertical"
+          className="personal-access-tokens-panel__created-token-modal"
+        >
+          <Typography.Text>
             {i18nText('settings', 'auto.api_key_created_once_notice')}
           </Typography.Text>
-          <Input.TextArea
-            aria-label={i18nText('settings', 'auto.full_token')}
-            value={createdToken?.token ?? ''}
-            readOnly
-            autoSize={{ minRows: 2, maxRows: 4 }}
-          />
-          <Button icon={<CopyOutlined />} onClick={handleCopyCreatedToken}>
-            {i18nText('settings', 'auto.copy_token')}
-          </Button>
+          <Typography.Text type="secondary">
+            {i18nText('settings', 'auto.api_key_created_hidden_after_close')}
+          </Typography.Text>
+          <Typography.Text className="personal-access-tokens-panel__created-token">
+            {createdToken?.token}
+          </Typography.Text>
         </Space>
       </Modal>
     </SettingsSectionSurface>

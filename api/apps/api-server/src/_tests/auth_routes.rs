@@ -128,6 +128,110 @@ async fn console_user_api_key_create_maps_expiration_policies() {
 }
 
 #[tokio::test]
+async fn console_user_api_key_role_options_only_include_current_user_roles() {
+    let app = test_app().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let member_id = create_member(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        "pat-role-filter",
+        "temp-pass",
+    )
+    .await;
+    create_role(&app, &root_cookie, &root_csrf, "pat_owned_role").await;
+    create_role(&app, &root_cookie, &root_csrf, "pat_other_role").await;
+    replace_member_roles(
+        &app,
+        &root_cookie,
+        &root_csrf,
+        &member_id,
+        &["pat_owned_role"],
+    )
+    .await;
+
+    let (member_cookie, member_csrf) =
+        login_and_capture_cookie(&app, "pat-role-filter", "temp-pass").await;
+    let options = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/user-api-keys/role-options")
+                .header("cookie", &member_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(options.status(), StatusCode::OK);
+    let options_payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(options.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let role_codes = options_payload["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["code"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(role_codes, vec!["pat_owned_role"]);
+
+    let create_owned = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/user-api-keys")
+                .header("cookie", &member_cookie)
+                .header("x-csrf-token", &member_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "owned role pat",
+                        "role_code": "pat_owned_role",
+                        "expiration_policy": "never"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_owned.status(), StatusCode::CREATED);
+    let create_owned_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(create_owned.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        create_owned_payload["data"]["role_code"],
+        json!("pat_owned_role")
+    );
+
+    let create_unowned = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/user-api-keys")
+                .header("cookie", &member_cookie)
+                .header("x-csrf-token", &member_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "unowned role pat",
+                        "role_code": "pat_other_role",
+                        "expiration_policy": "never"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(create_unowned.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn console_user_api_key_authenticates_console_get_and_mutation_without_csrf() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

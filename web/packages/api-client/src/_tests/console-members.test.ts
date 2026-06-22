@@ -1,0 +1,32 @@
+import { describe, expect, test, vi } from 'vitest';
+import * as transport from '../transport';
+
+import {
+  updateConsoleMember,
+  type UpdateConsoleMemberInput
+} from '../console-members';
+
+describe('console members client', () => {
+  vi.spyOn(transport, 'apiFetch').mockImplementation(
+    async (input) => input as never
+  );
+
+  test('updates member profile through the member patch route', async () => {
+    const input: UpdateConsoleMemberInput = {
+      name: 'Root Next',
+      nickname: 'Captain Root',
+      email: 'root-next@example.com',
+      phone: '13900000000',
+      introduction: 'updated root profile'
+    };
+
+    await expect(
+      updateConsoleMember('member-1', input, 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/console/members/member-1',
+      method: 'PATCH',
+      csrfToken: 'csrf-123',
+      body: input
+    });
+  });
+});

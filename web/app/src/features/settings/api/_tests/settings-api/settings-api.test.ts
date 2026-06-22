@@ -11,8 +11,10 @@ import {
   fetchConsoleApiOperationSpec,
   listConsoleMembers,
   createConsoleMember,
+  updateConsoleMember,
   disableConsoleMember,
   resetConsoleMemberPassword,
+  changeConsolePassword,
   replaceConsoleMemberRoles,
   listConsolePermissions,
   listConsoleRoles,
@@ -85,8 +87,10 @@ import {
   settingsMembersQueryKey,
   fetchSettingsMembers,
   createSettingsMember,
+  updateSettingsMember,
   disableSettingsMember,
   resetSettingsMemberPassword,
+  changeCurrentUserPassword,
   replaceSettingsMemberRoles
 } from '../../members';
 import {
@@ -223,7 +227,18 @@ describe('settings api wrappers', () => {
 
   test('forwards members, permissions, and roles helpers', async () => {
     const memberInput = { email: 'member@example.com', name: 'Member' };
+    const memberUpdateInput = {
+      name: 'Root Next',
+      nickname: 'Captain Root',
+      email: 'root-next@example.com',
+      phone: '13900000000',
+      introduction: 'updated root profile'
+    };
     const passwordInput = { password: 'password-123' };
+    const ownPasswordInput = {
+      old_password: 'change-me',
+      new_password: 'next-pass'
+    };
     const memberRolesInput = { role_codes: ['manager'] };
     const roleInput = { code: 'manager', name: 'Manager' };
     const roleUpdateInput = { name: 'Platform Manager' };
@@ -241,12 +256,14 @@ describe('settings api wrappers', () => {
 
     await fetchSettingsMembers();
     await createSettingsMember(memberInput as never, 'csrf-123');
+    await updateSettingsMember('member-1', memberUpdateInput, 'csrf-123');
     await disableSettingsMember('member-1', 'csrf-123');
     await resetSettingsMemberPassword(
       'member-1',
       passwordInput as never,
       'csrf-123'
     );
+    await changeCurrentUserPassword(ownPasswordInput, 'csrf-123');
     await replaceSettingsMemberRoles(
       'member-1',
       memberRolesInput as never,
@@ -266,10 +283,19 @@ describe('settings api wrappers', () => {
 
     expect(listConsoleMembers).toHaveBeenCalledTimes(1);
     expect(createConsoleMember).toHaveBeenCalledWith(memberInput, 'csrf-123');
+    expect(updateConsoleMember).toHaveBeenCalledWith(
+      'member-1',
+      memberUpdateInput,
+      'csrf-123'
+    );
     expect(disableConsoleMember).toHaveBeenCalledWith('member-1', 'csrf-123');
     expect(resetConsoleMemberPassword).toHaveBeenCalledWith(
       'member-1',
       passwordInput,
+      'csrf-123'
+    );
+    expect(changeConsolePassword).toHaveBeenCalledWith(
+      ownPasswordInput,
       'csrf-123'
     );
     expect(replaceConsoleMemberRoles).toHaveBeenCalledWith(

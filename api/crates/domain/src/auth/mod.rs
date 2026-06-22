@@ -241,6 +241,7 @@ pub struct ApiKeyRecord {
     pub token_prefix: String,
     pub key_kind: ApiKeyKind,
     pub application_id: Option<Uuid>,
+    pub role_code: Option<String>,
     pub creator_user_id: Uuid,
     pub tenant_id: Uuid,
     pub scope_kind: crate::DataModelScopeKind,

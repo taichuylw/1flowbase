@@ -12,6 +12,7 @@ impl ApiKeyRepository for ApplicationPublicApiTestRepository {
             token_prefix: input.token_prefix.clone(),
             key_kind: input.key_kind,
             application_id: input.application_id,
+            role_code: input.role_code.clone(),
             creator_user_id: input.creator_user_id,
             tenant_id: input.tenant_id,
             scope_kind: input.scope_kind,

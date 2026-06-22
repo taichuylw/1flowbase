@@ -80,6 +80,7 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
         "/api/console/system/runtime-profile",
         "/api/console/api-keys",
         "/api/console/user-api-keys",
+        "/api/console/user-api-keys/role-options",
         "/api/console/user-api-keys/{api_key_id}/revoke",
         "/api/runtime/models/{model_code}/records",
         "/api/runtime/models/{model_code}/records/{id}",

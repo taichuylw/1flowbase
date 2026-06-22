@@ -127,6 +127,7 @@ async fn api_key_data_model_permissions_reject_cross_scope_model_permission() {
             token_prefix: format!("dmk_{}", api_key_id.simple()),
             key_kind: ApiKeyKind::DataModelApiKey,
             application_id: None,
+            role_code: None,
             creator_user_id: actor_user_id,
             tenant_id,
             scope_kind: DataModelScopeKind::Workspace,

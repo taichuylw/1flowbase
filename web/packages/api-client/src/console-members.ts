@@ -27,6 +27,14 @@ export interface CreateConsoleMemberInput {
   phone_login_enabled: boolean;
 }
 
+export interface UpdateConsoleMemberInput {
+  email: string;
+  phone: string | null;
+  name: string;
+  nickname: string;
+  introduction: string;
+}
+
 export interface ResetConsoleMemberPasswordInput {
   new_password: string;
 }
@@ -50,6 +58,21 @@ export function createConsoleMember(
   return apiFetch<ConsoleMember>({
     path: '/api/console/members',
     method: 'POST',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function updateConsoleMember(
+  memberId: string,
+  input: UpdateConsoleMemberInput,
+  csrfToken: string,
+  baseUrl?: string
+): Promise<ConsoleMember> {
+  return apiFetch<ConsoleMember>({
+    path: `/api/console/members/${memberId}`,
+    method: 'PATCH',
     body: input,
     csrfToken,
     baseUrl

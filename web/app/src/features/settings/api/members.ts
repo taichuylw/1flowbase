@@ -1,17 +1,23 @@
 import {
+  changeConsolePassword,
   createConsoleMember,
   disableConsoleMember,
   listConsoleMembers,
   replaceConsoleMemberRoles,
   resetConsoleMemberPassword,
+  updateConsoleMember,
+  type ChangeConsolePasswordInput,
   type ConsoleMember,
   type CreateConsoleMemberInput,
   type ReplaceConsoleMemberRolesInput,
-  type ResetConsoleMemberPasswordInput
+  type ResetConsoleMemberPasswordInput,
+  type UpdateConsoleMemberInput
 } from '@1flowbase/api-client';
 
 export type SettingsMember = ConsoleMember;
 export type CreateSettingsMemberInput = CreateConsoleMemberInput;
+export type UpdateSettingsMemberInput = UpdateConsoleMemberInput;
+export type ChangeCurrentUserPasswordInput = ChangeConsolePasswordInput;
 
 export const settingsMembersQueryKey = ['settings', 'members'] as const;
 
@@ -26,6 +32,14 @@ export function createSettingsMember(
   return createConsoleMember(input, csrfToken);
 }
 
+export function updateSettingsMember(
+  memberId: string,
+  input: UpdateSettingsMemberInput,
+  csrfToken: string
+): Promise<SettingsMember> {
+  return updateConsoleMember(memberId, input, csrfToken);
+}
+
 export function disableSettingsMember(memberId: string, csrfToken: string): Promise<void> {
   return disableConsoleMember(memberId, csrfToken);
 }
@@ -36,6 +50,13 @@ export function resetSettingsMemberPassword(
   csrfToken: string
 ): Promise<void> {
   return resetConsoleMemberPassword(memberId, input, csrfToken);
+}
+
+export function changeCurrentUserPassword(
+  input: ChangeCurrentUserPasswordInput,
+  csrfToken: string
+): Promise<void> {
+  return changeConsolePassword(input, csrfToken);
 }
 
 export function replaceSettingsMemberRoles(

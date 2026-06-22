@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import {
   Avatar,
   Button,
@@ -24,12 +25,14 @@ import {
 
 import { useAuthStore } from '../../../state/auth-store';
 import {
+  changeCurrentUserPassword,
   createSettingsMember,
   disableSettingsMember,
   fetchSettingsMembers,
   replaceSettingsMemberRoles,
   resetSettingsMemberPassword,
   settingsMembersQueryKey,
+  updateSettingsMember,
   type SettingsMember
 } from '../api/members';
 import { fetchSettingsRoles, settingsRolesQueryKey } from '../api/roles';
@@ -45,11 +48,20 @@ export function MemberManagementPanel({
   canManageMembers: boolean;
   canManageRoleBindings: boolean;
 }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
+  const actor = useAuthStore((state) => state.actor);
+  const setAnonymous = useAuthStore((state) => state.setAnonymous);
 
   const [createForm] = Form.useForm();
+  const [profileForm] = Form.useForm();
+  const [passwordForm] = Form.useForm();
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [profileEditMember, setProfileEditMember] =
+    useState<SettingsMember | null>(null);
+  const [passwordEditMember, setPasswordEditMember] =
+    useState<SettingsMember | null>(null);
   const [roleEditMember, setRoleEditMember] = useState<SettingsMember | null>(
     null
   );
@@ -121,6 +133,59 @@ export function MemberManagementPanel({
     }
   });
 
+  const updateMemberMutation = useMutation({
+    mutationFn: async ({
+      memberId,
+      values
+    }: {
+      memberId: string;
+      values: Record<string, unknown>;
+    }) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return updateSettingsMember(
+        memberId,
+        {
+          name: String(values.name ?? ''),
+          nickname: String(values.nickname ?? ''),
+          email: String(values.email ?? ''),
+          phone: values.phone ? String(values.phone) : null,
+          introduction: String(values.introduction ?? '')
+        },
+        csrfToken
+      );
+    },
+    onSuccess: async () => {
+      await invalidateMembers();
+      setProfileEditMember(null);
+      profileForm.resetFields();
+    }
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async (values: Record<string, unknown>) => {
+      if (!csrfToken) {
+        throw new Error('missing csrf token');
+      }
+
+      return changeCurrentUserPassword(
+        {
+          old_password: String(values.old_password ?? ''),
+          new_password: String(values.new_password ?? '')
+        },
+        csrfToken
+      );
+    },
+    onSuccess: async () => {
+      passwordForm.resetFields();
+      setPasswordEditMember(null);
+      setAnonymous();
+      await navigate({ to: '/sign-in' });
+    }
+  });
+
   const replaceRolesMutation = useMutation({
     mutationFn: async ({
       memberId,
@@ -157,22 +222,84 @@ export function MemberManagementPanel({
     setEditingRoleCodes(member.role_codes);
   }, []);
 
+  const handleOpenProfileEdit = useCallback(
+    (member: SettingsMember) => {
+      setProfileEditMember(member);
+      profileForm.setFieldsValue({
+        name: member.name,
+        nickname: member.nickname,
+        email: member.email,
+        phone: member.phone,
+        introduction: member.introduction
+      });
+    },
+    [profileForm]
+  );
+
+  const handleProfileEditSubmit = useCallback(
+    (values: Record<string, unknown>) => {
+      if (profileEditMember) {
+        updateMemberMutation.mutate({
+          memberId: profileEditMember.id,
+          values
+        });
+      }
+    },
+    [profileEditMember, updateMemberMutation]
+  );
+
+  const handleOpenPasswordEdit = useCallback(
+    (member: SettingsMember) => {
+      setPasswordEditMember(member);
+      passwordForm.resetFields();
+    },
+    [passwordForm]
+  );
+
   const handleRoleEditOk = useCallback(() => {
     if (roleEditMember) {
+      const nextRoleCodes = roleEditMember.role_codes.includes('root')
+        ? Array.from(new Set(['root', ...editingRoleCodes]))
+        : editingRoleCodes;
       replaceRolesMutation.mutate({
         memberId: roleEditMember.id,
-        roleCodes: editingRoleCodes
+        roleCodes: nextRoleCodes
       });
     }
   }, [roleEditMember, editingRoleCodes, replaceRolesMutation]);
 
   const roleOptions = useMemo(
-    () =>
-      (rolesQuery.data ?? []).map((role) => ({
+    () => {
+      const options = (rolesQuery.data ?? []).map((role) => ({
         label: role.name,
         value: role.code
-      })),
-    [rolesQuery.data]
+      }));
+
+      if (
+        roleEditMember?.role_codes.includes('root') &&
+        !options.some((option) => option.value === 'root')
+      ) {
+        return [
+          { label: 'root', value: 'root', disabled: true },
+          ...options
+        ];
+      }
+
+      return options;
+    },
+    [roleEditMember, rolesQuery.data]
+  );
+
+  const handleRoleSelectionChange = useCallback(
+    (roleCodes: string[]) => {
+      if (roleEditMember?.role_codes.includes('root')) {
+        setEditingRoleCodes(Array.from(new Set(['root', ...roleCodes])));
+        return;
+      }
+
+      setEditingRoleCodes(roleCodes);
+    },
+    [roleEditMember]
   );
 
   const columns = useMemo(
@@ -244,10 +371,7 @@ export function MemberManagementPanel({
                 size="small"
                 icon={<EditOutlined />}
                 style={{ padding: '0 4px', fontSize: 12 }}
-                disabled={isRootMember}
-                onClick={
-                  isRootMember ? undefined : () => handleOpenRoleEdit(member)
-                }
+                onClick={() => handleOpenRoleEdit(member)}
               >
                 {i18nText("settings", "auto.edit")}</Button>
             </Space>
@@ -268,9 +392,16 @@ export function MemberManagementPanel({
               width: 160,
               render: (_: unknown, member: SettingsMember) => {
                 const isRootMember = member.role_codes.includes('root');
+                const isCurrentUser = member.id === actor?.id;
 
                 return (
                   <Space size={4}>
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => handleOpenProfileEdit(member)}
+                    >
+                      {i18nText("settings", "auto.edit_profile")}</Button>
                     {member.status === 'active' ? (
                       isRootMember ? (
                         <Button
@@ -300,8 +431,18 @@ export function MemberManagementPanel({
                       )
                     ) : null}
                     {isRootMember ? (
-                      <Button size="small" icon={<KeyOutlined />} disabled>
-                        {i18nText("settings", "auto.reset_password")}</Button>
+                      <Button
+                        size="small"
+                        icon={<KeyOutlined />}
+                        disabled={!isCurrentUser}
+                        loading={changePasswordMutation.isPending}
+                        onClick={
+                          isCurrentUser
+                            ? () => handleOpenPasswordEdit(member)
+                            : undefined
+                        }
+                      >
+                        {i18nText("settings", "auto.change_login_password")}</Button>
                     ) : (
                       <Popconfirm
                         title={i18nText("settings", "auto.reset_password")}
@@ -332,6 +473,10 @@ export function MemberManagementPanel({
       canManageRoleBindings,
       disableMutation,
       resetPasswordMutation,
+      changePasswordMutation,
+      actor?.id,
+      handleOpenProfileEdit,
+      handleOpenPasswordEdit,
       handleOpenRoleEdit
     ]
   );
@@ -457,6 +602,133 @@ export function MemberManagementPanel({
           </Form>
         </Modal>
 
+        {/* Profile Edit Modal */}
+        <Modal
+          title={
+            profileEditMember
+              ? i18nText("settings", "auto.edit_user_profile", { value1: profileEditMember.name })
+              : i18nText("settings", "auto.edit_profile")
+          }
+          open={Boolean(profileEditMember)}
+          onCancel={() => {
+            setProfileEditMember(null);
+            profileForm.resetFields();
+          }}
+          onOk={() => profileForm.submit()}
+          confirmLoading={updateMemberMutation.isPending}
+          okText={i18nText("settings", "auto.save")}
+          cancelText={i18nText("settings", "auto.cancel")}
+          width={560}
+          destroyOnHidden
+        >
+          <Form
+            form={profileForm}
+            layout="vertical"
+            onFinish={handleProfileEditSubmit}
+            style={{ marginTop: 16 }}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '0 16px'
+              }}
+            >
+              <Form.Item
+                label={i18nText("settings", "auto.name_alt")}
+                name="name"
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_full_name") }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                label={i18nText("settings", "auto.nickname")}
+                name="nickname"
+                rules={[{ required: true, message: i18nText("settings", "auto.enter_nickname") }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                label={i18nText("settings", "auto.email")}
+                name="email"
+                rules={[
+                  { required: true, message: i18nText("settings", "auto.enter_email") },
+                  { type: 'email', message: i18nText("settings", "auto.enter_valid_email_address") }
+                ]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item label={i18nText("settings", "auto.mobile_phone_number")} name="phone">
+                <Input />
+              </Form.Item>
+            </div>
+            <Form.Item label={i18nText("settings", "auto.personal_introduction")} name="introduction">
+              <Input.TextArea rows={3} />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Change Password Modal */}
+        <Modal
+          title={
+            passwordEditMember
+              ? i18nText("settings", "auto.change_login_password_for_user", { value1: passwordEditMember.name })
+              : i18nText("settings", "auto.change_login_password")
+          }
+          open={Boolean(passwordEditMember)}
+          onCancel={() => {
+            setPasswordEditMember(null);
+            passwordForm.resetFields();
+          }}
+          onOk={() => passwordForm.submit()}
+          confirmLoading={changePasswordMutation.isPending}
+          okText={i18nText("settings", "auto.confirm_change")}
+          cancelText={i18nText("settings", "auto.cancel")}
+          width={480}
+          destroyOnHidden
+        >
+          <Form
+            form={passwordForm}
+            layout="vertical"
+            onFinish={(values) => changePasswordMutation.mutate(values)}
+            style={{ marginTop: 16 }}
+          >
+            <Form.Item
+              label={i18nText("settings", "auto.current_password")}
+              name="old_password"
+              rules={[{ required: true, message: i18nText("settings", "auto.enter_current_password") }]}
+            >
+              <Input.Password />
+            </Form.Item>
+            <Form.Item
+              label={i18nText("settings", "auto.new_password")}
+              name="new_password"
+              rules={[{ required: true, message: i18nText("settings", "auto.enter_new_password") }]}
+            >
+              <Input.Password />
+            </Form.Item>
+            <Form.Item
+              label={i18nText("settings", "auto.confirm_new_password")}
+              name="confirm_password"
+              dependencies={['new_password']}
+              rules={[
+                { required: true, message: i18nText("settings", "auto.enter_new_password_again") },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || value === getFieldValue('new_password')) {
+                      return Promise.resolve();
+                    }
+
+                    return Promise.reject(new Error(i18nText("settings", "auto.passwords_do_not_match")));
+                  }
+                })
+              ]}
+            >
+              <Input.Password />
+            </Form.Item>
+          </Form>
+        </Modal>
+
         {/* Role Edit Modal */}
         <Modal
           title={
@@ -482,7 +754,7 @@ export function MemberManagementPanel({
                 mode="multiple"
                 style={{ width: '100%' }}
                 value={editingRoleCodes}
-                onChange={setEditingRoleCodes}
+                onChange={handleRoleSelectionChange}
                 options={roleOptions}
                 placeholder={i18nText("settings", "auto.select_role")}
               />

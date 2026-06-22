@@ -141,6 +141,202 @@ async fn member_routes_create_disable_and_reset_password() {
 }
 
 #[tokio::test]
+async fn root_member_profile_and_roles_can_be_updated_without_removing_root_role() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let session_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/session")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(session_response.status(), StatusCode::OK);
+    let session_body = to_bytes(session_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let session_payload: serde_json::Value = serde_json::from_slice(&session_body).unwrap();
+    let root_user_id = session_payload["data"]["actor"]["id"].as_str().unwrap();
+
+    let create_role_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/roles")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "code": "operator",
+                        "name": "Operator",
+                        "introduction": "operator role",
+                        "auto_grant_new_permissions": false,
+                        "is_default_member_role": false
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_role_response.status(), StatusCode::CREATED);
+
+    let profile_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/api/console/members/{root_user_id}"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "Root Next",
+                        "nickname": "Captain Root",
+                        "email": "root-next@example.com",
+                        "phone": "13900000000",
+                        "introduction": "updated root profile"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(profile_response.status(), StatusCode::OK);
+    let profile_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(profile_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(profile_payload["data"]["account"], "root");
+    assert_eq!(profile_payload["data"]["name"], "Root Next");
+    assert_eq!(profile_payload["data"]["nickname"], "Captain Root");
+    assert_eq!(profile_payload["data"]["email"], "root-next@example.com");
+    assert_eq!(profile_payload["data"]["phone"], "13900000000");
+    assert_eq!(
+        profile_payload["data"]["introduction"],
+        "updated root profile"
+    );
+
+    let append_role_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/console/members/{root_user_id}/roles"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "role_codes": ["root", "operator"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(append_role_response.status(), StatusCode::NO_CONTENT);
+
+    let remove_root_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/console/members/{root_user_id}/roles"))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "role_codes": ["operator"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(remove_root_response.status(), StatusCode::FORBIDDEN);
+    let remove_root_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(remove_root_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(remove_root_payload["code"], "root_user_immutable");
+
+    let list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/members")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let list_payload: serde_json::Value = serde_json::from_slice(
+        &to_bytes(list_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let root_member = list_payload["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|member| member["id"] == root_user_id)
+        .unwrap();
+    assert_eq!(root_member["name"], "Root Next");
+    assert_eq!(root_member["role_codes"], json!(["operator", "root"]));
+
+    let reset_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/members/{root_user_id}/actions/reset-password"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "new_password": "root-next-pass"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(reset_response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn member_creation_uses_workspace_default_member_role() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

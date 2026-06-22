@@ -1,0 +1,56 @@
+.personal-access-tokens-panel__action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.personal-access-tokens-panel__action-row .ant-typography {
+  min-width: 0;
+}
+
+.personal-access-tokens-panel__action-row .ant-btn {
+  flex: 0 0 auto;
+}
+
+.personal-access-tokens-panel__created-token-modal {
+  width: 100%;
+  min-width: 0;
+}
+
+.personal-access-tokens-panel__created-token {
+  display: block;
+  color: var(--text-primary);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.personal-access-tokens-panel__created-token-copy.ant-btn {
+  color: #ffffff;
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.personal-access-tokens-panel__created-token-copy.ant-btn:hover,
+.personal-access-tokens-panel__created-token-copy.ant-btn:focus-visible {
+  color: #ffffff;
+  background: #0b1310;
+  border-color: #0b1310;
+}
+
+@media (max-width: 767px) {
+  .personal-access-tokens-panel__action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .personal-access-tokens-panel__action-row .ant-btn {
+    width: fit-content;
+  }
+}

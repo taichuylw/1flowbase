@@ -7,12 +7,12 @@ use argon2::{
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post, put},
+    routing::{get, patch, post, put},
     Json, Router,
 };
 use control_plane::member::{
     CreateMemberCommand, DisableMemberCommand, MemberService, ReplaceMemberRolesCommand,
-    ResetMemberPasswordCommand,
+    ResetMemberPasswordCommand, UpdateMemberCommand,
 };
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,15 @@ pub struct CreateMemberBody {
     pub introduction: String,
     pub email_login_enabled: bool,
     pub phone_login_enabled: bool,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateMemberBody {
+    pub email: String,
+    pub phone: Option<String>,
+    pub name: String,
+    pub nickname: String,
+    pub introduction: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -120,6 +129,7 @@ fn to_member_response(user: domain::UserRecord) -> MemberResponse {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/members", get(list_members).post(create_member))
+        .route("/members/:id", patch(update_member))
         .route("/members/:id/actions/disable", post(disable_member))
         .route("/members/:id/actions/reset-password", post(reset_member))
         .route("/members/:id/roles", put(replace_member_roles))
@@ -180,6 +190,37 @@ pub async fn create_member(
         StatusCode::CREATED,
         Json(ApiSuccess::new(to_member_response(user))),
     ))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/console/members/{id}",
+    request_body = UpdateMemberBody,
+    params(("id" = String, Path, description = "Member user id")),
+    responses((status = 200, body = MemberResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn update_member(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(member_id): Path<String>,
+    Json(body): Json<UpdateMemberBody>,
+) -> Result<Json<ApiSuccess<MemberResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+
+    let user = MemberService::new(state.store.clone())
+        .update_member(UpdateMemberCommand {
+            actor_user_id: context.user.id,
+            target_user_id: parse_member_id(&member_id)?,
+            email: body.email,
+            phone: body.phone,
+            name: body.name,
+            nickname: body.nickname,
+            introduction: body.introduction,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_member_response(user))))
 }
 
 #[utoipa::path(

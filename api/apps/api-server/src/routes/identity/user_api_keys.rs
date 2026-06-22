@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use axum::{
     extract::{Path, State},
@@ -10,6 +10,7 @@ use control_plane::auth::{
     ApiKeyService, CreateUserApiKeyCommand, ListUserApiKeysCommand, RevokeUserApiKeyCommand,
     UserApiKeyExpirationPolicy,
 };
+use control_plane::ports::RoleRepository;
 use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use utoipa::ToSchema;
@@ -25,7 +26,20 @@ use crate::{
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateUserApiKeyRequest {
     pub name: String,
+    pub role_code: Option<String>,
     pub expiration_policy: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserApiKeyRoleOptionResponse {
+    pub code: String,
+    pub name: String,
+    pub scope_kind: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserApiKeyRoleOptionsResponse {
+    pub items: Vec<UserApiKeyRoleOptionResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -35,6 +49,7 @@ pub struct UserApiKeyResponse {
     pub token: Option<String>,
     pub token_prefix: String,
     pub key_kind: String,
+    pub role_code: Option<String>,
     pub creator_user_id: Uuid,
     pub tenant_id: Uuid,
     pub scope_kind: String,
@@ -64,9 +79,30 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(list_user_api_keys).post(create_user_api_key),
         )
         .route(
+            "/user-api-keys/role-options",
+            get(list_user_api_key_role_options),
+        )
+        .route(
             "/user-api-keys/:api_key_id/revoke",
             post(revoke_user_api_key),
         )
+}
+
+fn is_role_bound_to_current_workspace(
+    role: &domain::BoundRole,
+    current_workspace_id: Uuid,
+) -> bool {
+    match role.scope_kind {
+        domain::RoleScopeKind::System => true,
+        domain::RoleScopeKind::Workspace => role.workspace_id == Some(current_workspace_id),
+    }
+}
+
+fn role_scope_kind_text(role: &domain::BoundRole) -> String {
+    match role.scope_kind {
+        domain::RoleScopeKind::System => "system".to_string(),
+        domain::RoleScopeKind::Workspace => "workspace".to_string(),
+    }
 }
 
 fn parse_expiration_policy(raw: &str) -> Result<UserApiKeyExpirationPolicy, ApiError> {
@@ -101,6 +137,7 @@ fn user_api_key_response(
         token,
         token_prefix: api_key.token_prefix,
         key_kind: api_key.key_kind.as_str().to_string(),
+        role_code: api_key.role_code,
         creator_user_id: api_key.creator_user_id,
         tenant_id: api_key.tenant_id,
         scope_kind: api_key.scope_kind.as_str().to_string(),
@@ -139,6 +176,47 @@ pub async fn list_user_api_keys(
 }
 
 #[utoipa::path(
+    get,
+    path = "/api/console/user-api-keys/role-options",
+    responses((status = 200, body = UserApiKeyRoleOptionsResponse), (status = 401, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_user_api_key_role_options(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiSuccess<UserApiKeyRoleOptionsResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let workspace_roles = state
+        .store
+        .list_roles(context.actor.current_workspace_id)
+        .await?;
+    let role_names = workspace_roles
+        .into_iter()
+        .map(|role| (role.code, role.name))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut seen = BTreeSet::new();
+    let mut items = context
+        .user
+        .roles
+        .iter()
+        .filter(|role| is_role_bound_to_current_workspace(role, context.actor.current_workspace_id))
+        .filter(|role| seen.insert(role.code.clone()))
+        .map(|role| UserApiKeyRoleOptionResponse {
+            code: role.code.clone(),
+            name: role_names
+                .get(&role.code)
+                .cloned()
+                .unwrap_or_else(|| role.code.clone()),
+            scope_kind: role_scope_kind_text(role),
+        })
+        .collect::<Vec<_>>();
+    items.sort_by(|left, right| left.code.cmp(&right.code));
+
+    Ok(Json(ApiSuccess::new(UserApiKeyRoleOptionsResponse {
+        items,
+    })))
+}
+
+#[utoipa::path(
     post,
     path = "/api/console/user-api-keys",
     request_body = CreateUserApiKeyRequest,
@@ -151,12 +229,27 @@ pub async fn create_user_api_key(
 ) -> Result<(StatusCode, Json<ApiSuccess<UserApiKeyResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context)?;
+    let role_code = payload
+        .role_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(context.actor.effective_display_role.as_str())
+        .to_string();
+    let role_allowed = context.user.roles.iter().any(|role| {
+        role.code == role_code
+            && is_role_bound_to_current_workspace(role, context.actor.current_workspace_id)
+    });
+    if !role_allowed {
+        return Err(control_plane::errors::ControlPlaneError::InvalidInput("role_code").into());
+    }
     let result = ApiKeyService::new(state.store.clone())
         .create_user_api_key(CreateUserApiKeyCommand {
             actor_user_id: context.actor.user_id,
             tenant_id: context.actor.tenant_id,
             current_workspace_id: context.actor.current_workspace_id,
             name: payload.name,
+            role_code,
             expiration_policy: parse_expiration_policy(&payload.expiration_policy)?,
         })
         .await?;

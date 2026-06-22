@@ -12,6 +12,7 @@ export interface ConsolePersonalAccessToken {
   token: string | null;
   token_prefix: string;
   key_kind: string;
+  role_code: string | null;
   creator_user_id: string;
   tenant_id: string;
   scope_kind: string;
@@ -28,8 +29,19 @@ export interface ConsolePersonalAccessTokenListResponse {
   items: ConsolePersonalAccessToken[];
 }
 
+export interface ConsolePersonalAccessTokenRoleOption {
+  code: string;
+  name: string;
+  scope_kind: 'system' | 'workspace';
+}
+
+export interface ConsolePersonalAccessTokenRoleOptionsResponse {
+  items: ConsolePersonalAccessTokenRoleOption[];
+}
+
 export interface CreateConsolePersonalAccessTokenInput {
   name: string;
+  role_code: string;
   expiration_policy: ConsolePersonalAccessTokenExpirationPolicy;
 }
 
@@ -60,6 +72,15 @@ export function createConsolePersonalAccessToken(
     method: 'POST',
     body: input,
     csrfToken,
+    baseUrl
+  });
+}
+
+export function listConsolePersonalAccessTokenRoleOptions(
+  baseUrl?: string
+): Promise<ConsolePersonalAccessTokenRoleOptionsResponse> {
+  return apiFetch<ConsolePersonalAccessTokenRoleOptionsResponse>({
+    path: '/api/console/user-api-keys/role-options',
     baseUrl
   });
 }

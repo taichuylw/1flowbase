@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use control_plane::ports::{
-    ApiKeyRepository, AuthRepository, BootstrapRepository, CreateApiKeyInput, UpdateProfileInput,
-    UpdateUserMetaInput, UpsertApiKeyDataModelPermissionInput,
+use control_plane::{
+    errors::ControlPlaneError,
+    ports::{
+        ApiKeyRepository, AuthRepository, BootstrapRepository, CreateApiKeyInput,
+        UpdateProfileInput, UpdateUserMetaInput, UpsertApiKeyDataModelPermissionInput,
+    },
 };
 use domain::{
     ActorContext, ApiKeyDataModelPermissionRecord, ApiKeyRecord, AuditLogRecord,
@@ -56,6 +59,7 @@ fn map_api_key_row(row: sqlx::postgres::PgRow) -> ApiKeyRecord {
         token_prefix: row.get("token_prefix"),
         key_kind: domain::ApiKeyKind::from_db(row.get::<String, _>("key_kind").as_str()),
         application_id: row.get("application_id"),
+        role_code: row.get("role_code"),
         creator_user_id: row.get("creator_user_id"),
         tenant_id: row.get("tenant_id"),
         scope_kind: domain::DataModelScopeKind::from_db(
@@ -621,6 +625,63 @@ impl AuthRepository for PgControlPlaneStore {
         ))
     }
 
+    async fn load_actor_context_for_bound_role(
+        &self,
+        user_id: Uuid,
+        tenant_id: Uuid,
+        workspace_id: Uuid,
+        role_code: &str,
+    ) -> Result<ActorContext> {
+        let role: Option<(Uuid, String)> = sqlx::query_as(
+            r#"
+            select r.id, r.code
+            from user_role_bindings urb
+            join roles r on r.id = urb.role_id
+            where urb.user_id = $1
+              and r.code = $2
+              and (r.scope_kind = 'system' or r.workspace_id = $3)
+            limit 1
+            "#,
+        )
+        .bind(user_id)
+        .bind(role_code)
+        .bind(workspace_id)
+        .fetch_optional(self.pool())
+        .await?;
+        let (role_id, bound_role_code) =
+            role.ok_or(ControlPlaneError::InvalidInput("role_code"))?;
+
+        if bound_role_code == "root" {
+            return Ok(ActorContext::root_in_scope(
+                user_id,
+                tenant_id,
+                workspace_id,
+                &bound_role_code,
+            ));
+        }
+
+        let permissions: Vec<String> = sqlx::query_scalar(
+            r#"
+            select distinct pd.code
+            from role_permissions rp
+            join permission_definitions pd on pd.id = rp.permission_id
+            where rp.role_id = $1
+            order by pd.code asc
+            "#,
+        )
+        .bind(role_id)
+        .fetch_all(self.pool())
+        .await?;
+
+        Ok(ActorContext::scoped_in_scope(
+            user_id,
+            tenant_id,
+            workspace_id,
+            &bound_role_code,
+            permissions,
+        ))
+    }
+
     async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
         let scope = self.default_scope_for_user(actor_user_id).await?;
         self.load_actor_context(actor_user_id, scope.tenant_id, scope.workspace_id, None)
@@ -791,11 +852,11 @@ impl ApiKeyRepository for PgControlPlaneStore {
             r#"
             insert into api_keys (
                 id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                scope_kind, scope_id, key_kind, application_id, enabled, expires_at
+                scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at
             )
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             returning id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                      scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                      scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
                       last_used_at, created_at, updated_at
             "#,
         )
@@ -809,6 +870,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
         .bind(input.scope_id)
         .bind(input.key_kind.as_str())
         .bind(input.application_id)
+        .bind(&input.role_code)
         .bind(input.enabled)
         .bind(input.expires_at)
         .fetch_one(self.pool())
@@ -891,7 +953,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             select id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                   scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                   scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
                    last_used_at, created_at, updated_at
             from api_keys
             where token_hash = $1
@@ -929,7 +991,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
         let rows = sqlx::query(
             r#"
             select id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                   scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                   scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
                    last_used_at, created_at, updated_at
             from api_keys
             where key_kind = 'user_api_key'
@@ -988,7 +1050,7 @@ impl ApiKeyRepository for PgControlPlaneStore {
         let rows = sqlx::query(
             r#"
             select id, name, token_hash, token_prefix, creator_user_id, tenant_id,
-                   scope_kind, scope_id, key_kind, application_id, enabled, expires_at,
+                   scope_kind, scope_id, key_kind, application_id, role_code, enabled, expires_at,
                    last_used_at, created_at, updated_at
             from api_keys
             where key_kind = 'application_api_key'

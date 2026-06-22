@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
-    ports::{CreateMemberInput, MemberRepository},
+    ports::{CreateMemberInput, MemberRepository, UpdateMemberInput},
 };
 
 pub struct CreateMemberCommand {
@@ -24,6 +24,16 @@ pub struct CreateMemberCommand {
 pub struct DisableMemberCommand {
     pub actor_user_id: Uuid,
     pub target_user_id: Uuid,
+}
+
+pub struct UpdateMemberCommand {
+    pub actor_user_id: Uuid,
+    pub target_user_id: Uuid,
+    pub name: String,
+    pub nickname: String,
+    pub email: String,
+    pub phone: Option<String>,
+    pub introduction: String,
 }
 
 pub struct ResetMemberPasswordCommand {
@@ -92,6 +102,40 @@ where
                 "user",
                 Some(user.id),
                 "member.created",
+                serde_json::json!({ "account": user.account }),
+            ))
+            .await?;
+
+        Ok(user)
+    }
+
+    pub async fn update_member(&self, command: UpdateMemberCommand) -> Result<domain::UserRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(command.actor_user_id)
+            .await?;
+        ensure_permission(&actor, "user.manage.all")
+            .map_err(ControlPlaneError::PermissionDenied)?;
+
+        let user = self
+            .repository
+            .update_member_profile(&UpdateMemberInput {
+                actor_user_id: command.actor_user_id,
+                user_id: command.target_user_id,
+                name: command.name,
+                nickname: command.nickname,
+                email: command.email,
+                phone: command.phone,
+                introduction: command.introduction,
+            })
+            .await?;
+        self.repository
+            .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
+                Some(command.actor_user_id),
+                "user",
+                Some(command.target_user_id),
+                "member.updated",
                 serde_json::json!({ "account": user.account }),
             ))
             .await?;

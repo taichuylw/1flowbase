@@ -22,8 +22,10 @@ const membersApi = vi.hoisted(() => ({
   settingsMembersQueryKey: ['settings', 'members'],
   fetchSettingsMembers: vi.fn(),
   createSettingsMember: vi.fn(),
+  updateSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
+  changeCurrentUserPassword: vi.fn(),
   replaceSettingsMemberRoles: vi.fn()
 }));
 
@@ -71,7 +73,13 @@ const docsApi = vi.hoisted(() => ({
 
 const personalAccessTokensApi = vi.hoisted(() => ({
   settingsPersonalAccessTokensQueryKey: ['settings', 'personal-access-tokens'],
+  settingsPersonalAccessTokenRoleOptionsQueryKey: [
+    'settings',
+    'personal-access-tokens',
+    'role-options'
+  ],
   fetchSettingsPersonalAccessTokens: vi.fn(),
+  fetchSettingsPersonalAccessTokenRoleOptions: vi.fn(),
   createSettingsPersonalAccessToken: vi.fn(),
   revokeSettingsPersonalAccessToken: vi.fn()
 }));
@@ -295,8 +303,10 @@ vi.mock('@1flowbase/api-client', async (importOriginal) => {
     ...actual,
     listConsoleMembers: membersApi.fetchSettingsMembers,
     createConsoleMember: membersApi.createSettingsMember,
+    updateConsoleMember: membersApi.updateSettingsMember,
     disableConsoleMember: membersApi.disableSettingsMember,
     resetConsoleMemberPassword: membersApi.resetSettingsMemberPassword,
+    changeConsolePassword: membersApi.changeCurrentUserPassword,
     replaceConsoleMemberRoles: membersApi.replaceSettingsMemberRoles,
     listConsoleRoles: rolesApi.fetchSettingsRoles,
     fetchConsoleRolePermissions: rolesApi.fetchSettingsRolePermissions,
@@ -397,6 +407,9 @@ describe('SettingsPage', () => {
     personalAccessTokensApi.fetchSettingsPersonalAccessTokens.mockResolvedValue(
       []
     );
+    personalAccessTokensApi.fetchSettingsPersonalAccessTokenRoleOptions.mockResolvedValue(
+      [{ code: 'root', name: 'Root', scope_kind: 'system' }]
+    );
     personalAccessTokensApi.createSettingsPersonalAccessToken.mockResolvedValue(
       {
         id: 'key-1',
@@ -404,6 +417,7 @@ describe('SettingsPage', () => {
         token: 'pat_new_secret',
         token_prefix: 'pat_new',
         key_kind: 'user_api_key',
+        role_code: 'root',
         creator_user_id: 'user-1',
         tenant_id: 'tenant-1',
         scope_kind: 'workspace',
@@ -749,14 +763,43 @@ describe('SettingsPage', () => {
     ).toHaveBeenCalled();
   });
 
-  test('disables root member write actions while leaving normal members operable', async () => {
+  test('allows root safe member edits while keeping destructive actions locked', async () => {
     authenticateWithPermissions(
       ['route_page.view.all', 'user.view.all', 'user.manage.all'],
       'root'
     );
+    rolesApi.fetchSettingsRoles.mockResolvedValue([
+      {
+        code: 'operator',
+        name: 'Operator',
+        introduction: 'operator role',
+        scope_kind: 'workspace',
+        is_builtin: false,
+        is_editable: true,
+        auto_grant_new_permissions: false,
+        is_default_member_role: false,
+        permission_codes: []
+      }
+    ]);
+    membersApi.updateSettingsMember.mockResolvedValue({
+      id: 'user-1',
+      account: 'root',
+      email: 'root-next@example.com',
+      phone: '13900000000',
+      name: 'Root Next',
+      nickname: 'Captain Root',
+      introduction: 'updated root profile',
+      default_display_role: 'root',
+      email_login_enabled: true,
+      phone_login_enabled: false,
+      status: 'active',
+      role_codes: ['root']
+    });
+    membersApi.replaceSettingsMemberRoles.mockResolvedValue(undefined);
+    membersApi.changeCurrentUserPassword.mockResolvedValue(undefined);
     membersApi.fetchSettingsMembers.mockResolvedValue([
       {
-        id: 'root-user',
+        id: 'user-1',
         account: 'root',
         email: 'root@example.com',
         phone: null,
@@ -803,13 +846,16 @@ describe('SettingsPage', () => {
 
     expect(
       within(rootRow).getByRole('button', { name: /编辑$/ })
-    ).toBeDisabled();
+    ).toBeEnabled();
+    expect(
+      within(rootRow).getByRole('button', { name: /编辑资料$/ })
+    ).toBeEnabled();
     expect(
       within(rootRow).getByRole('button', { name: /停用$/ })
     ).toBeDisabled();
     expect(
-      within(rootRow).getByRole('button', { name: /重置密码$/ })
-    ).toBeDisabled();
+      within(rootRow).getByRole('button', { name: /修改密码$/ })
+    ).toBeEnabled();
     expect(
       within(managerRow).getByRole('button', { name: /编辑$/ })
     ).toBeEnabled();
@@ -819,6 +865,96 @@ describe('SettingsPage', () => {
     expect(
       within(managerRow).getByRole('button', { name: /重置密码$/ })
     ).toBeEnabled();
+
+    fireEvent.click(within(rootRow).getByRole('button', { name: /编辑资料$/ }));
+    const profileDialog = await screen.findByRole('dialog', {
+      name: /编辑用户资料/
+    });
+    fireEvent.change(within(profileDialog).getByLabelText('姓名'), {
+      target: { value: 'Root Next' }
+    });
+    fireEvent.change(within(profileDialog).getByLabelText('昵称'), {
+      target: { value: 'Captain Root' }
+    });
+    fireEvent.change(within(profileDialog).getByLabelText('邮箱'), {
+      target: { value: 'root-next@example.com' }
+    });
+    fireEvent.change(within(profileDialog).getByLabelText('手机号'), {
+      target: { value: '13900000000' }
+    });
+    fireEvent.change(within(profileDialog).getByLabelText('个人介绍'), {
+      target: { value: 'updated root profile' }
+    });
+    fireEvent.click(
+      within(profileDialog).getByRole('button', { name: /保\s*存/ })
+    );
+    await waitFor(() => {
+      expect(membersApi.updateSettingsMember).toHaveBeenCalledWith(
+        'user-1',
+        {
+          name: 'Root Next',
+          nickname: 'Captain Root',
+          email: 'root-next@example.com',
+          phone: '13900000000',
+          introduction: 'updated root profile'
+        },
+        'csrf-123'
+      );
+    });
+
+    fireEvent.click(within(rootRow).getByRole('button', { name: /编辑$/ }));
+    const roleDialog = await screen.findByRole('dialog', { name: /编辑角色/ });
+    fireEvent.mouseDown(within(roleDialog).getByRole('combobox'));
+    const [operatorOption] = await screen.findAllByText((_, element) => {
+      if (!element) {
+        return false;
+      }
+
+      return (
+        element.matches('.ant-select-item-option-content') &&
+        element.textContent === 'Operator'
+      );
+    });
+    fireEvent.click(operatorOption);
+    await waitFor(() => {
+      expect(within(roleDialog).getByText('Operator')).toBeInTheDocument();
+    });
+    fireEvent.click(
+      within(roleDialog).getByRole('button', { name: /保\s*存/ })
+    );
+    await waitFor(() => {
+      expect(membersApi.replaceSettingsMemberRoles).toHaveBeenCalledWith(
+        'user-1',
+        { role_codes: ['root', 'operator'] },
+        'csrf-123'
+      );
+    });
+
+    fireEvent.click(within(rootRow).getByRole('button', { name: /修改密码$/ }));
+    const passwordDialog = await screen.findByRole('dialog', {
+      name: /修改登录密码/
+    });
+    fireEvent.change(within(passwordDialog).getByLabelText('当前密码'), {
+      target: { value: 'change-me' }
+    });
+    fireEvent.change(within(passwordDialog).getByLabelText('新密码'), {
+      target: { value: 'next-pass' }
+    });
+    fireEvent.change(within(passwordDialog).getByLabelText('确认新密码'), {
+      target: { value: 'next-pass' }
+    });
+    fireEvent.click(
+      within(passwordDialog).getByRole('button', { name: '确认修改' })
+    );
+    await waitFor(() => {
+      expect(membersApi.changeCurrentUserPassword).toHaveBeenCalledWith(
+        {
+          old_password: 'change-me',
+          new_password: 'next-pass'
+        },
+        'csrf-123'
+      );
+    });
   }, 10000);
 
   test('redirects /settings/docs to API Key 认证 when docs is hidden', async () => {

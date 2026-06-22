@@ -85,6 +85,7 @@ pub struct CreateUserApiKeyCommand {
     pub tenant_id: Uuid,
     pub current_workspace_id: Uuid,
     pub name: String,
+    pub role_code: String,
     pub expiration_policy: UserApiKeyExpirationPolicy,
 }
 
@@ -261,6 +262,7 @@ where
                 token_prefix,
                 key_kind: domain::ApiKeyKind::DataModelApiKey,
                 application_id: None,
+                role_code: None,
                 creator_user_id: command.actor_user_id,
                 tenant_id: actor.tenant_id,
                 scope_kind,
@@ -318,6 +320,7 @@ where
                 token_prefix,
                 key_kind: domain::ApiKeyKind::UserApiKey,
                 application_id: None,
+                role_code: Some(command.role_code),
                 creator_user_id: command.actor_user_id,
                 tenant_id: actor.tenant_id,
                 scope_kind: domain::DataModelScopeKind::Workspace,
@@ -399,11 +402,15 @@ where
         }
         let actor = self
             .repository
-            .load_actor_context(
+            .load_actor_context_for_bound_role(
                 user.id,
                 api_key.tenant_id,
                 api_key.scope_id,
-                user.default_display_role.as_deref(),
+                api_key
+                    .role_code
+                    .as_deref()
+                    .or(user.default_display_role.as_deref())
+                    .unwrap_or("manager"),
             )
             .await?;
         self.repository.mark_api_key_used(api_key.id).await?;

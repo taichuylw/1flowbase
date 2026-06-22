@@ -127,6 +127,7 @@ where
                 token_prefix,
                 key_kind: domain::ApiKeyKind::ApplicationApiKey,
                 application_id: Some(application.id),
+                role_code: None,
                 creator_user_id: command.actor_user_id,
                 tenant_id: actor.tenant_id,
                 scope_kind: domain::DataModelScopeKind::Workspace,
