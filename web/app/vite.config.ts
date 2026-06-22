@@ -40,6 +40,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    optimizeDeps: {
+      include: ['@scalar/api-reference-react']
+    },
     build: {
       chunkSizeWarningLimit: 3500,
       rollupOptions: {
