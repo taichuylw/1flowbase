@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "source": "web/app/src/app/router.tsx",
+      "specifier": "../features/applications/pages/ApplicationDetailPage",
+      "smokePaths": [
+        {
+          "path": "/applications/vite-lazy-deps-application/orchestration",
+          "requiresFixture": true
+        }
+      ]
+    },
+    {
+      "source": "web/app/src/app/router.tsx",
+      "specifier": "../features/settings/pages/SettingsPage",
+      "smokePaths": [
+        "/settings"
+      ]
+    },
+    {
+      "source": "web/app/src/features/applications/pages/ApplicationDetailPage.tsx",
+      "specifier": "../../agent-flow/pages/AgentFlowEditorPage",
+      "smokePaths": [
+        {
+          "path": "/applications/vite-lazy-deps-application/orchestration",
+          "requiresFixture": true
+        }
+      ]
+    },
+    {
+      "source": "web/app/src/features/applications/pages/ApplicationDetailPage.tsx",
+      "specifier": "./ApplicationLogsPage",
+      "smokePaths": [
+        {
+          "path": "/applications/vite-lazy-deps-application/logs",
+          "requiresFixture": true
+        }
+      ]
+    },
+    {
+      "source": "web/app/src/features/applications/pages/ApplicationDetailPage.tsx",
+      "specifier": "./ApplicationApiPage",
+      "smokePaths": [
+        {
+          "path": "/applications/vite-lazy-deps-application/api",
+          "requiresFixture": true
+        }
+      ]
+    },
+    {
+      "source": "web/app/src/features/applications/pages/ApplicationDetailPage.tsx",
+      "specifier": "./ApplicationMonitoringPage",
+      "smokePaths": [
+        {
+          "path": "/applications/vite-lazy-deps-application/monitoring",
+          "requiresFixture": true
+        }
+      ]
+    },
+    {
+      "source": "web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx",
+      "specifier": "../../components/ApiDocsPanel",
+      "smokePaths": [
+        "/settings/docs"
+      ]
+    },
+    {
+      "source": "web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx",
+      "specifier": "../../components/PersonalAccessTokensPanel",
+      "smokePaths": [
+        "/settings/api-key-authentication"
+      ]
+    },
+    {
+      "source": "web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx",
+      "specifier": "./SettingsModelProvidersSection",
+      "smokePaths": [
+        "/settings/model-providers"
+      ]
+    },
+    {
+      "source": "web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx",
+      "specifier": "./SettingsMcpManagementSection",
+      "smokePaths": [
+        "/settings/mcp-management"
+      ]
+    },
+    {
+      "source": "web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx",
+      "specifier": "../../components/host-infrastructure/HostInfrastructurePanel",
+      "smokePaths": [
+        "/settings/host-infrastructure"
+      ]
+    },
+    {
+      "source": "web/app/src/features/settings/pages/settings-page/SettingsSectionBody.tsx",
+      "specifier": "../../components/host-infrastructure/HostInfrastructureMemoryObservationPanel",
+      "smokePaths": [
+        "/settings/memory-observation"
+      ]
+    }
+  ]
+}

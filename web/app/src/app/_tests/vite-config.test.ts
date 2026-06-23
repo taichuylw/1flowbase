@@ -45,9 +45,23 @@ describe('vite config', () => {
 
   test('pre-optimizes dependencies used by lazy application pages', async () => {
     const source = await readFile(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+    const lazyOnlyDeps = [
+      '@lexical/react',
+      '@lexical/utils',
+      '@monaco-editor/react',
+      '@scalar/api-reference-react',
+      '@xyflow/react',
+      'copy-to-clipboard',
+      'echarts',
+      'lexical',
+      'react-markdown',
+      'remark-breaks',
+      'remark-gfm'
+    ];
 
     expect(source).toContain('optimizeDeps');
-    expect(source).toContain("'@scalar/api-reference-react'");
-    expect(source).toContain("'@monaco-editor/react'");
+    for (const dependency of lazyOnlyDeps) {
+      expect(source).toContain(`'${dependency}'`);
+    }
   });
 });

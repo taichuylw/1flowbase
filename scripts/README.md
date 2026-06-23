@@ -99,6 +99,20 @@ node scripts/node/test-scripts.js page-debug
 node scripts/node/test-scripts.js verify-backend runtime-gate
 ```
 
+### `node scripts/node/vite-lazy-deps-gate.js`
+
+检查 `React.lazy(() => import(...))` 子图中的 lazy-only 裸 npm 依赖是否已写入
+`web/app/vite.config.ts` 的 `optimizeDeps.include`，并检查 route-owned lazy import
+是否有 `scripts/node/vite-lazy-deps-gate/manifest.json` smoke 覆盖。
+
+```bash
+node scripts/node/vite-lazy-deps-gate.js
+node scripts/node/vite-lazy-deps-gate.js --smoke --web-base-url http://127.0.0.1:3100
+```
+
+默认只跑静态检查；`--smoke` 才启动 Playwright 并访问 manifest 中的路径，捕获 Vite dev
+`504 Outdated Optimize Dep` 和 `Failed to fetch dynamically imported module`。
+
 ## Verification Scripts
 
 ### `node scripts/node/verify.js <backend|ci|coverage|repo> [args]`

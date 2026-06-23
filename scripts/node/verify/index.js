@@ -1016,7 +1016,14 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
       cwd: repoRoot,
     },
   ];
+  const viteLazyDepsCommand = {
+    label: 'repo-vite-lazy-deps-gate',
+    command: nodeBinary,
+    args: [resolveScriptsNodeCliEntry(repoRoot, 'tooling'), 'vite-lazy-deps-gate'],
+    cwd: repoRoot,
+  };
   const frontendCommands = [
+    viteLazyDepsCommand,
     {
       label: 'repo-frontend-full',
       command: nodeBinary,
@@ -1031,6 +1038,7 @@ function buildRepoCommands({ repoRoot, env = process.env, target = 'all' }) {
     },
   ];
   const frontendPrCommands = [
+    viteLazyDepsCommand,
     {
       label: 'repo-frontend-pr',
       command: nodeBinary,

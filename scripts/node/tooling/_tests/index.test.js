@@ -185,6 +185,20 @@ test('tooling index dispatches security-risk subcommand', async () => {
   assert.deepEqual(capturedArgv, ['origin/latest']);
 });
 
+test('tooling index dispatches vite-lazy-deps-gate subcommand', async () => {
+  let capturedArgv = null;
+
+  const status = await main(['vite-lazy-deps-gate', '--smoke'], {
+    runViteLazyDepsGateImpl(argv) {
+      capturedArgv = argv;
+      return 0;
+    },
+  });
+
+  assert.equal(status, 0);
+  assert.deepEqual(capturedArgv, ['--smoke']);
+});
+
 test('tooling index dispatches gate-router subcommand', async () => {
   let capturedArgv = null;
 

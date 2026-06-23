@@ -29,9 +29,10 @@ scope: repo-backend-fmt
 scope: repo-backend-check-{core-libs,runtime-storage,apps}
 ```
 
-The `repo-frontend-pr` scope runs web lint, a compact frontend PR smoke suite, and the app
-build. Full app Vitest, page regression, style-boundary, coverage, and backend
-consistency evidence stay in nightly or manual full quality gates.
+The `repo-frontend-pr` scope runs the Vite lazy dependency static gate, web lint, a
+compact frontend PR smoke suite, and the app build. Full app Vitest, page regression,
+style-boundary, coverage, and backend consistency evidence stay in nightly or manual
+full quality gates.
 
 The `repo-tooling` scope starts with `gate-router`, a non-blocking advisory that
 prints related quality gate suggestions for the current branch diff. It also

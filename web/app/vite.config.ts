@@ -41,7 +41,19 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     optimizeDeps: {
-      include: ['@scalar/api-reference-react', '@monaco-editor/react']
+      include: [
+        '@lexical/react',
+        '@lexical/utils',
+        '@monaco-editor/react',
+        '@scalar/api-reference-react',
+        '@xyflow/react',
+        'copy-to-clipboard',
+        'echarts',
+        'lexical',
+        'react-markdown',
+        'remark-breaks',
+        'remark-gfm'
+      ]
     },
     build: {
       chunkSizeWarningLimit: 3500,
