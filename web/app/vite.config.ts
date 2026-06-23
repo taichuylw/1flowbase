@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     optimizeDeps: {
-      include: ['@scalar/api-reference-react']
+      include: ['@scalar/api-reference-react', '@monaco-editor/react']
     },
     build: {
       chunkSizeWarningLimit: 3500,
