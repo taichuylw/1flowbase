@@ -50,6 +50,11 @@ pub struct ResolveRuntimeDebugArtifactsBody {
     pub artifact_refs: Vec<Uuid>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ApplicationRunSelectedExportBody {
+    pub run_ids: Vec<Uuid>,
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct RuntimeDebugArtifactValueResponse {
     pub artifact_ref: String,
@@ -305,6 +310,92 @@ pub struct ApplicationRunTraceTreeResponse {
     pub answer_snapshot: Option<AnswerSnapshotResponse>,
     pub projection_status: ApplicationRunTraceProjectionStatusResponse,
     pub nodes: Vec<ApplicationRunTraceNodeSummaryResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceExportWarningResponse {
+    pub code: String,
+    pub source: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceExportNodeResponse {
+    pub trace_node_id: String,
+    pub stable_locator: String,
+    pub parent_trace_node_id: Option<String>,
+    pub node_kind: String,
+    pub flow_run_id: String,
+    pub node_run_id: Option<String>,
+    pub callback_task_id: Option<String>,
+    pub node_id: Option<String>,
+    pub node_type: Option<String>,
+    pub node_mode: Option<String>,
+    pub node_alias: String,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub metrics_payload: serde_json::Value,
+    pub has_children: bool,
+    pub child_count: i64,
+    pub has_content: bool,
+    pub content_kind: Option<String>,
+    pub source_refs: serde_json::Value,
+    pub detail_refs: serde_json::Value,
+    pub payload: serde_json::Value,
+    #[schema(no_recursion)]
+    pub children: Vec<ApplicationRunTraceExportNodeResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceExportTreeResponse {
+    pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
+    pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
+    pub projection_status: ApplicationRunTraceProjectionStatusResponse,
+    pub nodes: Vec<ApplicationRunTraceExportNodeResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunTraceExportResponse {
+    pub export_version: i32,
+    pub exported_at: String,
+    pub export_status: String,
+    pub export_warnings: Vec<ApplicationRunTraceExportWarningResponse>,
+    pub run: application_logs::ApplicationRunLogResponse,
+    pub statistics: application_logs::ApplicationRunStatisticsResponse,
+    pub detail: application_logs::ApplicationRunTypedDetailResponse,
+    pub flow_run: FlowRunResponse,
+    pub answer_snapshot: Option<AnswerSnapshotResponse>,
+    pub node_runs: Vec<NodeRunResponse>,
+    pub checkpoints: Vec<CheckpointResponse>,
+    pub callback_tasks: Vec<CallbackTaskResponse>,
+    pub events: Vec<RunEventResponse>,
+    pub stitched_trace: Vec<ApplicationRunStitchedTraceResponse>,
+    pub trace_tree: ApplicationRunTraceExportTreeResponse,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunSelectedExportManifestRunResponse {
+    pub run_id: String,
+    pub title: String,
+    pub started_at: String,
+    pub filename: String,
+    pub export_status: String,
+    pub export_warning_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationRunSelectedExportManifestResponse {
+    pub export_version: i32,
+    pub exported_at: String,
+    pub export_status: String,
+    pub application_id: String,
+    pub run_count: usize,
+    pub selected_run_ids: Vec<String>,
+    pub entries: Vec<ApplicationRunSelectedExportManifestRunResponse>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

@@ -1,7 +1,7 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
 import { ApiClientError } from '../../errors';
-import { apiFetch } from '../../transport';
+import { apiFetch, apiFetchBlob } from '../../transport';
 import type {
   ConsoleApplicationRunDetail,
   ConsoleApplicationRunMonitoringReport,
@@ -218,6 +218,35 @@ export function getConsoleApplicationRunTraceTree(
 ) {
   return apiFetch<ConsoleApplicationRunTraceTree>({
     path: `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree`,
+    baseUrl
+  });
+}
+
+export function exportConsoleApplicationRunTraceDump(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetchBlob({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/export`,
+    method: 'GET',
+    baseUrl
+  });
+}
+
+export function exportConsoleApplicationRunsTraceDumpZip(
+  applicationId: string,
+  runIds: string[],
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetchBlob({
+    path: `/api/console/applications/${applicationId}/logs/runs/export`,
+    method: 'POST',
+    body: {
+      run_ids: runIds
+    },
+    csrfToken,
     baseUrl
   });
 }

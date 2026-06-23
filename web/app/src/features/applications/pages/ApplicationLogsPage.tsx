@@ -1,4 +1,5 @@
 import {
+  DownloadOutlined,
   ReloadOutlined,
   SearchOutlined,
   SortAscendingOutlined,
@@ -6,7 +7,7 @@ import {
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, App, Button, Empty, Input, Spin, Tooltip } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type Key } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AutosizeSelect } from '../../../shared/ui/autosize-select/AutosizeSelect';
@@ -21,6 +22,8 @@ import {
   fetchApplicationRunTraceToolCallbackContent,
   fetchApplicationRunTraceTree,
   fetchApplicationRunOverview,
+  exportApplicationRunTraceDump,
+  exportSelectedApplicationRunsTraceDumpZip,
   type FetchApplicationRunsInput,
   fetchRuntimeDebugArtifact,
   fetchRuntimeDebugArtifacts,
@@ -44,7 +47,13 @@ import {
   ApplicationRunsTableColumnSettings
 } from '../components/logs/ApplicationRunsTable';
 import { useApplicationRunsTableConfiguration } from '../components/logs/useApplicationRunsTableConfiguration';
+import {
+  buildRunTraceDumpFilename,
+  buildSelectedRunTraceDumpFilename,
+  saveApplicationRunExport
+} from '../lib/run-export-download';
 import { isActiveRunStatus } from '../lib/run-status';
+import { useAuthStore } from '../../../state/auth-store';
 import './application-logs-page.css';
 
 const FLOATING_WINDOW_TOP = 112;
@@ -242,10 +251,14 @@ export function ApplicationLogsPage({
   const [sortOrder, setSortOrder] =
     useState<ApplicationRunSortOrder>(DEFAULT_SORT_ORDER);
   const [refreshingRuns, setRefreshingRuns] = useState(false);
+  const [exportingSelectedRuns, setExportingSelectedRuns] = useState(false);
+  const [exportingRunId, setExportingRunId] = useState<string | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
   const [activeFloatingWindow, setActiveFloatingWindow] =
     useState<ApplicationLogsFloatingWindowKind>('run-detail');
   const { message } = App.useApp();
   const queryClient = useQueryClient();
+  const csrfToken = useAuthStore((state) => state.csrfToken);
   const timeRangeOptions = useMemo(
     () =>
       TIME_RANGE_OPTIONS.map((option) => ({
@@ -292,10 +305,28 @@ export function ApplicationLogsPage({
   const runsPage = runsQuery.data;
   const runs = useMemo(() => runsPage?.items ?? [], [runsPage?.items]);
   const total = runsPage?.total ?? 0;
+  const visibleRunIds = useMemo(
+    () => new Set(runs.map((run) => run.id)),
+    [runs]
+  );
+  const selectedVisibleRunIds = useMemo(
+    () => selectedRunIds.filter((runId) => visibleRunIds.has(runId)),
+    [selectedRunIds, visibleRunIds]
+  );
 
   useEffect(() => {
     setPage(1);
   }, [applicationId, timeRange, sortBy, sortOrder, titleIncludes]);
+
+  useEffect(() => {
+    setSelectedRunIds([]);
+  }, [applicationId, page, timeRange, sortBy, sortOrder, titleIncludes]);
+
+  useEffect(() => {
+    setSelectedRunIds((current) =>
+      current.filter((runId) => visibleRunIds.has(runId))
+    );
+  }, [visibleRunIds]);
 
   useEffect(() => {
     if (!runs.some((run) => isActiveRunStatus(run.status))) {
@@ -351,6 +382,7 @@ export function ApplicationLogsPage({
   }
 
   async function refreshRunsFromDurable() {
+    setSelectedRunIds([]);
     setRefreshingRuns(true);
     try {
       const refreshedRuns = await fetchApplicationRuns(applicationId, {
@@ -365,6 +397,48 @@ export function ApplicationLogsPage({
       message.error(t('auto.refresh_failed'));
     } finally {
       setRefreshingRuns(false);
+    }
+  }
+
+  async function exportSelectedRuns() {
+    const runIds = selectedRunIds.filter((runId) => visibleRunIds.has(runId));
+
+    if (runIds.length === 0) {
+      return;
+    }
+
+    if (!csrfToken) {
+      message.error(t('auto.export_logs_csrf_missing'));
+      return;
+    }
+
+    setExportingSelectedRuns(true);
+    try {
+      const download = await exportSelectedApplicationRunsTraceDumpZip(
+        applicationId,
+        runIds,
+        csrfToken
+      );
+      saveApplicationRunExport(download, buildSelectedRunTraceDumpFilename());
+    } catch {
+      message.error(t('auto.export_logs_failed'));
+    } finally {
+      setExportingSelectedRuns(false);
+    }
+  }
+
+  async function exportRunTraceDump(runId: string) {
+    setExportingRunId(runId);
+    try {
+      const download = await exportApplicationRunTraceDump(
+        applicationId,
+        runId
+      );
+      saveApplicationRunExport(download, buildRunTraceDumpFilename(runId));
+    } catch {
+      message.error(t('auto.export_logs_failed'));
+    } finally {
+      setExportingRunId(null);
     }
   }
 
@@ -435,6 +509,26 @@ export function ApplicationLogsPage({
     }
   }
 
+  const runsRowSelection = useMemo(
+    () => ({
+      selectedRowKeys: selectedVisibleRunIds,
+      onChange: (nextSelectedRowKeys: Key[]) => {
+        setSelectedRunIds(
+          nextSelectedRowKeys
+            .map((key) => String(key))
+            .filter((runId) => visibleRunIds.has(runId))
+        );
+      },
+      getCheckboxProps: (run: ApplicationRunSummary) => ({
+        name: run.id,
+        'aria-label': t('auto.select_run_for_export', {
+          value1: run.title || run.id
+        })
+      })
+    }),
+    [selectedVisibleRunIds, t, visibleRunIds]
+  );
+
   const logsHeader = (
     <div className="application-logs-page__header">
       <div className="application-logs-page__filters" role="search">
@@ -484,6 +578,17 @@ export function ApplicationLogsPage({
           onChange={(event) => setKeywordSearch(event.target.value)}
         />
         <div className="application-logs-page__filter-actions">
+          <Tooltip title={t('auto.export_selected_runs_trace_dump')}>
+            <Button
+              aria-label={t('auto.export_selected_runs_trace_dump')}
+              disabled={selectedVisibleRunIds.length === 0}
+              icon={<DownloadOutlined aria-hidden="true" />}
+              loading={exportingSelectedRuns}
+              onClick={() => {
+                void exportSelectedRuns();
+              }}
+            />
+          </Tooltip>
           <Tooltip title={t('auto.refresh_logs')}>
             <Button
               aria-label={t('auto.refresh_logs')}
@@ -540,6 +645,7 @@ export function ApplicationLogsPage({
           configuration={runsTableConfiguration}
           columns={runsTableColumns}
           runs={runs}
+          rowSelection={runsRowSelection}
           selectedRunId={selectedRunId}
           onPageChange={setPage}
           onSelectRun={selectRun}
@@ -612,6 +718,14 @@ export function ApplicationLogsPage({
               overviewLoader={{
                 loadOverview: (runId) =>
                   fetchApplicationRunOverview(applicationId, runId)
+              }}
+              exportingRun={
+                exportingRunId ===
+                (openConversationLogMessage.detailRunId ??
+                  openConversationLogMessage.runId)
+              }
+              onExportRun={(runId) => {
+                void exportRunTraceDump(runId);
               }}
             />
           </div>

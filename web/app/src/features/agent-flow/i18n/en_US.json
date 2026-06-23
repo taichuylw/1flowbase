@@ -282,6 +282,7 @@
     "execute_sub_processes_within_container_conditional_loop": "Execute sub-processes within the container in a conditional loop.",
     "call_large_language_model_generate_text_results": "Call a large language model to generate text results.",
     "conversation_log": "Conversation log",
+    "export_current_run_json": "Export current run JSON",
     "tracking_record_yet": "No tracking record yet",
     "trace_projection_pending": "Trace index is waiting",
     "trace_projection_running": "Trace index is building",

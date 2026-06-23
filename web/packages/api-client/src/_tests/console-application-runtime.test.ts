@@ -14,6 +14,8 @@ import {
   getConsoleApplicationRunTraceNodeDetail,
   getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
+  exportConsoleApplicationRunTraceDump,
+  exportConsoleApplicationRunsTraceDumpZip,
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugStream,
   getConsoleRuntimeDebugArtifact,
@@ -172,12 +174,10 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
 
     await expect(
-      getConsoleRuntimeDebugStream(
-        'app-1',
-        'run-1',
-        'http://127.0.0.1:7800',
-        { from_sequence: 12, limit: 25 }
-      )
+      getConsoleRuntimeDebugStream('app-1', 'run-1', 'http://127.0.0.1:7800', {
+        from_sequence: 12,
+        limit: 25
+      })
     ).resolves.toEqual({
       parts: [],
       page_size: 25,
@@ -189,6 +189,77 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
+      })
+    );
+  });
+
+  test('exports a single run trace dump as a blob response with filename metadata', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        new Blob(['{"run_id":"run-1"}'], { type: 'application/json' }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-disposition':
+              'attachment; filename="application-run-run-1-trace.json"'
+          }
+        }
+      )
+    );
+
+    const response = await exportConsoleApplicationRunTraceDump(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+
+    await expect(response.blob.text()).resolves.toBe('{"run_id":"run-1"}');
+    expect(response.filename).toBe('application-run-run-1-trace.json');
+    expect(response.contentType).toBe('application/json');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/export',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('exports selected run trace dumps as a csrf-protected zip blob response', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(new Blob(['zip-bytes'], { type: 'application/zip' }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/zip',
+          'content-disposition':
+            "attachment; filename*=UTF-8''selected-traces.zip"
+        }
+      })
+    );
+
+    const response = await exportConsoleApplicationRunsTraceDumpZip(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+
+    await expect(response.blob.text()).resolves.toBe('zip-bytes');
+    expect(response.filename).toBe('selected-traces.zip');
+    expect(response.contentType).toBe('application/zip');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/export',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          run_ids: ['run-1', 'run-2']
+        }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-csrf-token': 'csrf-123'
+        })
       })
     );
   });

@@ -103,6 +103,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "zip",
 ]
 
 [[package]]

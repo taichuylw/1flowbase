@@ -30,6 +30,7 @@ tracing-subscriber.workspace = true
 utoipa.workspace = true
 utoipa-swagger-ui.workspace = true
 uuid.workspace = true
+zip.workspace = true
 domain = { path = "../../crates/domain" }
 control-plane = { path = "../../crates/control-plane" }
 runtime-core = { path = "../../crates/runtime-core" }

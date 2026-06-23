@@ -2,6 +2,7 @@ import { CheckOutlined } from '@ant-design/icons';
 import { Button, Pagination, Select, Table } from 'antd';
 import { useCallback, useMemo } from 'react';
 import type { Key, MouseEvent, ThHTMLAttributes } from 'react';
+import type { TableProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -17,6 +18,8 @@ import './data-table.css';
 import { i18nText } from '../../i18n/text';
 
 export type { DataTableColumn, DataTableConfiguration };
+export type DataTableRowSelection<T extends object> =
+  TableProps<T>['rowSelection'];
 
 type ResizeHeaderCellProps = ThHTMLAttributes<HTMLElement> & {
   onResizeMouseDown?: (event: MouseEvent<HTMLElement>) => void;
@@ -41,12 +44,12 @@ function ResizeHeaderCell({
 }
 
 export function DataTableColumnSettings<T extends object>({
-  ariaLabel = i18nText("sharedUi", "auto.field_configuration"),
+  ariaLabel = i18nText('sharedUi', 'auto.field_configuration'),
   className,
   columns,
   configuration,
-  placeholder = i18nText("sharedUi", "auto.field_configuration"),
-  resetLabel = i18nText("sharedUi", "auto.reset_default_fields")
+  placeholder = i18nText('sharedUi', 'auto.field_configuration'),
+  resetLabel = i18nText('sharedUi', 'auto.reset_default_fields')
 }: {
   ariaLabel?: string;
   className?: string;
@@ -132,6 +135,7 @@ export function DataTable<T extends object>({
   pageSize,
   rowClassName,
   rowKey,
+  rowSelection,
   total,
   onPageChange
 }: {
@@ -144,6 +148,7 @@ export function DataTable<T extends object>({
   pageSize: number;
   rowClassName?: (record: T, index: number) => string;
   rowKey: keyof T | ((record: T) => Key);
+  rowSelection?: DataTableRowSelection<T>;
   total: number;
   onPageChange: (page: number) => void;
 }) {
@@ -261,6 +266,7 @@ export function DataTable<T extends object>({
           }}
           pagination={false}
           rowClassName={rowClassName}
+          rowSelection={rowSelection}
           columns={tableColumns}
         />
       </div>
@@ -270,7 +276,9 @@ export function DataTable<T extends object>({
         pageSize={pageSize}
         total={total}
         showSizeChanger={false}
-        showTotal={(paginationTotal) => i18nText("sharedUi", "auto.total_items", { value1: paginationTotal })}
+        showTotal={(paginationTotal) =>
+          i18nText('sharedUi', 'auto.total_items', { value1: paginationTotal })
+        }
         onChange={onPageChange}
       />
     </section>

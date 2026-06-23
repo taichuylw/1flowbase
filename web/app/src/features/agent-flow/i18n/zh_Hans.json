@@ -282,6 +282,7 @@
     "execute_sub_processes_within_container_conditional_loop": "按条件循环执行容器内子流程。",
     "call_large_language_model_generate_text_results": "调用大语言模型生成文本结果。",
     "conversation_log": "对话日志",
+    "export_current_run_json": "导出当前运行 JSON",
     "tracking_record_yet": "暂无追踪记录",
     "trace_projection_pending": "追踪索引等待生成",
     "trace_projection_running": "追踪索引生成中",

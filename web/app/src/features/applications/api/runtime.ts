@@ -11,10 +11,13 @@ import {
   getConsoleApplicationRunTraceNodeDetail,
   getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
+  exportConsoleApplicationRunTraceDump,
+  exportConsoleApplicationRunsTraceDumpZip,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
   resolveConsoleRuntimeDebugArtifacts,
   getConsoleRuntimeDebugStream,
+  type ApiBlobResponse,
   type ConsoleApplicationConversationMessage,
   type ConsoleApplicationConversationMessagesPage,
   type ConsoleApplicationRunMonitoringApiKeyUsage,
@@ -171,6 +174,7 @@ export interface ApplicationRunCallbackTasksPage {
 }
 export type ApplicationRuntimeDebugStreamPart = RuntimeDebugStreamPart;
 export type { RuntimeDebugStreamPart };
+export type ApplicationRunExportDownload = ApiBlobResponse;
 export type ApplicationRunSortField =
   | 'created_at'
   | 'started_at'
@@ -479,6 +483,30 @@ export function fetchApplicationRunOverview(
   return getConsoleApplicationRunOverview(
     applicationId,
     runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function exportApplicationRunTraceDump(
+  applicationId: string,
+  runId: string
+) {
+  return exportConsoleApplicationRunTraceDump(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function exportSelectedApplicationRunsTraceDumpZip(
+  applicationId: string,
+  runIds: string[],
+  csrfToken: string
+) {
+  return exportConsoleApplicationRunsTraceDumpZip(
+    applicationId,
+    runIds,
+    csrfToken,
     getApplicationsApiBaseUrl()
   );
 }

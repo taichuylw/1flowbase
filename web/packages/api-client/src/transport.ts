@@ -30,9 +30,49 @@ export interface ApiRequestOptions {
   unwrapSuccess?: boolean;
 }
 
+export interface ApiBlobResponse {
+  blob: Blob;
+  filename: string | null;
+  contentType: string;
+}
+
+function normalizeDispositionFilename(value: string): string | null {
+  const trimmed = value.trim().replace(/^"|"$/g, '');
+
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseContentDispositionFilename(header: string | null): string | null {
+  if (!header) {
+    return null;
+  }
+
+  const filenameStarMatch = /(?:^|;)\s*filename\*=([^;]+)/iu.exec(header);
+  if (filenameStarMatch?.[1]) {
+    const rawValue = normalizeDispositionFilename(filenameStarMatch[1]);
+    const encodedFilename = rawValue?.includes("''")
+      ? rawValue.split("''").slice(1).join("''")
+      : rawValue;
+
+    if (encodedFilename) {
+      try {
+        return decodeURIComponent(encodedFilename);
+      } catch {
+        return encodedFilename;
+      }
+    }
+  }
+
+  const filenameMatch = /(?:^|;)\s*filename=([^;]+)/iu.exec(header);
+  return filenameMatch?.[1]
+    ? normalizeDispositionFilename(filenameMatch[1])
+    : null;
+}
+
 export function getDefaultApiBaseUrl(
-  locationLike: ApiBaseUrlLocation | undefined =
-    typeof window !== 'undefined' ? window.location : undefined
+  locationLike: ApiBaseUrlLocation | undefined = typeof window !== 'undefined'
+    ? window.location
+    : undefined
 ): string {
   if (!locationLike) {
     return '';
@@ -65,7 +105,9 @@ export async function apiFetch<T>({
   unwrapSuccess = true
 }: ApiRequestOptions): Promise<T> {
   if (body !== undefined && rawBody !== undefined) {
-    throw new Error('apiFetch does not support body and rawBody at the same time');
+    throw new Error(
+      'apiFetch does not support body and rawBody at the same time'
+    );
   }
 
   const headers: Record<string, string> = {};
@@ -107,6 +149,63 @@ export async function apiFetch<T>({
   }
 
   return unwrapApiSuccess<T>((await response.json()) as ApiSuccessEnvelope<T>);
+}
+
+export async function apiFetchBlob({
+  path,
+  method = 'GET',
+  body,
+  rawBody,
+  contentType,
+  csrfToken,
+  baseUrl = getDefaultApiBaseUrl()
+}: Omit<
+  ApiRequestOptions,
+  'expectJson' | 'unwrapSuccess'
+>): Promise<ApiBlobResponse> {
+  if (body !== undefined && rawBody !== undefined) {
+    throw new Error(
+      'apiFetchBlob does not support body and rawBody at the same time'
+    );
+  }
+
+  const headers: Record<string, string> = {};
+
+  if (body !== undefined) {
+    headers['content-type'] = 'application/json';
+  }
+
+  if (contentType !== undefined && contentType !== null) {
+    headers['content-type'] = contentType;
+  }
+
+  if (csrfToken) {
+    headers['x-csrf-token'] = csrfToken;
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    credentials: 'include',
+    headers,
+    body:
+      body !== undefined
+        ? JSON.stringify(body)
+        : rawBody !== undefined
+          ? rawBody
+          : undefined
+  });
+
+  if (!response.ok) {
+    throw await ApiClientError.fromResponse(response);
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: parseContentDispositionFilename(
+      response.headers.get('content-disposition')
+    ),
+    contentType: response.headers.get('content-type') ?? ''
+  };
 }
 
 export async function apiFetchVoid(

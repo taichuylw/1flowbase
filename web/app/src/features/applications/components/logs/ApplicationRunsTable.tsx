@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import {
   DataTable,
   DataTableColumnSettings,
-  type DataTableColumn
+  type DataTableColumn,
+  type DataTableRowSelection
 } from '../../../../shared/ui/data-table/DataTable';
 import type { ApplicationRunSummary } from '../../api/runtime';
 import type { ApplicationRunsTableConfiguration } from './useApplicationRunsTableConfiguration';
@@ -34,6 +35,7 @@ export function ApplicationRunsTable({
   total,
   runs,
   columns,
+  rowSelection,
   selectedRunId,
   configuration,
   onPageChange,
@@ -45,6 +47,7 @@ export function ApplicationRunsTable({
   total: number;
   runs: ApplicationRunSummary[];
   columns: Array<DataTableColumn<ApplicationRunSummary>>;
+  rowSelection?: DataTableRowSelection<ApplicationRunSummary>;
   selectedRunId?: string | null;
   configuration: ApplicationRunsTableConfiguration;
   onPageChange: (page: number) => void;
@@ -83,6 +86,7 @@ export function ApplicationRunsTable({
         record.id === selectedRunId ? 'application-runs-table__row--active' : ''
       }
       rowKey={(record) => record.id}
+      rowSelection={rowSelection}
       total={total}
       onPageChange={onPageChange}
     />

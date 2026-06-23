@@ -48,6 +48,16 @@ vi.mock('@1flowbase/api-client', () => ({
     source_refs: [],
     payload: {}
   }),
+  exportConsoleApplicationRunTraceDump: vi.fn().mockResolvedValue({
+    blob: new Blob(['{}'], { type: 'application/json' }),
+    filename: 'run-1.json',
+    contentType: 'application/json'
+  }),
+  exportConsoleApplicationRunsTraceDumpZip: vi.fn().mockResolvedValue({
+    blob: new Blob(['zip'], { type: 'application/zip' }),
+    filename: 'selected-runs.zip',
+    contentType: 'application/zip'
+  }),
   getConsoleApplicationRunResumeTimeline: vi.fn().mockResolvedValue({
     flow_run: { id: 'run-1' },
     callback_tasks: [],
@@ -240,6 +250,8 @@ import {
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugStream,
+  exportConsoleApplicationRunTraceDump,
+  exportConsoleApplicationRunsTraceDumpZip,
   resumeConsoleFlowRun
 } from '@1flowbase/api-client';
 
@@ -262,6 +274,8 @@ import {
   fetchApplicationRunTraceTree,
   fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
+  exportApplicationRunTraceDump,
+  exportSelectedApplicationRunsTraceDumpZip,
   fetchRuntimeDebugStream,
   resumeFlowRun
 } from '../api/runtime';
@@ -386,6 +400,12 @@ describe('applications runtime api', () => {
     });
     await fetchApplicationRuntimeActivity('app-1');
     await fetchRuntimeDebugStream('app-1', 'run-1');
+    await exportApplicationRunTraceDump('app-1', 'run-1');
+    await exportSelectedApplicationRunsTraceDumpZip(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123'
+    );
 
     expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
       'application_run_log_summaries',
@@ -451,6 +471,17 @@ describe('applications runtime api', () => {
     expect(getConsoleRuntimeDebugStream).toHaveBeenCalledWith(
       'app-1',
       'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(exportConsoleApplicationRunTraceDump).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(exportConsoleApplicationRunsTraceDumpZip).toHaveBeenCalledWith(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123',
       'http://127.0.0.1:7800'
     );
   });

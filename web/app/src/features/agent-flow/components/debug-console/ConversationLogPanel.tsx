@@ -14,8 +14,10 @@ import {
   Empty,
   Spin,
   Tabs,
+  Tooltip,
   Typography
 } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 
 import type { AgentFlowDebugMessage } from '../../api/runtime';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
@@ -356,12 +358,11 @@ function ConversationTrace({
   );
 }
 
-const initialLazyTraceChildrenState =
-  createInitialLazyTraceChildrenState<
-    ConversationLogTraceNodeSummary,
-    ConversationLogTraceNodeChildrenPageInfo,
-    ConversationLogTraceProjectionStatus
-  >();
+const initialLazyTraceChildrenState = createInitialLazyTraceChildrenState<
+  ConversationLogTraceNodeSummary,
+  ConversationLogTraceNodeChildrenPageInfo,
+  ConversationLogTraceProjectionStatus
+>();
 
 function traceProjectionStatusMessage(
   status: ConversationLogTraceProjectionStatus
@@ -554,7 +555,8 @@ function FlattenedToolModeTraceNodeChild({
       runId,
       node.trace_node_id
     ],
-    queryFn: () => traceLoader.loadChildren(runId, node.trace_node_id, undefined),
+    queryFn: () =>
+      traceLoader.loadChildren(runId, node.trace_node_id, undefined),
     refetchOnWindowFocus: false,
     staleTime: CONVERSATION_LOG_QUERY_STALE_TIME_MS
   });
@@ -959,16 +961,20 @@ function useConversationLogArtifactLoader(
 
 export function ConversationLogPanel({
   defaultTraceToolsExpanded = false,
+  exportingRun = false,
   message,
   onClose,
+  onExportRun,
   onLoadArtifact,
   onLoadArtifacts,
   overviewLoader,
   traceLoader
 }: {
   defaultTraceToolsExpanded?: boolean;
+  exportingRun?: boolean;
   message: AgentFlowDebugMessage;
   onClose: () => void;
+  onExportRun?: (runId: string) => void | Promise<void>;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
   onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   overviewLoader?: ConversationLogOverviewLoader;
@@ -979,9 +985,30 @@ export function ConversationLogPanel({
     onLoadArtifact
   );
   const [activeTabKey, setActiveTabKey] = useState('detail');
+  const exportRunId = message.detailRunId ?? message.runId ?? null;
+  const exportActionLabel = i18nText(
+    'agentFlow',
+    'auto.export_current_run_json'
+  );
+  const exportAction =
+    onExportRun && exportRunId ? (
+      <Tooltip title={exportActionLabel}>
+        <Button
+          aria-label={exportActionLabel}
+          icon={<DownloadOutlined aria-hidden="true" />}
+          loading={exportingRun}
+          size="small"
+          type="text"
+          onClick={() => {
+            void onExportRun(exportRunId);
+          }}
+        />
+      </Tooltip>
+    ) : null;
 
   return (
     <AgentFlowDockPanel
+      actions={exportAction}
       bodyClassName="agent-flow-editor__conversation-log-body"
       className="agent-flow-editor__conversation-log-panel"
       closeLabel={i18nText('agentFlow', 'auto.turn_off_conversation_log')}

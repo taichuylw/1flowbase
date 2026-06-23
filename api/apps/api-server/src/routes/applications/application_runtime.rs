@@ -133,6 +133,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         )
         .route("/applications/:id/logs/runs", get(list_application_runs))
         .route(
+            "/applications/:id/logs/runs/export",
+            post(export_application_runs_zip),
+        )
+        .route(
             "/applications/:id/monitoring/run-metrics",
             get(application_monitoring::get_application_run_monitoring_report),
         )
@@ -155,6 +159,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/logs/runs/:run_id/trace-tree",
             get(get_application_run_trace_tree),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/export",
+            get(export_application_run_trace_dump),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/trace-tree/nodes",
@@ -199,6 +207,8 @@ include!("application_runtime/detail_responses.rs");
 include!("application_runtime/debug_handlers.rs");
 
 include!("application_runtime/log_handlers.rs");
+
+include!("application_runtime/export_handlers.rs");
 
 #[cfg(test)]
 mod tests;
