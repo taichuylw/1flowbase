@@ -45,6 +45,41 @@ fn read_zip_entries(body: &[u8]) -> Vec<(String, Vec<u8>)> {
     entries
 }
 
+async fn wait_for_node_run_error_code(
+    pool: &sqlx::PgPool,
+    node_run_id: Uuid,
+    expected_code: &str,
+) -> Value {
+    let mut last_payload = Value::Null;
+    for _ in 0..200 {
+        let payload = sqlx::query_scalar::<_, Value>(
+            r#"
+            select coalesce(error_payload, 'null'::jsonb)
+            from node_runs
+            where id = $1
+              and status = 'failed'
+            "#,
+        )
+        .bind(node_run_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+
+        if let Some(payload) = payload {
+            if payload.get("code").and_then(Value::as_str) == Some(expected_code) {
+                return payload;
+            }
+            last_payload = payload;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+
+    panic!(
+        "timed out waiting for node run {node_run_id} failed error code {expected_code}, last payload: {last_payload}"
+    );
+}
+
 #[tokio::test]
 async fn application_runtime_routes_logs_export_json_trace_dump_preserves_detail_and_error_payload()
 {
@@ -88,6 +123,8 @@ async fn application_runtime_routes_logs_export_json_trace_dump_preserves_detail
     )
     .await
     .unwrap();
+    let expected_error_payload =
+        wait_for_node_run_error_code(&pool, llm_node_run_id, "provider_failed").await;
 
     let (status, headers, body) = get_run_export(&app, &cookie, &application_id, &run_id).await;
     assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
@@ -160,8 +197,7 @@ async fn application_runtime_routes_logs_export_json_trace_dump_preserves_detail
         "node_runs[] must not wrap NodeRunResponse in a summary object"
     );
     assert_eq!(
-        failed_node["error_payload"]["code"],
-        json!("provider_failed"),
+        failed_node["error_payload"], expected_error_payload,
         "failed node error payload should be exported"
     );
 }
