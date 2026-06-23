@@ -53,18 +53,7 @@ function SettingsSectionBoundary({ children }: { children: ReactNode }) {
   return <Suspense fallback={<SettingsSectionFallback />}>{children}</Suspense>;
 }
 
-export function SettingsSectionBody({
-  sectionKey,
-  isRoot,
-  permissions,
-  canManageMembers,
-  canManageRoles,
-  canManageDataModels,
-  canManageModelProviders,
-  canManageHostInfrastructure,
-  canManageMcpManagement
-}: {
-  sectionKey: SettingsSectionKey;
+interface SettingsSectionAccess {
   isRoot: boolean;
   permissions: string[];
   canManageMembers: boolean;
@@ -73,37 +62,58 @@ export function SettingsSectionBody({
   canManageModelProviders: boolean;
   canManageHostInfrastructure: boolean;
   canManageMcpManagement: boolean;
+}
+
+export function SettingsSectionBody({
+  sectionKey,
+  access
+}: {
+  sectionKey: SettingsSectionKey;
+  access: SettingsSectionAccess;
 }) {
   switch (sectionKey) {
     case 'members':
       return (
         <MemberManagementPanel
-          canManageMembers={canManageMembers}
-          canManageRoleBindings={canManageRoles}
+          canManageMembers={access.canManageMembers}
+          canManageRoleBindings={access.canManageRoles}
         />
       );
     case 'system-runtime':
       return <SystemRuntimePanel />;
     case 'files':
-      return <SettingsFilesSection isRoot={isRoot} permissions={permissions} />;
+      return (
+        <SettingsFilesSection
+          isRoot={access.isRoot}
+          permissions={access.permissions}
+        />
+      );
     case 'model-providers':
       return (
         <SettingsSectionBoundary>
-          <SettingsModelProvidersSection canManage={canManageModelProviders} />
+          <SettingsModelProvidersSection
+            canManage={access.canManageModelProviders}
+          />
         </SettingsSectionBoundary>
       );
     case 'data-models':
-      return <SettingsDataModelsSection canManage={canManageDataModels} />;
+      return (
+        <SettingsDataModelsSection canManage={access.canManageDataModels} />
+      );
     case 'mcp-management':
       return (
         <SettingsSectionBoundary>
-          <SettingsMcpManagementSection canManage={canManageMcpManagement} />
+          <SettingsMcpManagementSection
+            canManage={access.canManageMcpManagement}
+          />
         </SettingsSectionBoundary>
       );
     case 'host-infrastructure':
       return (
         <SettingsSectionBoundary>
-          <HostInfrastructurePanel canManage={canManageHostInfrastructure} />
+          <HostInfrastructurePanel
+            canManage={access.canManageHostInfrastructure}
+          />
         </SettingsSectionBoundary>
       );
     case 'memory-observation':
@@ -115,13 +125,13 @@ export function SettingsSectionBody({
             heightMode="fill"
           >
             <HostInfrastructureMemoryObservationPanel
-              canManage={canManageHostInfrastructure}
+              canManage={access.canManageHostInfrastructure}
             />
           </SettingsSectionSurface>
         </SettingsSectionBoundary>
       );
     case 'roles':
-      return <RolePermissionPanel canManageRoles={canManageRoles} />;
+      return <RolePermissionPanel canManageRoles={access.canManageRoles} />;
     case 'api-key-authentication':
       return (
         <SettingsSectionBoundary>

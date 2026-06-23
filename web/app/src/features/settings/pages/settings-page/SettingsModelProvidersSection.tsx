@@ -1,4 +1,9 @@
-import { useState } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useReducer,
+  type SetStateAction
+} from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert, Layout, Modal, Typography } from 'antd';
@@ -36,6 +41,124 @@ import { useOfficialPluginTask } from './model-providers/use-official-plugin-tas
 import { SettingsSectionSurface } from '../../components/SettingsSectionSurface';
 import { i18nText } from '../../../../shared/i18n/text';
 
+interface ModelProviderSectionState {
+  drawerState: ModelProviderDrawerState;
+  instanceModalState: ModelProviderInstanceModalState;
+  uploadModalOpen: boolean;
+  uploadFileList: UploadFile[];
+  uploadValidationMessage: string | null;
+  uploadResultSummary: UploadResultSummary;
+  recentVersionSwitchNotice: RecentVersionSwitchNotice;
+  officialSearchQuery: string;
+}
+
+type ModelProviderSectionAction =
+  | {
+      type: 'setDrawerState';
+      value: SetStateAction<ModelProviderDrawerState>;
+    }
+  | {
+      type: 'setInstanceModalState';
+      value: SetStateAction<ModelProviderInstanceModalState>;
+    }
+  | { type: 'setUploadModalOpen'; value: SetStateAction<boolean> }
+  | { type: 'setUploadFileList'; value: SetStateAction<UploadFile[]> }
+  | {
+      type: 'setUploadValidationMessage';
+      value: SetStateAction<string | null>;
+    }
+  | {
+      type: 'setUploadResultSummary';
+      value: SetStateAction<UploadResultSummary>;
+    }
+  | {
+      type: 'setRecentVersionSwitchNotice';
+      value: SetStateAction<RecentVersionSwitchNotice>;
+    }
+  | { type: 'setOfficialSearchQuery'; value: SetStateAction<string> };
+
+const initialModelProviderSectionState: ModelProviderSectionState = {
+  drawerState: null,
+  instanceModalState: null,
+  uploadModalOpen: false,
+  uploadFileList: [],
+  uploadValidationMessage: null,
+  uploadResultSummary: null,
+  recentVersionSwitchNotice: null,
+  officialSearchQuery: ''
+};
+
+function resolveSetState<T>(value: SetStateAction<T>, current: T): T {
+  return typeof value === 'function'
+    ? (value as (previous: T) => T)(current)
+    : value;
+}
+
+function modelProviderSectionReducer(
+  state: ModelProviderSectionState,
+  action: ModelProviderSectionAction
+): ModelProviderSectionState {
+  switch (action.type) {
+    case 'setDrawerState':
+      return {
+        ...state,
+        drawerState: resolveSetState(action.value, state.drawerState)
+      };
+    case 'setInstanceModalState':
+      return {
+        ...state,
+        instanceModalState: resolveSetState(
+          action.value,
+          state.instanceModalState
+        )
+      };
+    case 'setUploadModalOpen':
+      return {
+        ...state,
+        uploadModalOpen: resolveSetState(action.value, state.uploadModalOpen)
+      };
+    case 'setUploadFileList':
+      return {
+        ...state,
+        uploadFileList: resolveSetState(action.value, state.uploadFileList)
+      };
+    case 'setUploadValidationMessage':
+      return {
+        ...state,
+        uploadValidationMessage: resolveSetState(
+          action.value,
+          state.uploadValidationMessage
+        )
+      };
+    case 'setUploadResultSummary':
+      return {
+        ...state,
+        uploadResultSummary: resolveSetState(
+          action.value,
+          state.uploadResultSummary
+        )
+      };
+    case 'setRecentVersionSwitchNotice':
+      return {
+        ...state,
+        recentVersionSwitchNotice: resolveSetState(
+          action.value,
+          state.recentVersionSwitchNotice
+        )
+      };
+    case 'setOfficialSearchQuery':
+      return {
+        ...state,
+        officialSearchQuery: resolveSetState(
+          action.value,
+          state.officialSearchQuery
+        )
+      };
+  }
+
+  return state;
+}
+
 export function SettingsModelProvidersSection({
   canManage
 }: {
@@ -44,20 +167,60 @@ export function SettingsModelProvidersSection({
   const queryClient = useQueryClient();
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const [modal, modalContextHolder] = Modal.useModal();
-  const [drawerState, setDrawerState] =
-    useState<ModelProviderDrawerState>(null);
-  const [instanceModalState, setInstanceModalState] =
-    useState<ModelProviderInstanceModalState>(null);
-  const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]);
-  const [uploadValidationMessage, setUploadValidationMessage] = useState<
-    string | null
-  >(null);
-  const [uploadResultSummary, setUploadResultSummary] =
-    useState<UploadResultSummary>(null);
-  const [recentVersionSwitchNotice, setRecentVersionSwitchNotice] =
-    useState<RecentVersionSwitchNotice>(null);
-  const [officialSearchQuery, setOfficialSearchQuery] = useState('');
+  const [sectionState, dispatchSectionState] = useReducer(
+    modelProviderSectionReducer,
+    initialModelProviderSectionState
+  );
+  const {
+    drawerState,
+    instanceModalState,
+    uploadModalOpen,
+    uploadFileList,
+    uploadValidationMessage,
+    uploadResultSummary,
+    recentVersionSwitchNotice,
+    officialSearchQuery
+  } = sectionState;
+  const setDrawerState = useCallback(
+    (value: SetStateAction<ModelProviderDrawerState>) =>
+      dispatchSectionState({ type: 'setDrawerState', value }),
+    []
+  );
+  const setInstanceModalState = useCallback(
+    (value: SetStateAction<ModelProviderInstanceModalState>) =>
+      dispatchSectionState({ type: 'setInstanceModalState', value }),
+    []
+  );
+  const setUploadModalOpen = useCallback(
+    (value: SetStateAction<boolean>) =>
+      dispatchSectionState({ type: 'setUploadModalOpen', value }),
+    []
+  );
+  const setUploadFileList = useCallback(
+    (value: SetStateAction<UploadFile[]>) =>
+      dispatchSectionState({ type: 'setUploadFileList', value }),
+    []
+  );
+  const setUploadValidationMessage = useCallback(
+    (value: SetStateAction<string | null>) =>
+      dispatchSectionState({ type: 'setUploadValidationMessage', value }),
+    []
+  );
+  const setUploadResultSummary = useCallback(
+    (value: SetStateAction<UploadResultSummary>) =>
+      dispatchSectionState({ type: 'setUploadResultSummary', value }),
+    []
+  );
+  const setRecentVersionSwitchNotice = useCallback(
+    (value: SetStateAction<RecentVersionSwitchNotice>) =>
+      dispatchSectionState({ type: 'setRecentVersionSwitchNotice', value }),
+    []
+  );
+  const setOfficialSearchQuery = useCallback(
+    (value: SetStateAction<string>) =>
+      dispatchSectionState({ type: 'setOfficialSearchQuery', value }),
+    []
+  );
   const clearUploadState = () => {
     resetUploadState(
       setUploadFileList,
@@ -175,6 +338,13 @@ export function SettingsModelProvidersSection({
     getErrorMessage(pluginTaskQuery.error);
   const uploadErrorMessage =
     uploadValidationMessage ?? getErrorMessage(uploadMutation.error);
+  const sectionStatus = useMemo(
+    () =>
+      errorMessage ? (
+        <Alert type="error" showIcon message={errorMessage} />
+      ) : null,
+    [errorMessage]
+  );
 
   return (
     <>
@@ -183,11 +353,7 @@ export function SettingsModelProvidersSection({
         title={i18nText('settings', 'auto.model_providers')}
         hideHeader
         heightMode="fill"
-        status={
-          errorMessage ? (
-            <Alert type="error" showIcon message={errorMessage} />
-          ) : null
-        }
+        status={sectionStatus}
       >
         <div className="model-provider-panel">
           <Layout className="model-provider-panel__main">

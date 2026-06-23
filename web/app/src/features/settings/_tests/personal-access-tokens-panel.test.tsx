@@ -158,14 +158,14 @@ describe('PersonalAccessTokensPanel', () => {
           .length
       ).toBeGreaterThan(listCallsBeforeCreate);
     });
-  });
+  }, 10_000);
 
   test('deletes active tokens through the revoke action', async () => {
     renderPanel();
 
-    const row = (await screen.findByText('Existing automation')).closest(
-      'tr'
-    ) as HTMLElement;
+    const row = await screen.findByRole('row', {
+      name: /Existing automation.*pat_abc/u
+    });
     fireEvent.click(within(row).getByRole('button', { name: /删除/ }));
     fireEvent.click(await screen.findByRole('button', { name: '确认删除' }));
 

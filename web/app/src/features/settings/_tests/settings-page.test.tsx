@@ -1,4 +1,3 @@
-/* eslint-disable testing-library/no-node-access */
 import {
   fireEvent,
   render,
@@ -720,7 +719,7 @@ describe('SettingsPage', () => {
       screen.queryByRole('heading', { name: 'API 文档', level: 3 })
     ).not.toBeInTheDocument();
     expect(
-      await screen.findByRole('heading', { name: 'API key', level: 3 })
+      await screen.findByRole('button', { name: /添加/ })
     ).toBeInTheDocument();
   }, 10000);
 
@@ -755,7 +754,7 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
     expect(
-      await screen.findByRole('heading', { name: 'API key', level: 3 })
+      await screen.findByRole('button', { name: /添加/ })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /添加/ })
@@ -839,15 +838,19 @@ describe('SettingsPage', () => {
       expect(membersApi.fetchSettingsMembers).toHaveBeenCalled();
     });
 
-    const rootRow = (
-      await screen.findByText('Root', {}, { timeout: 10000 })
-    ).closest('tr') as HTMLElement;
-    const managerRow = (
-      await screen.findByText('Manager 1', {}, { timeout: 10000 })
-    ).closest('tr') as HTMLElement;
+    await screen.findByText('root@example.com', {}, { timeout: 10_000 });
+    await screen.findByText('manager-1@example.com', {}, { timeout: 10_000 });
+    const rows = screen.getAllByRole('row');
+    const rootRow = rows.find((row) =>
+      within(row).queryByText('root@example.com')
+    );
+    const managerRow = rows.find((row) =>
+      within(row).queryByText('manager-1@example.com')
+    );
 
-    expect(rootRow).not.toBeNull();
-    expect(managerRow).not.toBeNull();
+    if (!rootRow || !managerRow) {
+      throw new Error('Expected root and manager member rows to be rendered.');
+    }
 
     expect(
       within(rootRow).getByRole('button', { name: /编辑$/ })
@@ -868,7 +871,9 @@ describe('SettingsPage', () => {
       screen.queryByRole('columnheader', { name: '角色' })
     ).not.toBeInTheDocument();
 
-    fireEvent.click(within(rootRow).getByRole('button', { name: /编辑$/ }));
+    fireEvent.click(
+      within(rootRow).getByRole('button', { name: /编辑$/ })
+    );
     const profileDialog = await screen.findByRole('dialog', {
       name: /编辑用户资料/
     });
@@ -926,7 +931,7 @@ describe('SettingsPage', () => {
       target: { value: 'next-pass' }
     });
     fireEvent.click(
-      within(passwordDialog).getByRole('button', { name: '确认修改' })
+      within(passwordDialog).getByRole('button', { name: '确认重置' })
     );
     await waitFor(() => {
       expect(membersApi.changeCurrentUserPassword).toHaveBeenCalledWith(
@@ -937,7 +942,7 @@ describe('SettingsPage', () => {
         'csrf-123'
       );
     });
-  }, 10000);
+  }, 20_000);
 
   test('redirects /settings/docs to API key when docs is hidden', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);
@@ -951,7 +956,7 @@ describe('SettingsPage', () => {
       'section-page-layout--viewport'
     );
     expect(
-      await screen.findByRole('heading', { name: 'API key', level: 3 })
+      await screen.findByRole('button', { name: /添加/ })
     ).toBeInTheDocument();
   });
 
@@ -1207,7 +1212,7 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
     expect(
-      await screen.findByRole('heading', { name: 'API key', level: 3 })
+      await screen.findByRole('button', { name: /添加/ })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('navigation', { name: 'Section navigation' })

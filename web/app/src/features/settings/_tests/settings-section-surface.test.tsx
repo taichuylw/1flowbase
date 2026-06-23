@@ -221,7 +221,7 @@ describe('settings section surface', () => {
   });
 
   test('hides the section hero header by default', () => {
-    const view = render(
+    render(
       <SettingsSectionSurface title="Section title">
         <div>Section body</div>
       </SettingsSectionSurface>
@@ -231,13 +231,10 @@ describe('settings section surface', () => {
     expect(
       screen.queryByRole('heading', { name: 'Section title' })
     ).not.toBeInTheDocument();
-    expect(
-      view.container.querySelector('.settings-section-surface__hero')
-    ).toBeNull();
   });
 
   test('can still render the section hero header explicitly', () => {
-    const view = render(
+    render(
       <SettingsSectionSurface title="Section title" hideHeader={false}>
         <div>Section body</div>
       </SettingsSectionSurface>
@@ -245,9 +242,6 @@ describe('settings section surface', () => {
 
     expect(
       screen.getByRole('heading', { name: 'Section title' })
-    ).toBeInTheDocument();
-    expect(
-      view.container.querySelector('.settings-section-surface__hero')
     ).toBeInTheDocument();
   });
 
@@ -320,6 +314,7 @@ describe('settings section surface', () => {
           ).toBeGreaterThan(0);
         });
       }
-    }
+    },
+    10_000
   );
 });

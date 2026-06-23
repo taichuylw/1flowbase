@@ -617,8 +617,6 @@
     "mcp_export_ready": "MCP configuration export generated",
     "mcp_interface_source_hint": "Interface schema, permission code, and risk level are derived from the backend interface capability catalog.",
     "instance_name": "Instance name",
-    "mcp_instance_description": "Description",
-    "default_entry_path": "Default entry path",
     "directory_summary": "Groups / Tools",
     "directory_editor": "Directory editor",
     "add_group": "Add group",

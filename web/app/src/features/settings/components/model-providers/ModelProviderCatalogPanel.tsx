@@ -29,6 +29,14 @@ function compareVersions(left: string, right: string) {
   });
 }
 
+function sortInstalledVersions(
+  versions: SettingsPluginFamilyEntry['installed_versions']
+) {
+  return Array.from(versions).sort((left, right) =>
+    compareVersions(left.plugin_version, right.plugin_version)
+  );
+}
+
 function formatCheckedAt(value: string) {
   const timestamp = new Date(value);
 
@@ -224,11 +232,9 @@ export function ModelProviderCatalogPanel({
               const shouldShowLocalArtifactVersion =
                 Boolean(localArtifactVersion) &&
                 localArtifactVersion !== entry.current_version;
-              const versionOptions = [...entry.installed_versions]
-                .sort((left, right) =>
-                  compareVersions(left.plugin_version, right.plugin_version)
-                )
-                .map((version) => ({
+              const versionOptions = sortInstalledVersions(
+                entry.installed_versions
+              ).map((version) => ({
                   value: version.installation_id,
                   label: version.plugin_version
                 }));

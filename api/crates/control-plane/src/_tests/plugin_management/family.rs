@@ -521,6 +521,69 @@ async fn seed_data_source_runtime_installation() -> (
         std::env::temp_dir().join(format!("plugin-data-source-assignment-{}", Uuid::now_v7()));
     let installed_path = install_root.join("installed/http_source/0.1.0");
     fs::create_dir_all(&installed_path).unwrap();
+    fs::create_dir_all(installed_path.join("bin")).unwrap();
+    fs::create_dir_all(installed_path.join("datasource")).unwrap();
+    fs::write(
+        installed_path.join("manifest.yaml"),
+        r#"
+manifest_version: 1
+plugin_id: http_source@0.1.0
+version: 0.1.0
+vendor: acme
+display_name: HTTP Source
+description: HTTP source runtime extension
+source_kind: uploaded
+trust_level: checksum_only
+consumption_kind: runtime_extension
+execution_mode: process_per_call
+slot_codes: [data_source]
+binding_targets: [workspace]
+selection_mode: assignment_then_select
+minimum_host_version: 0.1.0
+contract_version: 1flowbase.data_source/v1
+schema_version: 1flowbase.plugin.manifest/v1
+permissions:
+  network: outbound_only
+  secrets: provider_instance_only
+  storage: none
+  mcp: none
+  subprocess: deny
+runtime:
+  protocol: stdio_json
+  entry: bin/http_source
+"#,
+    )
+    .unwrap();
+    fs::write(installed_path.join("bin/http_source"), "#!/bin/sh\n").unwrap();
+    fs::write(
+        installed_path.join("datasource/http_source.yaml"),
+        r#"
+source_code: http_source
+display_name: HTTP Source
+auth_modes: [api_key]
+capabilities: [preview_read]
+supports_sync: false
+supports_webhook: false
+resource_kinds: [table]
+config_schema: []
+"#,
+    )
+    .unwrap();
+    let manifest_fingerprint =
+        plugin_framework::compute_manifest_fingerprint(&installed_path.join("manifest.yaml"))
+            .await
+            .unwrap();
+    fs::write(
+        installed_path.join(".1flowbase-artifact.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "plugin_id": "http_source@0.1.0",
+            "version": "0.1.0",
+            "checksum": null,
+            "manifest_fingerprint": manifest_fingerprint,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let service = PluginManagementService::new(
         repository.clone(),
         runtime,
@@ -546,7 +609,7 @@ async fn seed_data_source_runtime_installation() -> (
             package_path: None,
             installed_path: installed_path.display().to_string(),
             checksum: None,
-            manifest_fingerprint: None,
+            manifest_fingerprint: Some(manifest_fingerprint),
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,

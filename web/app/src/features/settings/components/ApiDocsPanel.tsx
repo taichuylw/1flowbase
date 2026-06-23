@@ -100,8 +100,9 @@ function collectPreferredSecuritySchemes(operationSpec: unknown) {
       requirementSchemes.length > 0 &&
       requirementSchemes.every(isScalarPreferredSecurityScheme)
     ) {
+      const requirementSchemeSet = new Set(requirementSchemes);
       return scalarPreferredSecurityScheme.filter((schemeName) =>
-        requirementSchemes.includes(schemeName)
+        requirementSchemeSet.has(schemeName)
       );
     }
   }

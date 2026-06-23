@@ -588,7 +588,7 @@ fn require_session_csrf_for_write(
     credential: &RuntimeCredential,
 ) -> Result<(), ApiError> {
     if let RuntimeCredential::Session(context) = credential {
-        require_csrf(headers, &context)?;
+        require_csrf(headers, context)?;
     }
     Ok(())
 }

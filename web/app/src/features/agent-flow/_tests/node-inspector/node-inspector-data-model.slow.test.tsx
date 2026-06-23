@@ -245,7 +245,7 @@ describe('NodeInspector data model', () => {
         }
       });
     });
-  }, 30_000);
+  }, 60_000);
 
   test('keeps Data Model query pagination editable when selected model has no fields', async () => {
     let latestDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

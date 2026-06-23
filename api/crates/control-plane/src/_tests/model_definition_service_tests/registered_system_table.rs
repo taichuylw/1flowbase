@@ -107,7 +107,7 @@ async fn registered_system_table_rejects_physical_field_add_update_and_delete() 
         .cloned()
         .unwrap();
     assert_eq!(stored.fields.len(), 1);
-    assert_eq!(stored.fields[0].is_required, true);
+    assert!(stored.fields[0].is_required);
 }
 
 #[tokio::test]
@@ -142,5 +142,5 @@ async fn registered_system_table_allows_non_physical_field_metadata_update() {
 
     assert_eq!(updated.title, "Status display");
     assert_eq!(updated.display_interface.as_deref(), Some("badge"));
-    assert_eq!(updated.is_required, true);
+    assert!(updated.is_required);
 }

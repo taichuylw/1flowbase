@@ -239,51 +239,47 @@ describe('section shell routing', () => {
     10000
   );
 
-  test('redirects /settings to /settings/members when docs is hidden but members is visible', async () => {
+  test('redirects /settings to API key when docs is hidden but members is visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);
 
     renderApp('/settings');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/members');
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
-    expect(
-      await screen.findByText(
-        '重置密码会将目标账号密码重置为默认临时密码，并要求用户登录后立即修改。'
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
   }, 10000);
 
-  test('redirects /settings/docs to /settings/roles when docs is hidden but roles is visible', async () => {
+  test('redirects /settings/docs to API key when docs is hidden but roles is visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'role_permission.view.all']);
 
     renderApp('/settings/docs');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/roles');
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
-    expect(await screen.findByTestId('settings-section-surface')).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
   });
 
-  test('redirects /settings/docs to /settings/data-models when state model settings are visible', async () => {
+  test('redirects /settings/docs to API key when state model settings are visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
 
     renderApp('/settings/docs');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/data-models');
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
-    expect(await screen.findByTestId('settings-section-surface')).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
   });
 
-  test('redirects /settings/docs to /settings/files when file management is the only visible section', async () => {
+  test('redirects /settings/docs to API key when file management is the only visible section', async () => {
     authenticateWithPermissions(['route_page.view.all', 'file_table.view.own']);
 
     renderApp('/settings/docs');
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/settings/files');
+      expect(window.location.pathname).toBe('/settings/api-key-authentication');
     });
-    expect(await screen.findByRole('tab', { name: '文件表' })).toBeInTheDocument();
+    expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
   });
 });

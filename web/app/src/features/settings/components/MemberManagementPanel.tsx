@@ -77,9 +77,6 @@ export function MemberManagementPanel({
     enabled: canManageRoleBindings
   });
 
-  const invalidateMembers = () =>
-    queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
-
   const createMutation = useMutation({
     mutationFn: async (values: Record<string, unknown>) => {
       if (!csrfToken) {
@@ -104,7 +101,7 @@ export function MemberManagementPanel({
     onSuccess: async () => {
       createForm.resetFields();
       setCreateModalOpen(false);
-      await invalidateMembers();
+      await queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
     }
   });
 
@@ -116,7 +113,9 @@ export function MemberManagementPanel({
 
       return disableSettingsMember(memberId, csrfToken);
     },
-    onSuccess: invalidateMembers
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
+    }
   });
 
   const enableMutation = useMutation({
@@ -127,7 +126,9 @@ export function MemberManagementPanel({
 
       return enableSettingsMember(memberId, csrfToken);
     },
-    onSuccess: invalidateMembers
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
+    }
   });
 
   const deleteMutation = useMutation({
@@ -138,7 +139,9 @@ export function MemberManagementPanel({
 
       return deleteSettingsMember(memberId, csrfToken);
     },
-    onSuccess: invalidateMembers
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
+    }
   });
 
   const resetPasswordMutation = useMutation({
@@ -152,6 +155,9 @@ export function MemberManagementPanel({
         { new_password: TEMP_PASSWORD },
         csrfToken
       );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
     }
   });
 
@@ -192,7 +198,7 @@ export function MemberManagementPanel({
       return member;
     },
     onSuccess: async () => {
-      await invalidateMembers();
+      await queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
       setProfileEditMember(null);
       profileForm.resetFields();
     }
@@ -213,6 +219,7 @@ export function MemberManagementPanel({
       );
     },
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: settingsMembersQueryKey });
       passwordForm.resetFields();
       setPasswordEditMember(null);
       setAnonymous();

@@ -72,6 +72,10 @@ function renderPanel() {
   );
 }
 
+function findMemberRow(name: RegExp) {
+  return screen.findByRole('row', { name });
+}
+
 describe('MemberManagementPanel', () => {
   beforeEach(() => {
     resetAuthStore();
@@ -197,8 +201,8 @@ describe('MemberManagementPanel', () => {
   test('renames profile action to edit and deletes non-root members after confirmation', async () => {
     renderPanel();
 
-    const rootRow = (await screen.findByText('root')).closest('tr') as HTMLElement;
-    const userRow = (await screen.findByText('user')).closest('tr') as HTMLElement;
+    const rootRow = await findMemberRow(/root.*Root Name.*Root Nick/u);
+    const userRow = await findMemberRow(/user.*User Name.*User Nick/u);
 
     expect(
       within(rootRow).getByRole('button', { name: /编辑$/ })
@@ -225,9 +229,9 @@ describe('MemberManagementPanel', () => {
   test('restores disabled members after confirmation', async () => {
     renderPanel();
 
-    const disabledRow = (await screen.findByText('disabled-user')).closest(
-      'tr'
-    ) as HTMLElement;
+    const disabledRow = await findMemberRow(
+      /disabled-user.*Disabled User.*Disabled Nick/u
+    );
 
     expect(
       within(disabledRow).getByRole('button', { name: /恢复$/ })
@@ -248,7 +252,7 @@ describe('MemberManagementPanel', () => {
   test('saves profile fields and role bindings from the edit profile dialog', async () => {
     renderPanel();
 
-    const row = (await screen.findByText('root')).closest('tr') as HTMLElement;
+    const row = await findMemberRow(/root.*Root Name.*Root Nick/u);
     fireEvent.click(within(row).getByRole('button', { name: /编辑$/ }));
 
     const dialog = await screen.findByRole('dialog', {

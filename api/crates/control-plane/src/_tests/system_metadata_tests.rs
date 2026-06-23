@@ -91,12 +91,12 @@ async fn bootstrap_creates_builtin_user_and_role_models_once() {
         users.protection.owner_kind,
         domain::DataModelOwnerKind::Core
     );
-    assert_eq!(users.protection.is_protected, true);
+    assert!(users.protection.is_protected);
     assert_eq!(
         roles.protection.owner_kind,
         domain::DataModelOwnerKind::Core
     );
-    assert_eq!(roles.protection.is_protected, true);
+    assert!(roles.protection.is_protected);
     assert_eq!(users.fields.len(), 8);
     assert_eq!(roles.fields.len(), 6);
 

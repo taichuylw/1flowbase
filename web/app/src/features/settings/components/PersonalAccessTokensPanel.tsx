@@ -18,6 +18,7 @@ import {
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 
 import { useAuthStore } from '../../../state/auth-store';
+import { formatDateTime as formatLocalizedDateTime } from '../../../shared/i18n/format';
 import { copyTextToClipboard } from '../../../shared/ui/clipboard/copy-text';
 import {
   createSettingsPersonalAccessToken,
@@ -50,10 +51,10 @@ function formatDateTime(value: string | null) {
     return value;
   }
 
-  return new Intl.DateTimeFormat(undefined, {
+  return formatLocalizedDateTime(date, {
     dateStyle: 'medium',
     timeStyle: 'short'
-  }).format(date);
+  });
 }
 
 function formatLastUsedAt(value: string | null) {
@@ -80,14 +81,6 @@ export function PersonalAccessTokensPanel() {
     queryFn: fetchSettingsPersonalAccessTokenRoleOptions
   });
 
-  const invalidateTokens = useCallback(
-    () =>
-      queryClient.invalidateQueries({
-        queryKey: settingsPersonalAccessTokensQueryKey
-      }),
-    [queryClient]
-  );
-
   const createMutation = useMutation({
     mutationFn: async (values: CreatePersonalAccessTokenFormValues) => {
       if (!csrfToken) {
@@ -107,7 +100,9 @@ export function PersonalAccessTokensPanel() {
       setCreatedToken(token);
       setCreateModalOpen(false);
       createForm.resetFields();
-      await invalidateTokens();
+      await queryClient.invalidateQueries({
+        queryKey: settingsPersonalAccessTokensQueryKey
+      });
     }
   });
 
@@ -119,7 +114,11 @@ export function PersonalAccessTokensPanel() {
 
       return revokeSettingsPersonalAccessToken(apiKeyId, csrfToken);
     },
-    onSuccess: invalidateTokens
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: settingsPersonalAccessTokensQueryKey
+      });
+    }
   });
 
   const expirationOptions = useMemo(
@@ -201,6 +200,24 @@ export function PersonalAccessTokensPanel() {
       message.error(i18nText('settings', 'auto.copy_failed_manual'));
     }
   }, [createdToken?.token]);
+
+  const sectionStatus = useMemo(
+    () => (
+      <div className="personal-access-tokens-panel__action-row">
+        <Typography.Text type="secondary">
+          {i18nText('settings', 'auto.user_api_key_security_notice')}
+        </Typography.Text>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setCreateModalOpen(true)}
+        >
+          {i18nText('settings', 'auto.create_api_key')}
+        </Button>
+      </div>
+    ),
+    []
+  );
 
   const columns = useMemo<TableProps<SettingsPersonalAccessToken>['columns']>(
     () => [
@@ -290,20 +307,7 @@ export function PersonalAccessTokensPanel() {
       titleLevel={3}
       hideHeader
       heightMode="fill"
-      status={
-        <div className="personal-access-tokens-panel__action-row">
-          <Typography.Text type="secondary">
-            {i18nText('settings', 'auto.user_api_key_security_notice')}
-          </Typography.Text>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setCreateModalOpen(true)}
-          >
-            {i18nText('settings', 'auto.create_api_key')}
-          </Button>
-        </div>
-      }
+      status={sectionStatus}
     >
       <Table<SettingsPersonalAccessToken>
         rowKey="id"

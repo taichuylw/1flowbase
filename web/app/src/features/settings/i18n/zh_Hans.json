@@ -617,8 +617,6 @@
     "mcp_export_ready": "MCP 配置导出已生成",
     "mcp_interface_source_hint": "接口 schema、权限码和风险等级由后端接口能力目录决定。",
     "instance_name": "实例名称",
-    "mcp_instance_description": "描述",
-    "default_entry_path": "默认入口 path",
     "directory_summary": "分组 / 工具",
     "directory_editor": "目录编辑",
     "add_group": "新增分组",
