@@ -206,7 +206,11 @@ function runServicePrestartCommands(
         continue;
       }
 
-      ensureCommandSuccess(prestartCommand.description, result);
+      if (result.error) {
+        throw result.error;
+      }
+
+      throw new Error(`${prestartCommand.description} 失败，退出码 ${result.status}`);
     }
   }
 }

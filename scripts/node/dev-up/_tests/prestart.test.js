@@ -118,33 +118,55 @@ test('runServicePrestartCommands blocks local postgres rebuild by default after 
 
   const commandCalls = [];
   const composeCalls = [];
+  const originalStderrWrite = process.stderr.write;
+  let stderrOutput = '';
 
-  assert.throws(
-    () =>
-      runServicePrestartCommands(apiService, {
-        runCommandImpl(command, args, options) {
-          commandCalls.push({ command, args, options });
-          return {
-            status: 1,
-            stdout: '',
-            stderr: 'Error: migration 20260412183000 was previously applied but has been modified\n',
-          };
-        },
-        runMiddlewareComposeImpl(repoRoot, args) {
-          composeCalls.push({ repoRoot, args });
-          return {
-            status: 0,
-            stdout: '',
-            stderr: '',
-          };
-        },
-      }),
-    /api-server 开发态重置 root 密码 失败，退出码 1/u
-  );
+  process.stderr.write = (chunk, encoding, callback) => {
+    stderrOutput += String(chunk);
+    if (typeof encoding === 'function') {
+      encoding();
+    }
+    if (typeof callback === 'function') {
+      callback();
+    }
+    return true;
+  };
+
+  try {
+    assert.throws(
+      () =>
+        runServicePrestartCommands(apiService, {
+          logImpl() {},
+          runCommandImpl(command, args, options) {
+            commandCalls.push({ command, args, options });
+            return {
+              status: 1,
+              stdout: '',
+              stderr: 'Error: migration 20260412183000 was previously applied but has been modified\n',
+            };
+          },
+          runMiddlewareComposeImpl(repoRoot, args) {
+            composeCalls.push({ repoRoot, args });
+            return {
+              status: 0,
+              stdout: '',
+              stderr: '',
+            };
+          }
+        }),
+      /api-server 开发态重置 root 密码 失败，退出码 1/u
+    );
+  } finally {
+    process.stderr.write = originalStderrWrite;
+  }
 
   assert.equal(commandCalls.length, 1);
   assert.equal(commandCalls[0].options.captureOutput, true);
   assert.deepEqual(composeCalls, []);
+  assert.equal(
+    stderrOutput.match(/previously applied but has been modified/gu)?.length,
+    1
+  );
 });
 
 test('runServicePrestartCommands rebuilds local postgres db only with explicit reset opt-in', () => {
