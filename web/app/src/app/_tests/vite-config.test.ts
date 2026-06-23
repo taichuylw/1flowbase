@@ -46,7 +46,6 @@ describe('vite config', () => {
   test('pre-optimizes dependencies used by lazy application pages', async () => {
     const source = await readFile(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
     const lazyOnlyDeps = [
-      '@lexical/react',
       '@lexical/utils',
       '@monaco-editor/react',
       '@scalar/api-reference-react',
@@ -60,6 +59,7 @@ describe('vite config', () => {
     ];
 
     expect(source).toContain('optimizeDeps');
+    expect(source).not.toContain("'@lexical/react'");
     for (const dependency of lazyOnlyDeps) {
       expect(source).toContain(`'${dependency}'`);
     }

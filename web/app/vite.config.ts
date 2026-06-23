@@ -42,7 +42,6 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     optimizeDeps: {
       include: [
-        '@lexical/react',
         '@lexical/utils',
         '@monaco-editor/react',
         '@scalar/api-reference-react',
