@@ -295,6 +295,44 @@ fn provider_runtime_line_text_maps_to_stream_event() {
 }
 
 #[test]
+fn provider_runtime_line_error_preserves_upstream_details() {
+    let line = ProviderRuntimeLine::Error {
+        error: ProviderRuntimeError::new(
+            ProviderRuntimeErrorKind::ProviderUpstreamError,
+            "400 Bad Request: upstream rejected request",
+        )
+        .with_provider_summary("x-request-id=req_123")
+        .with_provider_details(json!({
+            "status": 400,
+            "content_type": "application/json",
+            "headers": {
+                "x-request-id": "req_123"
+            },
+            "raw_body": "{\"error\":{\"message\":\"missing instructions\"}}\n"
+        })),
+    };
+
+    let encoded = serde_json::to_value(&line).unwrap();
+    assert_eq!(encoded["error"]["kind"], "provider_upstream_error");
+    assert_eq!(
+        encoded["error"]["provider_details"]["raw_body"],
+        "{\"error\":{\"message\":\"missing instructions\"}}\n"
+    );
+
+    let decoded: ProviderRuntimeLine = serde_json::from_value(encoded).unwrap();
+    match decoded.into_stream_event() {
+        Some(ProviderStreamEvent::Error { error }) => {
+            assert_eq!(error.kind, ProviderRuntimeErrorKind::ProviderUpstreamError);
+            assert_eq!(
+                error.provider_details.unwrap()["headers"]["x-request-id"],
+                "req_123"
+            );
+        }
+        other => panic!("expected upstream error stream event, got {other:?}"),
+    }
+}
+
+#[test]
 fn provider_runtime_line_tool_commit_preserves_arguments() {
     let line = ProviderRuntimeLine::ToolCallCommit {
         call: ProviderToolCall {

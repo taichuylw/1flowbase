@@ -54,6 +54,7 @@ impl ProviderInvoker for StubProviderInvoker {
                         kind: ProviderRuntimeErrorKind::AuthFailed,
                         message: "invalid api_key".to_string(),
                         provider_summary: Some("Authorization: Bearer sk-secret-value".to_string()),
+                        provider_details: None,
                     },
                 }],
                 result: ProviderInvocationResult {
@@ -197,6 +198,7 @@ impl_noop_code_invoker!(
     UnknownCapabilityOutputInvoker,
     ReservedCapabilityOutputInvoker,
     RuntimeContractErrorInvoker,
+    ProviderUpstreamErrorInvoker,
     FailsAfterFirstTokenInvoker,
     InputCacheUsageSnapshotInvoker,
     ToolMcpMetadataInvoker,
@@ -218,6 +220,7 @@ impl ProviderInvoker for RuntimeContractErrorInvoker {
             kind: ProviderRuntimeErrorKind::ProviderInvalidResponse,
             message: "401 401 Unauthorized: Incorrect API key provided".to_string(),
             provider_summary: None,
+            provider_details: None,
         })
         .into())
     }
@@ -225,6 +228,59 @@ impl ProviderInvoker for RuntimeContractErrorInvoker {
 
 #[async_trait]
 impl CapabilityInvoker for RuntimeContractErrorInvoker {
+    async fn invoke_capability_node(
+        &self,
+        _runtime: &CompiledPluginRuntime,
+        _config_payload: serde_json::Value,
+        _input_payload: serde_json::Value,
+    ) -> Result<CapabilityInvocationOutput> {
+        unreachable!("base plan does not execute capability nodes")
+    }
+}
+
+struct ProviderUpstreamErrorInvoker;
+
+#[async_trait]
+impl ProviderInvoker for ProviderUpstreamErrorInvoker {
+    async fn invoke_llm(
+        &self,
+        _runtime: &CompiledLlmRuntime,
+        _input: ProviderInvocationInput,
+    ) -> Result<ProviderInvocationOutput> {
+        Ok(ProviderInvocationOutput {
+            events: vec![ProviderStreamEvent::Error {
+                error: ProviderRuntimeError {
+                    kind: ProviderRuntimeErrorKind::ProviderUpstreamError,
+                    message: "400 Bad Request: OpenAI codex passthrough requires a non-empty instructions field".to_string(),
+                    provider_summary: Some(
+                        "Authorization: Bearer sk-secret-value; x-request-id=req_123".to_string(),
+                    ),
+                    provider_details: Some(json!({
+                        "status": 400,
+                        "content_type": "application/json; charset=utf-8",
+                        "headers": {
+                            "content-type": "application/json; charset=utf-8",
+                            "x-request-id": "req_123"
+                        },
+                        "raw_body": concat!(
+                            "{\"error\":{\"message\":\"OpenAI codex passthrough requires a non-empty instructions field\"}}\n",
+                            "data: {\"type\":\"response.failed\"}\n\n"
+                        )
+                    })),
+                },
+            }],
+            result: ProviderInvocationResult {
+                finish_reason: Some(ProviderFinishReason::Error),
+                ..ProviderInvocationResult::default()
+            },
+            first_token_at: None,
+            time_to_first_token_ms: None,
+        })
+    }
+}
+
+#[async_trait]
+impl CapabilityInvoker for ProviderUpstreamErrorInvoker {
     async fn invoke_capability_node(
         &self,
         _runtime: &CompiledPluginRuntime,
@@ -254,6 +310,7 @@ impl ProviderInvoker for FailsAfterFirstTokenInvoker {
                         kind: ProviderRuntimeErrorKind::ProviderInvalidResponse,
                         message: "stream failed".to_string(),
                         provider_summary: None,
+                        provider_details: None,
                     },
                 },
             ],

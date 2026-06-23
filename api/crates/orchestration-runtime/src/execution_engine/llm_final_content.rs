@@ -177,7 +177,7 @@ pub(super) fn build_provider_error_payload(
     runtime: &CompiledLlmRuntime,
     error: &ProviderRuntimeError,
 ) -> Value {
-    json!({
+    let mut payload = json!({
         "provider_instance_id": runtime.provider_instance_id,
         "provider_code": runtime.provider_code,
         "protocol": runtime.protocol,
@@ -187,7 +187,11 @@ pub(super) fn build_provider_error_payload(
             .provider_summary
             .as_deref()
             .map(sanitize_diagnostic_text),
-    })
+    });
+    if let Some(provider_details) = &error.provider_details {
+        payload["provider_details"] = provider_details.clone();
+    }
+    payload
 }
 
 pub(super) fn provider_runtime_error_from_anyhow(error: &anyhow::Error) -> ProviderRuntimeError {
@@ -212,6 +216,11 @@ pub(super) fn normalize_runtime_contract_error(
         &error.message,
         error.provider_summary.as_deref(),
     );
+    let normalized = if let Some(provider_details) = &error.provider_details {
+        normalized.with_provider_details(provider_details.clone())
+    } else {
+        normalized
+    };
     if normalized.kind == ProviderRuntimeErrorKind::ProviderInvalidResponse {
         error.clone()
     } else {

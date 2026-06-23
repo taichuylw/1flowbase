@@ -40,6 +40,58 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
 }
 
 #[tokio::test]
+async fn provider_upstream_error_keeps_raw_details_in_error_payload() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &ProviderUpstreamErrorInvoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_code"],
+                json!("provider_upstream_error")
+            );
+            assert!(failure.error_payload["message"]
+                .as_str()
+                .expect("message should be a string")
+                .contains("OpenAI codex passthrough requires a non-empty instructions field"));
+            assert!(failure.error_payload["provider_summary"]
+                .as_str()
+                .expect("provider_summary should be a string")
+                .contains("[REDACTED]"));
+
+            let provider_details = &failure.error_payload["provider_details"];
+            assert_eq!(provider_details["status"], json!(400));
+            assert_eq!(
+                provider_details["content_type"],
+                json!("application/json; charset=utf-8")
+            );
+            assert_eq!(
+                provider_details["headers"]["x-request-id"],
+                json!("req_123")
+            );
+            assert_eq!(
+                provider_details["raw_body"],
+                json!(concat!(
+                    "{\"error\":{\"message\":\"OpenAI codex passthrough requires a non-empty instructions field\"}}\n",
+                    "data: {\"type\":\"response.failed\"}\n\n"
+                ))
+            );
+            assert_eq!(
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["provider_details"],
+                failure.error_payload["provider_details"]
+            );
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
     let outcome = start_flow_debug_run(
         &base_plan(),

@@ -67,6 +67,8 @@ pub struct ProviderStdioError {
     pub message: String,
     #[serde(default)]
     pub provider_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_details: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -363,14 +365,18 @@ pub enum ProviderRuntimeErrorKind {
     EndpointUnreachable,
     ModelNotFound,
     RateLimited,
+    ProviderUpstreamError,
     ProviderInvalidResponse,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProviderRuntimeError {
     pub kind: ProviderRuntimeErrorKind,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_details: Option<Value>,
 }
 
 impl ProviderRuntimeError {
@@ -379,11 +385,17 @@ impl ProviderRuntimeError {
             kind,
             message: message.into(),
             provider_summary: None,
+            provider_details: None,
         }
     }
 
     pub fn with_provider_summary(mut self, provider_summary: impl Into<String>) -> Self {
         self.provider_summary = Some(provider_summary.into());
+        self
+    }
+
+    pub fn with_provider_details(mut self, provider_details: Value) -> Self {
+        self.provider_details = Some(provider_details);
         self
     }
 

@@ -206,5 +206,6 @@ async fn save_start_model_catalog(
 }
 
 mod anthropic_parent_callbacks;
+mod native_results;
 mod native_start;
 mod publication_guards;

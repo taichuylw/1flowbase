@@ -10,6 +10,7 @@ pub fn native_result_from_flow_run(
     metadata: Value,
 ) -> NativeRunResult {
     let error = flow_run.error_payload.as_ref().map(|payload| {
+        let public_details = public_native_error_details(payload);
         let message = payload
             .get("message")
             .or_else(|| payload.get("error"))
@@ -22,8 +23,8 @@ pub fn native_result_from_flow_run(
                 .and_then(Value::as_str)
                 .unwrap_or("runtime_error")
                 .to_string(),
-            message,
-            details: payload.clone(),
+            message: public_native_error_message(payload, &message),
+            details: public_details,
         }
     });
     NativeRunResult {
@@ -42,6 +43,56 @@ pub fn native_result_from_flow_run(
         error,
         created_at: flow_run.created_at,
     }
+}
+
+fn public_native_error_details(payload: &Value) -> Value {
+    let mut details = payload.clone();
+    if let Value::Object(object) = &mut details {
+        if object.get("error_code").and_then(Value::as_str) == Some("provider_upstream_error") {
+            if public_provider_upstream_message_contains_raw_body(payload, object.get("message")) {
+                object.insert(
+                    "message".to_string(),
+                    Value::String("provider upstream request failed".to_string()),
+                );
+            }
+            object.remove("provider_summary");
+        }
+        object.remove("provider_details");
+    }
+    details
+}
+
+fn public_native_error_message(payload: &Value, message: &str) -> String {
+    if payload.get("error_code").and_then(Value::as_str) != Some("provider_upstream_error") {
+        return message.to_string();
+    }
+
+    if public_provider_upstream_message_contains_raw_body(
+        payload,
+        Some(&Value::String(message.to_string())),
+    ) {
+        "provider upstream request failed".to_string()
+    } else {
+        message.to_string()
+    }
+}
+
+fn public_provider_upstream_message_contains_raw_body(
+    payload: &Value,
+    message: Option<&Value>,
+) -> bool {
+    let Some(message) = message.and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(raw_body) = payload
+        .get("provider_details")
+        .and_then(|details| details.get("raw_body"))
+        .and_then(Value::as_str)
+        .filter(|raw_body| !raw_body.trim().is_empty())
+    else {
+        return false;
+    };
+    message.contains(raw_body)
 }
 
 pub fn native_result_from_run_detail(

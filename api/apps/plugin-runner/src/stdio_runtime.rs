@@ -485,11 +485,13 @@ fn parse_stdio_response_line(executable_path: &Path, line: &str) -> FrameworkRes
         kind: ProviderRuntimeErrorKind::ProviderInvalidResponse,
         message: "provider runtime execution failed".to_string(),
         provider_summary: None,
+        provider_details: None,
     });
     Err(PluginFrameworkError::runtime(ProviderRuntimeError {
         kind: error.kind,
         message: error.message,
         provider_summary: error.provider_summary,
+        provider_details: error.provider_details,
     }))
 }
 
@@ -671,11 +673,13 @@ fn parse_stdio_response(
             stderr.clone()
         },
         provider_summary: None,
+        provider_details: None,
     });
     Err(PluginFrameworkError::runtime(ProviderRuntimeError {
         kind: error.kind,
         message: error.message,
         provider_summary: error.provider_summary,
+        provider_details: error.provider_details,
     }))
 }
 
