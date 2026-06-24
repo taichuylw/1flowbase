@@ -659,3 +659,309 @@ async fn application_run_detail_stitches_prior_conversation_tool_trace() {
         .expect("current run summary should exist");
     assert_eq!(current_summary.tool_callback_count, 0);
 }
+
+#[tokio::test]
+async fn application_run_detail_hides_failed_imported_stitched_sources_and_boundaries() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let conversation_id = "conversation-import-visibility-fixture";
+    let external_user = "claude-code-import-user-fixture";
+    let visible_started_at = datetime!(2026-06-24 09:00:00 UTC);
+    let hidden_boundary_started_at = datetime!(2026-06-24 09:00:02 UTC);
+    let hidden_prior_started_at = datetime!(2026-06-24 09:00:04 UTC);
+    let current_started_at = datetime!(2026-06-24 09:00:06 UTC);
+
+    let visible_prior = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        visible_started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    set_run_external_context(&store, visible_prior.id, external_user, conversation_id).await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: visible_prior.id,
+            status: FlowRunStatus::Cancelled,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: Some(visible_started_at + Duration::seconds(1)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let hidden_boundary = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        hidden_boundary_started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    set_run_external_context(&store, hidden_boundary.id, external_user, conversation_id).await;
+    attach_import_job_to_run(&store, &seeded, hidden_boundary.id, "failed").await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: hidden_boundary.id,
+            status: FlowRunStatus::Failed,
+            output_payload: json!({}),
+            error_payload: Some(json!({ "message": "hidden imported boundary" })),
+            finished_at: Some(hidden_boundary_started_at + Duration::seconds(1)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let hidden_prior = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        hidden_prior_started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    set_run_external_context(&store, hidden_prior.id, external_user, conversation_id).await;
+    attach_import_job_to_run(&store, &seeded, hidden_prior.id, "failed").await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: hidden_prior.id,
+            status: FlowRunStatus::Cancelled,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: Some(hidden_prior_started_at + Duration::seconds(1)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let current_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        current_started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    set_run_external_context(&store, current_run.id, external_user, conversation_id).await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: current_run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "visible current" }),
+            error_payload: None,
+            finished_at: Some(current_started_at + Duration::seconds(1)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let detail =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+            &store,
+            seeded.application_id,
+            current_run.id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let stitched_source_ids = detail
+        .stitched_trace
+        .iter()
+        .map(|trace| trace.source_flow_run.id)
+        .collect::<Vec<_>>();
+
+    assert_eq!(stitched_source_ids, vec![visible_prior.id]);
+}
+
+#[tokio::test]
+async fn application_run_trace_projection_watermark_hides_failed_imported_stitched_sources() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let conversation_id = "conversation-watermark-import-visibility";
+    let external_user = "claude-code-watermark-user-fixture";
+    let hidden_started_at = datetime!(2026-06-24 10:00:00 UTC);
+    let current_started_at = datetime!(2026-06-24 10:00:05 UTC);
+
+    let hidden_prior = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        hidden_started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    set_run_external_context(&store, hidden_prior.id, external_user, conversation_id).await;
+    attach_import_job_to_run(&store, &seeded, hidden_prior.id, "failed").await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: hidden_prior.id,
+            status: FlowRunStatus::Cancelled,
+            output_payload: json!({}),
+            error_payload: None,
+            finished_at: Some(hidden_started_at + Duration::seconds(1)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let current_run = seed_flow_run_with_mode(
+        &store,
+        &seeded,
+        &compiled,
+        current_started_at,
+        FlowRunMode::PublishedApiRun,
+        None,
+    )
+    .await;
+    set_run_external_context(&store, current_run.id, external_user, conversation_id).await;
+    <PgControlPlaneStore as OrchestrationRuntimeRepository>::update_flow_run(
+        &store,
+        &UpdateFlowRunInput {
+            flow_run_id: current_run.id,
+            status: FlowRunStatus::Succeeded,
+            output_payload: json!({ "answer": "watermark current" }),
+            error_payload: None,
+            finished_at: Some(current_started_at + Duration::seconds(1)),
+        },
+    )
+    .await
+    .unwrap();
+
+    let source_watermark =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_trace_projection_source_watermark(
+            &store,
+            seeded.application_id,
+            current_run.id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(
+        source_watermark.ends_with("/stitched:0"),
+        "failed imported source must not change projection source watermark: {source_watermark}"
+    );
+}
+
+async fn set_run_external_context(
+    store: &PgControlPlaneStore,
+    run_id: Uuid,
+    external_user: &str,
+    conversation_id: &str,
+) {
+    sqlx::query(
+        r#"
+        update flow_runs
+        set external_user = $2,
+            external_conversation_id = $3,
+            compatibility_mode = 'anthropic-messages-v1'
+        where id = $1
+        "#,
+    )
+    .bind(run_id)
+    .bind(external_user)
+    .bind(conversation_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+}
+
+async fn attach_import_job_to_run(
+    store: &PgControlPlaneStore,
+    seeded: &RuntimeSeedState,
+    run_id: Uuid,
+    status: &str,
+) {
+    let upload_session_id = Uuid::now_v7();
+    let import_job_id = Uuid::now_v7();
+
+    sqlx::query(
+        r#"
+        insert into run_archive_upload_sessions (
+            id,
+            scope_id,
+            application_id,
+            actor_user_id,
+            original_filename,
+            total_size_bytes,
+            received_bytes,
+            expected_sha256,
+            chunk_size_bytes,
+            status,
+            completed_at
+        ) values ($1, $2, $3, $4, 'fixture.zip', 8, 8, $5, 8, 'completed', now())
+        "#,
+    )
+    .bind(upload_session_id)
+    .bind(seeded.workspace_id)
+    .bind(seeded.application_id)
+    .bind(seeded.actor_user_id)
+    .bind("0".repeat(64))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        insert into run_archive_import_jobs (
+            id,
+            scope_id,
+            application_id,
+            actor_user_id,
+            upload_session_id,
+            status,
+            archive_version,
+            archive_sha256,
+            run_count,
+            imported_run_count,
+            error_payload,
+            result_payload,
+            started_at,
+            finished_at
+        ) values ($1, $2, $3, $4, $5, $6, 1, $7, 1, 1, '{}', '{}', now(), now())
+        "#,
+    )
+    .bind(import_job_id)
+    .bind(seeded.workspace_id)
+    .bind(seeded.application_id)
+    .bind(seeded.actor_user_id)
+    .bind(upload_session_id)
+    .bind(status)
+    .bind("1".repeat(64))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        update flow_runs
+        set import_job_id = $2,
+            import_source_run_id = $3
+        where id = $1
+        "#,
+    )
+    .bind(run_id)
+    .bind(import_job_id)
+    .bind(run_id.to_string())
+    .execute(store.pool())
+    .await
+    .unwrap();
+}

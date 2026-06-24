@@ -309,6 +309,15 @@ pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
           and prior.api_key_id is not distinct from $6
           and prior.compatibility_mode is not distinct from $7
           and prior.status in ('cancelled', 'waiting_callback')
+          and (
+              prior.import_job_id is null
+              or exists (
+                  select 1
+                  from run_archive_import_jobs prior_import_jobs
+                  where prior_import_jobs.id = prior.import_job_id
+                    and prior_import_jobs.status = 'succeeded'
+              )
+          )
           and not exists (
               select 1
               from flow_runs boundary
@@ -321,6 +330,15 @@ pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
                 and boundary.started_at > prior.started_at
                 and boundary.started_at < $4
                 and boundary.status in ('succeeded', 'failed')
+                and (
+                    boundary.import_job_id is null
+                    or exists (
+                        select 1
+                        from run_archive_import_jobs boundary_import_jobs
+                        where boundary_import_jobs.id = boundary.import_job_id
+                          and boundary_import_jobs.status = 'succeeded'
+                    )
+                )
           )
         order by prior.started_at asc, prior.id asc
         limit 12
