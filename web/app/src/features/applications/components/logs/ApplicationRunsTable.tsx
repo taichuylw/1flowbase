@@ -1,4 +1,4 @@
-import { FileZipOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, FileZipOutlined } from '@ant-design/icons';
 import { Button, Space, Tooltip } from 'antd';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
@@ -83,7 +83,7 @@ export function ApplicationRunsTable({
                     aria-label={t('auto.export_run_archive_named', {
                       value1: run.title || run.id
                     })}
-                    icon={<FileZipOutlined aria-hidden="true" />}
+                    icon={<DatabaseOutlined aria-hidden="true" />}
                     loading={exportingArchiveRunId === run.id}
                     onClick={() => onExportRunArchive(run)}
                     type="text"

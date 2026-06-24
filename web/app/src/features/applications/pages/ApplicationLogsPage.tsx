@@ -1,4 +1,5 @@
 import {
+  DatabaseOutlined,
   DownloadOutlined,
   FileZipOutlined,
   ReloadOutlined,
@@ -966,7 +967,7 @@ export function ApplicationLogsPage({
             <Button
               aria-label={t('auto.export_selected_runs_archive')}
               disabled={selectedVisibleRunIds.length === 0}
-              icon={<FileZipOutlined aria-hidden="true" />}
+              icon={<DatabaseOutlined aria-hidden="true" />}
               loading={exportingSelectedArchive}
               onClick={() => {
                 void exportSelectedRunArchive();
