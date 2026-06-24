@@ -118,6 +118,27 @@ async fn create_archive_upload_session(
     archive_bytes: &[u8],
     expected_sha256: &str,
 ) -> (StatusCode, Value) {
+    create_archive_upload_session_with_chunk_size(
+        app,
+        cookie,
+        csrf,
+        application_id,
+        archive_bytes,
+        expected_sha256,
+        archive_bytes.len(),
+    )
+    .await
+}
+
+async fn create_archive_upload_session_with_chunk_size(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+    archive_bytes: &[u8],
+    expected_sha256: &str,
+    chunk_size_bytes: usize,
+) -> (StatusCode, Value) {
     create_archive_upload_session_from_payload(
         app,
         Some(cookie),
@@ -127,7 +148,7 @@ async fn create_archive_upload_session(
             "filename": "archive.json",
             "total_size_bytes": archive_bytes.len(),
             "expected_sha256": expected_sha256,
-            "chunk_size_bytes": archive_bytes.len()
+            "chunk_size_bytes": chunk_size_bytes
         }),
     )
     .await
@@ -1084,6 +1105,84 @@ async fn application_runtime_routes_logs_archive_upload_enforces_checksum_limits
     assert_eq!(complete_status, StatusCode::OK, "{complete_payload}");
     let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
     assert_eq!(count_archive_upload_chunks(&pool, session_id).await, 0);
+
+    let split_at = archive_bytes.len().div_ceil(2);
+    let chunked_payload = json!({
+        "filename": "archive.json",
+        "total_size_bytes": archive_len,
+        "expected_sha256": archive_sha256,
+        "chunk_size_bytes": split_at
+    });
+    let (chunked_session_status, chunked_session_payload) =
+        create_archive_upload_session_from_payload(
+            &app,
+            Some(&cookie),
+            Some(&csrf),
+            &application_id,
+            chunked_payload,
+        )
+        .await;
+    assert_eq!(
+        chunked_session_status,
+        StatusCode::CREATED,
+        "{chunked_session_payload}"
+    );
+    let chunked_session_id = chunked_session_payload["data"]["session_id"]
+        .as_str()
+        .unwrap();
+    let first_chunk = &archive_bytes[..split_at];
+    let second_chunk = &archive_bytes[split_at..];
+    let (second_chunk_status, second_chunk_payload) = upload_archive_chunk(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        chunked_session_id,
+        1,
+        second_chunk,
+    )
+    .await;
+    assert_eq!(
+        second_chunk_status,
+        StatusCode::OK,
+        "{second_chunk_payload}"
+    );
+    let (missing_first_complete_status, missing_first_complete_payload) =
+        complete_archive_upload_session(&app, &cookie, &csrf, &application_id, chunked_session_id)
+            .await;
+    assert_eq!(
+        missing_first_complete_status,
+        StatusCode::BAD_REQUEST,
+        "{missing_first_complete_payload}"
+    );
+    assert_eq!(
+        missing_first_complete_payload["code"],
+        json!("archive_chunks")
+    );
+
+    let (first_chunk_status, first_chunk_payload) = upload_archive_chunk(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        chunked_session_id,
+        0,
+        first_chunk,
+    )
+    .await;
+    assert_eq!(first_chunk_status, StatusCode::OK, "{first_chunk_payload}");
+    let (chunked_complete_status, chunked_complete_payload) =
+        complete_archive_upload_session(&app, &cookie, &csrf, &application_id, chunked_session_id)
+            .await;
+    assert_eq!(
+        chunked_complete_status,
+        StatusCode::OK,
+        "{chunked_complete_payload}"
+    );
+    assert_eq!(
+        count_archive_upload_chunks(&pool, chunked_session_id).await,
+        0
+    );
 }
 
 #[tokio::test]
