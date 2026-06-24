@@ -118,28 +118,43 @@ async fn create_archive_upload_session(
     archive_bytes: &[u8],
     expected_sha256: &str,
 ) -> (StatusCode, Value) {
+    create_archive_upload_session_from_payload(
+        app,
+        Some(cookie),
+        Some(csrf),
+        application_id,
+        json!({
+            "filename": "archive.json",
+            "total_size_bytes": archive_bytes.len(),
+            "expected_sha256": expected_sha256,
+            "chunk_size_bytes": archive_bytes.len()
+        }),
+    )
+    .await
+}
+
+async fn create_archive_upload_session_from_payload(
+    app: &axum::Router,
+    cookie: Option<&str>,
+    csrf: Option<&str>,
+    application_id: &str,
+    payload: Value,
+) -> (StatusCode, Value) {
+    let mut builder = Request::builder()
+        .method("POST")
+        .uri(format!(
+            "/api/console/applications/{application_id}/logs/runs/archive/import-sessions"
+        ))
+        .header("content-type", "application/json");
+    if let Some(cookie) = cookie {
+        builder = builder.header("cookie", cookie);
+    }
+    if let Some(csrf) = csrf {
+        builder = builder.header("x-csrf-token", csrf);
+    }
     let response = app
         .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/archive/import-sessions"
-                ))
-                .header("cookie", cookie)
-                .header("x-csrf-token", csrf)
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({
-                        "filename": "archive.json",
-                        "total_size_bytes": archive_bytes.len(),
-                        "expected_sha256": expected_sha256,
-                        "chunk_size_bytes": 1024
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
+        .oneshot(builder.body(Body::from(payload.to_string())).unwrap())
         .await
         .unwrap();
     let status = response.status();
@@ -156,20 +171,44 @@ async fn upload_archive_chunk(
     chunk_index: usize,
     chunk: &[u8],
 ) -> (StatusCode, Value) {
+    upload_archive_chunk_with_headers(
+        app,
+        Some(cookie),
+        Some(csrf),
+        application_id,
+        session_id,
+        chunk_index,
+        chunk,
+        Some(&sha256_bytes_for_test(chunk)),
+    )
+    .await
+}
+
+async fn upload_archive_chunk_with_headers(
+    app: &axum::Router,
+    cookie: Option<&str>,
+    csrf: Option<&str>,
+    application_id: &str,
+    session_id: &str,
+    chunk_index: usize,
+    chunk: &[u8],
+    chunk_sha256: Option<&str>,
+) -> (StatusCode, Value) {
+    let mut builder = Request::builder().method("PUT").uri(format!(
+        "/api/console/applications/{application_id}/logs/runs/archive/import-sessions/{session_id}/chunks/{chunk_index}"
+    ));
+    if let Some(cookie) = cookie {
+        builder = builder.header("cookie", cookie);
+    }
+    if let Some(csrf) = csrf {
+        builder = builder.header("x-csrf-token", csrf);
+    }
+    if let Some(chunk_sha256) = chunk_sha256 {
+        builder = builder.header("x-chunk-sha256", chunk_sha256);
+    }
     let response = app
         .clone()
-        .oneshot(
-            Request::builder()
-                .method("PUT")
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/archive/import-sessions/{session_id}/chunks/{chunk_index}"
-                ))
-                .header("cookie", cookie)
-                .header("x-csrf-token", csrf)
-                .header("x-chunk-sha256", sha256_bytes_for_test(chunk))
-                .body(Body::from(chunk.to_vec()))
-                .unwrap(),
-        )
+        .oneshot(builder.body(Body::from(chunk.to_vec())).unwrap())
         .await
         .unwrap();
     let status = response.status();
@@ -184,19 +223,27 @@ async fn complete_archive_upload_session(
     application_id: &str,
     session_id: &str,
 ) -> (StatusCode, Value) {
+    complete_archive_upload_session_with_csrf(app, cookie, Some(csrf), application_id, session_id)
+        .await
+}
+
+async fn complete_archive_upload_session_with_csrf(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: Option<&str>,
+    application_id: &str,
+    session_id: &str,
+) -> (StatusCode, Value) {
+    let mut builder = Request::builder().method("POST").uri(format!(
+        "/api/console/applications/{application_id}/logs/runs/archive/import-sessions/{session_id}/complete"
+    ));
+    builder = builder.header("cookie", cookie);
+    if let Some(csrf) = csrf {
+        builder = builder.header("x-csrf-token", csrf);
+    }
     let response = app
         .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!(
-                    "/api/console/applications/{application_id}/logs/runs/archive/import-sessions/{session_id}/complete"
-                ))
-                .header("cookie", cookie)
-                .header("x-csrf-token", csrf)
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(builder.body(Body::empty()).unwrap())
         .await
         .unwrap();
     let status = response.status();
@@ -267,7 +314,7 @@ async fn import_archive_bytes(
     .await;
     assert_eq!(session_status, StatusCode::CREATED, "{}", session_payload);
     let session_id = session_payload["data"]["session_id"].as_str().unwrap();
-    let split_at = (archive_bytes.len() / 2).max(1);
+    let split_at = archive_bytes.len();
     for (chunk_index, chunk) in archive_bytes.chunks(split_at).enumerate() {
         let (chunk_status, chunk_payload) = upload_archive_chunk(
             app,
@@ -337,6 +384,20 @@ async fn list_run_logs(app: &axum::Router, cookie: &str, application_id: &str) -
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     serde_json::from_slice(&body).unwrap()
+}
+
+async fn count_archive_upload_chunks(pool: &sqlx::PgPool, session_id: &str) -> i64 {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        select count(*)::bigint
+        from run_archive_upload_chunks
+        where session_id = $1
+        "#,
+    )
+    .bind(Uuid::parse_str(session_id).unwrap())
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 fn sha256_bytes_for_test(bytes: &[u8]) -> String {
@@ -791,6 +852,190 @@ async fn application_runtime_routes_logs_archive_import_rejects_checksum_mismatc
     assert_eq!(complete_payload["code"], json!("archive_sha256"));
     let after_logs = list_run_logs(&app, &cookie, &application_id).await;
     assert_eq!(after_logs["data"]["total"].as_i64().unwrap(), before_total);
+}
+
+#[tokio::test]
+async fn application_runtime_routes_logs_archive_upload_enforces_checksum_limits_and_cleanup() {
+    let (state, database_url) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let source_run_id =
+        start_full_debug_run(&app, &cookie, &csrf, &application_id, "upload staging").await;
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &source_run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    let before_logs = list_run_logs(&app, &cookie, &application_id).await;
+    let before_total = before_logs["data"]["total"].as_i64().unwrap();
+    let (export_status, archive_bytes) =
+        get_run_archive(&app, &cookie, &application_id, &source_run_id, 1).await;
+    assert_eq!(export_status, StatusCode::OK);
+    let archive_sha256 = sha256_bytes_for_test(&archive_bytes);
+    let archive_len = archive_bytes.len();
+
+    let valid_payload = json!({
+        "filename": "archive.json",
+        "total_size_bytes": archive_len,
+        "expected_sha256": archive_sha256.clone(),
+        "chunk_size_bytes": archive_len
+    });
+    let (missing_csrf_status, _) = create_archive_upload_session_from_payload(
+        &app,
+        Some(&cookie),
+        None,
+        &application_id,
+        valid_payload.clone(),
+    )
+    .await;
+    assert_eq!(missing_csrf_status, StatusCode::UNAUTHORIZED);
+
+    for (payload, expected_code) in [
+        (
+            json!({
+                "filename": "archive.json",
+                "total_size_bytes": archive_len,
+                "chunk_size_bytes": archive_len
+            }),
+            "expected_sha256",
+        ),
+        (
+            json!({
+                "filename": "archive.json",
+                "total_size_bytes": archive_len,
+                "expected_sha256": archive_sha256.clone()
+            }),
+            "chunk_size_bytes",
+        ),
+        (
+            json!({
+                "filename": "archive.json",
+                "total_size_bytes": 104857601_i64,
+                "expected_sha256": archive_sha256.clone(),
+                "chunk_size_bytes": 1024
+            }),
+            "archive_size",
+        ),
+        (
+            json!({
+                "filename": "archive.json",
+                "total_size_bytes": archive_len,
+                "expected_sha256": "not-a-sha",
+                "chunk_size_bytes": archive_len
+            }),
+            "expected_sha256",
+        ),
+    ] {
+        let (status, payload) = create_archive_upload_session_from_payload(
+            &app,
+            Some(&cookie),
+            Some(&csrf),
+            &application_id,
+            payload,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{payload}");
+        assert_eq!(payload["code"], json!(expected_code));
+    }
+
+    let (session_status, session_payload) = create_archive_upload_session_from_payload(
+        &app,
+        Some(&cookie),
+        Some(&csrf),
+        &application_id,
+        valid_payload,
+    )
+    .await;
+    assert_eq!(session_status, StatusCode::CREATED, "{session_payload}");
+    let session_id = session_payload["data"]["session_id"].as_str().unwrap();
+
+    let (missing_chunk_sha_status, missing_chunk_sha_payload) = upload_archive_chunk_with_headers(
+        &app,
+        Some(&cookie),
+        Some(&csrf),
+        &application_id,
+        session_id,
+        0,
+        &archive_bytes,
+        None,
+    )
+    .await;
+    assert_eq!(
+        missing_chunk_sha_status,
+        StatusCode::BAD_REQUEST,
+        "{missing_chunk_sha_payload}"
+    );
+    assert_eq!(missing_chunk_sha_payload["code"], json!("chunk_sha256"));
+
+    let (wrong_chunk_sha_status, wrong_chunk_sha_payload) = upload_archive_chunk_with_headers(
+        &app,
+        Some(&cookie),
+        Some(&csrf),
+        &application_id,
+        session_id,
+        0,
+        &archive_bytes,
+        Some("sha256:0000000000000000000000000000000000000000000000000000000000000000"),
+    )
+    .await;
+    assert_eq!(
+        wrong_chunk_sha_status,
+        StatusCode::BAD_REQUEST,
+        "{wrong_chunk_sha_payload}"
+    );
+    assert_eq!(wrong_chunk_sha_payload["code"], json!("chunk_sha256"));
+
+    let (overflow_index_status, overflow_index_payload) = upload_archive_chunk(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        session_id,
+        1,
+        &archive_bytes,
+    )
+    .await;
+    assert_eq!(
+        overflow_index_status,
+        StatusCode::BAD_REQUEST,
+        "{overflow_index_payload}"
+    );
+    assert_eq!(overflow_index_payload["code"], json!("archive_chunk_count"));
+
+    let (chunk_status, chunk_payload) = upload_archive_chunk(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        session_id,
+        0,
+        &archive_bytes,
+    )
+    .await;
+    assert_eq!(chunk_status, StatusCode::OK, "{chunk_payload}");
+    assert_eq!(
+        list_run_logs(&app, &cookie, &application_id).await["data"]["total"],
+        json!(before_total),
+        "uploaded archive should remain staging-only before complete/import"
+    );
+
+    let (missing_complete_csrf_status, _) =
+        complete_archive_upload_session_with_csrf(&app, &cookie, None, &application_id, session_id)
+            .await;
+    assert_eq!(missing_complete_csrf_status, StatusCode::UNAUTHORIZED);
+
+    let (complete_status, complete_payload) =
+        complete_archive_upload_session(&app, &cookie, &csrf, &application_id, session_id).await;
+    assert_eq!(complete_status, StatusCode::OK, "{complete_payload}");
+    let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+    assert_eq!(count_archive_upload_chunks(&pool, session_id).await, 0);
 }
 
 #[tokio::test]

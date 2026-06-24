@@ -8,6 +8,9 @@ use control_plane::{
 
 const RUN_ARCHIVE_VERSION: i32 = 1;
 const APPLICATION_RUN_ARCHIVE_SEMANTICS: &str = "application_run_archive_v1";
+const RUN_ARCHIVE_UPLOAD_MAX_BYTES: i64 = 100 * 1024 * 1024;
+const RUN_ARCHIVE_UPLOAD_MAX_CHUNK_BYTES: i64 = 8 * 1024 * 1024;
+const RUN_ARCHIVE_UPLOAD_MAX_CHUNKS: i64 = 4096;
 
 #[derive(Debug)]
 struct RunArchiveUploadSessionRow {
@@ -18,6 +21,7 @@ struct RunArchiveUploadSessionRow {
     total_size_bytes: i64,
     received_bytes: i64,
     expected_sha256: Option<String>,
+    chunk_size_bytes: i64,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -138,10 +142,7 @@ fn ensure_run_archive_version(version: Option<i32>) -> Result<(), ApiError> {
     Err(ControlPlaneError::InvalidInput("unsupported_archive_version").into())
 }
 
-fn required_json_field<T>(
-    value: &serde_json::Value,
-    field: &'static str,
-) -> Result<T, ApiError>
+fn required_json_field<T>(value: &serde_json::Value, field: &'static str) -> Result<T, ApiError>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -170,17 +171,37 @@ pub async fn create_run_archive_upload_session(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
     Json(body): Json<RunArchiveUploadSessionCreateBody>,
-) -> Result<(StatusCode, Json<ApiSuccess<RunArchiveUploadSessionResponse>>), ApiError> {
+) -> Result<
+    (
+        StatusCode,
+        Json<ApiSuccess<RunArchiveUploadSessionResponse>>,
+    ),
+    ApiError,
+> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context)?;
     let application = ensure_application_visible(&state, context.user.id, id).await?;
     if body.total_size_bytes <= 0 {
         return Err(ControlPlaneError::InvalidInput("total_size_bytes").into());
     }
-    if let Some(chunk_size_bytes) = body.chunk_size_bytes {
-        if chunk_size_bytes <= 0 {
-            return Err(ControlPlaneError::InvalidInput("chunk_size_bytes").into());
-        }
+    if body.total_size_bytes > RUN_ARCHIVE_UPLOAD_MAX_BYTES {
+        return Err(ControlPlaneError::InvalidInput("archive_size").into());
+    }
+    let expected_sha256 = body
+        .expected_sha256
+        .as_deref()
+        .ok_or(ControlPlaneError::InvalidInput("expected_sha256"))?;
+    ensure_sha256_value(expected_sha256, "expected_sha256")?;
+    let chunk_size_bytes = body
+        .chunk_size_bytes
+        .ok_or(ControlPlaneError::InvalidInput("chunk_size_bytes"))?;
+    if chunk_size_bytes <= 0 || chunk_size_bytes > RUN_ARCHIVE_UPLOAD_MAX_CHUNK_BYTES {
+        return Err(ControlPlaneError::InvalidInput("chunk_size_bytes").into());
+    }
+    let expected_chunk_count =
+        expected_archive_chunk_count(body.total_size_bytes, chunk_size_bytes)?;
+    if expected_chunk_count > RUN_ARCHIVE_UPLOAD_MAX_CHUNKS {
+        return Err(ControlPlaneError::InvalidInput("archive_chunk_count").into());
     }
 
     let session_id = Uuid::now_v7();
@@ -205,13 +226,16 @@ pub async fn create_run_archive_upload_session(
     .bind(context.actor.user_id)
     .bind(body.filename.as_deref())
     .bind(body.total_size_bytes)
-    .bind(body.expected_sha256.as_deref())
-    .bind(body.chunk_size_bytes)
+    .bind(expected_sha256)
+    .bind(chunk_size_bytes)
     .execute(state.store.pool())
     .await?;
 
     let session = load_run_archive_upload_session(&state, id, session_id).await?;
-    Ok((StatusCode::CREATED, Json(ApiSuccess::new(to_upload_session_response(session)))))
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_upload_session_response(session))),
+    ))
 }
 
 #[utoipa::path(
@@ -247,12 +271,21 @@ pub async fn upload_run_archive_chunk(
     if session.status != "uploading" {
         return Err(ControlPlaneError::Conflict("archive_upload_session").into());
     }
+    if i64::try_from(body.len()).unwrap_or(i64::MAX) > session.chunk_size_bytes {
+        return Err(ControlPlaneError::InvalidInput("chunk_size_bytes").into());
+    }
+    let expected_chunk_count =
+        expected_archive_chunk_count(session.total_size_bytes, session.chunk_size_bytes)?;
+    if i64::from(chunk_index) >= expected_chunk_count {
+        return Err(ControlPlaneError::InvalidInput("archive_chunk_count").into());
+    }
 
     let actual_sha256 = sha256_bytes(&body);
-    if let Some(expected_sha256) = header_value(&headers, "x-chunk-sha256") {
-        if normalize_sha256(&expected_sha256) != normalize_sha256(&actual_sha256) {
-            return Err(ControlPlaneError::InvalidInput("chunk_sha256").into());
-        }
+    let expected_sha256 = header_value(&headers, "x-chunk-sha256")
+        .ok_or(ControlPlaneError::InvalidInput("chunk_sha256"))?;
+    ensure_sha256_value(&expected_sha256, "chunk_sha256")?;
+    if normalize_sha256(&expected_sha256) != normalize_sha256(&actual_sha256) {
+        return Err(ControlPlaneError::InvalidInput("chunk_sha256").into());
     }
 
     let mut tx = state.store.pool().begin().await?;
@@ -279,7 +312,8 @@ pub async fn upload_run_archive_chunk(
     .bind(body.as_ref())
     .execute(&mut *tx)
     .await?;
-    let received_bytes = refresh_run_archive_upload_session_received_bytes(&mut tx, session_id).await?;
+    let received_bytes =
+        refresh_run_archive_upload_session_received_bytes(&mut tx, session_id).await?;
     if received_bytes > session.total_size_bytes {
         return Err(ControlPlaneError::InvalidInput("archive_size").into());
     }
@@ -328,10 +362,13 @@ pub async fn complete_run_archive_upload_session(
         return Err(ControlPlaneError::InvalidInput("archive_size").into());
     }
     let archive_sha256 = sha256_bytes(&archive_bytes);
-    if let Some(expected_sha256) = session.expected_sha256.as_deref() {
-        if normalize_sha256(expected_sha256) != normalize_sha256(&archive_sha256) {
-            return Err(ControlPlaneError::InvalidInput("archive_sha256").into());
-        }
+    let expected_sha256 = session
+        .expected_sha256
+        .as_deref()
+        .ok_or(ControlPlaneError::InvalidInput("expected_sha256"))?;
+    ensure_sha256_value(expected_sha256, "expected_sha256")?;
+    if normalize_sha256(expected_sha256) != normalize_sha256(&archive_sha256) {
+        return Err(ControlPlaneError::InvalidInput("archive_sha256").into());
     }
     let archive = parse_run_archive_v1(&archive_bytes)?;
     let job_id = create_run_archive_import_job(
@@ -347,6 +384,7 @@ pub async fn complete_run_archive_upload_session(
     .await?;
 
     mark_upload_session_completed(&state, session_id).await?;
+    cleanup_run_archive_upload_chunks(&state, session_id).await?;
     let restore_state = state.clone();
     let restore_actor_user_id = context.actor.user_id;
     tokio::spawn(async move {
@@ -364,13 +402,18 @@ pub async fn complete_run_archive_upload_session(
                 mark_run_archive_import_job_failed(&restore_state, job_id, error.0.to_string())
                     .await
             {
-                error!("failed to mark run archive import job failed: {}", mark_error.0);
+                error!(
+                    "failed to mark run archive import job failed: {}",
+                    mark_error.0
+                );
             }
         }
     });
 
     let job = load_run_archive_import_job(&state, id, job_id).await?;
-    Ok(Json(ApiSuccess::new(to_import_job_response(&state, job).await?)))
+    Ok(Json(ApiSuccess::new(
+        to_import_job_response(&state, job).await?,
+    )))
 }
 
 #[utoipa::path(
@@ -396,7 +439,9 @@ pub async fn get_run_archive_import_job(
     ensure_application_visible(&state, context.user.id, id).await?;
     let job = load_run_archive_import_job(&state, id, job_id).await?;
 
-    Ok(Json(ApiSuccess::new(to_import_job_response(&state, job).await?)))
+    Ok(Json(ApiSuccess::new(
+        to_import_job_response(&state, job).await?,
+    )))
 }
 
 async fn build_run_archive_v1_document(
@@ -493,7 +538,9 @@ async fn build_run_archive_v1_entry(
     let trace_tree = export_value
         .get("trace_tree")
         .cloned()
-        .ok_or(ControlPlaneError::Conflict("application_run_archive_trace_tree"))?;
+        .ok_or(ControlPlaneError::Conflict(
+            "application_run_archive_trace_tree",
+        ))?;
     let export_warnings = required_json_field(&export_value, "export_warnings")?;
     let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
         &state.store,
@@ -763,6 +810,7 @@ async fn load_run_archive_upload_session(
             total_size_bytes,
             received_bytes,
             expected_sha256,
+            chunk_size_bytes,
             created_at,
             updated_at
         from run_archive_upload_sessions
@@ -784,9 +832,26 @@ async fn load_run_archive_upload_session(
         total_size_bytes: row.get("total_size_bytes"),
         received_bytes: row.get("received_bytes"),
         expected_sha256: row.get("expected_sha256"),
+        chunk_size_bytes: row.get("chunk_size_bytes"),
         created_at: row.get("created_at"),
         updated_at: row.get("updated_at"),
     })
+}
+
+async fn cleanup_run_archive_upload_chunks(
+    state: &Arc<ApiState>,
+    session_id: Uuid,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        r#"
+        delete from run_archive_upload_chunks
+        where session_id = $1
+        "#,
+    )
+    .bind(session_id)
+    .execute(state.store.pool())
+    .await?;
+    Ok(())
 }
 
 async fn load_upload_session_archive_bytes(
@@ -966,7 +1031,8 @@ fn parse_run_archive_v1(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> 
         if normalize_sha256(&entry_sha256) != normalize_sha256(&manifest_entry.content_sha256) {
             return Err(ControlPlaneError::InvalidInput("archive_entry_sha256").into());
         }
-        if normalize_sha256(&entry.content_digest) != normalize_sha256(&manifest_entry.content_digest)
+        if normalize_sha256(&entry.content_digest)
+            != normalize_sha256(&manifest_entry.content_digest)
         {
             return Err(ControlPlaneError::InvalidInput("archive_entry_digest").into());
         }
@@ -995,6 +1061,26 @@ fn normalize_sha256(value: &str) -> String {
         .strip_prefix("sha256:")
         .unwrap_or(value.trim())
         .to_ascii_lowercase()
+}
+
+fn ensure_sha256_value(value: &str, field: &'static str) -> Result<(), ApiError> {
+    let normalized = normalize_sha256(value);
+    if normalized.len() == 64 && normalized.chars().all(|value| value.is_ascii_hexdigit()) {
+        return Ok(());
+    }
+
+    Err(ControlPlaneError::InvalidInput(field).into())
+}
+
+fn expected_archive_chunk_count(
+    total_size_bytes: i64,
+    chunk_size_bytes: i64,
+) -> Result<i64, ApiError> {
+    if total_size_bytes <= 0 || chunk_size_bytes <= 0 {
+        return Err(ControlPlaneError::InvalidInput("archive_chunk_count").into());
+    }
+
+    Ok((total_size_bytes + chunk_size_bytes - 1) / chunk_size_bytes)
 }
 
 fn header_value(headers: &HeaderMap, name: &str) -> Option<String> {

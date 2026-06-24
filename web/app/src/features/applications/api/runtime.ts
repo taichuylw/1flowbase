@@ -553,8 +553,8 @@ export function createApplicationRunArchiveUploadSession(
   input: {
     filename?: string | null;
     total_size_bytes: number;
-    expected_sha256?: string | null;
-    chunk_size_bytes?: number | null;
+    expected_sha256: string;
+    chunk_size_bytes: number;
   },
   csrfToken: string
 ) {
