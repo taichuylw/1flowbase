@@ -68,6 +68,17 @@ async fn post_run_archive(
     application_id: &str,
     run_ids: &[&str],
 ) -> (StatusCode, Vec<u8>) {
+    post_run_archive_with_version(app, cookie, csrf, application_id, run_ids, 1).await
+}
+
+async fn post_run_archive_with_version(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+    run_ids: &[&str],
+    archive_version: i32,
+) -> (StatusCode, Vec<u8>) {
     let response = app
         .clone()
         .oneshot(
@@ -81,7 +92,7 @@ async fn post_run_archive(
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
-                        "archive_version": 1,
+                        "archive_version": archive_version,
                         "run_ids": run_ids
                     })
                     .to_string(),
@@ -346,6 +357,15 @@ fn read_zip_entries(body: &[u8]) -> Vec<(String, Vec<u8>)> {
     entries
 }
 
+fn tamper_run_archive_bytes<F>(archive_bytes: &[u8], mut tamper: F) -> Vec<u8>
+where
+    F: FnMut(&mut Value),
+{
+    let mut archive: Value = serde_json::from_slice(archive_bytes).unwrap();
+    tamper(&mut archive);
+    serde_json::to_vec_pretty(&archive).unwrap()
+}
+
 async fn wait_for_node_run_error_code(
     pool: &sqlx::PgPool,
     node_run_id: Uuid,
@@ -544,6 +564,20 @@ async fn application_runtime_routes_logs_archive_returns_v1_manifest_and_restore
     assert!(archive["manifest"]["content_sha256"]
         .as_str()
         .is_some_and(|value| value.starts_with("sha256:")));
+    assert!(archive["manifest"]["checksum"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("sha256:")));
+    assert!(archive["content_digest"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("sha256:")));
+    assert_eq!(
+        archive["content_digest"], archive["manifest"]["content_sha256"],
+        "root content_digest must match manifest content_sha256"
+    );
+    assert_eq!(
+        archive["manifest"]["checksum"], archive["manifest"]["content_sha256"],
+        "manifest checksum must match manifest content_sha256"
+    );
     assert_eq!(
         archive["manifest"]["entries"][0]["source_run_id"],
         json!(run_id)
@@ -551,11 +585,21 @@ async fn application_runtime_routes_logs_archive_returns_v1_manifest_and_restore
     assert!(archive["manifest"]["entries"][0]["content_sha256"]
         .as_str()
         .is_some_and(|value| value.starts_with("sha256:")));
+    assert!(archive["manifest"]["entries"][0]["content_digest"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("sha256:")));
 
     let entries = archive["entries"].as_array().unwrap();
     assert_eq!(entries.len(), 1);
     let entry = &entries[0];
     assert_eq!(entry["source_run_id"], json!(run_id));
+    assert!(entry["content_digest"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("sha256:")));
+    assert_eq!(
+        entry["content_digest"], archive["manifest"]["entries"][0]["content_digest"],
+        "entry content_digest must match manifest entry content_digest"
+    );
     assert_eq!(entry["flow_run"]["id"], json!(run_id));
     assert_eq!(
         entry["flow_run"]["input_payload"]["node-start"]["query"],
@@ -750,6 +794,97 @@ async fn application_runtime_routes_logs_archive_import_rejects_checksum_mismatc
 }
 
 #[tokio::test]
+async fn application_runtime_routes_logs_archive_import_rejects_tampered_contract_digests() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let source_run_id =
+        start_full_debug_run(&app, &cookie, &csrf, &application_id, "tampered archive").await;
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &source_run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    let before_logs = list_run_logs(&app, &cookie, &application_id).await;
+    let before_total = before_logs["data"]["total"].as_i64().unwrap();
+    let (export_status, archive_bytes) =
+        get_run_archive(&app, &cookie, &application_id, &source_run_id, 1).await;
+    assert_eq!(export_status, StatusCode::OK);
+
+    let tampered_cases: Vec<(&str, Vec<u8>)> = vec![
+        (
+            "archive_checksum",
+            tamper_run_archive_bytes(&archive_bytes, |archive| {
+                archive["content_digest"] = json!(
+                    "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                );
+            }),
+        ),
+        (
+            "archive_entry_digest",
+            tamper_run_archive_bytes(&archive_bytes, |archive| {
+                archive["manifest"]["entries"][0]["content_digest"] = json!(
+                    "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                );
+            }),
+        ),
+        (
+            "archive_content_sha256",
+            tamper_run_archive_bytes(&archive_bytes, |archive| {
+                archive["entries"][0]["flow_run_fact"]["debug_session_id"] =
+                    json!("tampered-debug-session");
+            }),
+        ),
+    ];
+
+    for (expected_code, tampered_bytes) in tampered_cases {
+        let (session_status, session_payload) = create_archive_upload_session(
+            &app,
+            &cookie,
+            &csrf,
+            &application_id,
+            &tampered_bytes,
+            &sha256_bytes_for_test(&tampered_bytes),
+        )
+        .await;
+        assert_eq!(session_status, StatusCode::CREATED, "{}", session_payload);
+        let session_id = session_payload["data"]["session_id"].as_str().unwrap();
+        let (chunk_status, chunk_payload) = upload_archive_chunk(
+            &app,
+            &cookie,
+            &csrf,
+            &application_id,
+            session_id,
+            0,
+            &tampered_bytes,
+        )
+        .await;
+        assert_eq!(chunk_status, StatusCode::OK, "{}", chunk_payload);
+
+        let (complete_status, complete_payload) =
+            complete_archive_upload_session(&app, &cookie, &csrf, &application_id, session_id)
+                .await;
+        assert_eq!(
+            complete_status,
+            StatusCode::BAD_REQUEST,
+            "expected {expected_code}, got {}",
+            complete_payload
+        );
+        assert_eq!(complete_payload["code"], json!(expected_code));
+    }
+
+    let after_logs = list_run_logs(&app, &cookie, &application_id).await;
+    assert_eq!(after_logs["data"]["total"].as_i64().unwrap(), before_total);
+}
+
+#[tokio::test]
 async fn application_runtime_routes_logs_archive_rejects_unsupported_version() {
     let (state, _) = test_api_state_with_database_url().await;
     let app = crate::app_with_state_and_config(state.clone(), &test_config());
@@ -783,6 +918,18 @@ async fn application_runtime_routes_logs_archive_rejects_unsupported_version() {
     );
     let payload: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(payload["code"], json!("unsupported_archive_version"));
+
+    let (post_status, post_body) =
+        post_run_archive_with_version(&app, &cookie, &csrf, &application_id, &[run_id.as_str()], 2)
+            .await;
+    assert_eq!(
+        post_status,
+        StatusCode::BAD_REQUEST,
+        "{}",
+        String::from_utf8_lossy(&post_body)
+    );
+    let post_payload: Value = serde_json::from_slice(&post_body).unwrap();
+    assert_eq!(post_payload["code"], json!("unsupported_archive_version"));
 }
 
 #[tokio::test]
