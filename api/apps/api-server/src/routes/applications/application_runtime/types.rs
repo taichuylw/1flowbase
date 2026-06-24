@@ -509,7 +509,7 @@ pub struct ApplicationRunTraceExportResponse {
     pub trace_tree: ApplicationRunTraceExportTreeResponse,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunSelectedExportManifestRunResponse {
     pub run_id: String,
     pub title: String,
@@ -519,7 +519,7 @@ pub struct ApplicationRunSelectedExportManifestRunResponse {
     pub export_warning_count: usize,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunSelectedExportManifestResponse {
     pub export_version: i32,
     pub exported_at: String,

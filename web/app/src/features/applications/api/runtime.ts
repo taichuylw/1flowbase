@@ -7,13 +7,11 @@ import {
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRunOverview,
-  getConsoleApplicationRunArchive,
   getConsoleApplicationRunTraceNodeChildren,
   getConsoleApplicationRunTraceNodeContent,
   getConsoleApplicationRunTraceNodeDetail,
   getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
-  createConsoleApplicationRunsArchive,
   createConsoleRunArchiveUploadSession,
   exportConsoleApplicationRunTraceDump,
   exportConsoleApplicationRunsTraceDumpZip,
@@ -24,7 +22,6 @@ import {
   getConsoleRuntimeDebugStream,
   uploadConsoleRunArchiveChunk,
   type ApiBlobResponse,
-  type ConsoleApplicationRunArchive,
   type ConsoleApplicationConversationMessage,
   type ConsoleApplicationConversationMessagesPage,
   type ConsoleApplicationRunMonitoringApiKeyUsage,
@@ -185,7 +182,6 @@ export interface ApplicationRunCallbackTasksPage {
 export type ApplicationRuntimeDebugStreamPart = RuntimeDebugStreamPart;
 export type { RuntimeDebugStreamPart };
 export type ApplicationRunExportDownload = ApiBlobResponse;
-export type ApplicationRunArchive = ConsoleApplicationRunArchive;
 export type ApplicationRunArchiveUploadSession = ConsoleRunArchiveUploadSession;
 export type ApplicationRunArchiveChunkUpload = ConsoleRunArchiveChunkUpload;
 export type ApplicationRunArchiveImportJob = ConsoleRunArchiveImportJob;
@@ -522,29 +518,6 @@ export function exportSelectedApplicationRunsTraceDumpZip(
     runIds,
     csrfToken,
     getApplicationsApiBaseUrl()
-  );
-}
-
-export function exportApplicationRunArchive(applicationId: string, runId: string) {
-  return getConsoleApplicationRunArchive(
-    applicationId,
-    runId,
-    getApplicationsApiBaseUrl(),
-    { archive_version: 1 }
-  );
-}
-
-export function exportSelectedApplicationRunsArchive(
-  applicationId: string,
-  runIds: string[],
-  csrfToken: string
-) {
-  return createConsoleApplicationRunsArchive(
-    applicationId,
-    runIds,
-    csrfToken,
-    getApplicationsApiBaseUrl(),
-    { archive_version: 1 }
   );
 }
 

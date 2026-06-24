@@ -21,17 +21,9 @@ vi.mock('@1flowbase/api-client', () => ({
     job_id: 'job-1',
     status: 'queued'
   }),
-  createConsoleApplicationRunsArchive: vi.fn().mockResolvedValue({
-    archive_version: 1,
-    entries: []
-  }),
   createConsoleRunArchiveUploadSession: vi.fn().mockResolvedValue({
     session_id: 'session-1',
     status: 'uploading'
-  }),
-  getConsoleApplicationRunArchive: vi.fn().mockResolvedValue({
-    archive_version: 1,
-    entries: []
   }),
   getConsoleApplicationRunTraceTree: vi.fn().mockResolvedValue({
     projection_status: traceProjectionStatus,
@@ -266,10 +258,8 @@ vi.mock('@1flowbase/api-client', () => ({
 import {
   completeConsoleCallbackTask,
   completeConsoleRunArchiveUploadSession,
-  createConsoleApplicationRunsArchive,
   createConsoleRunArchiveUploadSession,
   fetchConsoleRuntimeModelRecords,
-  getConsoleApplicationRunArchive,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRunTraceNodeChildren,
@@ -308,9 +298,7 @@ import {
   fetchApplicationRunTraceTree,
   fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
-  exportApplicationRunArchive,
   exportApplicationRunTraceDump,
-  exportSelectedApplicationRunsArchive,
   exportSelectedApplicationRunsTraceDumpZip,
   fetchRuntimeDebugStream,
   resumeFlowRun,
@@ -443,12 +431,6 @@ describe('applications runtime api', () => {
       ['run-1', 'run-2'],
       'csrf-123'
     );
-    await exportApplicationRunArchive('app-1', 'run-1');
-    await exportSelectedApplicationRunsArchive(
-      'app-1',
-      ['run-1', 'run-2'],
-      'csrf-123'
-    );
     await createApplicationRunArchiveUploadSession(
       'app-1',
       {
@@ -551,23 +533,6 @@ describe('applications runtime api', () => {
       ['run-1', 'run-2'],
       'csrf-123',
       'http://127.0.0.1:7800'
-    );
-    expect(getConsoleApplicationRunArchive).toHaveBeenCalledWith(
-      'app-1',
-      'run-1',
-      'http://127.0.0.1:7800',
-      {
-        archive_version: 1
-      }
-    );
-    expect(createConsoleApplicationRunsArchive).toHaveBeenCalledWith(
-      'app-1',
-      ['run-1', 'run-2'],
-      'csrf-123',
-      'http://127.0.0.1:7800',
-      {
-        archive_version: 1
-      }
     );
     expect(createConsoleRunArchiveUploadSession).toHaveBeenCalledWith(
       'app-1',

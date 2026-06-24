@@ -81,6 +81,7 @@ fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
 
 include!("application_runtime/types.rs");
 
+#[allow(deprecated)]
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route(

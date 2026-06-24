@@ -90,41 +90,66 @@ impl PgControlPlaneStore {
                 $11, $12, $13, $14, $15,
                 coalesce(
                     (
-                        select sum(runtime_usage_ledger.total_tokens)::bigint
+                        select sum(
+                            coalesce(runtime_usage_ledger.input_tokens, 0)
+                            + coalesce(runtime_usage_ledger.output_tokens, 0)
+                            + coalesce(runtime_usage_ledger.reasoning_output_tokens, 0)
+                            + coalesce(
+                                runtime_usage_ledger.input_cache_hit_tokens,
+                                runtime_usage_ledger.cache_read_tokens,
+                                runtime_usage_ledger.cached_input_tokens,
+                                0
+                            )
+                            + coalesce(runtime_usage_ledger.cache_write_tokens, 0)
+                        )::bigint
                         from runtime_usage_ledger
                         where runtime_usage_ledger.flow_run_id = $1
                     ),
                     (
                         select sum(
-                            case
-                                when node_runs.metrics_payload #>> '{usage,total_tokens}' ~ '^-?[0-9]+$'
-                                then (node_runs.metrics_payload #>> '{usage,total_tokens}')::bigint
-                                when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
-                                  or node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
-                                  or node_runs.metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
-                                then
-                                    coalesce(
-                                        case
-                                            when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
-                                            then (node_runs.metrics_payload #>> '{usage,input_tokens}')::bigint
-                                        end,
-                                        0
-                                    )
-                                    + coalesce(
-                                        case
-                                            when node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
-                                            then (node_runs.metrics_payload #>> '{usage,output_tokens}')::bigint
-                                        end,
-                                        0
-                                    )
-                                    + coalesce(
-                                        case
-                                            when node_runs.metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
-                                            then (node_runs.metrics_payload #>> '{usage,reasoning_tokens}')::bigint
-                                        end,
-                                        0
-                                    )
-                            end
+                            coalesce(
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,input_tokens}')::bigint
+                                end,
+                                0
+                            )
+                            + coalesce(
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,output_tokens}')::bigint
+                                end,
+                                0
+                            )
+                            + coalesce(
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,reasoning_tokens}')::bigint
+                                end,
+                                0
+                            )
+                            + coalesce(
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,input_cache_hit_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,input_cache_hit_tokens}')::bigint
+                                end,
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,cache_read_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,cache_read_tokens}')::bigint
+                                end,
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,cached_input_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,cached_input_tokens}')::bigint
+                                end,
+                                0
+                            )
+                            + coalesce(
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,cache_write_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,cache_write_tokens}')::bigint
+                                end,
+                                0
+                            )
                         )::bigint
                         from node_runs
                         where node_runs.flow_run_id = $1

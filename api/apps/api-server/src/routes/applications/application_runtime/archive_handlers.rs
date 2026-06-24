@@ -60,6 +60,8 @@ struct RunArchiveImportJobRow {
         (status = 404, body = crate::error_response::ErrorBody)
     )
 )]
+// Compatibility export endpoint; user-facing run export uses the trace zip path.
+#[deprecated(note = "Use selected trace export zip for user-facing run export.")]
 pub async fn export_application_run_archive(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
@@ -101,6 +103,8 @@ pub async fn export_application_run_archive(
         (status = 404, body = crate::error_response::ErrorBody)
     )
 )]
+// Compatibility export endpoint; user-facing run export uses the trace zip path.
+#[deprecated(note = "Use selected trace export zip for user-facing run export.")]
 pub async fn export_application_runs_archive(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
@@ -993,35 +997,202 @@ fn to_upload_session_response(row: RunArchiveUploadSessionRow) -> RunArchiveUplo
 }
 
 fn extract_archive_from_zip(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> {
-    use std::io::Read;
-
     let cursor = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(cursor)
         .map_err(|_| ControlPlaneError::InvalidInput("archive_not_valid_zip"))?;
 
-    // Look for archive.json or any .json file at root level
-    let mut archive_content: Option<Vec<u8>> = None;
+    if let Some(content) = read_zip_file(&mut zip, "archive.json")? {
+        return parse_run_archive_json(&content);
+    }
+    if let Some(archive) = extract_archive_from_trace_export_zip(&mut zip)? {
+        return Ok(archive);
+    }
 
-    for i in 0..zip.len() {
-        let mut file = zip.by_index(i)
+    let mut root_json_names = Vec::new();
+    for index in 0..zip.len() {
+        let file = zip
+            .by_index(index)
             .map_err(|_| ControlPlaneError::InvalidInput("archive_zip_read_error"))?;
         let file_name = file.name().to_string();
-
-        // Accept archive.json or any root-level .json file (not in subdirectories)
-        if file_name == "archive.json" || (file_name.ends_with(".json") && !file_name.contains('/')) {
-            let mut content = Vec::new();
-            file.read_to_end(&mut content)
-                .map_err(|_| ControlPlaneError::InvalidInput("archive_zip_read_error"))?;
-            archive_content = Some(content);
-            break;
+        if file_name.ends_with(".json") && !file_name.contains('/') {
+            root_json_names.push(file_name);
         }
     }
 
-    let content = archive_content
-        .ok_or(ControlPlaneError::InvalidInput("archive_json_not_found_in_zip"))?;
+    root_json_names.sort_by_key(|name| name == "manifest.json");
+    for file_name in root_json_names {
+        let Some(content) = read_zip_file(&mut zip, &file_name)? else {
+            continue;
+        };
+        if let Ok(archive) = parse_run_archive_json(&content) {
+            return Ok(archive);
+        }
+    }
 
-    serde_json::from_slice(&content)
+    Err(ControlPlaneError::InvalidInput("archive_json_not_found_in_zip").into())
+}
+
+fn read_zip_file(
+    zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
+    name: &str,
+) -> Result<Option<Vec<u8>>, ApiError> {
+    use std::io::Read;
+
+    let mut file = match zip.by_name(name) {
+        Ok(file) => file,
+        Err(zip::result::ZipError::FileNotFound) => return Ok(None),
+        Err(_) => return Err(ControlPlaneError::InvalidInput("archive_zip_read_error").into()),
+    };
+    let mut content = Vec::new();
+    file.read_to_end(&mut content)
+        .map_err(|_| ControlPlaneError::InvalidInput("archive_zip_read_error"))?;
+    Ok(Some(content))
+}
+
+fn parse_run_archive_json(content: &[u8]) -> Result<RunArchiveV1Response, ApiError> {
+    serde_json::from_slice(content)
         .map_err(|_| ControlPlaneError::InvalidInput("archive_json_invalid").into())
+}
+
+fn extract_archive_from_trace_export_zip(
+    zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
+) -> Result<Option<RunArchiveV1Response>, ApiError> {
+    let Some(manifest_content) = read_zip_file(zip, "manifest.json")? else {
+        return Ok(None);
+    };
+    let manifest: ApplicationRunSelectedExportManifestResponse =
+        match serde_json::from_slice(&manifest_content) {
+            Ok(manifest) => manifest,
+            Err(_) => return Ok(None),
+        };
+    if manifest.export_version != APPLICATION_RUN_TRACE_EXPORT_VERSION
+        || manifest.run_count == 0
+        || manifest.entries.len() != manifest.run_count
+    {
+        return Err(ControlPlaneError::InvalidInput("archive_trace_manifest").into());
+    }
+
+    let mut documents = Vec::with_capacity(manifest.entries.len());
+    for entry in &manifest.entries {
+        let content = read_zip_file(zip, &entry.filename)?
+            .ok_or(ControlPlaneError::InvalidInput("archive_trace_entry_missing"))?;
+        let document: ApplicationRunTraceExportResponse = serde_json::from_slice(&content)
+            .map_err(|_| ControlPlaneError::InvalidInput("archive_trace_entry_json"))?;
+        if document.export_version != APPLICATION_RUN_TRACE_EXPORT_VERSION
+            || document.flow_run.id != entry.run_id
+        {
+            return Err(ControlPlaneError::InvalidInput("archive_trace_entry").into());
+        }
+        documents.push(document);
+    }
+
+    Ok(Some(build_archive_from_trace_exports(manifest, documents)?))
+}
+
+fn build_archive_from_trace_exports(
+    manifest: ApplicationRunSelectedExportManifestResponse,
+    documents: Vec<ApplicationRunTraceExportResponse>,
+) -> Result<RunArchiveV1Response, ApiError> {
+    let first_document = documents
+        .first()
+        .ok_or(ControlPlaneError::InvalidInput("archive_trace_entries"))?;
+    let exported_by_user_id = first_document.run.actor.id.clone().unwrap_or_default();
+    let source = RunArchiveV1SourceResponse {
+        source_kind: "application_run_trace_export_zip".to_string(),
+        workspace_id: "unknown".to_string(),
+        application_id: manifest.application_id.clone(),
+        application_type: first_document.run.application_type.clone(),
+        application_name: "imported application runs".to_string(),
+        exported_by_user_id,
+        exported_at: manifest.exported_at.clone(),
+        archive_builder: "api-server.application-runtime.trace-export-zip-import-v1".to_string(),
+    };
+    let mut entries = documents
+        .into_iter()
+        .map(trace_export_to_archive_entry)
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    for entry in &mut entries {
+        entry.content_digest = sha256_bytes(&serde_json::to_vec(entry)?);
+    }
+    let manifest_entries = entries
+        .iter()
+        .map(|entry| {
+            Ok(RunArchiveV1ManifestEntryResponse {
+                source_run_id: entry.source_run_id.clone(),
+                content_sha256: sha256_bytes(&serde_json::to_vec(entry)?),
+                content_digest: entry.content_digest.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    let content_sha256 = sha256_bytes(&serde_json::to_vec(&entries)?);
+    let archive_manifest = RunArchiveV1ManifestResponse {
+        archive_version: RUN_ARCHIVE_VERSION,
+        archive_semantics: APPLICATION_RUN_ARCHIVE_SEMANTICS.to_string(),
+        exported_at: manifest.exported_at.clone(),
+        source_workspace_id: "unknown".to_string(),
+        source_application_id: manifest.application_id,
+        run_count: entries.len(),
+        selected_run_ids: manifest.selected_run_ids,
+        entries: manifest_entries,
+        content_sha256: content_sha256.clone(),
+        checksum: content_sha256.clone(),
+    };
+
+    Ok(RunArchiveV1Response {
+        archive_version: RUN_ARCHIVE_VERSION,
+        exported_at: manifest.exported_at,
+        manifest: archive_manifest,
+        source,
+        entries,
+        content_digest: content_sha256,
+    })
+}
+
+fn trace_export_to_archive_entry(
+    document: ApplicationRunTraceExportResponse,
+) -> Result<RunArchiveV1EntryResponse, ApiError> {
+    let source_run_id = document.flow_run.id.clone();
+    let flow_run_fact = trace_export_flow_run_fact(&document.flow_run)?;
+    let trace_tree = serde_json::to_value(document.trace_tree)?;
+
+    Ok(RunArchiveV1EntryResponse {
+        source_run_id,
+        content_digest: String::new(),
+        flow_run: document.flow_run,
+        flow_run_fact,
+        compiled_plan: None,
+        node_runs: document.node_runs,
+        checkpoints: document.checkpoints,
+        callback_tasks: document.callback_tasks,
+        events: document.events,
+        runtime_spans: Vec::new(),
+        runtime_events: Vec::new(),
+        runtime_items: Vec::new(),
+        context_projections: Vec::new(),
+        usage_ledger: Vec::new(),
+        model_failover_attempts: Vec::new(),
+        capability_invocations: Vec::new(),
+        trace_tree,
+        export_warnings: document.export_warnings,
+    })
+}
+
+fn trace_export_flow_run_fact(flow_run: &FlowRunResponse) -> Result<serde_json::Value, ApiError> {
+    let mut value = serde_json::to_value(flow_run)?;
+    let object = value
+        .as_object_mut()
+        .ok_or(ControlPlaneError::InvalidInput("archive_trace_flow_run"))?;
+    if let Some(external_user) = flow_run.expand_id.as_ref() {
+        object.insert(
+            "external_user".to_string(),
+            serde_json::Value::String(external_user.clone()),
+        );
+    }
+    object.insert(
+        "document_hash".to_string(),
+        serde_json::Value::String("imported-trace-export".to_string()),
+    );
+    Ok(value)
 }
 
 fn parse_run_archive_v1(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> {

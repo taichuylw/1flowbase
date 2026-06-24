@@ -1,7 +1,5 @@
 import {
-  DatabaseOutlined,
   DownloadOutlined,
-  FileZipOutlined,
   ReloadOutlined,
   SearchOutlined,
   SortAscendingOutlined,
@@ -28,8 +26,6 @@ import {
   applicationRunsQueryKey,
   completeApplicationRunArchiveUploadSession,
   createApplicationRunArchiveUploadSession,
-  exportApplicationRunArchive,
-  exportSelectedApplicationRunsArchive,
   fetchApplicationRunArchiveImportJob,
   fetchApplicationRuns,
   fetchApplicationRunTraceNodeChildren,
@@ -42,8 +38,6 @@ import {
   exportSelectedApplicationRunsTraceDumpZip,
   uploadApplicationRunArchiveChunk,
   type FetchApplicationRunsInput,
-  type ApplicationRunArchive,
-  type ApplicationRunExportDownload,
   type ApplicationRunArchiveImportJob,
   fetchRuntimeDebugArtifact,
   fetchRuntimeDebugArtifacts,
@@ -68,12 +62,11 @@ import {
 } from '../components/logs/ApplicationRunsTable';
 import { useApplicationRunsTableConfiguration } from '../components/logs/useApplicationRunsTableConfiguration';
 import {
-  buildRunArchiveFilename,
   buildRunTraceDumpFilename,
-  buildSelectedRunArchiveFilename,
   buildSelectedRunTraceDumpFilename,
   saveApplicationRunExport
 } from '../lib/run-export-download';
+import { sha256ArrayBuffer } from '../lib/run-archive-hash';
 import { isActiveRunStatus } from '../lib/run-status';
 import { useAuthStore } from '../../../state/auth-store';
 import './application-logs-page.css';
@@ -154,18 +147,6 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
-function archiveDownloadFromDocument(
-  archive: ApplicationRunArchive
-): ApplicationRunExportDownload {
-  return {
-    blob: new Blob([JSON.stringify(archive, null, 2)], {
-      type: 'application/json'
-    }),
-    filename: null,
-    contentType: 'application/json'
-  };
-}
-
 function archiveImportStorageKey(applicationId: string) {
   return `1flowbase.application.${applicationId}.run_archive_import_job`;
 }
@@ -222,13 +203,6 @@ function clearPersistedArchiveImportJob(applicationId: string) {
   }
 
   window.localStorage.removeItem(archiveImportStorageKey(applicationId));
-}
-
-async function sha256ArrayBuffer(buffer: ArrayBuffer) {
-  const digest = await window.crypto.subtle.digest('SHA-256', buffer);
-  return `sha256:${Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')}`;
 }
 
 function getFloatingWindowHeight() {
@@ -367,11 +341,6 @@ export function ApplicationLogsPage({
     useState<ApplicationRunSortOrder>(DEFAULT_SORT_ORDER);
   const [refreshingRuns, setRefreshingRuns] = useState(false);
   const [exportingSelectedRuns, setExportingSelectedRuns] = useState(false);
-  const [exportingSelectedArchive, setExportingSelectedArchive] =
-    useState(false);
-  const [exportingArchiveRunId, setExportingArchiveRunId] = useState<
-    string | null
-  >(null);
   const [archiveImportState, setArchiveImportState] =
     useState<RunArchiveImportState | null>(null);
   const [exportingRunId, setExportingRunId] = useState<string | null>(null);
@@ -551,53 +520,6 @@ export function ApplicationLogsPage({
       message.error(t('auto.export_logs_failed'));
     } finally {
       setExportingSelectedRuns(false);
-    }
-  }
-
-  async function exportSelectedRunArchive() {
-    const runIds = selectedRunIds.filter((runId) => visibleRunIds.has(runId));
-
-    if (runIds.length === 0) {
-      return;
-    }
-
-    if (!csrfToken) {
-      message.error(t('auto.export_logs_csrf_missing'));
-      return;
-    }
-
-    setExportingSelectedArchive(true);
-    try {
-      const archive = await exportSelectedApplicationRunsArchive(
-        applicationId,
-        runIds,
-        csrfToken
-      );
-      saveApplicationRunExport(
-        archiveDownloadFromDocument(archive),
-        buildSelectedRunArchiveFilename()
-      );
-      message.success(t('auto.export_run_archive_succeeded'));
-    } catch {
-      message.error(t('auto.export_run_archive_failed'));
-    } finally {
-      setExportingSelectedArchive(false);
-    }
-  }
-
-  async function exportRunArchive(run: ApplicationRunSummary) {
-    setExportingArchiveRunId(run.id);
-    try {
-      const archive = await exportApplicationRunArchive(applicationId, run.id);
-      saveApplicationRunExport(
-        archiveDownloadFromDocument(archive),
-        buildRunArchiveFilename(run.id)
-      );
-      message.success(t('auto.export_run_archive_succeeded'));
-    } catch {
-      message.error(t('auto.export_run_archive_failed'));
-    } finally {
-      setExportingArchiveRunId(null);
     }
   }
 
@@ -956,21 +878,10 @@ export function ApplicationLogsPage({
             <Button
               aria-label={t('auto.export_selected_runs_trace_dump')}
               disabled={selectedVisibleRunIds.length === 0}
-              icon={<DownloadOutlined aria-hidden="true" />}
+              icon={<UploadOutlined aria-hidden="true" />}
               loading={exportingSelectedRuns}
               onClick={() => {
                 void exportSelectedRuns();
-              }}
-            />
-          </Tooltip>
-          <Tooltip title={t('auto.export_selected_runs_archive')}>
-            <Button
-              aria-label={t('auto.export_selected_runs_archive')}
-              disabled={selectedVisibleRunIds.length === 0}
-              icon={<DatabaseOutlined aria-hidden="true" />}
-              loading={exportingSelectedArchive}
-              onClick={() => {
-                void exportSelectedRunArchive();
               }}
             />
           </Tooltip>
@@ -986,7 +897,7 @@ export function ApplicationLogsPage({
             <Button
               aria-label={t('auto.import_run_archive')}
               disabled={archiveImportState !== null}
-              icon={<UploadOutlined aria-hidden="true" />}
+              icon={<DownloadOutlined aria-hidden="true" />}
               onClick={() => archiveImportInputRef.current?.click()}
             />
           </Tooltip>
@@ -1048,10 +959,6 @@ export function ApplicationLogsPage({
           runs={runs}
           rowSelection={runsRowSelection}
           selectedRunId={selectedRunId}
-          exportingArchiveRunId={exportingArchiveRunId}
-          onExportRunArchive={(run) => {
-            void exportRunArchive(run);
-          }}
           onPageChange={setPage}
           onSelectRun={selectRun}
         />
