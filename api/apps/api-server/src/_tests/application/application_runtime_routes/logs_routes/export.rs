@@ -862,6 +862,8 @@ async fn application_runtime_routes_logs_archive_upload_enforces_checksum_limits
     let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
     let application_id =
         seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let other_application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
     let source_run_id =
         start_full_debug_run(&app, &cookie, &csrf, &application_id, "upload staging").await;
     wait_for_run_detail(
@@ -896,6 +898,23 @@ async fn application_runtime_routes_logs_archive_upload_enforces_checksum_limits
     )
     .await;
     assert_eq!(missing_csrf_status, StatusCode::UNAUTHORIZED);
+
+    let missing_session_id = Uuid::now_v7().to_string();
+    let (missing_session_upload_status, _) = upload_archive_chunk(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        &missing_session_id,
+        0,
+        &archive_bytes,
+    )
+    .await;
+    assert_eq!(missing_session_upload_status, StatusCode::NOT_FOUND);
+    let (missing_session_complete_status, _) =
+        complete_archive_upload_session(&app, &cookie, &csrf, &application_id, &missing_session_id)
+            .await;
+    assert_eq!(missing_session_complete_status, StatusCode::NOT_FOUND);
 
     for (payload, expected_code) in [
         (
@@ -955,6 +974,35 @@ async fn application_runtime_routes_logs_archive_upload_enforces_checksum_limits
     .await;
     assert_eq!(session_status, StatusCode::CREATED, "{session_payload}");
     let session_id = session_payload["data"]["session_id"].as_str().unwrap();
+
+    let (other_application_upload_status, _) = upload_archive_chunk(
+        &app,
+        &cookie,
+        &csrf,
+        &other_application_id,
+        session_id,
+        0,
+        &archive_bytes,
+    )
+    .await;
+    assert_eq!(other_application_upload_status, StatusCode::NOT_FOUND);
+    let (other_application_complete_status, _) =
+        complete_archive_upload_session(&app, &cookie, &csrf, &other_application_id, session_id)
+            .await;
+    assert_eq!(other_application_complete_status, StatusCode::NOT_FOUND);
+
+    let (missing_upload_csrf_status, _) = upload_archive_chunk_with_headers(
+        &app,
+        Some(&cookie),
+        None,
+        &application_id,
+        session_id,
+        0,
+        &archive_bytes,
+        Some(&sha256_bytes_for_test(&archive_bytes)),
+    )
+    .await;
+    assert_eq!(missing_upload_csrf_status, StatusCode::UNAUTHORIZED);
 
     let (missing_chunk_sha_status, missing_chunk_sha_payload) = upload_archive_chunk_with_headers(
         &app,
