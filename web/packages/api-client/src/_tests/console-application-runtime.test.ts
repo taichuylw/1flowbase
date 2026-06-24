@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
   getConsoleApplicationRunDebugSnapshot,
+  completeConsoleRunArchiveUploadSession,
+  createConsoleApplicationRunsArchive,
+  createConsoleRunArchiveUploadSession,
   getConsoleApplicationConversationMessages,
+  getConsoleApplicationRunArchive,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
@@ -19,9 +23,11 @@ import {
   getConsoleDebugVariableSnapshot,
   getConsoleRuntimeDebugStream,
   getConsoleRuntimeDebugArtifact,
+  getConsoleRunArchiveImportJob,
   resolveConsoleRuntimeDebugArtifacts,
   startConsoleFlowDebugRunStream,
-  subscribeConsoleFlowDebugRunStream
+  subscribeConsoleFlowDebugRunStream,
+  uploadConsoleRunArchiveChunk
 } from '../console/application-runtime';
 
 function sseResponse(frame: string) {
@@ -260,6 +266,347 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
           'content-type': 'application/json',
           'x-csrf-token': 'csrf-123'
         })
+      })
+    );
+  });
+
+  test('loads run archive JSON with explicit archive version', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          archive_version: 1,
+          exported_at: '2026-06-24T00:00:00Z',
+          manifest: {
+            archive_version: 1,
+            archive_semantics: 'application_run_archive_v1',
+            exported_at: '2026-06-24T00:00:00Z',
+            source_workspace_id: 'workspace-1',
+            source_application_id: 'app-1',
+            run_count: 1,
+            selected_run_ids: ['run-1'],
+            entries: [],
+            content_sha256: 'sha256:archive',
+            checksum: 'sha256:archive'
+          },
+          source: {
+            source_kind: 'application_run',
+            application_id: 'app-1',
+            application_type: 'agent_flow',
+            application_name: 'Agent',
+            workspace_id: 'workspace-1',
+            exported_by_user_id: 'user-1',
+            exported_at: '2026-06-24T00:00:00Z',
+            archive_builder: 'application_run_archive_v1'
+          },
+          entries: [],
+          content_digest: 'sha256:archive'
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunArchive(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800',
+        { archive_version: 1 }
+      )
+    ).resolves.toEqual(
+      expect.objectContaining({
+        archive_version: 1,
+        content_digest: 'sha256:archive'
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/archive?archive_version=1',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('creates selected runs archive as csrf-protected JSON', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          archive_version: 1,
+          exported_at: '2026-06-24T00:00:00Z',
+          manifest: {
+            archive_version: 1,
+            archive_semantics: 'application_run_archive_v1',
+            exported_at: '2026-06-24T00:00:00Z',
+            source_workspace_id: 'workspace-1',
+            source_application_id: 'app-1',
+            run_count: 2,
+            selected_run_ids: ['run-1', 'run-2'],
+            entries: [],
+            content_sha256: 'sha256:archive',
+            checksum: 'sha256:archive'
+          },
+          source: {
+            source_kind: 'application_run',
+            application_id: 'app-1',
+            application_type: 'agent_flow',
+            application_name: 'Agent',
+            workspace_id: 'workspace-1',
+            exported_by_user_id: 'user-1',
+            exported_at: '2026-06-24T00:00:00Z',
+            archive_builder: 'application_run_archive_v1'
+          },
+          entries: [],
+          content_digest: 'sha256:archive'
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      createConsoleApplicationRunsArchive(
+        'app-1',
+        ['run-1', 'run-2'],
+        'csrf-123',
+        'http://127.0.0.1:7800',
+        { archive_version: 1 }
+      )
+    ).resolves.toEqual(
+      expect.objectContaining({
+        archive_version: 1,
+        content_digest: 'sha256:archive'
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          archive_version: 1,
+          run_ids: ['run-1', 'run-2']
+        }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+  });
+
+  test('creates archive upload sessions with csrf protected metadata', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            session_id: 'session-1',
+            application_id: 'app-1',
+            status: 'uploading',
+            filename: 'archive.json',
+            total_size_bytes: 42,
+            received_bytes: 0,
+            expected_sha256: 'sha256:archive',
+            created_at: '2026-06-24T00:00:00Z',
+            updated_at: '2026-06-24T00:00:00Z'
+          },
+          meta: null
+        }),
+        {
+          status: 201,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      createConsoleRunArchiveUploadSession(
+        'app-1',
+        {
+          filename: 'archive.json',
+          total_size_bytes: 42,
+          expected_sha256: 'sha256:archive',
+          chunk_size_bytes: 1024
+        },
+        'csrf-123',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      session_id: 'session-1',
+      status: 'uploading'
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-sessions',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          filename: 'archive.json',
+          total_size_bytes: 42,
+          expected_sha256: 'sha256:archive',
+          chunk_size_bytes: 1024
+        }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+  });
+
+  test('uploads archive chunks as raw octets with chunk checksum', async () => {
+    const chunk = new Blob(['part-1']);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            session_id: 'session-1',
+            chunk_index: 0,
+            chunk_size_bytes: 6,
+            chunk_sha256: 'sha256:chunk',
+            received_bytes: 6,
+            status: 'uploading'
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      uploadConsoleRunArchiveChunk(
+        'app-1',
+        'session-1',
+        0,
+        chunk,
+        'sha256:chunk',
+        'csrf-123',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      chunk_index: 0,
+      received_bytes: 6
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-sessions/session-1/chunks/0',
+      expect.objectContaining({
+        method: 'PUT',
+        body: chunk,
+        headers: expect.objectContaining({
+          'content-type': 'application/octet-stream',
+          'x-chunk-sha256': 'sha256:chunk',
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+  });
+
+  test('completes archive upload sessions and polls import jobs', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              job_id: 'job-1',
+              application_id: 'app-1',
+              upload_session_id: 'session-1',
+              status: 'queued',
+              archive_version: 1,
+              archive_sha256: 'sha256:archive',
+              run_count: 1,
+              imported_run_count: 0,
+              source_to_target_run_ids: [],
+              error_payload: null,
+              result_payload: {},
+              created_at: '2026-06-24T00:00:00Z',
+              updated_at: '2026-06-24T00:00:00Z',
+              started_at: null,
+              finished_at: null
+            },
+            meta: null
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              job_id: 'job-1',
+              application_id: 'app-1',
+              upload_session_id: 'session-1',
+              status: 'succeeded',
+              archive_version: 1,
+              archive_sha256: 'sha256:archive',
+              run_count: 1,
+              imported_run_count: 1,
+              source_to_target_run_ids: [
+                { source_run_id: 'run-source', target_run_id: 'run-target' }
+              ],
+              error_payload: null,
+              result_payload: {},
+              created_at: '2026-06-24T00:00:00Z',
+              updated_at: '2026-06-24T00:00:01Z',
+              started_at: '2026-06-24T00:00:00Z',
+              finished_at: '2026-06-24T00:00:01Z'
+            },
+            meta: null
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+      );
+
+    await expect(
+      completeConsoleRunArchiveUploadSession(
+        'app-1',
+        'session-1',
+        'csrf-123',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      job_id: 'job-1',
+      status: 'queued'
+    });
+    await expect(
+      getConsoleRunArchiveImportJob(
+        'app-1',
+        'job-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      job_id: 'job-1',
+      status: 'succeeded',
+      imported_run_count: 1
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-sessions/session-1/complete',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-jobs/job-1',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
       })
     );
   });

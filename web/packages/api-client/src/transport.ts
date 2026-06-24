@@ -24,6 +24,7 @@ export interface ApiRequestOptions {
   body?: unknown;
   rawBody?: BodyInit;
   contentType?: string | null;
+  headers?: Record<string, string>;
   csrfToken?: string | null;
   baseUrl?: string;
   expectJson?: boolean;
@@ -99,6 +100,7 @@ export async function apiFetch<T>({
   body,
   rawBody,
   contentType,
+  headers: extraHeaders,
   csrfToken,
   baseUrl = getDefaultApiBaseUrl(),
   expectJson = true,
@@ -119,6 +121,8 @@ export async function apiFetch<T>({
   if (contentType !== undefined && contentType !== null) {
     headers['content-type'] = contentType;
   }
+
+  Object.assign(headers, extraHeaders);
 
   if (csrfToken) {
     headers['x-csrf-token'] = csrfToken;
@@ -157,6 +161,7 @@ export async function apiFetchBlob({
   body,
   rawBody,
   contentType,
+  headers: extraHeaders,
   csrfToken,
   baseUrl = getDefaultApiBaseUrl()
 }: Omit<
@@ -178,6 +183,8 @@ export async function apiFetchBlob({
   if (contentType !== undefined && contentType !== null) {
     headers['content-type'] = contentType;
   }
+
+  Object.assign(headers, extraHeaders);
 
   if (csrfToken) {
     headers['x-csrf-token'] = csrfToken;

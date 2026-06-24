@@ -359,6 +359,15 @@ impl PgControlPlaneStore {
                 updated_at
             from flow_runs
             where application_id = $1
+              and (
+                  flow_runs.import_job_id is null
+                  or exists (
+                      select 1
+                      from run_archive_import_jobs import_jobs
+                      where import_jobs.id = flow_runs.import_job_id
+                        and import_jobs.status = 'succeeded'
+                  )
+              )
             order by created_at desc, id desc
             "#,
         )
@@ -389,6 +398,15 @@ impl PgControlPlaneStore {
             from flow_runs
             where application_id = $1
               and ($2::timestamptz is null or created_at >= $2)
+              and (
+                  flow_runs.import_job_id is null
+                  or exists (
+                      select 1
+                      from run_archive_import_jobs import_jobs
+                      where import_jobs.id = flow_runs.import_job_id
+                        and import_jobs.status = 'succeeded'
+                  )
+              )
             "#,
         )
         .bind(application_id)
@@ -424,6 +442,15 @@ impl PgControlPlaneStore {
             from flow_runs
             where application_id = $1
               and ($2::timestamptz is null or created_at >= $2)
+              and (
+                  flow_runs.import_job_id is null
+                  or exists (
+                      select 1
+                      from run_archive_import_jobs import_jobs
+                      where import_jobs.id = flow_runs.import_job_id
+                        and import_jobs.status = 'succeeded'
+                  )
+              )
             order by {}
             limit $3 offset $4
             "#,
@@ -526,6 +553,15 @@ impl PgControlPlaneStore {
                   on runs.id = messages.flow_run_id
                 where messages.application_id = $1
                   and conversations.external_conversation_id = $2
+                  and (
+                      runs.import_job_id is null
+                      or exists (
+                          select 1
+                          from run_archive_import_jobs import_jobs
+                          where import_jobs.id = runs.import_job_id
+                            and import_jobs.status = 'succeeded'
+                      )
+                  )
                 group by runs.id, runs.status, runs.started_at, runs.finished_at
             ),
             ordered as (
@@ -595,6 +631,15 @@ impl PgControlPlaneStore {
                   on runs.id = messages.flow_run_id
                 where messages.application_id = $1
                   and conversations.external_conversation_id = $2
+                  and (
+                      runs.import_job_id is null
+                      or exists (
+                          select 1
+                          from run_archive_import_jobs import_jobs
+                          where import_jobs.id = runs.import_job_id
+                            and import_jobs.status = 'succeeded'
+                      )
+                  )
                 group by runs.id
             ),
             ordered as (
@@ -692,6 +737,15 @@ impl PgControlPlaneStore {
             join flow_runs fr on fr.id = nr.flow_run_id
             where fr.application_id = $1
               and nr.node_id = $2
+              and (
+                  fr.import_job_id is null
+                  or exists (
+                      select 1
+                      from run_archive_import_jobs import_jobs
+                      where import_jobs.id = fr.import_job_id
+                        and import_jobs.status = 'succeeded'
+                  )
+              )
             order by nr.started_at desc, nr.id desc
             limit 1
             "#,

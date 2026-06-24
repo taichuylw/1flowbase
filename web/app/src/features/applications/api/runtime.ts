@@ -1,23 +1,30 @@
 import {
   completeConsoleCallbackTask,
+  completeConsoleRunArchiveUploadSession,
   getConsoleApplicationConversationMessages,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRunOverview,
+  getConsoleApplicationRunArchive,
   getConsoleApplicationRunTraceNodeChildren,
   getConsoleApplicationRunTraceNodeContent,
   getConsoleApplicationRunTraceNodeDetail,
   getConsoleApplicationRunTraceToolCallbackContent,
   getConsoleApplicationRunTraceTree,
+  createConsoleApplicationRunsArchive,
+  createConsoleRunArchiveUploadSession,
   exportConsoleApplicationRunTraceDump,
   exportConsoleApplicationRunsTraceDumpZip,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
+  getConsoleRunArchiveImportJob,
   resolveConsoleRuntimeDebugArtifacts,
   getConsoleRuntimeDebugStream,
+  uploadConsoleRunArchiveChunk,
   type ApiBlobResponse,
+  type ConsoleApplicationRunArchive,
   type ConsoleApplicationConversationMessage,
   type ConsoleApplicationConversationMessagesPage,
   type ConsoleApplicationRunMonitoringApiKeyUsage,
@@ -38,6 +45,9 @@ import {
   type ConsoleApplicationRunTraceNodeContent,
   type ConsoleApplicationRunTraceNodeDetail,
   type ConsoleApplicationRunTraceTree,
+  type ConsoleRunArchiveImportJob,
+  type ConsoleRunArchiveUploadSession,
+  type ConsoleRunArchiveChunkUpload,
   type ConsoleCallbackTask,
   type ConsoleNodeRunDetail,
   type ConsoleRunCheckpoint,
@@ -175,6 +185,10 @@ export interface ApplicationRunCallbackTasksPage {
 export type ApplicationRuntimeDebugStreamPart = RuntimeDebugStreamPart;
 export type { RuntimeDebugStreamPart };
 export type ApplicationRunExportDownload = ApiBlobResponse;
+export type ApplicationRunArchive = ConsoleApplicationRunArchive;
+export type ApplicationRunArchiveUploadSession = ConsoleRunArchiveUploadSession;
+export type ApplicationRunArchiveChunkUpload = ConsoleRunArchiveChunkUpload;
+export type ApplicationRunArchiveImportJob = ConsoleRunArchiveImportJob;
 export type ApplicationRunSortField =
   | 'created_at'
   | 'started_at'
@@ -507,6 +521,90 @@ export function exportSelectedApplicationRunsTraceDumpZip(
     applicationId,
     runIds,
     csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function exportApplicationRunArchive(applicationId: string, runId: string) {
+  return getConsoleApplicationRunArchive(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl(),
+    { archive_version: 1 }
+  );
+}
+
+export function exportSelectedApplicationRunsArchive(
+  applicationId: string,
+  runIds: string[],
+  csrfToken: string
+) {
+  return createConsoleApplicationRunsArchive(
+    applicationId,
+    runIds,
+    csrfToken,
+    getApplicationsApiBaseUrl(),
+    { archive_version: 1 }
+  );
+}
+
+export function createApplicationRunArchiveUploadSession(
+  applicationId: string,
+  input: {
+    filename?: string | null;
+    total_size_bytes: number;
+    expected_sha256?: string | null;
+    chunk_size_bytes?: number | null;
+  },
+  csrfToken: string
+) {
+  return createConsoleRunArchiveUploadSession(
+    applicationId,
+    input,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function uploadApplicationRunArchiveChunk(
+  applicationId: string,
+  sessionId: string,
+  chunkIndex: number,
+  chunk: BodyInit,
+  chunkSha256: string,
+  csrfToken: string
+) {
+  return uploadConsoleRunArchiveChunk(
+    applicationId,
+    sessionId,
+    chunkIndex,
+    chunk,
+    chunkSha256,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function completeApplicationRunArchiveUploadSession(
+  applicationId: string,
+  sessionId: string,
+  csrfToken: string
+) {
+  return completeConsoleRunArchiveUploadSession(
+    applicationId,
+    sessionId,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunArchiveImportJob(
+  applicationId: string,
+  jobId: string
+) {
+  return getConsoleRunArchiveImportJob(
+    applicationId,
+    jobId,
     getApplicationsApiBaseUrl()
   );
 }

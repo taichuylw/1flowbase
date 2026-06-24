@@ -17,6 +17,22 @@ const traceProjectionStatus = vi.hoisted(() => ({
 
 vi.mock('@1flowbase/api-client', () => ({
   completeConsoleCallbackTask: vi.fn().mockResolvedValue(undefined),
+  completeConsoleRunArchiveUploadSession: vi.fn().mockResolvedValue({
+    job_id: 'job-1',
+    status: 'queued'
+  }),
+  createConsoleApplicationRunsArchive: vi.fn().mockResolvedValue({
+    archive_version: 1,
+    entries: []
+  }),
+  createConsoleRunArchiveUploadSession: vi.fn().mockResolvedValue({
+    session_id: 'session-1',
+    status: 'uploading'
+  }),
+  getConsoleApplicationRunArchive: vi.fn().mockResolvedValue({
+    archive_version: 1,
+    entries: []
+  }),
   getConsoleApplicationRunTraceTree: vi.fn().mockResolvedValue({
     projection_status: traceProjectionStatus,
     nodes: []
@@ -234,13 +250,26 @@ vi.mock('@1flowbase/api-client', () => ({
     next_sequence: null,
     has_more: false
   }),
+  getConsoleRunArchiveImportJob: vi.fn().mockResolvedValue({
+    job_id: 'job-1',
+    status: 'succeeded',
+    imported_run_count: 1
+  }),
   resumeConsoleFlowRun: vi.fn().mockResolvedValue(undefined),
+  uploadConsoleRunArchiveChunk: vi.fn().mockResolvedValue({
+    session_id: 'session-1',
+    chunk_index: 0
+  }),
   getDefaultApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800')
 }));
 
 import {
   completeConsoleCallbackTask,
+  completeConsoleRunArchiveUploadSession,
+  createConsoleApplicationRunsArchive,
+  createConsoleRunArchiveUploadSession,
   fetchConsoleRuntimeModelRecords,
+  getConsoleApplicationRunArchive,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRunTraceNodeChildren,
@@ -250,9 +279,11 @@ import {
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugStream,
+  getConsoleRunArchiveImportJob,
   exportConsoleApplicationRunTraceDump,
   exportConsoleApplicationRunsTraceDumpZip,
-  resumeConsoleFlowRun
+  resumeConsoleFlowRun,
+  uploadConsoleRunArchiveChunk
 } from '@1flowbase/api-client';
 
 import {
@@ -265,7 +296,10 @@ import {
   applicationRunsQueryKey,
   applicationRuntimeDebugStreamQueryKey,
   completeCallbackTask,
+  completeApplicationRunArchiveUploadSession,
+  createApplicationRunArchiveUploadSession,
   fetchApplicationConversationMessages,
+  fetchApplicationRunArchiveImportJob,
   fetchApplicationRunMonitoringReport,
   fetchApplicationRunResumeTimeline,
   fetchApplicationRunTraceNodeChildren,
@@ -274,10 +308,13 @@ import {
   fetchApplicationRunTraceTree,
   fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
+  exportApplicationRunArchive,
   exportApplicationRunTraceDump,
+  exportSelectedApplicationRunsArchive,
   exportSelectedApplicationRunsTraceDumpZip,
   fetchRuntimeDebugStream,
-  resumeFlowRun
+  resumeFlowRun,
+  uploadApplicationRunArchiveChunk
 } from '../api/runtime';
 
 afterEach(() => {
@@ -406,6 +443,37 @@ describe('applications runtime api', () => {
       ['run-1', 'run-2'],
       'csrf-123'
     );
+    await exportApplicationRunArchive('app-1', 'run-1');
+    await exportSelectedApplicationRunsArchive(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123'
+    );
+    await createApplicationRunArchiveUploadSession(
+      'app-1',
+      {
+        filename: 'archive.json',
+        total_size_bytes: 42,
+        expected_sha256: 'sha256:archive',
+        chunk_size_bytes: 1024
+      },
+      'csrf-123'
+    );
+    const chunk = new Blob(['chunk']);
+    await uploadApplicationRunArchiveChunk(
+      'app-1',
+      'session-1',
+      0,
+      chunk,
+      'sha256:chunk',
+      'csrf-123'
+    );
+    await completeApplicationRunArchiveUploadSession(
+      'app-1',
+      'session-1',
+      'csrf-123'
+    );
+    await fetchApplicationRunArchiveImportJob('app-1', 'job-1');
 
     expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
       'application_run_log_summaries',
@@ -482,6 +550,54 @@ describe('applications runtime api', () => {
       'app-1',
       ['run-1', 'run-2'],
       'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunArchive).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800',
+      {
+        archive_version: 1
+      }
+    );
+    expect(createConsoleApplicationRunsArchive).toHaveBeenCalledWith(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123',
+      'http://127.0.0.1:7800',
+      {
+        archive_version: 1
+      }
+    );
+    expect(createConsoleRunArchiveUploadSession).toHaveBeenCalledWith(
+      'app-1',
+      {
+        filename: 'archive.json',
+        total_size_bytes: 42,
+        expected_sha256: 'sha256:archive',
+        chunk_size_bytes: 1024
+      },
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(uploadConsoleRunArchiveChunk).toHaveBeenCalledWith(
+      'app-1',
+      'session-1',
+      0,
+      chunk,
+      'sha256:chunk',
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(completeConsoleRunArchiveUploadSession).toHaveBeenCalledWith(
+      'app-1',
+      'session-1',
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleRunArchiveImportJob).toHaveBeenCalledWith(
+      'app-1',
+      'job-1',
       'http://127.0.0.1:7800'
     );
   });

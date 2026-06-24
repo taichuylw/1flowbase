@@ -55,6 +55,138 @@ pub struct ApplicationRunSelectedExportBody {
     pub run_ids: Vec<Uuid>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RunArchiveUploadSessionCreateBody {
+    pub filename: Option<String>,
+    pub total_size_bytes: i64,
+    pub expected_sha256: Option<String>,
+    pub chunk_size_bytes: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct RunArchiveV1SourceResponse {
+    pub source_kind: String,
+    pub workspace_id: String,
+    pub application_id: String,
+    pub application_type: String,
+    pub application_name: String,
+    pub exported_by_user_id: String,
+    pub exported_at: String,
+    pub archive_builder: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct RunArchiveV1ManifestResponse {
+    pub archive_version: i32,
+    pub archive_semantics: String,
+    pub exported_at: String,
+    pub source_workspace_id: String,
+    pub source_application_id: String,
+    pub run_count: usize,
+    pub selected_run_ids: Vec<String>,
+    pub entries: Vec<RunArchiveV1ManifestEntryResponse>,
+    pub content_sha256: String,
+    pub checksum: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct RunArchiveV1ManifestEntryResponse {
+    pub source_run_id: String,
+    pub content_sha256: String,
+    pub content_digest: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct RunArchiveV1EntryResponse {
+    pub source_run_id: String,
+    pub content_digest: String,
+    pub flow_run: FlowRunResponse,
+    pub flow_run_fact: serde_json::Value,
+    pub compiled_plan: Option<serde_json::Value>,
+    pub node_runs: Vec<NodeRunResponse>,
+    pub checkpoints: Vec<CheckpointResponse>,
+    pub callback_tasks: Vec<CallbackTaskResponse>,
+    pub events: Vec<RunEventResponse>,
+    pub runtime_spans: Vec<serde_json::Value>,
+    pub runtime_events: Vec<serde_json::Value>,
+    pub runtime_items: Vec<serde_json::Value>,
+    pub context_projections: Vec<serde_json::Value>,
+    pub usage_ledger: Vec<serde_json::Value>,
+    pub model_failover_attempts: Vec<serde_json::Value>,
+    pub capability_invocations: Vec<serde_json::Value>,
+    pub trace_tree: serde_json::Value,
+    pub export_warnings: Vec<ApplicationRunTraceExportWarningResponse>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct RunArchiveV1Response {
+    pub archive_version: i32,
+    pub exported_at: String,
+    pub manifest: RunArchiveV1ManifestResponse,
+    pub source: RunArchiveV1SourceResponse,
+    pub entries: Vec<RunArchiveV1EntryResponse>,
+    pub content_digest: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RunArchiveUploadSessionResponse {
+    pub session_id: String,
+    pub application_id: String,
+    pub status: String,
+    pub filename: Option<String>,
+    pub total_size_bytes: i64,
+    pub received_bytes: i64,
+    pub expected_sha256: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RunArchiveChunkUploadResponse {
+    pub session_id: String,
+    pub chunk_index: i32,
+    pub chunk_size_bytes: i64,
+    pub chunk_sha256: String,
+    pub received_bytes: i64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RunArchiveImportRunMappingResponse {
+    pub source_run_id: String,
+    pub target_run_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RunArchiveImportJobResponse {
+    pub job_id: String,
+    pub application_id: String,
+    pub upload_session_id: String,
+    pub status: String,
+    pub archive_version: Option<i32>,
+    pub archive_sha256: Option<String>,
+    pub run_count: i32,
+    pub imported_run_count: i32,
+    pub source_to_target_run_ids: Vec<RunArchiveImportRunMappingResponse>,
+    pub error_payload: Option<serde_json::Value>,
+    pub result_payload: serde_json::Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ApplicationRunArchiveQuery {
+    pub archive_version: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ApplicationRunArchiveBody {
+    pub run_ids: Vec<Uuid>,
+    pub archive_version: Option<i32>,
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct RuntimeDebugArtifactValueResponse {
     pub artifact_ref: String,
@@ -286,7 +418,7 @@ pub struct ApplicationRunTraceNodeSummaryResponse {
     pub has_content: bool,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunTraceProjectionStatusResponse {
     pub projection_status: String,
     pub projection_version: i32,
@@ -312,14 +444,14 @@ pub struct ApplicationRunTraceTreeResponse {
     pub nodes: Vec<ApplicationRunTraceNodeSummaryResponse>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunTraceExportWarningResponse {
     pub code: String,
     pub source: String,
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunTraceExportNodeResponse {
     pub trace_node_id: String,
     pub stable_locator: String,
@@ -348,7 +480,7 @@ pub struct ApplicationRunTraceExportNodeResponse {
     pub children: Vec<ApplicationRunTraceExportNodeResponse>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunTraceExportTreeResponse {
     pub run: application_logs::ApplicationRunLogResponse,
     pub statistics: application_logs::ApplicationRunStatisticsResponse,
@@ -358,7 +490,7 @@ pub struct ApplicationRunTraceExportTreeResponse {
     pub nodes: Vec<ApplicationRunTraceExportNodeResponse>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct ApplicationRunTraceExportResponse {
     pub export_version: i32,
     pub exported_at: String,

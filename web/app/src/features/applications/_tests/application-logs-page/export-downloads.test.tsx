@@ -121,8 +121,14 @@ const runtimeApi = vi.hoisted(() => ({
   fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
   fetchRuntimeDebugArtifacts: vi.fn(),
+  exportApplicationRunArchive: vi.fn(),
   exportApplicationRunTraceDump: vi.fn(),
+  exportSelectedApplicationRunsArchive: vi.fn(),
   exportSelectedApplicationRunsTraceDumpZip: vi.fn(),
+  createApplicationRunArchiveUploadSession: vi.fn(),
+  uploadApplicationRunArchiveChunk: vi.fn(),
+  completeApplicationRunArchiveUploadSession: vi.fn(),
+  fetchApplicationRunArchiveImportJob: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
 }));
@@ -220,6 +226,37 @@ function getRunSelectionCheckbox(title: string) {
   return screen.getByLabelText(`选择导出 ${title}`);
 }
 
+function runArchiveDocument(runIds: string[]) {
+  return {
+    archive_version: 1,
+    exported_at: '2026-06-24T00:00:00Z',
+    manifest: {
+      archive_version: 1,
+      archive_semantics: 'application_run_archive_v1',
+      exported_at: '2026-06-24T00:00:00Z',
+      source_workspace_id: 'workspace-1',
+      source_application_id: 'app-1',
+      run_count: runIds.length,
+      selected_run_ids: runIds,
+      entries: [],
+      content_sha256: 'sha256:archive',
+      checksum: 'sha256:archive'
+    },
+    source: {
+      source_kind: 'application_run',
+      application_id: 'app-1',
+      application_type: 'agent_flow',
+      application_name: 'Agent',
+      workspace_id: 'workspace-1',
+      exported_by_user_id: 'user-1',
+      exported_at: '2026-06-24T00:00:00Z',
+      archive_builder: 'application_run_archive_v1'
+    },
+    entries: [],
+    content_digest: 'sha256:archive'
+  };
+}
+
 describe('ApplicationLogsPage - run export downloads', () => {
   let createObjectUrlSpy: ReturnType<typeof vi.fn>;
   let revokeObjectUrlSpy: ReturnType<typeof vi.fn>;
@@ -259,8 +296,26 @@ describe('ApplicationLogsPage - run export downloads', () => {
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
     runtimeApi.fetchRuntimeDebugArtifacts.mockReset();
+    runtimeApi.exportApplicationRunArchive.mockReset();
     runtimeApi.exportApplicationRunTraceDump.mockReset();
+    runtimeApi.exportSelectedApplicationRunsArchive.mockReset();
     runtimeApi.exportSelectedApplicationRunsTraceDumpZip.mockReset();
+    runtimeApi.createApplicationRunArchiveUploadSession.mockReset();
+    runtimeApi.uploadApplicationRunArchiveChunk.mockReset();
+    runtimeApi.completeApplicationRunArchiveUploadSession.mockReset();
+    runtimeApi.fetchApplicationRunArchiveImportJob.mockReset();
+    Object.defineProperty(window, 'crypto', {
+      configurable: true,
+      value: {
+        subtle: {
+          digest: vi.fn().mockResolvedValue(Uint8Array.from([0xab]).buffer)
+        }
+      }
+    });
+    Object.defineProperty(Blob.prototype, 'arrayBuffer', {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(new TextEncoder().encode('chunk').buffer)
+    });
     runtimeApi.fetchApplicationRuns.mockResolvedValue(
       applicationRunsPage([
         runSummary('run-1', '退款总结'),
@@ -324,6 +379,67 @@ describe('ApplicationLogsPage - run export downloads', () => {
       filename: 'selected-runs.zip',
       contentType: 'application/zip'
     });
+    runtimeApi.exportApplicationRunArchive.mockResolvedValue(
+      runArchiveDocument(['run-1'])
+    );
+    runtimeApi.exportSelectedApplicationRunsArchive.mockResolvedValue(
+      runArchiveDocument(['run-1', 'run-2'])
+    );
+    runtimeApi.createApplicationRunArchiveUploadSession.mockResolvedValue({
+      session_id: 'session-1',
+      application_id: 'app-1',
+      status: 'uploading',
+      filename: 'archive.json',
+      total_size_bytes: 17,
+      received_bytes: 0,
+      expected_sha256: 'sha256:ab',
+      created_at: '2026-06-24T00:00:00Z',
+      updated_at: '2026-06-24T00:00:00Z'
+    });
+    runtimeApi.uploadApplicationRunArchiveChunk.mockResolvedValue({
+      session_id: 'session-1',
+      chunk_index: 0,
+      chunk_size_bytes: 17,
+      chunk_sha256: 'sha256:ab',
+      received_bytes: 17,
+      status: 'uploaded'
+    });
+    runtimeApi.completeApplicationRunArchiveUploadSession.mockResolvedValue({
+      job_id: 'job-1',
+      application_id: 'app-1',
+      upload_session_id: 'session-1',
+      status: 'queued',
+      archive_version: 1,
+      archive_sha256: 'sha256:archive',
+      run_count: 1,
+      imported_run_count: 0,
+      source_to_target_run_ids: [],
+      error_payload: null,
+      result_payload: {},
+      created_at: '2026-06-24T00:00:00Z',
+      updated_at: '2026-06-24T00:00:00Z',
+      started_at: null,
+      finished_at: null
+    });
+    runtimeApi.fetchApplicationRunArchiveImportJob.mockResolvedValue({
+      job_id: 'job-1',
+      application_id: 'app-1',
+      upload_session_id: 'session-1',
+      status: 'succeeded',
+      archive_version: 1,
+      archive_sha256: 'sha256:archive',
+      run_count: 1,
+      imported_run_count: 1,
+      source_to_target_run_ids: [
+        { source_run_id: 'source-run-1', target_run_id: 'imported-run-1' }
+      ],
+      error_payload: null,
+      result_payload: {},
+      created_at: '2026-06-24T00:00:00Z',
+      updated_at: '2026-06-24T00:00:01Z',
+      started_at: '2026-06-24T00:00:00Z',
+      finished_at: '2026-06-24T00:00:01Z'
+    });
   });
 
   afterEach(() => {
@@ -360,6 +476,54 @@ describe('ApplicationLogsPage - run export downloads', () => {
     expect(
       runtimeApi.fetchApplicationRunTraceNodeContent
     ).not.toHaveBeenCalled();
+  });
+
+  test('exports selected visible run ids as a run archive document', async () => {
+    renderLogsPage();
+
+    expect(await screen.findByText('退款总结')).toBeInTheDocument();
+    const archiveButton = screen.getByRole('button', {
+      name: '导出已选运行归档'
+    });
+
+    expect(archiveButton).toBeDisabled();
+
+    fireEvent.click(getRunSelectionCheckbox('退款总结'));
+    fireEvent.click(getRunSelectionCheckbox('天气查询'));
+
+    await waitFor(() => expect(archiveButton).toBeEnabled());
+    fireEvent.click(archiveButton);
+
+    await waitFor(() => {
+      expect(runtimeApi.exportSelectedApplicationRunsArchive).toHaveBeenCalledWith(
+        'app-1',
+        ['run-1', 'run-2'],
+        'csrf-123'
+      );
+    });
+    expect(createObjectUrlSpy).toHaveBeenCalledWith(expect.any(Blob));
+    expect(runtimeApi.exportSelectedApplicationRunsTraceDumpZip).not.toHaveBeenCalled();
+    expect(runtimeApi.fetchApplicationRunTraceTree).not.toHaveBeenCalled();
+  });
+
+  test('exports a single run archive from the table row action', async () => {
+    renderLogsPage();
+
+    expect(await screen.findByText('退款总结')).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '导出运行归档：退款总结'
+      })
+    );
+
+    await waitFor(() => {
+      expect(runtimeApi.exportApplicationRunArchive).toHaveBeenCalledWith(
+        'app-1',
+        'run-1'
+      );
+    });
+    expect(createObjectUrlSpy).toHaveBeenCalledWith(expect.any(Blob));
+    expect(runtimeApi.fetchApplicationRunTraceTree).not.toHaveBeenCalled();
   });
 
   test('shows loading while selected zip export is pending', async () => {
@@ -472,6 +636,26 @@ describe('ApplicationLogsPage - run export downloads', () => {
     expect(createObjectUrlSpy).not.toHaveBeenCalled();
   });
 
+  test('reports selected archive export failures without saving a file', async () => {
+    runtimeApi.exportSelectedApplicationRunsArchive.mockRejectedValueOnce(
+      new Error('archive export failed')
+    );
+
+    renderLogsPage();
+
+    expect(await screen.findByText('退款总结')).toBeInTheDocument();
+    fireEvent.click(getRunSelectionCheckbox('退款总结'));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: '导出已选运行归档' })
+      ).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: '导出已选运行归档' }));
+
+    expect(await screen.findByText('导出运行归档失败')).toBeInTheDocument();
+    expect(createObjectUrlSpy).not.toHaveBeenCalled();
+  });
+
   test('requires csrf token before selected zip export', async () => {
     resetAuthStore();
 
@@ -491,6 +675,109 @@ describe('ApplicationLogsPage - run export downloads', () => {
       runtimeApi.exportSelectedApplicationRunsTraceDumpZip
     ).not.toHaveBeenCalled();
     expect(createObjectUrlSpy).not.toHaveBeenCalled();
+  });
+
+  test('requires csrf token before selected archive export', async () => {
+    resetAuthStore();
+
+    renderLogsPage();
+
+    expect(await screen.findByText('退款总结')).toBeInTheDocument();
+    fireEvent.click(getRunSelectionCheckbox('退款总结'));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: '导出已选运行归档' })
+      ).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole('button', { name: '导出已选运行归档' }));
+
+    expect(
+      await screen.findByText('缺少 CSRF token，无法导出日志')
+    ).toBeInTheDocument();
+    expect(runtimeApi.exportSelectedApplicationRunsArchive).not.toHaveBeenCalled();
+    expect(createObjectUrlSpy).not.toHaveBeenCalled();
+  });
+
+  test('uploads an archive file, polls the import job and opens the target run', async () => {
+    renderLogsPage();
+
+    expect(await screen.findByText('退款总结')).toBeInTheDocument();
+    const importInput = screen.getByTestId(
+      'application-logs-archive-import-input'
+    ) as HTMLInputElement;
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      value: [
+        new File(['{"archive_version":1}'], 'archive.json', {
+          type: 'application/json'
+        })
+      ]
+    });
+    fireEvent.change(importInput);
+
+    await waitFor(() => {
+      expect(
+        runtimeApi.createApplicationRunArchiveUploadSession
+      ).toHaveBeenCalledWith(
+        'app-1',
+        {
+          filename: 'archive.json',
+          total_size_bytes: 21,
+          expected_sha256: 'sha256:ab',
+          chunk_size_bytes: 1024 * 1024
+        },
+        'csrf-123'
+      );
+    });
+    expect(runtimeApi.uploadApplicationRunArchiveChunk).toHaveBeenCalledWith(
+      'app-1',
+      'session-1',
+      0,
+      expect.any(Blob),
+      'sha256:ab',
+      'csrf-123'
+    );
+    expect(
+      runtimeApi.completeApplicationRunArchiveUploadSession
+    ).toHaveBeenCalledWith('app-1', 'session-1', 'csrf-123');
+    expect(runtimeApi.fetchApplicationRunArchiveImportJob).toHaveBeenCalledWith(
+      'app-1',
+      'job-1'
+    );
+    expect(await screen.findByText('已导入 1 条运行')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('complementary', { name: '运行详情' })
+    ).toBeInTheDocument();
+    expect(
+      window.localStorage.getItem(
+        '1flowbase.application.app-1.run_archive_import_job'
+      )
+    ).toBeNull();
+  });
+
+  test('resumes a persisted archive import job after returning to the page', async () => {
+    window.localStorage.setItem(
+      '1flowbase.application.app-1.run_archive_import_job',
+      JSON.stringify({ jobId: 'job-1', fileName: 'archive.json' })
+    );
+
+    renderLogsPage();
+
+    await waitFor(() => {
+      expect(runtimeApi.fetchApplicationRunArchiveImportJob).toHaveBeenCalledWith(
+        'app-1',
+        'job-1'
+      );
+    });
+    expect(await screen.findByText('已导入 1 条运行')).toBeInTheDocument();
+    expect(
+      window.localStorage.getItem(
+        '1flowbase.application.app-1.run_archive_import_job'
+      )
+    ).toBeNull();
+    expect(
+      await screen.findByRole('complementary', { name: '运行详情' })
+    ).toBeInTheDocument();
   });
 
   test('exports a single run from the conversation log floating window without composing trace content', async () => {

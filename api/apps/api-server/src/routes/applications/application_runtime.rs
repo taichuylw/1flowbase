@@ -137,6 +137,26 @@ pub fn router() -> Router<Arc<ApiState>> {
             post(export_application_runs_zip),
         )
         .route(
+            "/applications/:id/logs/runs/archive",
+            post(export_application_runs_archive),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-sessions",
+            post(create_run_archive_upload_session),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-sessions/:session_id/chunks/:chunk_index",
+            put(upload_run_archive_chunk),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-sessions/:session_id/complete",
+            post(complete_run_archive_upload_session),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-jobs/:job_id",
+            get(get_run_archive_import_job),
+        )
+        .route(
             "/applications/:id/monitoring/run-metrics",
             get(application_monitoring::get_application_run_monitoring_report),
         )
@@ -163,6 +183,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/logs/runs/:run_id/export",
             get(export_application_run_trace_dump),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/archive",
+            get(export_application_run_archive),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/trace-tree/nodes",
@@ -209,6 +233,10 @@ include!("application_runtime/debug_handlers.rs");
 include!("application_runtime/log_handlers.rs");
 
 include!("application_runtime/export_handlers.rs");
+
+include!("application_runtime/archive_handlers.rs");
+
+include!("application_runtime/archive_restore.rs");
 
 #[cfg(test)]
 mod tests;

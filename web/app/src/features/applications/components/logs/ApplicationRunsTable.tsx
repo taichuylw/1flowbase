@@ -1,4 +1,5 @@
-import { Button } from 'antd';
+import { FileZipOutlined } from '@ant-design/icons';
+import { Button, Space, Tooltip } from 'antd';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +39,9 @@ export function ApplicationRunsTable({
   rowSelection,
   selectedRunId,
   configuration,
+  exportingArchiveRunId,
   onPageChange,
+  onExportRunArchive,
   onSelectRun
 }: {
   loading?: boolean;
@@ -50,7 +53,9 @@ export function ApplicationRunsTable({
   rowSelection?: DataTableRowSelection<ApplicationRunSummary>;
   selectedRunId?: string | null;
   configuration: ApplicationRunsTableConfiguration;
+  exportingArchiveRunId?: string | null;
   onPageChange: (page: number) => void;
+  onExportRunArchive?: (run: ApplicationRunSummary) => void;
   onSelectRun: (run: ApplicationRunSummary) => void;
 }) {
   const { t } = useTranslation('applications');
@@ -64,13 +69,32 @@ export function ApplicationRunsTable({
         return {
           ...column,
           render: (_value: unknown, run: ApplicationRunSummary): ReactNode => (
-            <Button type="link" onClick={() => onSelectRun(run)}>
-              {t('auto.view_run_details')}
-            </Button>
+            <Space size={4}>
+              <Button type="link" onClick={() => onSelectRun(run)}>
+                {t('auto.view_run_details')}
+              </Button>
+              {onExportRunArchive ? (
+                <Tooltip
+                  title={t('auto.export_run_archive_named', {
+                    value1: run.title || run.id
+                  })}
+                >
+                  <Button
+                    aria-label={t('auto.export_run_archive_named', {
+                      value1: run.title || run.id
+                    })}
+                    icon={<FileZipOutlined aria-hidden="true" />}
+                    loading={exportingArchiveRunId === run.id}
+                    onClick={() => onExportRunArchive(run)}
+                    type="text"
+                  />
+                </Tooltip>
+              ) : null}
+            </Space>
           )
         };
       }),
-    [columns, onSelectRun, t]
+    [columns, exportingArchiveRunId, onExportRunArchive, onSelectRun, t]
   );
 
   return (

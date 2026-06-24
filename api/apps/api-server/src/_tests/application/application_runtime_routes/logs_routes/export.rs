@@ -1,5 +1,6 @@
 use super::*;
 use control_plane::ports::{UpdateNodeRunInput, UpsertApplicationRunTraceProjectionStatusInput};
+use sha2::{Digest, Sha256};
 use std::io::{Cursor, Read};
 
 async fn get_run_export(
@@ -29,6 +30,306 @@ async fn get_run_export(
         .to_vec();
 
     (status, headers, body)
+}
+
+async fn get_run_archive(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    run_id: &str,
+    archive_version: i32,
+) -> (StatusCode, Vec<u8>) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/archive?archive_version={archive_version}"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .to_vec();
+
+    (status, body)
+}
+
+async fn post_run_archive(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+    run_ids: &[&str],
+) -> (StatusCode, Vec<u8>) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/archive"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "archive_version": 1,
+                        "run_ids": run_ids
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .to_vec();
+
+    (status, body)
+}
+
+async fn create_archive_upload_session(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+    archive_bytes: &[u8],
+    expected_sha256: &str,
+) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/archive/import-sessions"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "filename": "archive.json",
+                        "total_size_bytes": archive_bytes.len(),
+                        "expected_sha256": expected_sha256,
+                        "chunk_size_bytes": 1024
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+async fn upload_archive_chunk(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+    session_id: &str,
+    chunk_index: usize,
+    chunk: &[u8],
+) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/archive/import-sessions/{session_id}/chunks/{chunk_index}"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("x-chunk-sha256", sha256_bytes_for_test(chunk))
+                .body(Body::from(chunk.to_vec()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+async fn complete_archive_upload_session(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+    session_id: &str,
+) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/archive/import-sessions/{session_id}/complete"
+                ))
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+async fn get_archive_import_job(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    job_id: &str,
+) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/archive/import-jobs/{job_id}"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+async fn wait_for_archive_import_job(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    job_id: &str,
+) -> Value {
+    let mut last_payload = json!({});
+    for _ in 0..80 {
+        let (status, payload) = get_archive_import_job(app, cookie, application_id, job_id).await;
+        assert_eq!(status, StatusCode::OK, "{payload}");
+        let job_status = payload["data"]["status"].as_str().unwrap_or_default();
+        if matches!(job_status, "succeeded" | "failed") {
+            return payload;
+        }
+        last_payload = payload;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    panic!("archive import job did not finish: {last_payload}");
+}
+
+async fn import_archive_bytes(
+    app: &axum::Router,
+    cookie: &str,
+    csrf: &str,
+    application_id: &str,
+    archive_bytes: &[u8],
+) -> Value {
+    let archive_sha256 = sha256_bytes_for_test(archive_bytes);
+    let (session_status, session_payload) = create_archive_upload_session(
+        app,
+        cookie,
+        csrf,
+        application_id,
+        archive_bytes,
+        &archive_sha256,
+    )
+    .await;
+    assert_eq!(session_status, StatusCode::CREATED, "{}", session_payload);
+    let session_id = session_payload["data"]["session_id"].as_str().unwrap();
+    let split_at = (archive_bytes.len() / 2).max(1);
+    for (chunk_index, chunk) in archive_bytes.chunks(split_at).enumerate() {
+        let (chunk_status, chunk_payload) = upload_archive_chunk(
+            app,
+            cookie,
+            csrf,
+            application_id,
+            session_id,
+            chunk_index,
+            chunk,
+        )
+        .await;
+        assert_eq!(chunk_status, StatusCode::OK, "{}", chunk_payload);
+    }
+
+    let (complete_status, complete_payload) =
+        complete_archive_upload_session(app, cookie, csrf, application_id, session_id).await;
+    assert_eq!(complete_status, StatusCode::OK, "{}", complete_payload);
+    assert!(
+        matches!(
+            complete_payload["data"]["status"].as_str(),
+            Some("queued" | "processing" | "succeeded" | "failed")
+        ),
+        "{complete_payload}"
+    );
+    let job_id = complete_payload["data"]["job_id"].as_str().unwrap();
+    wait_for_archive_import_job(app, cookie, application_id, job_id).await
+}
+
+async fn get_run_overview(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    run_id: &str,
+) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/overview"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+async fn list_run_logs(app: &axum::Router, cookie: &str, application_id: &str) -> Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs?time_range_days=30&page_size=100"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
+fn sha256_bytes_for_test(bytes: &[u8]) -> String {
+    format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
 fn read_zip_entries(body: &[u8]) -> Vec<(String, Vec<u8>)> {
@@ -200,6 +501,288 @@ async fn application_runtime_routes_logs_export_json_trace_dump_preserves_detail
         failed_node["error_payload"], expected_error_payload,
         "failed node error payload should be exported"
     );
+}
+
+#[tokio::test]
+async fn application_runtime_routes_logs_archive_returns_v1_manifest_and_restore_facts() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let large_query = format!("run archive full payload {}", "X".repeat(3_000));
+    let run_id = start_full_debug_run(&app, &cookie, &csrf, &application_id, &large_query).await;
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    let (status, body) = get_run_archive(&app, &cookie, &application_id, &run_id, 1).await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let archive: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(archive["archive_version"], json!(1));
+    assert_eq!(archive["manifest"]["archive_version"], json!(1));
+    assert_eq!(
+        archive["manifest"]["archive_semantics"],
+        json!("application_run_archive_v1")
+    );
+    assert_eq!(archive["manifest"]["run_count"], json!(1));
+    assert_eq!(
+        archive["manifest"]["selected_run_ids"],
+        json!([run_id.as_str()])
+    );
+    assert_eq!(archive["source"]["application_id"], json!(application_id));
+    assert_eq!(archive["source"]["source_kind"], json!("application_run"));
+    assert!(archive["source"]["workspace_id"].is_string());
+    assert!(archive["source"]["exported_by_user_id"].is_string());
+    assert!(archive["exported_at"].is_string());
+    assert!(archive["manifest"]["content_sha256"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("sha256:")));
+    assert_eq!(
+        archive["manifest"]["entries"][0]["source_run_id"],
+        json!(run_id)
+    );
+    assert!(archive["manifest"]["entries"][0]["content_sha256"]
+        .as_str()
+        .is_some_and(|value| value.starts_with("sha256:")));
+
+    let entries = archive["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 1);
+    let entry = &entries[0];
+    assert_eq!(entry["source_run_id"], json!(run_id));
+    assert_eq!(entry["flow_run"]["id"], json!(run_id));
+    assert_eq!(
+        entry["flow_run"]["input_payload"]["node-start"]["query"],
+        json!(large_query)
+    );
+    assert!(entry["flow_run_fact"]["debug_session_id"].is_string());
+    assert!(entry["compiled_plan"].is_object());
+    assert!(entry["node_runs"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+    assert!(entry["events"].as_array().is_some());
+    assert!(entry["checkpoints"].as_array().is_some());
+    assert!(entry["callback_tasks"].as_array().is_some());
+    assert!(entry["runtime_spans"].as_array().is_some());
+    assert!(entry["runtime_items"].as_array().is_some());
+    assert!(entry["context_projections"].as_array().is_some());
+    assert!(entry["model_failover_attempts"].as_array().is_some());
+    assert!(entry["capability_invocations"].as_array().is_some());
+    assert!(entry["runtime_events"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+    assert!(entry["usage_ledger"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+    assert!(entry["usage_ledger"][0]["id"].is_string());
+    assert!(entry["usage_ledger"][0]["usage_status"].is_string());
+    assert!(entry["usage_ledger"][0]["raw_usage"].is_object());
+    assert!(entry["usage_ledger"][0]["normalized_usage"].is_object());
+    assert!(entry["trace_tree"]["projection_status"]["projection_version"].is_number());
+    assert!(entry["trace_tree"]["nodes"].as_array().is_some());
+    assert!(entry["export_warnings"].as_array().is_some());
+
+    let (multi_status, multi_body) =
+        post_run_archive(&app, &cookie, &csrf, &application_id, &[run_id.as_str()]).await;
+    assert_eq!(
+        multi_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&multi_body)
+    );
+    let multi_archive: Value = serde_json::from_slice(&multi_body).unwrap();
+    assert_eq!(multi_archive["archive_version"], json!(1));
+    assert_eq!(multi_archive["manifest"]["run_count"], json!(1));
+    assert_eq!(multi_archive["entries"][0]["source_run_id"], json!(run_id));
+    assert_eq!(
+        multi_archive["manifest"]["entries"][0]["content_sha256"],
+        archive["manifest"]["entries"][0]["content_sha256"],
+        "single-run and multi-run archive endpoints must use the same entry builder"
+    );
+}
+
+#[tokio::test]
+async fn application_runtime_routes_logs_archive_import_restores_visible_target_runs() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let query = "archive import round trip";
+    let source_run_id = start_full_debug_run(&app, &cookie, &csrf, &application_id, query).await;
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &source_run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    let (export_status, archive_bytes) =
+        get_run_archive(&app, &cookie, &application_id, &source_run_id, 1).await;
+    assert_eq!(
+        export_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&archive_bytes)
+    );
+
+    let first_job =
+        import_archive_bytes(&app, &cookie, &csrf, &application_id, &archive_bytes).await;
+    assert_eq!(
+        first_job["data"]["status"],
+        json!("succeeded"),
+        "{first_job}"
+    );
+    assert_eq!(first_job["data"]["imported_run_count"], json!(1));
+    let first_target_run_id = first_job["data"]["source_to_target_run_ids"][0]["target_run_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_ne!(first_target_run_id, source_run_id);
+
+    let (overview_status, overview_payload) =
+        get_run_overview(&app, &cookie, &application_id, &first_target_run_id).await;
+    assert_eq!(overview_status, StatusCode::OK, "{}", overview_payload);
+    assert_eq!(
+        overview_payload["data"]["flow_run"]["id"],
+        json!(first_target_run_id)
+    );
+    assert_eq!(
+        overview_payload["data"]["flow_run"]["input_payload"]["node-start"]["query"],
+        json!(query)
+    );
+
+    let logs_payload = list_run_logs(&app, &cookie, &application_id).await;
+    let listed_run_ids = logs_payload["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|run| run["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert!(
+        listed_run_ids.contains(&first_target_run_id.as_str()),
+        "imported target run should be visible in official logs"
+    );
+
+    let second_job =
+        import_archive_bytes(&app, &cookie, &csrf, &application_id, &archive_bytes).await;
+    assert_eq!(
+        second_job["data"]["status"],
+        json!("succeeded"),
+        "{second_job}"
+    );
+    let second_target_run_id = second_job["data"]["source_to_target_run_ids"][0]["target_run_id"]
+        .as_str()
+        .unwrap();
+    assert_ne!(
+        second_target_run_id, first_target_run_id,
+        "repeat import must create a fresh target run"
+    );
+}
+
+#[tokio::test]
+async fn application_runtime_routes_logs_archive_import_rejects_checksum_mismatch() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let source_run_id =
+        start_full_debug_run(&app, &cookie, &csrf, &application_id, "checksum mismatch").await;
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &source_run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    let before_logs = list_run_logs(&app, &cookie, &application_id).await;
+    let before_total = before_logs["data"]["total"].as_i64().unwrap();
+    let (export_status, archive_bytes) =
+        get_run_archive(&app, &cookie, &application_id, &source_run_id, 1).await;
+    assert_eq!(export_status, StatusCode::OK);
+    let (session_status, session_payload) = create_archive_upload_session(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        &archive_bytes,
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    )
+    .await;
+    assert_eq!(session_status, StatusCode::CREATED, "{}", session_payload);
+    let session_id = session_payload["data"]["session_id"].as_str().unwrap();
+    let (chunk_status, chunk_payload) = upload_archive_chunk(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        session_id,
+        0,
+        &archive_bytes,
+    )
+    .await;
+    assert_eq!(chunk_status, StatusCode::OK, "{}", chunk_payload);
+
+    let (complete_status, complete_payload) =
+        complete_archive_upload_session(&app, &cookie, &csrf, &application_id, session_id).await;
+    assert_eq!(
+        complete_status,
+        StatusCode::BAD_REQUEST,
+        "{}",
+        complete_payload
+    );
+    assert_eq!(complete_payload["code"], json!("archive_sha256"));
+    let after_logs = list_run_logs(&app, &cookie, &application_id).await;
+    assert_eq!(after_logs["data"]["total"].as_i64().unwrap(), before_total);
+}
+
+#[tokio::test]
+async fn application_runtime_routes_logs_archive_rejects_unsupported_version() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let run_id = start_full_debug_run(
+        &app,
+        &cookie,
+        &csrf,
+        &application_id,
+        "unsupported archive version",
+    )
+    .await;
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    let (status, body) = get_run_archive(&app, &cookie, &application_id, &run_id, 2).await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "{}",
+        String::from_utf8_lossy(&body)
+    );
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["code"], json!("unsupported_archive_version"));
 }
 
 #[tokio::test]

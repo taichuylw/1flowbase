@@ -1,0 +1,1030 @@
+use sha2::{Digest, Sha256};
+use sqlx::Row;
+
+use control_plane::{
+    flow::FlowService,
+    ports::{UpdateFlowRunInput, UpdateFlowRunPayloadsInput},
+};
+
+const RUN_ARCHIVE_VERSION: i32 = 1;
+const APPLICATION_RUN_ARCHIVE_SEMANTICS: &str = "application_run_archive_v1";
+
+#[derive(Debug)]
+struct RunArchiveUploadSessionRow {
+    session_id: Uuid,
+    application_id: Uuid,
+    status: String,
+    filename: Option<String>,
+    total_size_bytes: i64,
+    received_bytes: i64,
+    expected_sha256: Option<String>,
+    created_at: OffsetDateTime,
+    updated_at: OffsetDateTime,
+}
+
+#[derive(Debug)]
+struct RunArchiveImportJobRow {
+    job_id: Uuid,
+    application_id: Uuid,
+    upload_session_id: Uuid,
+    status: String,
+    archive_version: Option<i32>,
+    archive_sha256: Option<String>,
+    run_count: i32,
+    imported_run_count: i32,
+    error_payload: Option<serde_json::Value>,
+    result_payload: serde_json::Value,
+    created_at: OffsetDateTime,
+    updated_at: OffsetDateTime,
+    started_at: Option<OffsetDateTime>,
+    finished_at: Option<OffsetDateTime>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/{run_id}/archive",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("run_id" = String, Path, description = "Flow run id"),
+        ("archive_version" = Option<i32>, Query, description = "Archive contract version, currently 1")
+    ),
+    responses(
+        (status = 200, body = RunArchiveV1Response),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn export_application_run_archive(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, run_id)): Path<(Uuid, Uuid)>,
+    Query(query): Query<ApplicationRunArchiveQuery>,
+) -> Result<axum::response::Response, ApiError> {
+    ensure_run_archive_version(query.archive_version)?;
+    let context = require_session(&state, &headers).await?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
+    let archive = build_run_archive_v1_document(
+        state,
+        context.actor.current_workspace_id,
+        context.actor.user_id,
+        &application,
+        vec![run_id],
+        OffsetDateTime::now_utc(),
+    )
+    .await?;
+    let filename = application_run_archive_filename(
+        &archive.source.application_name,
+        &archive.exported_at,
+        archive.entries.len(),
+    );
+    let body = serde_json::to_vec_pretty(&archive)?;
+
+    download_response("application/json", &filename, body)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/applications/{id}/logs/runs/archive",
+    request_body = ApplicationRunArchiveBody,
+    params(("id" = String, Path, description = "Application id")),
+    responses(
+        (status = 200, body = RunArchiveV1Response),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn export_application_runs_archive(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ApplicationRunArchiveBody>,
+) -> Result<axum::response::Response, ApiError> {
+    ensure_run_archive_version(body.archive_version)?;
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
+    if body.run_ids.is_empty() {
+        return Err(ControlPlaneError::InvalidInput("run_ids").into());
+    }
+
+    let archive = build_run_archive_v1_document(
+        state,
+        context.actor.current_workspace_id,
+        context.actor.user_id,
+        &application,
+        body.run_ids,
+        OffsetDateTime::now_utc(),
+    )
+    .await?;
+    let filename = application_run_archive_filename(
+        &archive.source.application_name,
+        &archive.exported_at,
+        archive.entries.len(),
+    );
+    let body = serde_json::to_vec_pretty(&archive)?;
+
+    download_response("application/json", &filename, body)
+}
+
+fn ensure_run_archive_version(version: Option<i32>) -> Result<(), ApiError> {
+    if version.unwrap_or(RUN_ARCHIVE_VERSION) == RUN_ARCHIVE_VERSION {
+        return Ok(());
+    }
+
+    Err(ControlPlaneError::InvalidInput("unsupported_archive_version").into())
+}
+
+fn required_json_field<T>(
+    value: &serde_json::Value,
+    field: &'static str,
+) -> Result<T, ApiError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let field_value = value
+        .get(field)
+        .cloned()
+        .ok_or(ControlPlaneError::Conflict(field))?;
+    Ok(serde_json::from_value(field_value)?)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/applications/{id}/logs/runs/archive/import-sessions",
+    request_body = RunArchiveUploadSessionCreateBody,
+    params(("id" = String, Path, description = "Application id")),
+    responses(
+        (status = 201, body = RunArchiveUploadSessionResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn create_run_archive_upload_session(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RunArchiveUploadSessionCreateBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<RunArchiveUploadSessionResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
+    if body.total_size_bytes <= 0 {
+        return Err(ControlPlaneError::InvalidInput("total_size_bytes").into());
+    }
+    if let Some(chunk_size_bytes) = body.chunk_size_bytes {
+        if chunk_size_bytes <= 0 {
+            return Err(ControlPlaneError::InvalidInput("chunk_size_bytes").into());
+        }
+    }
+
+    let session_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        insert into run_archive_upload_sessions (
+            id,
+            scope_id,
+            application_id,
+            actor_user_id,
+            original_filename,
+            total_size_bytes,
+            expected_sha256,
+            chunk_size_bytes,
+            status
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, 'uploading')
+        "#,
+    )
+    .bind(session_id)
+    .bind(application.workspace_id)
+    .bind(application.id)
+    .bind(context.actor.user_id)
+    .bind(body.filename.as_deref())
+    .bind(body.total_size_bytes)
+    .bind(body.expected_sha256.as_deref())
+    .bind(body.chunk_size_bytes)
+    .execute(state.store.pool())
+    .await?;
+
+    let session = load_run_archive_upload_session(&state, id, session_id).await?;
+    Ok((StatusCode::CREATED, Json(ApiSuccess::new(to_upload_session_response(session)))))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/console/applications/{id}/logs/runs/archive/import-sessions/{session_id}/chunks/{chunk_index}",
+    request_body(content = Vec<u8>, content_type = "application/octet-stream"),
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("session_id" = String, Path, description = "Upload session id"),
+        ("chunk_index" = i32, Path, description = "Zero-based chunk index")
+    ),
+    responses(
+        (status = 200, body = RunArchiveChunkUploadResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn upload_run_archive_chunk(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, session_id, chunk_index)): Path<(Uuid, Uuid, i32)>,
+    body: axum::body::Bytes,
+) -> Result<Json<ApiSuccess<RunArchiveChunkUploadResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    if chunk_index < 0 || body.is_empty() {
+        return Err(ControlPlaneError::InvalidInput("archive_chunk").into());
+    }
+    let session = load_run_archive_upload_session(&state, id, session_id).await?;
+    if session.status != "uploading" {
+        return Err(ControlPlaneError::Conflict("archive_upload_session").into());
+    }
+
+    let actual_sha256 = sha256_bytes(&body);
+    if let Some(expected_sha256) = header_value(&headers, "x-chunk-sha256") {
+        if normalize_sha256(&expected_sha256) != normalize_sha256(&actual_sha256) {
+            return Err(ControlPlaneError::InvalidInput("chunk_sha256").into());
+        }
+    }
+
+    let mut tx = state.store.pool().begin().await?;
+    sqlx::query(
+        r#"
+        insert into run_archive_upload_chunks (
+            session_id,
+            chunk_index,
+            chunk_size_bytes,
+            chunk_sha256,
+            content
+        ) values ($1, $2, $3, $4, $5)
+        on conflict (session_id, chunk_index) do update
+        set chunk_size_bytes = excluded.chunk_size_bytes,
+            chunk_sha256 = excluded.chunk_sha256,
+            content = excluded.content,
+            created_at = now()
+        "#,
+    )
+    .bind(session_id)
+    .bind(chunk_index)
+    .bind(i64::try_from(body.len()).unwrap_or(i64::MAX))
+    .bind(&actual_sha256)
+    .bind(body.as_ref())
+    .execute(&mut *tx)
+    .await?;
+    let received_bytes = refresh_run_archive_upload_session_received_bytes(&mut tx, session_id).await?;
+    if received_bytes > session.total_size_bytes {
+        return Err(ControlPlaneError::InvalidInput("archive_size").into());
+    }
+    tx.commit().await?;
+
+    Ok(Json(ApiSuccess::new(RunArchiveChunkUploadResponse {
+        session_id: session_id.to_string(),
+        chunk_index,
+        chunk_size_bytes: i64::try_from(body.len()).unwrap_or(i64::MAX),
+        chunk_sha256: actual_sha256,
+        received_bytes,
+        status: "uploading".to_string(),
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/applications/{id}/logs/runs/archive/import-sessions/{session_id}/complete",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("session_id" = String, Path, description = "Upload session id")
+    ),
+    responses(
+        (status = 200, body = RunArchiveImportJobResponse),
+        (status = 400, body = crate::error_response::ErrorBody),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn complete_run_archive_upload_session(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, session_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiSuccess<RunArchiveImportJobResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+    let application = ensure_application_visible(&state, context.user.id, id).await?;
+    let session = load_run_archive_upload_session(&state, id, session_id).await?;
+    if session.status != "uploading" {
+        return Err(ControlPlaneError::Conflict("archive_upload_session").into());
+    }
+
+    let archive_bytes = load_upload_session_archive_bytes(&state, session_id).await?;
+    if i64::try_from(archive_bytes.len()).unwrap_or(i64::MAX) != session.total_size_bytes {
+        return Err(ControlPlaneError::InvalidInput("archive_size").into());
+    }
+    let archive_sha256 = sha256_bytes(&archive_bytes);
+    if let Some(expected_sha256) = session.expected_sha256.as_deref() {
+        if normalize_sha256(expected_sha256) != normalize_sha256(&archive_sha256) {
+            return Err(ControlPlaneError::InvalidInput("archive_sha256").into());
+        }
+    }
+    let archive = parse_run_archive_v1(&archive_bytes)?;
+    let job_id = create_run_archive_import_job(
+        &state,
+        application.workspace_id,
+        application.id,
+        context.actor.user_id,
+        session_id,
+        archive.archive_version,
+        &archive_sha256,
+        i32::try_from(archive.entries.len()).unwrap_or(i32::MAX),
+    )
+    .await?;
+
+    mark_upload_session_completed(&state, session_id).await?;
+    let restore_state = state.clone();
+    let restore_actor_user_id = context.actor.user_id;
+    tokio::spawn(async move {
+        let restore_result = restore_run_archive_v1(
+            restore_state.clone(),
+            &application,
+            restore_actor_user_id,
+            job_id,
+            archive,
+        )
+        .await;
+        if let Err(error) = restore_result {
+            error!("run archive restore failed: {}", error.0);
+            if let Err(mark_error) =
+                mark_run_archive_import_job_failed(&restore_state, job_id, error.0.to_string())
+                    .await
+            {
+                error!("failed to mark run archive import job failed: {}", mark_error.0);
+            }
+        }
+    });
+
+    let job = load_run_archive_import_job(&state, id, job_id).await?;
+    Ok(Json(ApiSuccess::new(to_import_job_response(&state, job).await?)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}/logs/runs/archive/import-jobs/{job_id}",
+    params(
+        ("id" = String, Path, description = "Application id"),
+        ("job_id" = String, Path, description = "Import job id")
+    ),
+    responses(
+        (status = 200, body = RunArchiveImportJobResponse),
+        (status = 401, body = crate::error_response::ErrorBody),
+        (status = 403, body = crate::error_response::ErrorBody),
+        (status = 404, body = crate::error_response::ErrorBody)
+    )
+)]
+pub async fn get_run_archive_import_job(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path((id, job_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiSuccess<RunArchiveImportJobResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_application_visible(&state, context.user.id, id).await?;
+    let job = load_run_archive_import_job(&state, id, job_id).await?;
+
+    Ok(Json(ApiSuccess::new(to_import_job_response(&state, job).await?)))
+}
+
+async fn build_run_archive_v1_document(
+    state: Arc<ApiState>,
+    workspace_id: Uuid,
+    actor_user_id: Uuid,
+    application: &domain::ApplicationRecord,
+    run_ids: Vec<Uuid>,
+    exported_at: OffsetDateTime,
+) -> Result<RunArchiveV1Response, ApiError> {
+    let mut entries = Vec::with_capacity(run_ids.len());
+    for run_id in &run_ids {
+        let mut entry = build_run_archive_v1_entry(
+            state.clone(),
+            workspace_id,
+            application,
+            application.id,
+            *run_id,
+            exported_at,
+        )
+        .await?;
+        entry.content_digest = sha256_bytes(&serde_json::to_vec(&entry)?);
+        entries.push(entry);
+    }
+    let manifest_entries = entries
+        .iter()
+        .map(|entry| {
+            Ok(RunArchiveV1ManifestEntryResponse {
+                source_run_id: entry.source_run_id.clone(),
+                content_sha256: sha256_bytes(&serde_json::to_vec(entry)?),
+                content_digest: entry.content_digest.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    let content_sha256 = sha256_bytes(&serde_json::to_vec(&entries)?);
+    let exported_at_text = application_logs::format_time(exported_at);
+    let selected_run_ids = run_ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+    let manifest = RunArchiveV1ManifestResponse {
+        archive_version: RUN_ARCHIVE_VERSION,
+        archive_semantics: APPLICATION_RUN_ARCHIVE_SEMANTICS.to_string(),
+        exported_at: exported_at_text.clone(),
+        source_workspace_id: application.workspace_id.to_string(),
+        source_application_id: application.id.to_string(),
+        run_count: entries.len(),
+        selected_run_ids,
+        entries: manifest_entries,
+        content_sha256: content_sha256.clone(),
+        checksum: content_sha256.clone(),
+    };
+    let source = RunArchiveV1SourceResponse {
+        source_kind: "application_run".to_string(),
+        workspace_id: application.workspace_id.to_string(),
+        application_id: application.id.to_string(),
+        application_type: application.application_type.as_str().to_string(),
+        application_name: application.name.clone(),
+        exported_by_user_id: actor_user_id.to_string(),
+        exported_at: exported_at_text.clone(),
+        archive_builder: "api-server.application-runtime.run-archive-v1".to_string(),
+    };
+
+    Ok(RunArchiveV1Response {
+        archive_version: RUN_ARCHIVE_VERSION,
+        exported_at: exported_at_text,
+        manifest,
+        source,
+        entries,
+        content_digest: content_sha256,
+    })
+}
+
+async fn build_run_archive_v1_entry(
+    state: Arc<ApiState>,
+    workspace_id: Uuid,
+    application: &domain::ApplicationRecord,
+    application_id: Uuid,
+    run_id: Uuid,
+    exported_at: OffsetDateTime,
+) -> Result<RunArchiveV1EntryResponse, ApiError> {
+    let export_document = build_application_run_trace_export_document(
+        state.clone(),
+        workspace_id,
+        application,
+        application_id,
+        run_id,
+        exported_at,
+    )
+    .await?;
+    let export_value = export_document.value.clone();
+    let flow_run = required_json_field(&export_value, "flow_run")?;
+    let node_runs = required_json_field(&export_value, "node_runs")?;
+    let checkpoints = required_json_field(&export_value, "checkpoints")?;
+    let callback_tasks = required_json_field(&export_value, "callback_tasks")?;
+    let events = required_json_field(&export_value, "events")?;
+    let trace_tree = export_value
+        .get("trace_tree")
+        .cloned()
+        .ok_or(ControlPlaneError::Conflict("application_run_archive_trace_tree"))?;
+    let export_warnings = required_json_field(&export_value, "export_warnings")?;
+    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+        &state.store,
+        application_id,
+        run_id,
+    )
+    .await?
+    .ok_or(ControlPlaneError::NotFound("flow_run"))?;
+    let compiled_plan = match detail.flow_run.compiled_plan_id {
+        Some(compiled_plan_id) => {
+            <MainDurableStore as OrchestrationRuntimeRepository>::get_compiled_plan(
+                &state.store,
+                compiled_plan_id,
+            )
+            .await?
+            .map(serde_json::to_value)
+            .transpose()?
+        }
+        None => None,
+    };
+    let runtime_spans = records_to_json_values(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_spans(
+            &state.store,
+            run_id,
+        )
+        .await?,
+    )?;
+    let runtime_events = records_to_json_values(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_events(
+            &state.store,
+            run_id,
+            0,
+        )
+        .await?,
+    )?;
+    let runtime_items = records_to_json_values(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_runtime_items(
+            &state.store,
+            run_id,
+        )
+        .await?,
+    )?;
+    let context_projections = records_to_json_values(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_context_projections(
+            &state.store,
+            run_id,
+        )
+        .await?,
+    )?;
+    let usage_ledger = records_to_json_values(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_usage_ledger(
+            &state.store,
+            run_id,
+        )
+        .await?,
+    )?;
+    let model_failover_attempts = records_to_json_values(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_model_failover_attempt_ledger(
+            &state.store,
+            run_id,
+        )
+        .await?,
+    )?;
+    let capability_invocations = records_to_json_values(
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_capability_invocations(
+            &state.store,
+            run_id,
+        )
+        .await?,
+    )?;
+
+    Ok(RunArchiveV1EntryResponse {
+        source_run_id: run_id.to_string(),
+        content_digest: String::new(),
+        flow_run,
+        flow_run_fact: serde_json::to_value(&detail.flow_run)?,
+        compiled_plan,
+        node_runs,
+        checkpoints,
+        callback_tasks,
+        events,
+        runtime_spans,
+        runtime_events,
+        runtime_items,
+        context_projections,
+        usage_ledger,
+        model_failover_attempts,
+        capability_invocations,
+        trace_tree,
+        export_warnings,
+    })
+}
+
+async fn create_run_archive_import_job(
+    state: &Arc<ApiState>,
+    workspace_id: Uuid,
+    application_id: Uuid,
+    actor_user_id: Uuid,
+    session_id: Uuid,
+    archive_version: i32,
+    archive_sha256: &str,
+    run_count: i32,
+) -> Result<Uuid, ApiError> {
+    let job_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        insert into run_archive_import_jobs (
+            id,
+            scope_id,
+            application_id,
+            actor_user_id,
+            upload_session_id,
+            status,
+            archive_version,
+            archive_sha256,
+            run_count
+        ) values ($1, $2, $3, $4, $5, 'queued', $6, $7, $8)
+        "#,
+    )
+    .bind(job_id)
+    .bind(workspace_id)
+    .bind(application_id)
+    .bind(actor_user_id)
+    .bind(session_id)
+    .bind(archive_version)
+    .bind(archive_sha256)
+    .bind(run_count)
+    .execute(state.store.pool())
+    .await?;
+    Ok(job_id)
+}
+
+async fn mark_run_archive_import_job_processing(
+    state: &Arc<ApiState>,
+    job_id: Uuid,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        r#"
+        update run_archive_import_jobs
+        set status = 'processing',
+            started_at = coalesce(started_at, now()),
+            updated_at = now()
+        where id = $1
+        "#,
+    )
+    .bind(job_id)
+    .execute(state.store.pool())
+    .await?;
+    Ok(())
+}
+
+async fn mark_run_archive_import_job_succeeded(
+    state: &Arc<ApiState>,
+    job_id: Uuid,
+    run_mappings: Vec<(String, Uuid)>,
+) -> Result<(), ApiError> {
+    let result_payload = serde_json::json!({
+        "source_to_target_run_ids": run_mappings
+            .iter()
+            .map(|(source_run_id, target_run_id)| serde_json::json!({
+                "source_run_id": source_run_id,
+                "target_run_id": target_run_id.to_string()
+            }))
+            .collect::<Vec<_>>()
+    });
+    sqlx::query(
+        r#"
+        update run_archive_import_jobs
+        set status = 'succeeded',
+            imported_run_count = $2,
+            result_payload = $3,
+            finished_at = now(),
+            updated_at = now()
+        where id = $1
+        "#,
+    )
+    .bind(job_id)
+    .bind(i32::try_from(run_mappings.len()).unwrap_or(i32::MAX))
+    .bind(result_payload)
+    .execute(state.store.pool())
+    .await?;
+    Ok(())
+}
+
+async fn mark_run_archive_import_job_failed(
+    state: &Arc<ApiState>,
+    job_id: Uuid,
+    message: String,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        r#"
+        update run_archive_import_jobs
+        set status = 'failed',
+            error_payload = $2,
+            finished_at = now(),
+            updated_at = now()
+        where id = $1
+        "#,
+    )
+    .bind(job_id)
+    .bind(serde_json::json!({ "message": message }))
+    .execute(state.store.pool())
+    .await?;
+    Ok(())
+}
+
+async fn mark_upload_session_completed(
+    state: &Arc<ApiState>,
+    session_id: Uuid,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        r#"
+        update run_archive_upload_sessions
+        set status = 'completed',
+            completed_at = now(),
+            updated_at = now()
+        where id = $1
+        "#,
+    )
+    .bind(session_id)
+    .execute(state.store.pool())
+    .await?;
+    Ok(())
+}
+
+async fn refresh_run_archive_upload_session_received_bytes(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    session_id: Uuid,
+) -> Result<i64, ApiError> {
+    let received_bytes = sqlx::query_scalar::<_, i64>(
+        r#"
+        select coalesce(sum(chunk_size_bytes), 0)::bigint
+        from run_archive_upload_chunks
+        where session_id = $1
+        "#,
+    )
+    .bind(session_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        update run_archive_upload_sessions
+        set received_bytes = $2,
+            updated_at = now()
+        where id = $1
+        "#,
+    )
+    .bind(session_id)
+    .bind(received_bytes)
+    .execute(&mut **tx)
+    .await?;
+    Ok(received_bytes)
+}
+
+async fn load_run_archive_upload_session(
+    state: &Arc<ApiState>,
+    application_id: Uuid,
+    session_id: Uuid,
+) -> Result<RunArchiveUploadSessionRow, ApiError> {
+    let row = sqlx::query(
+        r#"
+        select
+            id,
+            application_id,
+            status,
+            original_filename,
+            total_size_bytes,
+            received_bytes,
+            expected_sha256,
+            created_at,
+            updated_at
+        from run_archive_upload_sessions
+        where id = $1
+          and application_id = $2
+        "#,
+    )
+    .bind(session_id)
+    .bind(application_id)
+    .fetch_optional(state.store.pool())
+    .await?
+    .ok_or(ControlPlaneError::NotFound("run_archive_upload_session"))?;
+
+    Ok(RunArchiveUploadSessionRow {
+        session_id: row.get("id"),
+        application_id: row.get("application_id"),
+        status: row.get("status"),
+        filename: row.get("original_filename"),
+        total_size_bytes: row.get("total_size_bytes"),
+        received_bytes: row.get("received_bytes"),
+        expected_sha256: row.get("expected_sha256"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+    })
+}
+
+async fn load_upload_session_archive_bytes(
+    state: &Arc<ApiState>,
+    session_id: Uuid,
+) -> Result<Vec<u8>, ApiError> {
+    let chunks = sqlx::query(
+        r#"
+        select chunk_index, content
+        from run_archive_upload_chunks
+        where session_id = $1
+        order by chunk_index asc
+        "#,
+    )
+    .bind(session_id)
+    .fetch_all(state.store.pool())
+    .await?;
+    if chunks.is_empty() {
+        return Err(ControlPlaneError::InvalidInput("archive_chunks").into());
+    }
+    let mut bytes = Vec::new();
+    for (expected_index, chunk) in chunks.into_iter().enumerate() {
+        let chunk_index: i32 = chunk.get("chunk_index");
+        if chunk_index != i32::try_from(expected_index).unwrap_or(i32::MAX) {
+            return Err(ControlPlaneError::InvalidInput("archive_chunks").into());
+        }
+        let content: Vec<u8> = chunk.get("content");
+        bytes.extend(content);
+    }
+    Ok(bytes)
+}
+
+async fn load_run_archive_import_job(
+    state: &Arc<ApiState>,
+    application_id: Uuid,
+    job_id: Uuid,
+) -> Result<RunArchiveImportJobRow, ApiError> {
+    let row = sqlx::query(
+        r#"
+        select
+            id,
+            application_id,
+            upload_session_id,
+            status,
+            archive_version,
+            archive_sha256,
+            run_count,
+            imported_run_count,
+            error_payload,
+            result_payload,
+            created_at,
+            updated_at,
+            started_at,
+            finished_at
+        from run_archive_import_jobs
+        where id = $1
+          and application_id = $2
+        "#,
+    )
+    .bind(job_id)
+    .bind(application_id)
+    .fetch_optional(state.store.pool())
+    .await?
+    .ok_or(ControlPlaneError::NotFound("run_archive_import_job"))?;
+
+    Ok(RunArchiveImportJobRow {
+        job_id: row.get("id"),
+        application_id: row.get("application_id"),
+        upload_session_id: row.get("upload_session_id"),
+        status: row.get("status"),
+        archive_version: row.get("archive_version"),
+        archive_sha256: row.get("archive_sha256"),
+        run_count: row.get("run_count"),
+        imported_run_count: row.get("imported_run_count"),
+        error_payload: row.get("error_payload"),
+        result_payload: row.get("result_payload"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        started_at: row.get("started_at"),
+        finished_at: row.get("finished_at"),
+    })
+}
+
+async fn to_import_job_response(
+    state: &Arc<ApiState>,
+    row: RunArchiveImportJobRow,
+) -> Result<RunArchiveImportJobResponse, ApiError> {
+    let mapping_rows = sqlx::query(
+        r#"
+        select source_id, target_id
+        from run_archive_import_mappings
+        where job_id = $1
+          and entity_kind = 'flow_run'
+        order by created_at asc, source_id asc
+        "#,
+    )
+    .bind(row.job_id)
+    .fetch_all(state.store.pool())
+    .await?;
+    let source_to_target_run_ids = mapping_rows
+        .into_iter()
+        .map(|row| RunArchiveImportRunMappingResponse {
+            source_run_id: row.get::<String, _>("source_id"),
+            target_run_id: row.get::<Uuid, _>("target_id").to_string(),
+        })
+        .collect();
+
+    Ok(RunArchiveImportJobResponse {
+        job_id: row.job_id.to_string(),
+        application_id: row.application_id.to_string(),
+        upload_session_id: row.upload_session_id.to_string(),
+        status: row.status,
+        archive_version: row.archive_version,
+        archive_sha256: row.archive_sha256,
+        run_count: row.run_count,
+        imported_run_count: row.imported_run_count,
+        source_to_target_run_ids,
+        error_payload: row.error_payload,
+        result_payload: row.result_payload,
+        created_at: application_logs::format_time(row.created_at),
+        updated_at: application_logs::format_time(row.updated_at),
+        started_at: application_logs::format_optional_time(row.started_at),
+        finished_at: application_logs::format_optional_time(row.finished_at),
+    })
+}
+
+fn to_upload_session_response(row: RunArchiveUploadSessionRow) -> RunArchiveUploadSessionResponse {
+    RunArchiveUploadSessionResponse {
+        session_id: row.session_id.to_string(),
+        application_id: row.application_id.to_string(),
+        status: row.status,
+        filename: row.filename,
+        total_size_bytes: row.total_size_bytes,
+        received_bytes: row.received_bytes,
+        expected_sha256: row.expected_sha256,
+        created_at: application_logs::format_time(row.created_at),
+        updated_at: application_logs::format_time(row.updated_at),
+    }
+}
+
+fn parse_run_archive_v1(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> {
+    let archive: RunArchiveV1Response = serde_json::from_slice(bytes)?;
+    if archive.archive_version != RUN_ARCHIVE_VERSION
+        || archive.manifest.archive_version != RUN_ARCHIVE_VERSION
+        || archive.manifest.archive_semantics != APPLICATION_RUN_ARCHIVE_SEMANTICS
+    {
+        return Err(ControlPlaneError::InvalidInput("archive_version").into());
+    }
+    let content_sha256 = sha256_bytes(&serde_json::to_vec(&archive.entries)?);
+    if normalize_sha256(&content_sha256) != normalize_sha256(&archive.manifest.content_sha256) {
+        return Err(ControlPlaneError::InvalidInput("archive_content_sha256").into());
+    }
+    if normalize_sha256(&archive.manifest.checksum)
+        != normalize_sha256(&archive.manifest.content_sha256)
+        || normalize_sha256(&archive.content_digest)
+            != normalize_sha256(&archive.manifest.content_sha256)
+    {
+        return Err(ControlPlaneError::InvalidInput("archive_checksum").into());
+    }
+    if archive.entries.is_empty()
+        || archive.entries.len() != archive.manifest.run_count
+        || archive.entries.len() != archive.manifest.entries.len()
+    {
+        return Err(ControlPlaneError::InvalidInput("archive_entries").into());
+    }
+    for (entry, manifest_entry) in archive.entries.iter().zip(&archive.manifest.entries) {
+        if entry.source_run_id != manifest_entry.source_run_id {
+            return Err(ControlPlaneError::InvalidInput("archive_entries").into());
+        }
+        let mut entry_without_digest = entry.clone();
+        entry_without_digest.content_digest.clear();
+        let entry_content_digest = sha256_bytes(&serde_json::to_vec(&entry_without_digest)?);
+        if normalize_sha256(&entry_content_digest) != normalize_sha256(&entry.content_digest) {
+            return Err(ControlPlaneError::InvalidInput("archive_entry_digest").into());
+        }
+        let entry_sha256 = sha256_bytes(&serde_json::to_vec(entry)?);
+        if normalize_sha256(&entry_sha256) != normalize_sha256(&manifest_entry.content_sha256) {
+            return Err(ControlPlaneError::InvalidInput("archive_entry_sha256").into());
+        }
+        if normalize_sha256(&entry.content_digest) != normalize_sha256(&manifest_entry.content_digest)
+        {
+            return Err(ControlPlaneError::InvalidInput("archive_entry_digest").into());
+        }
+    }
+
+    Ok(archive)
+}
+
+fn records_to_json_values<T: Serialize>(
+    records: Vec<T>,
+) -> Result<Vec<serde_json::Value>, ApiError> {
+    records
+        .into_iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ApiError::from)
+}
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    format!("sha256:{:x}", Sha256::digest(bytes))
+}
+
+fn normalize_sha256(value: &str) -> String {
+    value
+        .trim()
+        .strip_prefix("sha256:")
+        .unwrap_or(value.trim())
+        .to_ascii_lowercase()
+}
+
+fn header_value(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(ToString::to_string)
+}
+
+fn application_run_archive_filename(
+    application_name: &str,
+    exported_at: &str,
+    run_count: usize,
+) -> String {
+    let timestamp = exported_at
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+    format!(
+        "1flowbase-run-archive-{}-{}-{}runs.json",
+        safe_filename_segment(application_name),
+        timestamp,
+        run_count
+    )
+}

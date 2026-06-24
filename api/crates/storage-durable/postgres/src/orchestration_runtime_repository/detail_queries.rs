@@ -51,6 +51,15 @@ pub(super) async fn fetch_flow_run_for_application(
         from flow_runs
         where application_id = $1
           and id = $2
+          and (
+              flow_runs.import_job_id is null
+              or exists (
+                  select 1
+                  from run_archive_import_jobs import_jobs
+                  where import_jobs.id = flow_runs.import_job_id
+                    and import_jobs.status = 'succeeded'
+              )
+          )
         "#,
     )
     .bind(application_id)

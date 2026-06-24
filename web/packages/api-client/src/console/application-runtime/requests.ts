@@ -3,6 +3,8 @@ import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 import { ApiClientError } from '../../errors';
 import { apiFetch, apiFetchBlob } from '../../transport';
 import type {
+  ConsoleApplicationRunArchive,
+  ConsoleApplicationRunArchiveVersionInput,
   ConsoleApplicationRunDetail,
   ConsoleApplicationRunMonitoringReport,
   ConsoleApplicationRunOverview,
@@ -14,6 +16,10 @@ import type {
   ConsoleApplicationRunTraceToolCallbackContent,
   ConsoleApplicationRunTraceTree,
   ConsoleApplicationRunResumeTimeline,
+  ConsoleRunArchiveChunkUpload,
+  ConsoleRunArchiveImportJob,
+  ConsoleRunArchiveUploadSession,
+  ConsoleRunArchiveUploadSessionCreateInput,
   ConsoleDebugVariableSnapshot,
   ConsoleNodeLastRun,
   ConsoleRuntimeDebugArtifactsResolveResponse,
@@ -41,6 +47,15 @@ function traceNodeArtifactPreviewQueryString(
     searchParams.append('artifact_preview_field', fieldPath);
   }
 
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : '';
+}
+
+function archiveVersionQueryString(input?: ConsoleApplicationRunArchiveVersionInput) {
+  const searchParams = new URLSearchParams();
+  if (input?.archive_version !== undefined) {
+    searchParams.set('archive_version', String(input.archive_version));
+  }
   const queryString = searchParams.toString();
   return queryString ? `?${queryString}` : '';
 }
@@ -247,6 +262,109 @@ export function exportConsoleApplicationRunsTraceDumpZip(
       run_ids: runIds
     },
     csrfToken,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunArchive(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string,
+  input?: ConsoleApplicationRunArchiveVersionInput
+) {
+  return apiFetch<ConsoleApplicationRunArchive>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}/archive` +
+      archiveVersionQueryString(input),
+    method: 'GET',
+    baseUrl,
+    unwrapSuccess: false
+  });
+}
+
+export function createConsoleApplicationRunsArchive(
+  applicationId: string,
+  runIds: string[],
+  csrfToken: string,
+  baseUrl?: string,
+  input: ConsoleApplicationRunArchiveVersionInput = {}
+) {
+  return apiFetch<ConsoleApplicationRunArchive>({
+    path: `/api/console/applications/${applicationId}/logs/runs/archive`,
+    method: 'POST',
+    body: {
+      ...input,
+      run_ids: runIds
+    },
+    csrfToken,
+    baseUrl,
+    unwrapSuccess: false
+  });
+}
+
+export function createConsoleRunArchiveUploadSession(
+  applicationId: string,
+  input: ConsoleRunArchiveUploadSessionCreateInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveUploadSession>({
+    path: `/api/console/applications/${applicationId}/logs/runs/archive/import-sessions`,
+    method: 'POST',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function uploadConsoleRunArchiveChunk(
+  applicationId: string,
+  sessionId: string,
+  chunkIndex: number,
+  chunk: BodyInit,
+  chunkSha256: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveChunkUpload>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/archive/import-sessions/` +
+      `${sessionId}/chunks/${chunkIndex}`,
+    method: 'PUT',
+    rawBody: chunk,
+    contentType: 'application/octet-stream',
+    headers: {
+      'x-chunk-sha256': chunkSha256
+    },
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function completeConsoleRunArchiveUploadSession(
+  applicationId: string,
+  sessionId: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveImportJob>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/archive/import-sessions/` +
+      `${sessionId}/complete`,
+    method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function getConsoleRunArchiveImportJob(
+  applicationId: string,
+  jobId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveImportJob>({
+    path: `/api/console/applications/${applicationId}/logs/runs/archive/import-jobs/${jobId}`,
+    method: 'GET',
     baseUrl
   });
 }

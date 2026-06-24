@@ -150,7 +150,7 @@ export function getApplicationRunsTableColumns(
   {
     key: 'action',
     title: t('auto.operation'),
-    width: 140
+    width: 180
   }
   ];
 }

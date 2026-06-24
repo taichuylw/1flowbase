@@ -536,6 +536,13 @@ fn visible_application_run_log_summary_filter_sql(summary_table: &str) -> String
             where runs.id = {summary_table}.flow_run_id
               and ({hidden_internal_run_filter})
         )
+        and exists (
+            select 1
+            from flow_runs runs
+            left join run_archive_import_jobs import_jobs on import_jobs.id = runs.import_job_id
+            where runs.id = {summary_table}.flow_run_id
+              and (runs.import_job_id is null or import_jobs.status = 'succeeded')
+        )
         "#,
         hidden_internal_run_filter = hidden_internal_run_filter
     )
