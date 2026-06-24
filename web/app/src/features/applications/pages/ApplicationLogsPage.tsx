@@ -976,7 +976,7 @@ export function ApplicationLogsPage({
           </Tooltip>
           <input
             ref={archiveImportInputRef}
-            accept="application/json,.json"
+            accept="application/json,.json,application/zip,.zip"
             data-testid="application-logs-archive-import-input"
             onChange={handleArchiveImportInputChange}
             style={{ display: 'none' }}

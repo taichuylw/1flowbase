@@ -992,8 +992,47 @@ fn to_upload_session_response(row: RunArchiveUploadSessionRow) -> RunArchiveUplo
     }
 }
 
+fn extract_archive_from_zip(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> {
+    use std::io::Read;
+
+    let cursor = std::io::Cursor::new(bytes);
+    let mut zip = zip::ZipArchive::new(cursor)
+        .map_err(|_| ControlPlaneError::InvalidInput("archive_not_valid_zip"))?;
+
+    // Look for archive.json or any .json file at root level
+    let mut archive_content: Option<Vec<u8>> = None;
+
+    for i in 0..zip.len() {
+        let mut file = zip.by_index(i)
+            .map_err(|_| ControlPlaneError::InvalidInput("archive_zip_read_error"))?;
+        let file_name = file.name().to_string();
+
+        // Accept archive.json or any root-level .json file (not in subdirectories)
+        if file_name == "archive.json" || (file_name.ends_with(".json") && !file_name.contains('/')) {
+            let mut content = Vec::new();
+            file.read_to_end(&mut content)
+                .map_err(|_| ControlPlaneError::InvalidInput("archive_zip_read_error"))?;
+            archive_content = Some(content);
+            break;
+        }
+    }
+
+    let content = archive_content
+        .ok_or(ControlPlaneError::InvalidInput("archive_json_not_found_in_zip"))?;
+
+    serde_json::from_slice(&content)
+        .map_err(|_| ControlPlaneError::InvalidInput("archive_json_invalid").into())
+}
+
 fn parse_run_archive_v1(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> {
-    let archive: RunArchiveV1Response = serde_json::from_slice(bytes)?;
+    // Try to parse as JSON first (single file archive)
+    let archive: RunArchiveV1Response = match serde_json::from_slice(bytes) {
+        Ok(archive) => archive,
+        Err(_) => {
+            // If JSON parsing fails, try to extract from ZIP
+            extract_archive_from_zip(bytes)?
+        }
+    };
     if archive.archive_version != RUN_ARCHIVE_VERSION
         || archive.manifest.archive_version != RUN_ARCHIVE_VERSION
         || archive.manifest.archive_semantics != APPLICATION_RUN_ARCHIVE_SEMANTICS

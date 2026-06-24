@@ -1518,3 +1518,62 @@ async fn application_runtime_routes_logs_export_keeps_shape_when_projection_fail
     );
     assert_eq!(dump["trace_tree"]["nodes"], json!([]));
 }
+
+#[tokio::test]
+async fn application_runtime_routes_logs_archive_import_accepts_zip_format() {
+    let (state, _) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let source_run_id =
+        start_full_debug_run(&app, &cookie, &csrf, &application_id, "zip import test").await;
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &source_run_id,
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    // Export as JSON
+    let (export_status, archive_json_bytes) =
+        get_run_archive(&app, &cookie, &application_id, &source_run_id, 1).await;
+    assert_eq!(
+        export_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&archive_json_bytes)
+    );
+
+    // Wrap the JSON in a ZIP file with archive.json
+    use std::io::Write;
+    let cursor = std::io::Cursor::new(Vec::new());
+    let mut zip_writer = zip::ZipWriter::new(cursor);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    zip_writer.start_file("archive.json", options).unwrap();
+    zip_writer.write_all(&archive_json_bytes).unwrap();
+    let archive_zip_bytes = zip_writer.finish().unwrap().into_inner();
+
+    // Import the ZIP file
+    let job = import_archive_bytes(&app, &cookie, &csrf, &application_id, &archive_zip_bytes).await;
+    assert_eq!(job["data"]["status"], json!("succeeded"), "{job}");
+    assert_eq!(job["data"]["imported_run_count"], json!(1));
+
+    let target_run_id = job["data"]["source_to_target_run_ids"][0]["target_run_id"]
+        .as_str()
+        .unwrap();
+    assert_ne!(target_run_id, source_run_id);
+
+    // Verify the imported run
+    let (overview_status, overview_payload) =
+        get_run_overview(&app, &cookie, &application_id, target_run_id).await;
+    assert_eq!(overview_status, StatusCode::OK, "{}", overview_payload);
+    assert_eq!(
+        overview_payload["data"]["flow_run"]["input_payload"]["node-start"]["query"],
+        json!("zip import test")
+    );
+}
