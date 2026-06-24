@@ -3,8 +3,11 @@ import type { AgentFlowTraceItem } from '../../api/runtime';
 export interface ConversationLogTraceNodeSummary {
   trace_node_id: string;
   stable_locator?: string;
+  parent_trace_node_id?: string | null;
   node_kind: string;
+  flow_run_id?: string;
   node_run_id?: string | null;
+  callback_task_id?: string | null;
   node_id?: string | null;
   node_type?: string | null;
   node_mode?: string | null;
@@ -17,6 +20,11 @@ export interface ConversationLogTraceNodeSummary {
   has_children: boolean;
   child_count?: number;
   has_content: boolean;
+  source_flow_run_id?: string | null;
+  source_trace_node_id?: string | null;
+  parent_callback_task_id?: string | null;
+  parent_tool_call_id?: string | null;
+  trace_relation_kind?: string | null;
 }
 
 export interface ConversationLogTraceProjectionStatus {
@@ -159,6 +167,15 @@ export function mapTraceSummaryToTraceItem(
 
 export function isToolModeTraceNode(node: ConversationLogTraceNodeSummary) {
   return node.node_kind === 'fusion' || node.node_kind === 'route';
+}
+
+export function isTraceGroupNode(node: ConversationLogTraceNodeSummary) {
+  return (
+    node.node_kind === 'tool_group' ||
+    node.node_kind === 'agent_group' ||
+    node.node_type === 'tools' ||
+    node.node_type === 'agents'
+  );
 }
 
 export function toolModeFromTraceNodes(

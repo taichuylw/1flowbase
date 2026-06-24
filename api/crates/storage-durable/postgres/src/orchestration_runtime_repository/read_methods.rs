@@ -692,13 +692,16 @@ impl PgControlPlaneStore {
             return Ok(None);
         };
 
+        let callback_tasks = list_callback_tasks_for_flow_run(self, flow_run.id).await?;
         Ok(Some(domain::ApplicationRunDetail {
             node_runs: list_node_runs_for_flow_run(self, flow_run.id).await?,
             checkpoints: list_checkpoints_for_flow_run(self, flow_run.id).await?,
-            callback_tasks: list_callback_tasks_for_flow_run(self, flow_run.id).await?,
             events: list_events_for_flow_run(self, flow_run.id).await?,
             stitched_trace: list_stitched_trace_for_flow_run(self, &flow_run).await?,
+            subagent_traces: list_subagent_traces_for_flow_run(self, &flow_run, &callback_tasks)
+                .await?,
             flow_run,
+            callback_tasks,
         }))
     }
 
@@ -713,13 +716,16 @@ impl PgControlPlaneStore {
             return Ok(None);
         };
 
+        let callback_tasks = list_callback_tasks_for_flow_run(self, flow_run.id).await?;
         Ok(Some(domain::ApplicationRunDetail {
             node_runs: list_node_runs_for_flow_run(self, flow_run.id).await?,
             checkpoints: list_checkpoints_for_flow_run(self, flow_run.id).await?,
-            callback_tasks: list_callback_tasks_for_flow_run(self, flow_run.id).await?,
             events: list_events_for_flow_run(self, flow_run.id).await?,
             stitched_trace: list_stitched_trace_for_flow_run(self, &flow_run).await?,
+            subagent_traces: list_subagent_traces_for_flow_run(self, &flow_run, &callback_tasks)
+                .await?,
             flow_run,
+            callback_tasks,
         }))
     }
 

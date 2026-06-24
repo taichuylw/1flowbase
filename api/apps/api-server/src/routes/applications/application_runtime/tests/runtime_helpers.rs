@@ -196,6 +196,7 @@ fn application_run_statistics_counts_indexed_llm_tool_callbacks() {
         callback_tasks: vec![callback_task],
         events: Vec::new(),
         stitched_trace: Vec::new(),
+        subagent_traces: Vec::new(),
     };
 
     let statistics = application_run_statistics(&detail);
@@ -313,6 +314,11 @@ fn trace_node_content_response_serializes_refs_without_heavy_containers() {
             child_count: 0,
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
             projection_version: APPLICATION_RUN_TRACE_PROJECTION_VERSION,
             source_watermark: "source:1".to_string(),
             created_at: now,

@@ -75,6 +75,7 @@ fn run_detail_response_moves_waiting_prefix_answer_into_answer_snapshot() {
         callback_tasks: Vec::new(),
         events: Vec::new(),
         stitched_trace: Vec::new(),
+        subagent_traces: Vec::new(),
     };
 
     let response = to_application_run_detail_response(&application, detail);
@@ -196,6 +197,7 @@ fn run_detail_response_exposes_stitched_trace_sources() {
             events: Vec::new(),
             runtime_events: Vec::new(),
         }],
+        subagent_traces: Vec::new(),
     };
 
     let response = to_application_run_detail_response(&application, detail);
@@ -287,6 +289,7 @@ fn visible_internal_llm_route_trace_uses_precise_node_run_id_before_reused_node_
         callback_tasks: Vec::new(),
         events: Vec::new(),
         stitched_trace: Vec::new(),
+        subagent_traces: Vec::new(),
     };
     let runtime_events = vec![test_runtime_event_record(
         flow_run_id,
@@ -431,6 +434,7 @@ fn visible_internal_llm_fusion_branch_trace_uses_branch_node_run_payloads() {
         callback_tasks: Vec::new(),
         events: Vec::new(),
         stitched_trace: Vec::new(),
+        subagent_traces: Vec::new(),
     };
     let runtime_events = vec![test_runtime_event_record(
         flow_run_id,
@@ -574,6 +578,7 @@ fn run_detail_response_hides_historical_waiting_prefix_after_run_finishes() {
         callback_tasks: Vec::new(),
         events: Vec::new(),
         stitched_trace: Vec::new(),
+        subagent_traces: Vec::new(),
     };
 
     let response = to_application_run_detail_response(&application, detail);

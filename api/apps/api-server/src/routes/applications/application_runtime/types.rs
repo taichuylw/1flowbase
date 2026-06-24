@@ -416,6 +416,11 @@ pub struct ApplicationRunTraceNodeSummaryResponse {
     pub has_children: bool,
     pub child_count: i64,
     pub has_content: bool,
+    pub source_flow_run_id: Option<String>,
+    pub source_trace_node_id: Option<String>,
+    pub parent_callback_task_id: Option<String>,
+    pub parent_tool_call_id: Option<String>,
+    pub trace_relation_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
@@ -472,6 +477,11 @@ pub struct ApplicationRunTraceExportNodeResponse {
     pub has_children: bool,
     pub child_count: i64,
     pub has_content: bool,
+    pub source_flow_run_id: Option<String>,
+    pub source_trace_node_id: Option<String>,
+    pub parent_callback_task_id: Option<String>,
+    pub parent_tool_call_id: Option<String>,
+    pub trace_relation_kind: Option<String>,
     pub content_kind: Option<String>,
     pub source_refs: serde_json::Value,
     pub detail_refs: serde_json::Value,

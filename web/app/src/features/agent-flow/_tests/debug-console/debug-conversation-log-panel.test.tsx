@@ -537,6 +537,321 @@ describe('debug conversation log panel', () => {
     expect(traceLoader.loadContent).not.toHaveBeenCalled();
   });
 
+  test('renders backend-linked agent groups as subagent LLM nodes with their own tools', async () => {
+    const rootNode = {
+      trace_node_id: 'node_run:parent-llm',
+      node_kind: 'node_run',
+      flow_run_id: 'run-application-log',
+      node_run_id: 'parent-llm',
+      node_id: 'node-parent-llm',
+      node_type: 'llm',
+      node_alias: 'Parent LLM',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:10Z',
+      duration_ms: 9000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: true
+    };
+    const agentsNode = {
+      trace_node_id: 'agent_group:parent-llm',
+      parent_trace_node_id: rootNode.trace_node_id,
+      node_kind: 'agent_group',
+      flow_run_id: 'run-application-log',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'agents',
+      node_alias: 'Agents',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:09Z',
+      duration_ms: 7000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: false
+    };
+    const subagentNode = {
+      trace_node_id: 'subagent_node_run:research-agent',
+      parent_trace_node_id: agentsNode.trace_node_id,
+      node_kind: 'node_run',
+      flow_run_id: 'run-application-log',
+      node_run_id: 'research-agent-node-run',
+      node_id: 'research-agent-node',
+      node_type: 'llm',
+      node_alias: 'Research agent',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:03Z',
+      finished_at: '2026-04-25T10:00:08Z',
+      duration_ms: 5000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: true,
+      source_flow_run_id: 'run-subagent-research',
+      source_trace_node_id: 'node_run:research-agent-node-run',
+      parent_callback_task_id: 'callback-agent-task',
+      parent_tool_call_id: 'tooluse-agent',
+      trace_relation_kind: 'subagent'
+    };
+    const subagentToolsNode = {
+      trace_node_id: 'tool_group:research-agent',
+      parent_trace_node_id: subagentNode.trace_node_id,
+      node_kind: 'tool_group',
+      flow_run_id: 'run-application-log',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tools',
+      node_alias: 'Tools',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:04Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: false
+    };
+    const subagentToolCallbackNode = {
+      trace_node_id: 'tool_callback:subagent-bash',
+      parent_trace_node_id: subagentToolsNode.trace_node_id,
+      node_kind: 'tool_callback',
+      flow_run_id: 'run-application-log',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tool',
+      node_mode: null,
+      node_alias: 'Bash',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:04Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: false,
+      child_count: 0,
+      has_content: true
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi
+        .fn()
+        .mockImplementation(
+          async (_runId: string, parentTraceNodeId: string) => ({
+            items:
+              parentTraceNodeId === rootNode.trace_node_id
+                ? [agentsNode]
+                : parentTraceNodeId === agentsNode.trace_node_id
+                  ? [subagentNode]
+                  : parentTraceNodeId === subagentNode.trace_node_id
+                    ? [subagentToolsNode]
+                    : parentTraceNodeId === subagentToolsNode.trace_node_id
+                      ? [subagentToolCallbackNode]
+                      : [],
+            page_info: {
+              has_more: false,
+              next_cursor: null,
+              page_size: 20
+            }
+          })
+        ),
+      loadContent: vi
+        .fn()
+        .mockImplementation(async (_runId: string, traceNodeId: string) => ({
+          trace_node_id: traceNodeId,
+          node_kind:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? 'tool_callback'
+              : 'node_run',
+          content_kind:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? 'tool_callback'
+              : 'node_run',
+          payload:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? {
+                  id: 'tooluse-subagent-bash',
+                  name: 'Bash',
+                  callback_status: 'returned',
+                  execution_status: 'succeeded',
+                  request_payload: {
+                    arguments: {
+                      command: 'rg agent'
+                    }
+                  },
+                  callback_payload: {
+                    content: 'agent relation found'
+                  },
+                  parsed_result: {
+                    content: 'agent relation found'
+                  },
+                  duration_ms: 1000
+                }
+              : {
+                  payload_index: {
+                    node_run_count: 1,
+                    checkpoint_count: 0,
+                    event_count: 0
+                  }
+                },
+          detail_refs:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? []
+              : [
+                  {
+                    detail_ref_id: 'node_run',
+                    detail_kind: 'node_run',
+                    source_kind: 'node_run',
+                    source_locator:
+                      traceNodeId === subagentNode.trace_node_id
+                        ? 'research-agent-node-run'
+                        : 'parent-llm',
+                    count: 1
+                  }
+                ]
+        })),
+      loadDetail: vi
+        .fn()
+        .mockImplementation(
+          async (
+            _runId: string,
+            traceNodeId: string,
+            _detailRefId: string
+          ) => ({
+            trace_node_id: traceNodeId,
+            detail_ref_id: 'node_run',
+            detail_kind: 'node_run',
+            payload: {
+              node_run:
+                traceNodeId === subagentNode.trace_node_id
+                  ? {
+                      id: 'research-agent-node-run',
+                      node_id: 'research-agent-node',
+                      node_type: 'llm',
+                      node_alias: 'Research agent',
+                      status: 'succeeded',
+                      input_payload: {
+                        prompt: 'Investigate agent projection'
+                      },
+                      output_payload: {
+                        answer: 'Use a dedicated Agents group'
+                      },
+                      error_payload: null,
+                      metrics_payload: {},
+                      debug_payload: {
+                        provider: 'anthropic'
+                      },
+                      started_at: '2026-04-25T10:00:03Z',
+                      finished_at: '2026-04-25T10:00:08Z'
+                    }
+                  : {
+                      id: 'parent-llm',
+                      node_id: 'node-parent-llm',
+                      node_type: 'llm',
+                      node_alias: 'Parent LLM',
+                      status: 'succeeded',
+                      input_payload: {
+                        prompt: 'Coordinate subagents'
+                      },
+                      output_payload: {
+                        answer: 'Subagent done'
+                      },
+                      error_payload: null,
+                      metrics_payload: {},
+                      debug_payload: {},
+                      started_at: '2026-04-25T10:00:01Z',
+                      finished_at: '2026-04-25T10:00:10Z'
+                    }
+            }
+          })
+        )
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-subagents',
+          role: 'assistant',
+          content: 'Subagent done',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Parent LLM/ }));
+
+    const parentDetail = await screen.findByRole('region', {
+      name: 'Parent LLM 节点详情'
+    });
+    const agentsButton = await within(parentDetail).findByRole('button', {
+      name: /Agents/
+    });
+    expect(agentsButton).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(parentDetail).queryByRole('region', {
+        name: 'Agents 节点详情'
+      })
+    ).not.toBeInTheDocument();
+    expect(traceLoader.loadContent).not.toHaveBeenCalledWith(
+      'run-application-log',
+      agentsNode.trace_node_id
+    );
+
+    fireEvent.click(agentsButton);
+    await waitFor(() =>
+      expect(traceLoader.loadChildren).toHaveBeenCalledWith(
+        'run-application-log',
+        agentsNode.trace_node_id,
+        undefined
+      )
+    );
+    const subagentButton = await within(parentDetail).findByRole('button', {
+      name: /Research agent/
+    });
+    fireEvent.click(subagentButton);
+
+    await waitFor(() =>
+      expect(traceLoader.loadContent).toHaveBeenCalledWith(
+        'run-application-log',
+        subagentNode.trace_node_id
+      )
+    );
+    await waitFor(() =>
+      expect(traceLoader.loadDetail).toHaveBeenCalledWith(
+        'run-application-log',
+        subagentNode.trace_node_id,
+        'node_run'
+      )
+    );
+    const subagentDetail = await within(parentDetail).findByRole('region', {
+      name: 'Research agent 节点详情'
+    });
+    expect(
+      within(subagentDetail).getByLabelText('输入 JSON')
+    ).toHaveTextContent('Investigate agent projection');
+    expect(
+      within(subagentDetail).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('anthropic');
+    expect(
+      within(subagentDetail).getByLabelText('输出 JSON')
+    ).toHaveTextContent('Use a dedicated Agents group');
+
+    fireEvent.click(
+      await within(subagentDetail).findByRole('button', { name: /Tools/ })
+    );
+    expect(
+      await within(subagentDetail).findByRole('button', { name: /Bash/ })
+    ).toBeInTheDocument();
+  }, 10_000);
+
   test('loads lazy trace tool details only when a tool callback expands', async () => {
     const rootNode = {
       trace_node_id: 'node_run:node-run-llm',

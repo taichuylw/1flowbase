@@ -726,10 +726,12 @@ pub async fn get_application_run_trace_node_detail(
     let payload = match detail_kind.as_str() {
         "node_run" => {
             let node_run_ids = trace_node_content_node_run_ids(&content.payload)?;
+            let detail_flow_run_id =
+                trace_node_content_source_flow_run_id(&content.payload)?.unwrap_or(run_id);
             let node_runs =
                 <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_trace_node_run_details(
                     &state.store,
-                    run_id,
+                    detail_flow_run_id,
                     node_run_ids,
                 )
                 .await?;
@@ -740,7 +742,7 @@ pub async fn get_application_run_trace_node_detail(
                     state.clone(),
                     context.actor.current_workspace_id,
                     id,
-                    run_id,
+                    detail_flow_run_id,
                     node_run,
                     preview_request,
                 )
@@ -754,11 +756,13 @@ pub async fn get_application_run_trace_node_detail(
             let node_run_ids = trace_node_content_node_run_ids(&content.payload)?
                 .into_iter()
                 .collect::<HashSet<_>>();
+            let detail_flow_run_id =
+                trace_node_content_source_flow_run_id(&content.payload)?.unwrap_or(run_id);
             let detail =
                 <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
                     &state.store,
                     id,
-                    run_id,
+                    detail_flow_run_id,
                 )
                 .await?
                 .ok_or(ControlPlaneError::NotFound("flow_run"))?;
@@ -779,11 +783,13 @@ pub async fn get_application_run_trace_node_detail(
             let node_run_ids = trace_node_content_node_run_ids(&content.payload)?
                 .into_iter()
                 .collect::<HashSet<_>>();
+            let detail_flow_run_id =
+                trace_node_content_source_flow_run_id(&content.payload)?.unwrap_or(run_id);
             let detail =
                 <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
                     &state.store,
                     id,
-                    run_id,
+                    detail_flow_run_id,
                 )
                 .await?
                 .ok_or(ControlPlaneError::NotFound("flow_run"))?;

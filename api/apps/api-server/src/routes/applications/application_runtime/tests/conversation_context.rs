@@ -319,6 +319,7 @@ async fn run_conversation_reads_llm_system_when_run_input_system_is_split_from_p
         callback_tasks: Vec::new(),
         events: Vec::new(),
         stitched_trace: Vec::new(),
+        subagent_traces: Vec::new(),
     };
 
     let load_debug_artifact = |_| async { None::<serde_json::Value> };

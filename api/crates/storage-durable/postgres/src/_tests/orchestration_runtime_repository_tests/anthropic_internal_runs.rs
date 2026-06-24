@@ -213,3 +213,404 @@ async fn claude_code_builtin_agent_run_is_hidden_from_business_run_logs() {
         .unwrap();
     assert!(conversation_runs.items.is_empty());
 }
+
+#[tokio::test]
+async fn claude_code_agent_tool_links_unique_subagent_trace_to_parent_detail() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-06-12 18:02:05 UTC);
+    let prompt = "Search the codebase for Agent trace projection.";
+
+    let parent_run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "claude-code-parent".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "Parent Claude Code run".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": "Coordinate Agent workers"
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("claude-code-user".to_string()),
+            external_conversation_id: Some("claude-code-session".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+    let parent_node_run = seed_node_run_for(
+        &store,
+        &parent_run,
+        "node-parent-llm",
+        "llm",
+        "Parent LLM",
+        json!({ "prompt_messages": ["Coordinate Agent workers"] }),
+        started_at + Duration::seconds(1),
+    )
+    .await;
+    let parent_callback_task =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_callback_task(
+            &store,
+            &CreateCallbackTaskInput {
+                flow_run_id: parent_run.id,
+                node_run_id: parent_node_run.id,
+                callback_kind: "llm_tool_calls".to_string(),
+                request_payload: json!({
+                    "tool_calls": [
+                        {
+                            "id": "tooluse-agent-1",
+                            "name": "Agent",
+                            "arguments": {
+                                "description": "Research trace projection",
+                                "prompt": prompt
+                            }
+                        }
+                    ]
+                }),
+                external_ref_payload: None,
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"
+        update flow_run_callback_tasks
+        set status = 'completed',
+            created_at = $2,
+            completed_at = $3
+        where id = $1
+        "#,
+    )
+    .bind(parent_callback_task.id)
+    .bind(started_at + Duration::seconds(2))
+    .bind(started_at + Duration::seconds(10))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    let subagent_run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "claude-code-subagent".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "Research trace projection".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": prompt,
+                    "system": "cc_is_subagent=true\nAgent threads always have their cwd reset between bash calls; the parent agent reads your text output."
+                }
+            }),
+            started_at: started_at + Duration::seconds(4),
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("claude-code-user".to_string()),
+            external_conversation_id: Some("claude-code-session".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+    let subagent_node_run = seed_node_run_for(
+        &store,
+        &subagent_run,
+        "node-subagent-llm",
+        "llm",
+        "Research agent",
+        json!({ "prompt_messages": [prompt] }),
+        started_at + Duration::seconds(5),
+    )
+    .await;
+    let subagent_callback_task =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_callback_task(
+            &store,
+            &CreateCallbackTaskInput {
+                flow_run_id: subagent_run.id,
+                node_run_id: subagent_node_run.id,
+                callback_kind: "llm_tool_calls".to_string(),
+                request_payload: json!({
+                    "tool_calls": [
+                        {
+                            "id": "tooluse-bash-1",
+                            "name": "Bash",
+                            "arguments": {
+                                "command": "rg trace_projection"
+                            }
+                        }
+                    ]
+                }),
+                external_ref_payload: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let projection_source =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_trace_projection_source(
+            &store,
+            seeded.application_id,
+            parent_run.id,
+        )
+        .await
+        .unwrap()
+        .expect("parent run projection source should be available");
+
+    assert_eq!(projection_source.subagent_traces.len(), 1);
+    let subagent_trace = &projection_source.subagent_traces[0];
+    assert_eq!(subagent_trace.parent_tool_call_id, "tooluse-agent-1");
+    assert_eq!(
+        subagent_trace.parent_callback_task_id,
+        parent_callback_task.id
+    );
+    assert_eq!(subagent_trace.source_flow_run.id, subagent_run.id);
+    assert_eq!(subagent_trace.node_runs.len(), 1);
+    assert_eq!(subagent_trace.node_runs[0].id, subagent_node_run.id);
+    assert_eq!(subagent_trace.callback_tasks.len(), 1);
+    assert_eq!(
+        subagent_trace.callback_tasks[0].id,
+        subagent_callback_task.id
+    );
+
+    let duplicate_subagent_run =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+            &store,
+            &CreateFlowRunInput {
+                actor_user_id: seeded.actor_user_id,
+                application_id: seeded.application_id,
+                flow_id: seeded.flow_id,
+                flow_draft_id: seeded.draft_id,
+                compiled_plan_id: compiled.id,
+                debug_session_id: "claude-code-duplicate-subagent".to_string(),
+                flow_schema_version: compiled.schema_version.clone(),
+                document_hash: compiled.document_hash.clone(),
+                run_mode: FlowRunMode::PublishedApiRun,
+                target_node_id: None,
+                title: "Duplicate trace projection research".to_string(),
+                status: FlowRunStatus::Running,
+                input_payload: json!({
+                    "node-start": {
+                        "query": prompt,
+                        "system": "cc_is_subagent=true"
+                    }
+                }),
+                started_at: started_at + Duration::seconds(6),
+                api_key_id: Some(api_key_id),
+                publication_version_id: Some(Uuid::now_v7()),
+                external_user: Some("claude-code-user".to_string()),
+                external_conversation_id: Some("claude-code-session".to_string()),
+                external_trace_id: None,
+                compatibility_mode: Some("anthropic-messages-v1".to_string()),
+                idempotency_key: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_ne!(duplicate_subagent_run.id, subagent_run.id);
+
+    let ambiguous_projection_source =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_trace_projection_source(
+            &store,
+            seeded.application_id,
+            parent_run.id,
+        )
+        .await
+        .unwrap()
+        .expect("parent run projection source should still be available");
+    assert!(
+        ambiguous_projection_source.subagent_traces.is_empty(),
+        "ambiguous Agent prompt matches must not link any subagent run"
+    );
+}
+
+#[tokio::test]
+async fn claude_code_agent_watermark_counts_batched_agent_tool_calls() {
+    let pool = connect(&isolated_database_url().await).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let store = PgControlPlaneStore::new(pool);
+    let seeded = seed_runtime_base(&store).await;
+    let compiled = seed_compiled_plan(&store, &seeded).await;
+    let api_key_id = seed_application_api_key(&store, &seeded).await;
+    let started_at = datetime!(2026-06-12 19:02:05 UTC);
+    let prompt_a = "Inspect backend Agent relation.";
+    let prompt_b = "Inspect frontend Agent relation.";
+
+    let parent_run = <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+        &store,
+        &CreateFlowRunInput {
+            actor_user_id: seeded.actor_user_id,
+            application_id: seeded.application_id,
+            flow_id: seeded.flow_id,
+            flow_draft_id: seeded.draft_id,
+            compiled_plan_id: compiled.id,
+            debug_session_id: "claude-code-parent-batched".to_string(),
+            flow_schema_version: compiled.schema_version.clone(),
+            document_hash: compiled.document_hash.clone(),
+            run_mode: FlowRunMode::PublishedApiRun,
+            target_node_id: None,
+            title: "Parent batched Agent run".to_string(),
+            status: FlowRunStatus::Running,
+            input_payload: json!({
+                "node-start": {
+                    "query": "Coordinate batched Agent workers"
+                }
+            }),
+            started_at,
+            api_key_id: Some(api_key_id),
+            publication_version_id: Some(Uuid::now_v7()),
+            external_user: Some("claude-code-user".to_string()),
+            external_conversation_id: Some("claude-code-session".to_string()),
+            external_trace_id: None,
+            compatibility_mode: Some("anthropic-messages-v1".to_string()),
+            idempotency_key: None,
+        },
+    )
+    .await
+    .unwrap();
+    let parent_node_run = seed_node_run_for(
+        &store,
+        &parent_run,
+        "node-parent-llm",
+        "llm",
+        "Parent LLM",
+        json!({ "prompt_messages": ["Coordinate batched Agent workers"] }),
+        started_at + Duration::seconds(1),
+    )
+    .await;
+    let parent_callback_task =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_callback_task(
+            &store,
+            &CreateCallbackTaskInput {
+                flow_run_id: parent_run.id,
+                node_run_id: parent_node_run.id,
+                callback_kind: "llm_tool_calls".to_string(),
+                request_payload: json!({
+                    "tool_calls": [
+                        {
+                            "id": "tooluse-agent-a",
+                            "name": "Agent",
+                            "arguments": {
+                                "description": "Backend relation",
+                                "prompt": prompt_a
+                            }
+                        },
+                        {
+                            "id": "tooluse-agent-b",
+                            "name": "Agent",
+                            "arguments": {
+                                "description": "Frontend relation",
+                                "prompt": prompt_b
+                            }
+                        }
+                    ]
+                }),
+                external_ref_payload: None,
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"
+        update flow_run_callback_tasks
+        set status = 'completed',
+            created_at = $2,
+            completed_at = $3
+        where id = $1
+        "#,
+    )
+    .bind(parent_callback_task.id)
+    .bind(started_at + Duration::seconds(2))
+    .bind(started_at + Duration::seconds(10))
+    .execute(store.pool())
+    .await
+    .unwrap();
+
+    for (index, prompt) in [prompt_a, prompt_b].into_iter().enumerate() {
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::create_flow_run(
+            &store,
+            &CreateFlowRunInput {
+                actor_user_id: seeded.actor_user_id,
+                application_id: seeded.application_id,
+                flow_id: seeded.flow_id,
+                flow_draft_id: seeded.draft_id,
+                compiled_plan_id: compiled.id,
+                debug_session_id: format!("claude-code-subagent-batched-{index}"),
+                flow_schema_version: compiled.schema_version.clone(),
+                document_hash: compiled.document_hash.clone(),
+                run_mode: FlowRunMode::PublishedApiRun,
+                target_node_id: None,
+                title: format!("Batched Agent {index}"),
+                status: FlowRunStatus::Running,
+                input_payload: json!({
+                    "node-start": {
+                        "query": prompt,
+                        "system": "cc_is_subagent=true\nAgent threads always have their cwd reset between bash calls; the parent agent reads your text output."
+                    }
+                }),
+                started_at: started_at + Duration::seconds(4 + index as i64),
+                api_key_id: Some(api_key_id),
+                publication_version_id: Some(Uuid::now_v7()),
+                external_user: Some("claude-code-user".to_string()),
+                external_conversation_id: Some("claude-code-session".to_string()),
+                external_trace_id: None,
+                compatibility_mode: Some("anthropic-messages-v1".to_string()),
+                idempotency_key: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let projection_source =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_trace_projection_source(
+            &store,
+            seeded.application_id,
+            parent_run.id,
+        )
+        .await
+        .unwrap()
+        .expect("parent run projection source should be available");
+    assert_eq!(projection_source.subagent_traces.len(), 2);
+
+    let source_watermark =
+        <PgControlPlaneStore as OrchestrationRuntimeRepository>::get_application_run_trace_projection_source_watermark(
+            &store,
+            seeded.application_id,
+            parent_run.id,
+        )
+        .await
+        .unwrap()
+        .expect("parent run projection watermark should be available");
+    assert!(
+        source_watermark.ends_with("/subagents:2"),
+        "batched Agent tool calls must be counted individually in projection watermark: {source_watermark}"
+    );
+}

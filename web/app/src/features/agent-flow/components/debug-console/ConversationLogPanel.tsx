@@ -47,6 +47,7 @@ import type {
 } from './conversation-log-trace-model';
 import {
   findNodeRunDetailRefId,
+  isTraceGroupNode,
   isToolModeTraceNode,
   mapTraceContentToTraceItem,
   mapTraceSummaryToTraceItem,
@@ -610,8 +611,7 @@ function LazyTraceNodeItem({
   runId: string;
   traceLoader: ConversationLogTraceLoader;
 }) {
-  const isToolGroupNode =
-    node.node_kind === 'tool_group' || node.node_type === 'tools';
+  const isGroupNode = isTraceGroupNode(node);
   const [expanded, setExpanded] = useState(false);
   const [childrenState, dispatchChildrenState] = useReducer(
     lazyTraceChildrenReducer,
@@ -619,7 +619,7 @@ function LazyTraceNodeItem({
   );
   const fallbackItem = useMemo(() => mapTraceSummaryToTraceItem(node), [node]);
   const contentQuery = useQuery({
-    enabled: expanded && node.has_content && !isToolGroupNode,
+    enabled: expanded && node.has_content && !isGroupNode,
     queryKey: [
       'conversation-log-trace-node-content',
       runId,
@@ -794,7 +794,7 @@ function LazyTraceNodeItem({
       item={item}
       onToggle={() => setExpanded((current) => !current)}
     >
-      {isToolGroupNode ? (
+      {isGroupNode ? (
         <div className="agent-flow-editor__conversation-log-node-group">
           {childLoadStatusContent}
           {childNodesBeforePayload}

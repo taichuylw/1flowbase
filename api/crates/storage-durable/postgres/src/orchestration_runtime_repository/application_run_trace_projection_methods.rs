@@ -49,6 +49,8 @@ impl PgControlPlaneStore {
         .await?;
         let external_conversation_id: Option<String> = flow_run.get("external_conversation_id");
         let external_user: Option<String> = flow_run.get("external_user");
+        let api_key_id: Option<Uuid> = flow_run.get("api_key_id");
+        let compatibility_mode: Option<String> = flow_run.get("compatibility_mode");
         let stitched_trace_count = if let (Some(external_conversation_id), Some(external_user)) = (
             external_conversation_id
                 .as_deref()
@@ -60,8 +62,6 @@ impl PgControlPlaneStore {
                 .filter(|value| !value.is_empty()),
         ) {
             let current_started_at: OffsetDateTime = flow_run.get("started_at");
-            let api_key_id: Option<Uuid> = flow_run.get("api_key_id");
-            let compatibility_mode: Option<String> = flow_run.get("compatibility_mode");
 
             sqlx::query_scalar::<_, i64>(
                 r#"
@@ -120,6 +120,109 @@ impl PgControlPlaneStore {
         } else {
             0
         };
+        let subagent_trace_count = if let Some(external_conversation_id) = external_conversation_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .filter(|_| compatibility_mode.as_deref() == Some("anthropic-messages-v1"))
+        {
+            sqlx::query_scalar::<_, i64>(
+                r#"
+                with agent_calls as (
+                    select
+                        callback_tasks.id as callback_task_id,
+                        callback_tasks.created_at,
+                        callback_tasks.completed_at,
+                        coalesce(
+                            agent_tool_calls.tool_call ->> 'id',
+                            agent_tool_calls.tool_call ->> 'tool_call_id',
+                            agent_tool_calls.tool_call ->> 'call_id',
+                            md5(agent_tool_calls.tool_call::text)
+                        ) as tool_call_key,
+                        agent_tool_calls.tool_call #>> '{arguments,prompt}' as prompt
+                    from flow_run_callback_tasks callback_tasks
+                    cross join lateral jsonb_array_elements(
+                        coalesce(callback_tasks.request_payload -> 'tool_calls', '[]'::jsonb)
+                    ) as agent_tool_calls(tool_call)
+                    where callback_tasks.flow_run_id = $3
+                      and callback_tasks.callback_kind = 'llm_tool_calls'
+                      and agent_tool_calls.tool_call ->> 'name' = 'Agent'
+                      and nullif(trim(agent_tool_calls.tool_call #>> '{arguments,prompt}'), '') is not null
+                ),
+                matched_agent_calls as (
+                    select
+                        agent_calls.callback_task_id,
+                        agent_calls.tool_call_key,
+                        count(candidate.id)::bigint as candidate_count
+                    from agent_calls
+                    left join flow_runs candidate
+                      on candidate.application_id = $1
+                     and candidate.id <> $3
+                     and candidate.external_conversation_id = $2
+                     and candidate.external_user is not distinct from $4
+                     and candidate.api_key_id is not distinct from $5
+                     and candidate.compatibility_mode is not distinct from $6
+                     and candidate.compatibility_mode = 'anthropic-messages-v1'
+                     and candidate.started_at >= agent_calls.created_at
+                     and (
+                         agent_calls.completed_at is null
+                         or candidate.started_at <= agent_calls.completed_at
+                     )
+                     and coalesce(
+                         candidate.input_payload #>> '{node-start,query}',
+                         candidate.input_payload #>> '{start,query}',
+                         candidate.input_payload #>> '{query}',
+                         ''
+                     ) = agent_calls.prompt
+                     and (
+                         position('cc_is_subagent=true' in coalesce(
+                             candidate.input_payload #>> '{node-start,system}',
+                             candidate.input_payload #>> '{start,system}',
+                             candidate.input_payload #>> '{system}',
+                             ''
+                         )) > 0
+                         or (
+                             position('Agent threads always have their cwd reset between bash calls' in coalesce(
+                                 candidate.input_payload #>> '{node-start,system}',
+                                 candidate.input_payload #>> '{start,system}',
+                                 candidate.input_payload #>> '{system}',
+                                 ''
+                             )) > 0
+                             and position('the parent agent reads your text output' in coalesce(
+                                 candidate.input_payload #>> '{node-start,system}',
+                                 candidate.input_payload #>> '{start,system}',
+                                 candidate.input_payload #>> '{system}',
+                                 ''
+                             )) > 0
+                         )
+                     )
+                     and (
+                         candidate.import_job_id is null
+                         or exists (
+                             select 1
+                             from run_archive_import_jobs import_jobs
+                             where import_jobs.id = candidate.import_job_id
+                               and import_jobs.status = 'succeeded'
+                         )
+                     )
+                    group by agent_calls.callback_task_id, agent_calls.tool_call_key
+                )
+                select count(*)::bigint
+                from matched_agent_calls
+                where candidate_count = 1
+                "#,
+            )
+            .bind(application_id)
+            .bind(external_conversation_id)
+            .bind(flow_run_id)
+            .bind(external_user.as_deref())
+            .bind(api_key_id)
+            .bind(compatibility_mode.as_deref())
+            .fetch_one(self.pool())
+            .await?
+        } else {
+            0
+        };
 
         Ok(Some(
             control_plane::orchestration_runtime::trace_projection::trace_projection_source_watermark_from_counts(
@@ -131,6 +234,8 @@ impl PgControlPlaneStore {
                 usize::try_from(event_count).map_err(|_| anyhow!("event_count must fit usize"))?,
                 usize::try_from(stitched_trace_count)
                     .map_err(|_| anyhow!("stitched_trace_count must fit usize"))?,
+                usize::try_from(subagent_trace_count)
+                    .map_err(|_| anyhow!("subagent_trace_count must fit usize"))?,
             ),
         ))
     }
@@ -191,12 +296,17 @@ impl PgControlPlaneStore {
                     child_count,
                     has_content,
                     content_ref,
+                    source_flow_run_id,
+                    source_trace_node_id,
+                    parent_callback_task_id,
+                    parent_tool_call_id,
+                    trace_relation_kind,
                     projection_version,
                     source_watermark
                 ) values (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
                     $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
-                    $23, $24, $25
+                    $23, $24, $25, $26, $27, $28, $29, $30
                 )
                 "#,
             )
@@ -223,6 +333,11 @@ impl PgControlPlaneStore {
             .bind(node.child_count)
             .bind(node.has_content)
             .bind(&node.content_ref)
+            .bind(node.source_flow_run_id)
+            .bind(node.source_trace_node_id)
+            .bind(node.parent_callback_task_id)
+            .bind(&node.parent_tool_call_id)
+            .bind(&node.trace_relation_kind)
             .bind(input.projection_version)
             .bind(&input.source_watermark)
             .execute(&mut *tx)
@@ -680,6 +795,11 @@ fn trace_node_select_sql(predicate: &str) -> String {
             child_count,
             has_content,
             content_ref,
+            source_flow_run_id,
+            source_trace_node_id,
+            parent_callback_task_id,
+            parent_tool_call_id,
+            trace_relation_kind,
             projection_version,
             source_watermark,
             created_at,
@@ -748,6 +868,11 @@ fn map_application_run_trace_node_record(
         child_count: row.get("child_count"),
         has_content: row.get("has_content"),
         content_ref: row.get("content_ref"),
+        source_flow_run_id: row.get("source_flow_run_id"),
+        source_trace_node_id: row.get("source_trace_node_id"),
+        parent_callback_task_id: row.get("parent_callback_task_id"),
+        parent_tool_call_id: row.get("parent_tool_call_id"),
+        trace_relation_kind: row.get("trace_relation_kind"),
         projection_version: row.get("projection_version"),
         source_watermark: row.get("source_watermark"),
         created_at: row.get("created_at"),

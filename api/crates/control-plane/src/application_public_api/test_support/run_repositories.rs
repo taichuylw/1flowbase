@@ -372,6 +372,7 @@ impl run_service::ApplicationPublishedRunControlRepository for ApplicationPublic
                 .cloned()
                 .unwrap_or_default(),
             stitched_trace: Vec::new(),
+            subagent_traces: Vec::new(),
         }))
     }
 }

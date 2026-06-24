@@ -539,6 +539,11 @@ pub struct ApplicationRunTraceNodeProjectionInput {
     pub child_count: i64,
     pub has_content: bool,
     pub content_ref: Option<String>,
+    pub source_flow_run_id: Option<Uuid>,
+    pub source_trace_node_id: Option<Uuid>,
+    pub parent_callback_task_id: Option<Uuid>,
+    pub parent_tool_call_id: Option<String>,
+    pub trace_relation_kind: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 8;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 9;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -94,6 +94,7 @@ pub fn trace_projection_source_watermark(detail: &domain::ApplicationRunDetail) 
         detail.callback_tasks.len(),
         detail.events.len(),
         detail.stitched_trace.len(),
+        detail.subagent_traces.len(),
     )
 }
 
@@ -103,22 +104,21 @@ pub fn trace_projection_source_watermark_from_counts(
     callback_task_count: usize,
     event_count: usize,
     stitched_trace_count: usize,
+    subagent_trace_count: usize,
 ) -> String {
     format!(
-        "flow_run_updated_at:{}/node_runs:{}/callback_tasks:{}/events:{}/stitched:{}",
+        "flow_run_updated_at:{}/node_runs:{}/callback_tasks:{}/events:{}/stitched:{}/subagents:{}",
         flow_run_updated_at.unix_timestamp_nanos(),
         node_run_count,
         callback_task_count,
         event_count,
-        stitched_trace_count
+        stitched_trace_count,
+        subagent_trace_count
     )
 }
 
-fn trace_visible_current_node_runs(
-    detail: &domain::ApplicationRunDetail,
-) -> Vec<domain::NodeRunRecord> {
-    detail
-        .node_runs
+fn trace_visible_node_runs(node_runs: &[domain::NodeRunRecord]) -> Vec<domain::NodeRunRecord> {
+    node_runs
         .iter()
         .filter(|node_run| !is_waiting_prefix_answer_node_run(node_run))
         .cloned()
@@ -128,10 +128,16 @@ fn trace_visible_current_node_runs(
 fn trace_visible_current_node_run_groups(
     detail: &domain::ApplicationRunDetail,
 ) -> Vec<Vec<domain::NodeRunRecord>> {
+    trace_visible_node_run_groups(&detail.node_runs)
+}
+
+fn trace_visible_node_run_groups(
+    node_runs: &[domain::NodeRunRecord],
+) -> Vec<Vec<domain::NodeRunRecord>> {
     let mut groups = Vec::<Vec<domain::NodeRunRecord>>::new();
     let mut llm_group_index_by_node = HashMap::<(Uuid, String), usize>::new();
 
-    for node_run in trace_visible_current_node_runs(detail) {
+    for node_run in trace_visible_node_runs(node_runs) {
         if node_run.node_type != "llm" {
             groups.push(vec![node_run]);
             continue;
@@ -187,6 +193,11 @@ struct TraceProjectionBuilder {
     contents: Vec<ApplicationRunTraceNodeContentProjectionInput>,
 }
 
+struct ToolCallProjection<'a> {
+    task: &'a domain::CallbackTaskRecord,
+    tool_call: serde_json::Value,
+}
+
 impl TraceProjectionBuilder {
     fn new(flow_run_id: Uuid, source_watermark: String) -> Self {
         Self {
@@ -227,15 +238,28 @@ impl TraceProjectionBuilder {
             .map(|node_run| node_run.id)
             .collect::<HashSet<_>>();
         let callback_tasks = callback_tasks_for_node_run_ids(detail, &node_run_ids);
-        let has_tool_calls = callback_tasks
+        let tool_tasks: Vec<&domain::CallbackTaskRecord> = callback_tasks
             .iter()
-            .any(|task| task.callback_kind == "llm_tool_calls");
+            .filter(|task| task.callback_kind == "llm_tool_calls")
+            .collect();
+        let synthetic_tool_calls =
+            synthetic_tool_calls_not_in_callback_tasks(node_runs, &tool_tasks);
+        let linked_subagent_count = count_linked_subagent_tool_calls(detail, &tool_tasks);
+        let total_callback_tool_call_count = tool_tasks
+            .iter()
+            .flat_map(|task| tool_calls_from_callback_task(task))
+            .count();
+        let ordinary_tool_call_count = total_callback_tool_call_count
+            .saturating_sub(linked_subagent_count)
+            + synthetic_tool_calls.len();
         let non_tool_callback_count = callback_tasks
             .iter()
             .filter(|task| task.callback_kind != "llm_tool_calls")
             .count();
-        let child_count = i64::try_from(non_tool_callback_count + usize::from(has_tool_calls))
-            .unwrap_or(i64::MAX);
+        let child_group_count =
+            usize::from(ordinary_tool_call_count > 0) + usize::from(linked_subagent_count > 0);
+        let child_count =
+            i64::try_from(non_tool_callback_count + child_group_count).unwrap_or(i64::MAX);
 
         self.nodes.push(ApplicationRunTraceNodeProjectionInput {
             trace_node_id,
@@ -262,6 +286,11 @@ impl TraceProjectionBuilder {
             child_count,
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
         self.contents
             .push(node_run_group_content(trace_node_id, node_runs, detail)?);
@@ -272,6 +301,7 @@ impl TraceProjectionBuilder {
             &stable_locator,
             node_runs,
             &callback_tasks,
+            detail,
         )?;
         Ok(())
     }
@@ -283,6 +313,7 @@ impl TraceProjectionBuilder {
         parent_stable_locator: &str,
         parent_node_runs: &[domain::NodeRunRecord],
         callback_tasks: &[domain::CallbackTaskRecord],
+        detail: &domain::ApplicationRunDetail,
     ) -> Result<()> {
         let mut child_index = 0_usize;
         let tool_tasks: Vec<&domain::CallbackTaskRecord> = callback_tasks
@@ -291,15 +322,17 @@ impl TraceProjectionBuilder {
             .collect();
         let synthetic_tool_calls =
             synthetic_tool_calls_not_in_callback_tasks(parent_node_runs, &tool_tasks);
+        let ordinary_tool_calls = ordinary_tool_calls_not_linked_to_subagents(detail, &tool_tasks);
+        let linked_subagent_traces = linked_subagent_traces_for_tool_tasks(detail, &tool_tasks);
 
-        if !tool_tasks.is_empty() {
+        if !ordinary_tool_calls.is_empty() {
             child_index += 1;
             self.push_tool_group(
                 child_order_key(parent_order_key, child_index),
                 parent_trace_node_id,
                 parent_stable_locator,
                 parent_node_runs,
-                &tool_tasks,
+                &ordinary_tool_calls,
                 &synthetic_tool_calls,
             )?;
         } else if !synthetic_tool_calls.is_empty() {
@@ -310,6 +343,16 @@ impl TraceProjectionBuilder {
                 parent_stable_locator,
                 parent_node_runs,
                 &synthetic_tool_calls,
+            )?;
+        }
+
+        if !linked_subagent_traces.is_empty() {
+            child_index += 1;
+            self.push_agent_group(
+                child_order_key(parent_order_key, child_index),
+                parent_trace_node_id,
+                parent_stable_locator,
+                &linked_subagent_traces,
             )?;
         }
 
@@ -335,16 +378,12 @@ impl TraceProjectionBuilder {
         parent_trace_node_id: Uuid,
         parent_stable_locator: &str,
         parent_node_runs: &[domain::NodeRunRecord],
-        tool_tasks: &[&domain::CallbackTaskRecord],
+        tool_calls: &[ToolCallProjection<'_>],
         synthetic_tool_calls: &[serde_json::Value],
     ) -> Result<()> {
         let stable_locator = format!("{parent_stable_locator}/tools");
         let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
-        let tool_call_count = tool_tasks
-            .iter()
-            .flat_map(|task| tool_calls_from_callback_task(task))
-            .count()
-            + synthetic_tool_calls.len();
+        let tool_call_count = tool_calls.len() + synthetic_tool_calls.len();
 
         self.nodes.push(ApplicationRunTraceNodeProjectionInput {
             trace_node_id,
@@ -358,34 +397,45 @@ impl TraceProjectionBuilder {
             node_type: Some("tools".to_string()),
             node_mode: None,
             node_alias: "Tools".to_string(),
-            status: tool_group_status(tool_tasks),
-            started_at: tool_tasks
+            status: tool_group_status(
+                &tool_calls
+                    .iter()
+                    .map(|tool_call| tool_call.task)
+                    .collect::<Vec<_>>(),
+            ),
+            started_at: tool_calls
                 .iter()
-                .map(|task| task.created_at)
+                .map(|tool_call| tool_call.task.created_at)
                 .min()
                 .unwrap_or(OffsetDateTime::UNIX_EPOCH),
-            finished_at: tool_tasks.iter().filter_map(|task| task.completed_at).max(),
+            finished_at: tool_calls
+                .iter()
+                .filter_map(|tool_call| tool_call.task.completed_at)
+                .max(),
             duration_ms: None,
             metrics_payload: serde_json::json!({}),
             has_children: tool_call_count > 0,
             child_count: i64::try_from(tool_call_count).unwrap_or(i64::MAX),
             has_content: false,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
 
         let mut tool_index = 0_usize;
-        for task in tool_tasks {
-            for tool_call in tool_calls_from_callback_task(task) {
-                tool_index += 1;
-                self.push_tool_callback_node(
-                    child_order_key(&order_key, tool_index),
-                    trace_node_id,
-                    &stable_locator,
-                    parent_node_runs,
-                    task,
-                    &tool_call,
-                )?;
-            }
+        for tool_call in tool_calls {
+            tool_index += 1;
+            self.push_tool_callback_node(
+                child_order_key(&order_key, tool_index),
+                trace_node_id,
+                &stable_locator,
+                parent_node_runs,
+                tool_call.task,
+                &tool_call.tool_call,
+            )?;
         }
         for tool_call in synthetic_tool_calls {
             tool_index += 1;
@@ -395,6 +445,235 @@ impl TraceProjectionBuilder {
                 &stable_locator,
                 parent_node_runs,
                 tool_call,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn push_agent_group(
+        &mut self,
+        order_key: String,
+        parent_trace_node_id: Uuid,
+        parent_stable_locator: &str,
+        subagent_traces: &[&domain::ApplicationRunSubagentTrace],
+    ) -> Result<()> {
+        let stable_locator = format!("{parent_stable_locator}/agents");
+        let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
+        let child_count = subagent_traces.len();
+
+        self.nodes.push(ApplicationRunTraceNodeProjectionInput {
+            trace_node_id,
+            parent_trace_node_id: Some(parent_trace_node_id),
+            stable_locator: stable_locator.clone(),
+            node_kind: "agent_group".to_string(),
+            owner_kind: Some("node_run_agents".to_string()),
+            owner_id: Some(parent_trace_node_id.to_string()),
+            order_key: order_key.clone(),
+            node_id: None,
+            node_type: Some("agents".to_string()),
+            node_mode: None,
+            node_alias: "Agents".to_string(),
+            status: subagent_group_status(subagent_traces),
+            started_at: subagent_traces
+                .iter()
+                .map(|trace| trace.source_flow_run.started_at)
+                .min()
+                .unwrap_or(OffsetDateTime::UNIX_EPOCH),
+            finished_at: subagent_group_finished_at(subagent_traces),
+            duration_ms: None,
+            metrics_payload: serde_json::json!({}),
+            has_children: child_count > 0,
+            child_count: i64::try_from(child_count).unwrap_or(i64::MAX),
+            has_content: false,
+            content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
+        });
+
+        let mut subagent_index = 0_usize;
+        for subagent_trace in subagent_traces {
+            subagent_index += 1;
+            if let Some(node_runs) = subagent_primary_node_run_group(subagent_trace) {
+                self.push_subagent_node_run(
+                    child_order_key(&order_key, subagent_index),
+                    trace_node_id,
+                    &stable_locator,
+                    subagent_trace,
+                    &node_runs,
+                )?;
+            } else {
+                self.push_subagent_flow_run_fallback(
+                    child_order_key(&order_key, subagent_index),
+                    trace_node_id,
+                    &stable_locator,
+                    subagent_trace,
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn push_subagent_flow_run_fallback(
+        &mut self,
+        order_key: String,
+        parent_trace_node_id: Uuid,
+        parent_stable_locator: &str,
+        subagent_trace: &domain::ApplicationRunSubagentTrace,
+    ) -> Result<()> {
+        let source_run = &subagent_trace.source_flow_run;
+        let stable_locator = format!(
+            "{parent_stable_locator}/agent:{}/run:{}/flow-run",
+            subagent_trace.parent_tool_call_id, source_run.id
+        );
+        let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
+
+        self.nodes.push(ApplicationRunTraceNodeProjectionInput {
+            trace_node_id,
+            parent_trace_node_id: Some(parent_trace_node_id),
+            stable_locator: stable_locator.clone(),
+            node_kind: "node_run".to_string(),
+            owner_kind: Some("subagent_flow_run".to_string()),
+            owner_id: Some(source_run.id.to_string()),
+            order_key,
+            node_id: None,
+            node_type: Some("llm".to_string()),
+            node_mode: None,
+            node_alias: subagent_flow_run_alias(source_run),
+            status: source_run.status.as_str().to_string(),
+            started_at: source_run.started_at,
+            finished_at: source_run.finished_at,
+            duration_ms: trace_node_duration_ms(source_run.started_at, source_run.finished_at),
+            metrics_payload: serde_json::json!({}),
+            has_children: false,
+            child_count: 0,
+            has_content: true,
+            content_ref: None,
+            source_flow_run_id: Some(source_run.id),
+            source_trace_node_id: None,
+            parent_callback_task_id: Some(subagent_trace.parent_callback_task_id),
+            parent_tool_call_id: Some(subagent_trace.parent_tool_call_id.clone()),
+            trace_relation_kind: Some("subagent".to_string()),
+        });
+        self.contents.push(subagent_flow_run_fallback_content(
+            trace_node_id,
+            subagent_trace,
+        )?);
+
+        Ok(())
+    }
+
+    fn push_subagent_node_run(
+        &mut self,
+        order_key: String,
+        parent_trace_node_id: Uuid,
+        parent_stable_locator: &str,
+        subagent_trace: &domain::ApplicationRunSubagentTrace,
+        node_runs: &[domain::NodeRunRecord],
+    ) -> Result<()> {
+        let first_node_run = &node_runs[0];
+        let summary_node_run = merge_node_run_group(node_runs);
+        let stable_locator = format!(
+            "{parent_stable_locator}/agent:{}/run:{}/node:{}",
+            subagent_trace.parent_tool_call_id,
+            subagent_trace.source_flow_run.id,
+            first_node_run.id
+        );
+        let trace_node_id = trace_node_id_for_locator(self.flow_run_id, &stable_locator);
+        let source_stable_locator = if node_runs.len() == 1 {
+            format!(
+                "run:{}/node:{}",
+                subagent_trace.source_flow_run.id, first_node_run.id
+            )
+        } else {
+            format!(
+                "run:{}/node_group:{}",
+                subagent_trace.source_flow_run.id, first_node_run.id
+            )
+        };
+        let source_trace_node_id =
+            trace_node_id_for_locator(subagent_trace.source_flow_run.id, &source_stable_locator);
+        let node_run_ids = node_runs
+            .iter()
+            .map(|node_run| node_run.id)
+            .collect::<HashSet<_>>();
+        let callback_tasks = subagent_trace
+            .callback_tasks
+            .iter()
+            .filter(|task| node_run_ids.contains(&task.node_run_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        let tool_tasks = callback_tasks
+            .iter()
+            .filter(|task| task.callback_kind == "llm_tool_calls")
+            .collect::<Vec<_>>();
+        let synthetic_tool_calls =
+            synthetic_tool_calls_not_in_callback_tasks(node_runs, &tool_tasks);
+        let total_tool_call_count = tool_tasks
+            .iter()
+            .flat_map(|task| tool_calls_from_callback_task(task))
+            .count()
+            + synthetic_tool_calls.len();
+        let child_count = i64::from(total_tool_call_count > 0);
+
+        self.nodes.push(ApplicationRunTraceNodeProjectionInput {
+            trace_node_id,
+            parent_trace_node_id: Some(parent_trace_node_id),
+            stable_locator: stable_locator.clone(),
+            node_kind: "node_run".to_string(),
+            owner_kind: Some(if node_runs.len() == 1 {
+                "subagent_node_run".to_string()
+            } else {
+                "subagent_node_run_group".to_string()
+            }),
+            owner_id: Some(first_node_run.id.to_string()),
+            order_key: order_key.clone(),
+            node_id: Some(first_node_run.node_id.clone()),
+            node_type: Some(first_node_run.node_type.clone()),
+            node_mode: None,
+            node_alias: subagent_node_alias(subagent_trace, first_node_run),
+            status: subagent_trace.source_flow_run.status.as_str().to_string(),
+            started_at: first_node_run.started_at,
+            finished_at: summary_node_run.finished_at,
+            duration_ms: trace_node_group_duration_ms(node_runs),
+            metrics_payload: summary_node_run.metrics_payload.clone(),
+            has_children: child_count > 0,
+            child_count,
+            has_content: true,
+            content_ref: None,
+            source_flow_run_id: Some(subagent_trace.source_flow_run.id),
+            source_trace_node_id: Some(source_trace_node_id),
+            parent_callback_task_id: Some(subagent_trace.parent_callback_task_id),
+            parent_tool_call_id: Some(subagent_trace.parent_tool_call_id.clone()),
+            trace_relation_kind: Some("subagent".to_string()),
+        });
+        self.contents.push(subagent_node_run_group_content(
+            trace_node_id,
+            node_runs,
+            subagent_trace,
+        )?);
+
+        if total_tool_call_count > 0 {
+            let tool_calls = tool_tasks
+                .iter()
+                .flat_map(|task| {
+                    tool_calls_from_callback_task(task)
+                        .into_iter()
+                        .map(|tool_call| ToolCallProjection { task, tool_call })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            self.push_tool_group(
+                child_order_key(&order_key, 1),
+                trace_node_id,
+                &stable_locator,
+                node_runs,
+                &tool_calls,
+                &synthetic_tool_calls,
             )?;
         }
 
@@ -461,6 +740,11 @@ impl TraceProjectionBuilder {
             child_count: i64::from(has_route_child),
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
         self.contents
             .push(ApplicationRunTraceNodeContentProjectionInput {
@@ -521,6 +805,11 @@ impl TraceProjectionBuilder {
             child_count: i64::try_from(tool_calls.len()).unwrap_or(i64::MAX),
             has_content: false,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
 
         for (index, tool_call) in tool_calls.iter().enumerate() {
@@ -598,6 +887,11 @@ impl TraceProjectionBuilder {
             child_count: i64::from(has_route_child),
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
         self.contents
             .push(ApplicationRunTraceNodeContentProjectionInput {
@@ -664,6 +958,11 @@ impl TraceProjectionBuilder {
             child_count,
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
         self.contents
             .push(ApplicationRunTraceNodeContentProjectionInput {
@@ -731,6 +1030,11 @@ impl TraceProjectionBuilder {
             child_count: 0,
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
         self.contents
             .push(ApplicationRunTraceNodeContentProjectionInput {
@@ -777,6 +1081,11 @@ impl TraceProjectionBuilder {
             child_count: 0,
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
         self.contents
             .push(ApplicationRunTraceNodeContentProjectionInput {
@@ -829,6 +1138,11 @@ impl TraceProjectionBuilder {
             child_count: i64::try_from(stitched_trace.len()).unwrap_or(i64::MAX),
             has_content: false,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
 
         for (index, trace) in stitched_trace.iter().enumerate() {
@@ -875,6 +1189,11 @@ impl TraceProjectionBuilder {
             child_count: i64::try_from(trace.node_runs.len()).unwrap_or(i64::MAX),
             has_content: true,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
         self.contents
             .push(ApplicationRunTraceNodeContentProjectionInput {
@@ -1120,6 +1439,271 @@ fn merge_node_run_group(node_runs: &[domain::NodeRunRecord]) -> domain::NodeRunR
     merged.debug_payload = merge_debug_payloads(node_runs);
 
     merged
+}
+
+fn tool_call_id(tool_call: &serde_json::Value) -> Option<&str> {
+    tool_call
+        .get("id")
+        .or_else(|| tool_call.get("tool_call_id"))
+        .or_else(|| tool_call.get("call_id"))
+        .and_then(serde_json::Value::as_str)
+}
+
+fn subagent_trace_matches_tool_call(
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+    task: &domain::CallbackTaskRecord,
+    tool_call: &serde_json::Value,
+) -> bool {
+    subagent_trace.parent_callback_task_id == task.id
+        && tool_call_id(tool_call) == Some(subagent_trace.parent_tool_call_id.as_str())
+}
+
+fn linked_subagent_trace_for_tool_call<'a>(
+    detail: &'a domain::ApplicationRunDetail,
+    task: &domain::CallbackTaskRecord,
+    tool_call: &serde_json::Value,
+) -> Option<&'a domain::ApplicationRunSubagentTrace> {
+    detail
+        .subagent_traces
+        .iter()
+        .find(|subagent_trace| subagent_trace_matches_tool_call(subagent_trace, task, tool_call))
+}
+
+fn ordinary_tool_calls_not_linked_to_subagents<'a>(
+    detail: &'a domain::ApplicationRunDetail,
+    tool_tasks: &[&'a domain::CallbackTaskRecord],
+) -> Vec<ToolCallProjection<'a>> {
+    let mut tool_calls = Vec::new();
+
+    for task in tool_tasks {
+        for tool_call in tool_calls_from_callback_task(task) {
+            if linked_subagent_trace_for_tool_call(detail, task, &tool_call).is_none() {
+                tool_calls.push(ToolCallProjection { task, tool_call });
+            }
+        }
+    }
+
+    tool_calls
+}
+
+fn linked_subagent_traces_for_tool_tasks<'a>(
+    detail: &'a domain::ApplicationRunDetail,
+    tool_tasks: &[&domain::CallbackTaskRecord],
+) -> Vec<&'a domain::ApplicationRunSubagentTrace> {
+    let mut subagent_traces = Vec::new();
+    let mut seen_flow_runs = HashSet::new();
+
+    for task in tool_tasks {
+        for tool_call in tool_calls_from_callback_task(task) {
+            if let Some(subagent_trace) =
+                linked_subagent_trace_for_tool_call(detail, task, &tool_call)
+            {
+                if seen_flow_runs.insert(subagent_trace.source_flow_run.id) {
+                    subagent_traces.push(subagent_trace);
+                }
+            }
+        }
+    }
+
+    subagent_traces
+}
+
+fn count_linked_subagent_tool_calls(
+    detail: &domain::ApplicationRunDetail,
+    tool_tasks: &[&domain::CallbackTaskRecord],
+) -> usize {
+    linked_subagent_traces_for_tool_tasks(detail, tool_tasks).len()
+}
+
+fn subagent_primary_node_run_group(
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+) -> Option<Vec<domain::NodeRunRecord>> {
+    trace_visible_node_run_groups(&subagent_trace.node_runs)
+        .into_iter()
+        .find(|group| {
+            group
+                .first()
+                .is_some_and(|node_run| node_run.node_type == "llm")
+        })
+}
+
+fn subagent_group_status(subagent_traces: &[&domain::ApplicationRunSubagentTrace]) -> String {
+    if subagent_traces.iter().any(|trace| {
+        matches!(
+            trace.source_flow_run.status,
+            domain::FlowRunStatus::Failed | domain::FlowRunStatus::Cancelled
+        )
+    }) {
+        return domain::NodeRunStatus::Failed.as_str().to_string();
+    }
+
+    if subagent_traces.iter().any(|trace| {
+        matches!(
+            trace.source_flow_run.status,
+            domain::FlowRunStatus::Queued
+                | domain::FlowRunStatus::Running
+                | domain::FlowRunStatus::WaitingCallback
+                | domain::FlowRunStatus::WaitingHuman
+                | domain::FlowRunStatus::Paused
+        )
+    }) {
+        return domain::NodeRunStatus::Running.as_str().to_string();
+    }
+
+    domain::NodeRunStatus::Succeeded.as_str().to_string()
+}
+
+fn subagent_group_finished_at(
+    subagent_traces: &[&domain::ApplicationRunSubagentTrace],
+) -> Option<OffsetDateTime> {
+    if subagent_traces
+        .iter()
+        .any(|trace| trace.source_flow_run.finished_at.is_none())
+    {
+        return None;
+    }
+
+    subagent_traces
+        .iter()
+        .filter_map(|trace| trace.source_flow_run.finished_at)
+        .max()
+}
+
+fn subagent_node_alias(
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+    first_node_run: &domain::NodeRunRecord,
+) -> String {
+    if !subagent_trace.source_flow_run.title.trim().is_empty() {
+        return subagent_trace.source_flow_run.title.clone();
+    }
+
+    first_node_run.node_alias.clone()
+}
+
+fn subagent_flow_run_alias(source_run: &domain::FlowRunRecord) -> String {
+    if !source_run.title.trim().is_empty() {
+        return source_run.title.clone();
+    }
+
+    "Agent".to_string()
+}
+
+fn subagent_flow_run_fallback_content(
+    trace_node_id: Uuid,
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+) -> Result<ApplicationRunTraceNodeContentProjectionInput> {
+    let source_run = &subagent_trace.source_flow_run;
+    let source_refs = serde_json::json!([{
+        "source_kind": "subagent_flow_run",
+        "source_locator": source_run.id,
+        "source_flow_run_id": source_run.id,
+        "parent_callback_task_id": subagent_trace.parent_callback_task_id,
+        "parent_tool_call_id": subagent_trace.parent_tool_call_id.clone(),
+    }]);
+    let detail_refs = serde_json::Value::Array(Vec::new());
+
+    Ok(ApplicationRunTraceNodeContentProjectionInput {
+        trace_node_id,
+        content_kind: "node_run".to_string(),
+        payload: serde_json::json!({
+            "payload_index": {
+                "node_run_count": 0,
+                "checkpoint_count": 0,
+                "event_count": subagent_trace.events.len(),
+                "node_run_ids": [],
+                "source_flow_run_id": source_run.id
+            },
+            "source_refs": source_refs.clone(),
+            "detail_refs": detail_refs,
+            "input_payload": source_run.input_payload.clone(),
+            "output_payload": source_run.output_payload.clone(),
+            "error_payload": source_run.error_payload.clone(),
+            "metrics_payload": {},
+            "debug_payload": {
+                "source_flow_run_id": source_run.id,
+                "parent_callback_task_id": subagent_trace.parent_callback_task_id,
+                "parent_tool_call_id": subagent_trace.parent_tool_call_id.clone(),
+                "runtime_event_count": subagent_trace.runtime_events.len()
+            }
+        }),
+        source_refs,
+    })
+}
+
+fn subagent_node_run_group_content(
+    trace_node_id: Uuid,
+    node_runs: &[domain::NodeRunRecord],
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+) -> Result<ApplicationRunTraceNodeContentProjectionInput> {
+    let primary_node_run = &node_runs[0];
+    let source_ref_values = node_runs
+        .iter()
+        .map(|node_run| {
+            serde_json::json!({
+                "source_kind": "subagent_node_run",
+                "source_locator": node_run.id,
+                "source_flow_run_id": subagent_trace.source_flow_run.id,
+                "parent_callback_task_id": subagent_trace.parent_callback_task_id,
+                "parent_tool_call_id": subagent_trace.parent_tool_call_id,
+            })
+        })
+        .collect::<Vec<_>>();
+    let node_run_refs = node_runs
+        .iter()
+        .map(|node_run| {
+            serde_json::json!({
+                "detail_kind": "node_run",
+                "source_kind": "subagent_node_run",
+                "source_locator": node_run.id,
+                "source_flow_run_id": subagent_trace.source_flow_run.id,
+                "count": 1
+            })
+        })
+        .collect::<Vec<_>>();
+    let detail_refs = serde_json::json!([
+        {
+            "detail_ref_id": "node_run",
+            "detail_kind": "node_run",
+            "source_kind": "subagent_node_run",
+            "source_locator": primary_node_run.id,
+            "source_flow_run_id": subagent_trace.source_flow_run.id,
+            "count": node_runs.len()
+        },
+        {
+            "detail_ref_id": "checkpoints",
+            "detail_kind": "checkpoints",
+            "source_kind": "subagent_flow_run_checkpoints",
+            "source_locator": trace_node_id,
+            "source_flow_run_id": subagent_trace.source_flow_run.id,
+            "count": 0
+        },
+        {
+            "detail_ref_id": "events",
+            "detail_kind": "events",
+            "source_kind": "subagent_flow_run_events",
+            "source_locator": trace_node_id,
+            "source_flow_run_id": subagent_trace.source_flow_run.id,
+            "count": subagent_trace.events.len()
+        }
+    ]);
+
+    Ok(ApplicationRunTraceNodeContentProjectionInput {
+        trace_node_id,
+        content_kind: "node_run".to_string(),
+        payload: serde_json::json!({
+            "payload_index": {
+                "node_run_count": node_runs.len(),
+                "checkpoint_count": 0,
+                "event_count": subagent_trace.events.len(),
+                "node_run_ids": node_runs.iter().map(|node_run| node_run.id).collect::<Vec<_>>(),
+                "source_flow_run_id": subagent_trace.source_flow_run.id
+            },
+            "source_refs": source_ref_values.clone(),
+            "detail_refs": detail_refs,
+            "node_run_refs": node_run_refs
+        }),
+        source_refs: serde_json::Value::Array(source_ref_values),
+    })
 }
 
 mod tool_callbacks;

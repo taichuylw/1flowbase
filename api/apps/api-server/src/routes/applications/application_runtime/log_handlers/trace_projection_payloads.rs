@@ -96,6 +96,11 @@ pub(super) fn to_trace_node_summary_from_projection(
         has_children: node.has_children,
         child_count: node.child_count,
         has_content: node.has_content,
+        source_flow_run_id: node.source_flow_run_id.map(|value| value.to_string()),
+        source_trace_node_id: node.source_trace_node_id.map(|value| value.to_string()),
+        parent_callback_task_id: node.parent_callback_task_id.map(|value| value.to_string()),
+        parent_tool_call_id: node.parent_tool_call_id,
+        trace_relation_kind: node.trace_relation_kind,
     }
 }
 
@@ -205,6 +210,24 @@ pub(super) fn trace_node_content_node_run_ids(payload: &serde_json::Value) -> Re
     }
 
     Ok(node_run_ids)
+}
+
+pub(super) fn trace_node_content_source_flow_run_id(
+    payload: &serde_json::Value,
+) -> Result<Option<Uuid>, ApiError> {
+    let Some(value) = payload
+        .get("payload_index")
+        .and_then(|payload_index| payload_index.get("source_flow_run_id"))
+    else {
+        return Ok(None);
+    };
+    let Some(id) = value.as_str() else {
+        return Err(ControlPlaneError::Conflict("trace_node_detail_ref").into());
+    };
+
+    Ok(Some(
+        Uuid::parse_str(id).map_err(|_| ControlPlaneError::Conflict("trace_node_detail_ref"))?,
+    ))
 }
 
 pub(super) fn strip_projected_tool_debug_payloads(mut node_run: domain::NodeRunRecord) -> domain::NodeRunRecord {

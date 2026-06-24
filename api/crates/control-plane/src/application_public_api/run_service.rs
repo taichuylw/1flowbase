@@ -726,6 +726,7 @@ mod tests {
             callback_tasks: Vec::new(),
             events: Vec::new(),
             stitched_trace: Vec::new(),
+            subagent_traces: Vec::new(),
         };
 
         let run = native_result_from_run_detail(&detail, json!({}));
@@ -763,6 +764,7 @@ mod tests {
             callback_tasks: Vec::new(),
             events: Vec::new(),
             stitched_trace: Vec::new(),
+            subagent_traces: Vec::new(),
         };
 
         let run = native_result_from_run_detail(&detail, json!({}));
@@ -788,6 +790,7 @@ mod tests {
             callback_tasks: Vec::new(),
             events: Vec::new(),
             stitched_trace: Vec::new(),
+            subagent_traces: Vec::new(),
         };
 
         let run = native_result_from_run_detail(&detail, json!({}));

@@ -56,6 +56,11 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
                     child_count: 1,
                     has_content: true,
                     content_ref: None,
+                    source_flow_run_id: None,
+                    source_trace_node_id: None,
+                    parent_callback_task_id: None,
+                    parent_tool_call_id: None,
+                    trace_relation_kind: None,
                 },
                 control_plane::ports::ApplicationRunTraceNodeProjectionInput {
                     trace_node_id: child_trace_node_id,
@@ -78,6 +83,11 @@ async fn trace_projection_repository_queries_root_children_content_and_status() 
                     child_count: 0,
                     has_content: true,
                     content_ref: Some("artifact:tool-weather".to_string()),
+                    source_flow_run_id: None,
+                    source_trace_node_id: None,
+                    parent_callback_task_id: None,
+                    parent_tool_call_id: None,
+                    trace_relation_kind: None,
                 },
             ],
             contents: vec![control_plane::ports::ApplicationRunTraceNodeContentProjectionInput {
@@ -303,6 +313,11 @@ async fn trace_projection_repository_paginates_children_by_stable_order() {
             child_count: 5,
             has_content: false,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         },
     ];
     for index in 0..5 {
@@ -332,6 +347,11 @@ async fn trace_projection_repository_paginates_children_by_stable_order() {
             child_count: 0,
             has_content: false,
             content_ref: None,
+            source_flow_run_id: None,
+            source_trace_node_id: None,
+            parent_callback_task_id: None,
+            parent_tool_call_id: None,
+            trace_relation_kind: None,
         });
     }
 

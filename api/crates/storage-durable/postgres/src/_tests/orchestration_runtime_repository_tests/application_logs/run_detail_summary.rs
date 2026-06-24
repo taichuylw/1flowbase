@@ -856,7 +856,7 @@ async fn application_run_trace_projection_watermark_hides_failed_imported_stitch
         .unwrap();
 
     assert!(
-        source_watermark.ends_with("/stitched:0"),
+        source_watermark.ends_with("/stitched:0/subagents:0"),
         "failed imported source must not change projection source watermark: {source_watermark}"
     );
 }

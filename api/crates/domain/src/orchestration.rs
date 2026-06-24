@@ -402,6 +402,11 @@ pub struct ApplicationRunTraceNodeRecord {
     pub child_count: i64,
     pub has_content: bool,
     pub content_ref: Option<String>,
+    pub source_flow_run_id: Option<Uuid>,
+    pub source_trace_node_id: Option<Uuid>,
+    pub parent_callback_task_id: Option<Uuid>,
+    pub parent_tool_call_id: Option<String>,
+    pub trace_relation_kind: Option<String>,
     pub projection_version: i32,
     pub source_watermark: String,
     pub created_at: OffsetDateTime,
@@ -426,10 +431,22 @@ pub struct ApplicationRunDetail {
     pub callback_tasks: Vec<CallbackTaskRecord>,
     pub events: Vec<RunEventRecord>,
     pub stitched_trace: Vec<ApplicationRunStitchedTrace>,
+    pub subagent_traces: Vec<ApplicationRunSubagentTrace>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationRunStitchedTrace {
+    pub source_flow_run: FlowRunRecord,
+    pub node_runs: Vec<NodeRunRecord>,
+    pub callback_tasks: Vec<CallbackTaskRecord>,
+    pub events: Vec<RunEventRecord>,
+    pub runtime_events: Vec<RuntimeEventRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunSubagentTrace {
+    pub parent_tool_call_id: String,
+    pub parent_callback_task_id: Uuid,
     pub source_flow_run: FlowRunRecord,
     pub node_runs: Vec<NodeRunRecord>,
     pub callback_tasks: Vec<CallbackTaskRecord>,

@@ -466,6 +466,7 @@ export type ConsoleApplicationRunTraceNodeKind =
   | 'node_run'
   | 'callback_task'
   | 'tool_group'
+  | 'agent_group'
   | 'tool_callback'
   | 'stitched_context'
   | 'stitched_run'
@@ -494,6 +495,11 @@ export interface ConsoleApplicationRunTraceNodeSummary {
   has_children: boolean;
   child_count: number;
   has_content: boolean;
+  source_flow_run_id?: string | null;
+  source_trace_node_id?: string | null;
+  parent_callback_task_id?: string | null;
+  parent_tool_call_id?: string | null;
+  trace_relation_kind?: string | null;
 }
 
 export interface ConsoleApplicationRunTraceProjectionStatus {
@@ -689,8 +695,7 @@ export interface ConsoleApplicationRunArchiveUsageLedger {
   created_at: string;
 }
 
-export interface ConsoleApplicationRunArchiveTraceNode
-  extends ConsoleApplicationRunTraceNodeSummary {
+export interface ConsoleApplicationRunArchiveTraceNode extends ConsoleApplicationRunTraceNodeSummary {
   content_kind?: string | null;
   source_refs: unknown;
   detail_refs: unknown;
