@@ -14,6 +14,7 @@ base64.workspace = true
 flate2.workspace = true
 form_urlencoded = "1"
 rand_core.workspace = true
+regex.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
