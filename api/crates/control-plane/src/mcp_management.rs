@@ -36,7 +36,6 @@ pub struct UpsertMcpGroupCommand {
 pub struct CreateMcpToolCommand {
     pub actor_user_id: Uuid,
     pub tool_id: Option<String>,
-    pub suggested_group_path: Option<String>,
     pub name: String,
     pub short_description: String,
     pub usage_description: Option<String>,
@@ -258,7 +257,7 @@ where
         let actor = self.authorize_manage(command.actor_user_id).await?;
         let tool_id = match command.tool_id {
             Some(tool_id) if !tool_id.trim().is_empty() => tool_id,
-            _ => readable_tool_id(command.suggested_group_path.as_deref(), &command.name),
+            _ => readable_tool_id(&command.name),
         };
         validate_identifier(&tool_id, "tool_id")?;
         let interface = bindable_interface(&command.interface_id)?;
@@ -698,14 +697,9 @@ fn validate_allowed_value(value: &str, field: &'static str, allowed_values: &[&s
     Ok(())
 }
 
-fn readable_tool_id(path: Option<&str>, name: &str) -> String {
-    let mut parts = Vec::new();
-    if let Some(path) = path {
-        parts.extend(path.split('/').filter(|part| !part.is_empty()));
-    }
-    parts.extend(name.split_whitespace());
-    let candidate = parts
-        .into_iter()
+fn readable_tool_id(name: &str) -> String {
+    let candidate = name
+        .split_whitespace()
         .map(normalize_tool_id_part)
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()

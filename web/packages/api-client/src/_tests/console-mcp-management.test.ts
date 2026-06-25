@@ -138,7 +138,6 @@ describe('console-mcp-management client', () => {
         createConsoleMcpTool(
           {
             tool_id: null,
-            suggested_group_path: '/ops',
             name: 'Get Runtime',
             short_description: 'Runtime profile',
             usage_description: null,

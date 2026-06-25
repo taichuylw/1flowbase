@@ -6,12 +6,10 @@ import {
 } from '../mcp-management-view-model';
 
 describe('mcp management view model', () => {
-  test('builds a readable tool id from path and name', () => {
-    expect(buildReadableToolId('Create Customer', '/crm/accounts')).toBe(
-      'crm_accounts_create_customer'
-    );
-    expect(buildReadableToolId('', '/', 'A_b9Zx10')).toBe('A_b9Zx10');
-    expect(buildReadableToolId('', '/', 'too-long-random-value')).toHaveLength(8);
+  test('builds a readable tool id from name', () => {
+    expect(buildReadableToolId('Create Customer')).toBe('create_customer');
+    expect(buildReadableToolId('', 'A_b9Zx10')).toBe('A_b9Zx10');
+    expect(buildReadableToolId('', 'too-long-random-value')).toHaveLength(8);
   });
 
   test('represents groups and multi-path tool bindings in the directory tree', () => {
