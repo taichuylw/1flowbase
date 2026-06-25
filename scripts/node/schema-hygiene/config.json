@@ -520,6 +520,38 @@
       "created_byGeneration": "audit created_by mirrors actor_user_id when present; system and deleted-actor audit rows remain nullable",
       "updated_byGeneration": "audit updated_by mirrors actor_user_id when present; system and deleted-actor audit rows remain nullable",
       "writePathSource": "auth repository appends audit logs with explicit scope_id derived from workspace_id or SYSTEM_SCOPE_ID"
+    },
+    "run_archive_upload_sessions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id; upload session writes the application workspace scope",
+      "backfillSource": "existing run_archive_upload_sessions.scope_id",
+      "created_byGeneration": "upload session writes actor_user_id into created_by",
+      "updated_byGeneration": "upload session writes actor_user_id into updated_by",
+      "writePathSource": "archive upload session route writes id, scope_id, actor ownership, and status in one insert"
+    },
+    "run_archive_upload_chunks": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "session_id -> run_archive_upload_sessions.scope_id",
+      "backfillSource": "run_archive_upload_sessions.scope_id",
+      "created_byGeneration": "chunk upload writes the current actor user id into created_by",
+      "updated_byGeneration": "chunk upload writes the current actor user id into updated_by",
+      "writePathSource": "archive chunk upload route writes id and session-derived scope while preserving the session/chunk unique key"
+    },
+    "run_archive_import_jobs": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id; import job writes the application workspace scope",
+      "backfillSource": "existing run_archive_import_jobs.scope_id",
+      "created_byGeneration": "import job writes actor_user_id into created_by",
+      "updated_byGeneration": "import job writes actor_user_id into updated_by",
+      "writePathSource": "archive import route writes id, scope_id, actor ownership, upload session, and import status"
+    },
+    "run_archive_import_mappings": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "job_id -> run_archive_import_jobs.scope_id",
+      "backfillSource": "run_archive_import_jobs.scope_id",
+      "created_byGeneration": "mapping insert copies actor_user_id from the import job into created_by",
+      "updated_byGeneration": "mapping insert copies actor_user_id from the import job into updated_by",
+      "writePathSource": "archive restore mapping helper writes id and job-derived scope while preserving the job/entity/source unique key"
     }
   },
   "needsOwnerReviewTables": {},

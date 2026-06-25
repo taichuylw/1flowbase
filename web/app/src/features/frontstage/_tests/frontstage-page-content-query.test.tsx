@@ -33,6 +33,8 @@ import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
 import { resetAuthStore, useAuthStore } from '../../../state/auth-store';
 
+const FRONTSTAGE_ROUTE_WIRING_TEST_TIMEOUT = 15_000;
+
 function authenticate() {
   useAuthStore.getState().setAuthenticated({
     csrfToken: 'csrf-123',
@@ -106,27 +108,31 @@ describe('frontstage page content query route wiring', () => {
     authenticate();
   });
 
-  test('loads page detail content after resolving a route pageId to the selected page', async () => {
-    pageTreeApi.fetchFrontstagePageTree.mockResolvedValue([
-      createPageNode('page-1')
-    ]);
-    pageContentApi.fetchFrontstagePageContent.mockResolvedValue(
-      createPageContent('page-1')
-    );
-
-    renderApp('/frontstage/pages/page-1');
-
-    await waitFor(() => {
-      expect(pageContentApi.fetchFrontstagePageContent).toHaveBeenCalledWith(
-        'workspace-1',
-        'page-1'
+  test(
+    'loads page detail content after resolving a route pageId to the selected page',
+    async () => {
+      pageTreeApi.fetchFrontstagePageTree.mockResolvedValue([
+        createPageNode('page-1')
+      ]);
+      pageContentApi.fetchFrontstagePageContent.mockResolvedValue(
+        createPageContent('page-1')
       );
-    });
-    expect((await screen.findAllByText('页面 page-1')).length).toBeGreaterThan(
-      0
-    );
-    expect(screen.getByText('页面内容为空')).toBeInTheDocument();
-  });
+
+      renderApp('/frontstage/pages/page-1');
+
+      await waitFor(() => {
+        expect(pageContentApi.fetchFrontstagePageContent).toHaveBeenCalledWith(
+          'workspace-1',
+          'page-1'
+        );
+      });
+      expect((await screen.findAllByText('页面 page-1')).length).toBeGreaterThan(
+        0
+      );
+      expect(screen.getByText('页面内容为空')).toBeInTheDocument();
+    },
+    FRONTSTAGE_ROUTE_WIRING_TEST_TIMEOUT
+  );
 
   test('passes page detail loading state to the frontstage page container', async () => {
     pageTreeApi.fetchFrontstagePageTree.mockResolvedValue([
@@ -173,25 +179,29 @@ describe('frontstage page content query route wiring', () => {
     expect(pageContentApi.fetchFrontstagePageContent).not.toHaveBeenCalled();
   });
 
-  test('normalizes page-less frontstage routes through clean page URLs', async () => {
-    pageTreeApi.fetchFrontstagePageTree.mockResolvedValue([
-      createPageNode('page-1'),
-      createPageNode('page-2')
-    ]);
-    pageContentApi.fetchFrontstagePageContent.mockImplementation(
-      (_workspaceId: string, pageId: string) =>
-        Promise.resolve(createPageContent(pageId))
-    );
+  test(
+    'normalizes page-less frontstage routes through clean page URLs',
+    async () => {
+      pageTreeApi.fetchFrontstagePageTree.mockResolvedValue([
+        createPageNode('page-1'),
+        createPageNode('page-2')
+      ]);
+      pageContentApi.fetchFrontstagePageContent.mockImplementation(
+        (_workspaceId: string, pageId: string) =>
+          Promise.resolve(createPageContent(pageId))
+      );
 
-    renderApp('/frontstage');
+      renderApp('/frontstage');
 
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/frontstage/pages/page-1');
-    });
-    expect(window.location.pathname).not.toContain('workspace-1');
-    expect(pageContentApi.fetchFrontstagePageContent).toHaveBeenCalledWith(
-      'workspace-1',
-      'page-1'
-    );
-  });
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/frontstage/pages/page-1');
+      });
+      expect(window.location.pathname).not.toContain('workspace-1');
+      expect(pageContentApi.fetchFrontstagePageContent).toHaveBeenCalledWith(
+        'workspace-1',
+        'page-1'
+      );
+    },
+    FRONTSTAGE_ROUTE_WIRING_TEST_TIMEOUT
+  );
 });

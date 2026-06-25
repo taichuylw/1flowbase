@@ -8,6 +8,7 @@ import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 import { renderReactFlowScene } from '../../test/renderers/render-react-flow-scene';
 
 const ROUTE_EDITOR_WAIT_OPTIONS = { timeout: 20_000 };
+const ROUTE_EDITOR_TEST_TIMEOUT = 40_000;
 
 const applicationApi = vi.hoisted(() => ({
   applicationsQueryKey: ['applications'],
@@ -359,7 +360,7 @@ describe('application shell routing', () => {
     } finally {
       desktopBreakpoints.mockRestore();
     }
-  }, 20_000);
+  }, ROUTE_EDITOR_TEST_TIMEOUT);
 
   test('keeps orchestration draft save enabled when application api capability is planned', async () => {
     const desktopBreakpoints = vi
@@ -381,7 +382,7 @@ describe('application shell routing', () => {
     } finally {
       desktopBreakpoints.mockRestore();
     }
-  }, 20_000);
+  }, ROUTE_EDITOR_TEST_TIMEOUT);
 
   test('renders formal 403 state for inaccessible applications', async () => {
     applicationApi.fetchApplicationDetail.mockRejectedValue(

@@ -192,44 +192,50 @@ async fn upload_archive_chunk(
     chunk_index: usize,
     chunk: &[u8],
 ) -> (StatusCode, Value) {
-    upload_archive_chunk_with_headers(
+    upload_archive_chunk_with_headers(UploadArchiveChunkRequest {
         app,
-        Some(cookie),
-        Some(csrf),
+        cookie: Some(cookie),
+        csrf: Some(csrf),
         application_id,
         session_id,
         chunk_index,
         chunk,
-        Some(&sha256_bytes_for_test(chunk)),
-    )
+        chunk_sha256: Some(&sha256_bytes_for_test(chunk)),
+    })
     .await
 }
 
-async fn upload_archive_chunk_with_headers(
-    app: &axum::Router,
-    cookie: Option<&str>,
-    csrf: Option<&str>,
-    application_id: &str,
-    session_id: &str,
+struct UploadArchiveChunkRequest<'a> {
+    app: &'a axum::Router,
+    cookie: Option<&'a str>,
+    csrf: Option<&'a str>,
+    application_id: &'a str,
+    session_id: &'a str,
     chunk_index: usize,
-    chunk: &[u8],
-    chunk_sha256: Option<&str>,
+    chunk: &'a [u8],
+    chunk_sha256: Option<&'a str>,
+}
+
+async fn upload_archive_chunk_with_headers(
+    input: UploadArchiveChunkRequest<'_>,
 ) -> (StatusCode, Value) {
     let mut builder = Request::builder().method("PUT").uri(format!(
-        "/api/console/applications/{application_id}/logs/runs/archive/import-sessions/{session_id}/chunks/{chunk_index}"
+        "/api/console/applications/{}/logs/runs/archive/import-sessions/{}/chunks/{}",
+        input.application_id, input.session_id, input.chunk_index
     ));
-    if let Some(cookie) = cookie {
+    if let Some(cookie) = input.cookie {
         builder = builder.header("cookie", cookie);
     }
-    if let Some(csrf) = csrf {
+    if let Some(csrf) = input.csrf {
         builder = builder.header("x-csrf-token", csrf);
     }
-    if let Some(chunk_sha256) = chunk_sha256 {
+    if let Some(chunk_sha256) = input.chunk_sha256 {
         builder = builder.header("x-chunk-sha256", chunk_sha256);
     }
-    let response = app
+    let response = input
+        .app
         .clone()
-        .oneshot(builder.body(Body::from(chunk.to_vec())).unwrap())
+        .oneshot(builder.body(Body::from(input.chunk.to_vec())).unwrap())
         .await
         .unwrap();
     let status = response.status();
@@ -1012,30 +1018,32 @@ async fn application_runtime_routes_logs_archive_upload_enforces_checksum_limits
             .await;
     assert_eq!(other_application_complete_status, StatusCode::NOT_FOUND);
 
-    let (missing_upload_csrf_status, _) = upload_archive_chunk_with_headers(
-        &app,
-        Some(&cookie),
-        None,
-        &application_id,
-        session_id,
-        0,
-        &archive_bytes,
-        Some(&sha256_bytes_for_test(&archive_bytes)),
-    )
-    .await;
+    let (missing_upload_csrf_status, _) =
+        upload_archive_chunk_with_headers(UploadArchiveChunkRequest {
+            app: &app,
+            cookie: Some(&cookie),
+            csrf: None,
+            application_id: &application_id,
+            session_id,
+            chunk_index: 0,
+            chunk: &archive_bytes,
+            chunk_sha256: Some(&sha256_bytes_for_test(&archive_bytes)),
+        })
+        .await;
     assert_eq!(missing_upload_csrf_status, StatusCode::UNAUTHORIZED);
 
-    let (missing_chunk_sha_status, missing_chunk_sha_payload) = upload_archive_chunk_with_headers(
-        &app,
-        Some(&cookie),
-        Some(&csrf),
-        &application_id,
-        session_id,
-        0,
-        &archive_bytes,
-        None,
-    )
-    .await;
+    let (missing_chunk_sha_status, missing_chunk_sha_payload) =
+        upload_archive_chunk_with_headers(UploadArchiveChunkRequest {
+            app: &app,
+            cookie: Some(&cookie),
+            csrf: Some(&csrf),
+            application_id: &application_id,
+            session_id,
+            chunk_index: 0,
+            chunk: &archive_bytes,
+            chunk_sha256: None,
+        })
+        .await;
     assert_eq!(
         missing_chunk_sha_status,
         StatusCode::BAD_REQUEST,
@@ -1043,17 +1051,20 @@ async fn application_runtime_routes_logs_archive_upload_enforces_checksum_limits
     );
     assert_eq!(missing_chunk_sha_payload["code"], json!("chunk_sha256"));
 
-    let (wrong_chunk_sha_status, wrong_chunk_sha_payload) = upload_archive_chunk_with_headers(
-        &app,
-        Some(&cookie),
-        Some(&csrf),
-        &application_id,
-        session_id,
-        0,
-        &archive_bytes,
-        Some("sha256:0000000000000000000000000000000000000000000000000000000000000000"),
-    )
-    .await;
+    let (wrong_chunk_sha_status, wrong_chunk_sha_payload) =
+        upload_archive_chunk_with_headers(UploadArchiveChunkRequest {
+            app: &app,
+            cookie: Some(&cookie),
+            csrf: Some(&csrf),
+            application_id: &application_id,
+            session_id,
+            chunk_index: 0,
+            chunk: &archive_bytes,
+            chunk_sha256: Some(
+                "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            ),
+        })
+        .await;
     assert_eq!(
         wrong_chunk_sha_status,
         StatusCode::BAD_REQUEST,

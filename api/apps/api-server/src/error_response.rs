@@ -33,18 +33,14 @@ impl IntoResponse for ApiError {
             Some(ControlPlaneError::NotAuthenticated) => {
                 (StatusCode::UNAUTHORIZED, "not_authenticated")
             }
-            Some(ControlPlaneError::PermissionDenied(reason)) => {
-                (StatusCode::FORBIDDEN, *reason)
-            }
+            Some(ControlPlaneError::PermissionDenied(reason)) => (StatusCode::FORBIDDEN, *reason),
             Some(ControlPlaneError::NotFound(name)) => (StatusCode::NOT_FOUND, *name),
             Some(ControlPlaneError::Conflict(name)) => (StatusCode::CONFLICT, *name),
             Some(ControlPlaneError::InvalidInput(name)) => (StatusCode::BAD_REQUEST, *name),
             Some(ControlPlaneError::InvalidStateTransition { .. }) => {
                 (StatusCode::CONFLICT, "invalid_state_transition")
             }
-            Some(ControlPlaneError::UpstreamUnavailable(name)) => {
-                (StatusCode::BAD_GATEWAY, *name)
-            }
+            Some(ControlPlaneError::UpstreamUnavailable(name)) => (StatusCode::BAD_GATEWAY, *name),
             None => match self.0.downcast_ref::<PluginFrameworkError>() {
                 Some(PluginFrameworkError::RuntimeContract { .. }) => {
                     (StatusCode::BAD_GATEWAY, "provider_runtime")
@@ -77,7 +73,10 @@ impl IntoResponse for ApiError {
 /// Sanitize sensitive information from error messages
 fn sanitize_error_message(message: &str) -> String {
     let patterns = [
-        (r"(api[_-]?key|token|secret|password|authorization)[=:\s]+[^\s]+", "$1=<redacted>"),
+        (
+            r"(api[_-]?key|token|secret|password|authorization)[=:\s]+[^\s]+",
+            "$1=<redacted>",
+        ),
         (r"Bearer\s+[^\s]+", "Bearer <redacted>"),
         (r"(x-[a-z]+-[a-z]+):\s*[^\s]+", "$1: <redacted>"),
     ];

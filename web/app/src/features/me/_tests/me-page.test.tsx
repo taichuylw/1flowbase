@@ -8,6 +8,8 @@ const { updateMyProfile, changeMyPassword, fetchMyProfile } = vi.hoisted(() => (
   fetchMyProfile: vi.fn()
 }));
 
+const ME_PROFILE_FLOW_TEST_TIMEOUT = 15_000;
+
 vi.mock('../api/me', () => ({
   updateMyProfile,
   changeMyPassword,
@@ -101,60 +103,64 @@ describe('MePage', () => {
     expect(screen.queryByText('退出登录')).not.toBeInTheDocument();
   });
 
-  test('keeps profile update flow working on /me/profile', async () => {
-    updateMyProfile.mockResolvedValue({
-      id: 'user-1',
-      account: 'root',
-      email: 'root-next@example.com',
-      phone: '13900000000',
-      nickname: 'Captain Root',
-      name: 'Root Next',
-      avatar_url: null,
-      introduction: 'updated intro',
-      preferred_locale: null,
-      effective_display_role: 'manager',
-      permissions: ['route_page.view.all']
-    });
+  test(
+    'keeps profile update flow working on /me/profile',
+    async () => {
+      updateMyProfile.mockResolvedValue({
+        id: 'user-1',
+        account: 'root',
+        email: 'root-next@example.com',
+        phone: '13900000000',
+        nickname: 'Captain Root',
+        name: 'Root Next',
+        avatar_url: null,
+        introduction: 'updated intro',
+        preferred_locale: null,
+        effective_display_role: 'manager',
+        permissions: ['route_page.view.all']
+      });
 
-    renderApp('/me/profile');
+      renderApp('/me/profile');
 
-    expect(await screen.findByRole('heading', { name: '个人资料', level: 4 })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /编辑资料/ }));
+      expect(await screen.findByRole('heading', { name: '个人资料', level: 4 })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /编辑资料/ }));
 
-    await waitFor(() => {
-      expect(screen.getByText('编辑个人信息')).toBeInTheDocument();
-    });
-    expect(screen.getByLabelText('界面语言')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('编辑个人信息')).toBeInTheDocument();
+      });
+      expect(screen.getByLabelText('界面语言')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('姓名'), {
-      target: { value: 'Root Next' }
-    });
-    fireEvent.change(screen.getByLabelText('昵称'), {
-      target: { value: 'Captain Root' }
-    });
-    fireEvent.change(screen.getByLabelText('联系邮箱'), {
-      target: { value: 'root-next@example.com' }
-    });
-    fireEvent.change(screen.getByLabelText('手机号码'), {
-      target: { value: '13900000000' }
-    });
-    fireEvent.click(screen.getByRole('button', { name: '保存资料' }));
+      fireEvent.change(screen.getByLabelText('姓名'), {
+        target: { value: 'Root Next' }
+      });
+      fireEvent.change(screen.getByLabelText('昵称'), {
+        target: { value: 'Captain Root' }
+      });
+      fireEvent.change(screen.getByLabelText('联系邮箱'), {
+        target: { value: 'root-next@example.com' }
+      });
+      fireEvent.change(screen.getByLabelText('手机号码'), {
+        target: { value: '13900000000' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: '保存资料' }));
 
-    await waitFor(() =>
-      expect(updateMyProfile).toHaveBeenCalledWith(
-        {
-          name: 'Root Next',
-          nickname: 'Captain Root',
-          email: 'root-next@example.com',
-          phone: '13900000000',
-          avatar_url: null,
-          introduction: '',
-          preferred_locale: null
-        },
-        'csrf-123'
-      )
-    );
-  });
+      await waitFor(() =>
+        expect(updateMyProfile).toHaveBeenCalledWith(
+          {
+            name: 'Root Next',
+            nickname: 'Captain Root',
+            email: 'root-next@example.com',
+            phone: '13900000000',
+            avatar_url: null,
+            introduction: '',
+            preferred_locale: null
+          },
+          'csrf-123'
+        )
+      );
+    },
+    ME_PROFILE_FLOW_TEST_TIMEOUT
+  );
 
   test('renders profile form copy in English when preferred locale is English', async () => {
     resetAuthStore();

@@ -1341,14 +1341,22 @@ async fn insert_import_mapping(
     sqlx::query(
         r#"
         insert into run_archive_import_mappings (
+            id,
+            scope_id,
             job_id,
             entity_kind,
             source_id,
-            target_id
-        ) values ($1, $2, $3, $4)
+            target_id,
+            created_by,
+            updated_by
+        )
+        select $1, jobs.scope_id, $2, $3, $4, $5, jobs.actor_user_id, jobs.actor_user_id
+        from run_archive_import_jobs jobs
+        where jobs.id = $2
         on conflict (job_id, entity_kind, source_id) do nothing
         "#,
     )
+    .bind(Uuid::now_v7())
     .bind(job_id)
     .bind(entity_kind)
     .bind(source_id)

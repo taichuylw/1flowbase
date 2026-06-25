@@ -118,8 +118,9 @@ async fn seed_runtime_read_model_rows(store: &PgControlPlaneStore) -> RuntimeRea
     .unwrap();
     sqlx::query(
         r#"
-        insert into flow_drafts (id, flow_id, schema_version, document, updated_by)
-        values ($1, $2, '1flowbase.flow/v2', '{}', $3)
+        insert into flow_drafts (
+            id, flow_id, scope_id, schema_version, document, created_by, updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), '1flowbase.flow/v2', '{}', $3, $3)
         "#,
     )
     .bind(draft_id)

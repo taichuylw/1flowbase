@@ -16,6 +16,7 @@ use domain::{
     PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus,
     PluginVerificationStatus,
 };
+use plugin_framework::compute_manifest_fingerprint;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
@@ -150,6 +151,20 @@ esac
     package
 }
 
+fn copy_dir_all(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let file_type = entry.file_type().unwrap();
+        let target = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_all(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
 async fn seed_data_source_installation(
     state: &crate::app_state::ApiState,
     package_root: &Path,
@@ -164,10 +179,29 @@ async fn seed_data_source_installation(
         <storage_durable::MainDurableStore as control_plane::ports::AuthRepository>::default_scope_for_user(
             &state.store,
             root.id,
-        )
+    )
         .await
         .unwrap();
     let installation_id = uuid::Uuid::now_v7();
+    let installed_path = PathBuf::from(&state.provider_install_root)
+        .join("installed")
+        .join("fixture_data_source")
+        .join("0.1.0");
+    copy_dir_all(package_root, &installed_path);
+    let manifest_fingerprint = compute_manifest_fingerprint(&installed_path.join("manifest.yaml"))
+        .await
+        .unwrap();
+    fs::write(
+        installed_path.join(".1flowbase-artifact.json"),
+        serde_json::to_vec_pretty(&json!({
+            "plugin_id": "fixture_data_source@0.1.0",
+            "version": "0.1.0",
+            "checksum": null,
+            "manifest_fingerprint": manifest_fingerprint,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
 
     <storage_durable::MainDurableStore as control_plane::ports::PluginRepository>::upsert_installation(
         &state.store,
@@ -187,9 +221,9 @@ async fn seed_data_source_installation(
             runtime_status: PluginRuntimeStatus::Active,
             availability_status: PluginAvailabilityStatus::Available,
             package_path: None,
-            installed_path: package_root.display().to_string(),
+            installed_path: installed_path.display().to_string(),
             checksum: None,
-            manifest_fingerprint: None,
+            manifest_fingerprint: Some(manifest_fingerprint),
             signature_status: None,
             signature_algorithm: None,
             signing_key_id: None,

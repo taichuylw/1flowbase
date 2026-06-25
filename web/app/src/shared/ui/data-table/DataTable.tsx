@@ -66,9 +66,13 @@ export function DataTableColumnSettings<T extends object>({
       return;
     }
 
-    const next = columns
-      .map((column) => column.key)
-      .filter((columnKey) => nextVisible.includes(columnKey));
+    const nextVisibleKeys = new Set(nextVisible);
+    const next: string[] = [];
+    for (const column of columns) {
+      if (nextVisibleKeys.has(column.key)) {
+        next.push(column.key);
+      }
+    }
 
     setVisibleColumnKeys(next);
   }

@@ -661,7 +661,8 @@ async fn application_run_monitoring_report_aggregates_terminal_log_summaries_by_
     sqlx::query(
         r#"
         update application_run_log_summaries
-        set input_tokens = case flow_run_id when $1 then 80 when $2 then 300 end,
+        set total_tokens = case flow_run_id when $1 then 100 when $2 then 400 end,
+            input_tokens = case flow_run_id when $1 then 80 when $2 then 300 end,
             output_tokens = case flow_run_id when $1 then 20 when $2 then 100 end,
             input_cache_hit_tokens = case flow_run_id when $1 then 10 when $2 then 50 end
         where flow_run_id in ($1, $2)

@@ -7,7 +7,16 @@ import {
   UploadOutlined
 } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App, Button, Empty, Input, Progress, Spin, Tooltip } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  Empty,
+  Input,
+  Progress,
+  Spin,
+  Tooltip
+} from 'antd';
 import {
   useCallback,
   useEffect,
@@ -102,6 +111,22 @@ type PersistedRunArchiveImportJob = {
   fileName: string;
 };
 
+function buildArchiveImportStateFromPersistedJob(
+  job: PersistedRunArchiveImportJob | null
+): RunArchiveImportState | null {
+  if (!job) {
+    return null;
+  }
+
+  return {
+    phase: 'processing',
+    percent: 90,
+    fileName: job.fileName,
+    jobId: job.jobId,
+    jobStatus: 'queued'
+  };
+}
+
 const TIME_RANGE_OPTIONS: Array<{
   labelKey: string;
   value: ApplicationLogTimeRange;
@@ -171,8 +196,7 @@ function readPersistedArchiveImportJob(
       typeof parsedValue === 'object' &&
       parsedValue !== null &&
       typeof (parsedValue as PersistedRunArchiveImportJob).jobId === 'string' &&
-      typeof (parsedValue as PersistedRunArchiveImportJob).fileName ===
-        'string'
+      typeof (parsedValue as PersistedRunArchiveImportJob).fileName === 'string'
     ) {
       return parsedValue as PersistedRunArchiveImportJob;
     }
@@ -342,7 +366,11 @@ export function ApplicationLogsPage({
   const [refreshingRuns, setRefreshingRuns] = useState(false);
   const [exportingSelectedRuns, setExportingSelectedRuns] = useState(false);
   const [archiveImportState, setArchiveImportState] =
-    useState<RunArchiveImportState | null>(null);
+    useState<RunArchiveImportState | null>(() =>
+      buildArchiveImportStateFromPersistedJob(
+        readPersistedArchiveImportJob(applicationId)
+      )
+    );
   const [exportingRunId, setExportingRunId] = useState<string | null>(null);
   const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
   const [activeFloatingWindow, setActiveFloatingWindow] =
@@ -412,17 +440,7 @@ export function ApplicationLogsPage({
 
   useEffect(() => {
     setPage(1);
-  }, [applicationId, timeRange, sortBy, sortOrder, titleIncludes]);
-
-  useEffect(() => {
-    setSelectedRunIds([]);
-  }, [applicationId, page, timeRange, sortBy, sortOrder, titleIncludes]);
-
-  useEffect(() => {
-    setSelectedRunIds((current) =>
-      current.filter((runId) => visibleRunIds.has(runId))
-    );
-  }, [visibleRunIds]);
+  }, [applicationId]);
 
   useEffect(() => {
     if (!runs.some((run) => isActiveRunStatus(run.status))) {
@@ -475,6 +493,31 @@ export function ApplicationLogsPage({
 
   function toggleSortOrder() {
     setSortOrder((current) => (current === 'desc' ? 'asc' : 'desc'));
+    setPage(1);
+    setSelectedRunIds([]);
+  }
+
+  function changeTimeRange(nextTimeRange: ApplicationLogTimeRange) {
+    setTimeRange(nextTimeRange);
+    setPage(1);
+    setSelectedRunIds([]);
+  }
+
+  function changeSortBy(nextSortBy: ApplicationRunSortField) {
+    setSortBy(nextSortBy);
+    setPage(1);
+    setSelectedRunIds([]);
+  }
+
+  function changeKeywordSearch(event: ChangeEvent<HTMLInputElement>) {
+    setKeywordSearch(event.target.value);
+    setPage(1);
+    setSelectedRunIds([]);
+  }
+
+  function changePage(nextPage: number) {
+    setPage(nextPage);
+    setSelectedRunIds([]);
   }
 
   async function refreshRunsFromDurable() {
@@ -523,69 +566,82 @@ export function ApplicationLogsPage({
     }
   }
 
-  const waitForArchiveImportJob = useCallback(async (jobId: string, fileName: string) => {
-    let lastJob: ApplicationRunArchiveImportJob | null = null;
-    for (let index = 0; index < RUN_ARCHIVE_IMPORT_MAX_POLLS; index += 1) {
-      const job = await fetchApplicationRunArchiveImportJob(
-        applicationId,
-        jobId
-      );
-      lastJob = job;
-      setArchiveImportState({
-        phase: 'processing',
-        percent: job.status === 'succeeded' ? 100 : 90,
-        fileName,
-        jobId,
-        jobStatus: job.status
-      });
-      if (job.status === 'succeeded' || job.status === 'failed') {
-        return job;
+  const waitForArchiveImportJob = useCallback(
+    async (jobId: string, fileName: string) => {
+      let lastJob: ApplicationRunArchiveImportJob | null = null;
+
+      async function poll(
+        index: number
+      ): Promise<ApplicationRunArchiveImportJob | null> {
+        if (index >= RUN_ARCHIVE_IMPORT_MAX_POLLS) {
+          return lastJob;
+        }
+
+        const job = await fetchApplicationRunArchiveImportJob(
+          applicationId,
+          jobId
+        );
+        lastJob = job;
+        setArchiveImportState({
+          phase: 'processing',
+          percent: job.status === 'succeeded' ? 100 : 90,
+          fileName,
+          jobId,
+          jobStatus: job.status
+        });
+        if (job.status === 'succeeded' || job.status === 'failed') {
+          return job;
+        }
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, RUN_ARCHIVE_IMPORT_POLL_INTERVAL_MS)
+        );
+
+        return poll(index + 1);
       }
-      await new Promise((resolve) =>
-        window.setTimeout(resolve, RUN_ARCHIVE_IMPORT_POLL_INTERVAL_MS)
+
+      return poll(0);
+    },
+    [applicationId]
+  );
+
+  const finishArchiveImportJob = useCallback(
+    async (job: ApplicationRunArchiveImportJob | null) => {
+      if (job && (job.status === 'succeeded' || job.status === 'failed')) {
+        clearPersistedArchiveImportJob(applicationId);
+      }
+
+      if (!job || job.status !== 'succeeded') {
+        message.error(t('auto.import_run_archive_failed'));
+        return;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: applicationRunsQueryKey(applicationId, runsInput)
+      });
+      const targetRunId =
+        job.source_to_target_run_ids[0]?.target_run_id ?? null;
+      if (targetRunId) {
+        setSelectedRunId(targetRunId);
+        setActiveFloatingWindow('run-detail');
+        setRunDetailRect(
+          clampRect(
+            applyStoredWidth(
+              getRunDetailInitialRect(),
+              'application-logs-floating-run-detail'
+            ),
+            DEFAULT_MIN_WIDTH,
+            DEFAULT_MIN_HEIGHT
+          )
+        );
+      }
+      message.success(
+        t('auto.import_run_archive_succeeded', {
+          value1: job.imported_run_count
+        })
       );
-    }
-
-    return lastJob;
-  }, [applicationId]);
-
-  const finishArchiveImportJob = useCallback(async (
-    job: ApplicationRunArchiveImportJob | null
-  ) => {
-    if (job && (job.status === 'succeeded' || job.status === 'failed')) {
-      clearPersistedArchiveImportJob(applicationId);
-    }
-
-    if (!job || job.status !== 'succeeded') {
-      message.error(t('auto.import_run_archive_failed'));
-      return;
-    }
-
-    await queryClient.invalidateQueries({
-      queryKey: applicationRunsQueryKey(applicationId, runsInput)
-    });
-    const targetRunId =
-      job.source_to_target_run_ids[0]?.target_run_id ?? null;
-    if (targetRunId) {
-      setSelectedRunId(targetRunId);
-      setActiveFloatingWindow('run-detail');
-      setRunDetailRect(
-        clampRect(
-          applyStoredWidth(
-            getRunDetailInitialRect(),
-            'application-logs-floating-run-detail'
-          ),
-          DEFAULT_MIN_WIDTH,
-          DEFAULT_MIN_HEIGHT
-        )
-      );
-    }
-    message.success(
-      t('auto.import_run_archive_succeeded', {
-        value1: job.imported_run_count
-      })
-    );
-  }, [applicationId, message, queryClient, runsInput, t]);
+    },
+    [applicationId, message, queryClient, runsInput, t]
+  );
 
   useEffect(() => {
     const persistedJob = readPersistedArchiveImportJob(applicationId);
@@ -594,14 +650,6 @@ export function ApplicationLogsPage({
     }
 
     restoringArchiveImportRef.current = true;
-    setArchiveImportState({
-      phase: 'processing',
-      percent: 90,
-      fileName: persistedJob.fileName,
-      jobId: persistedJob.jobId,
-      jobStatus: 'queued'
-    });
-
     void (async () => {
       try {
         const job = await waitForArchiveImportJob(
@@ -621,6 +669,7 @@ export function ApplicationLogsPage({
       message.error(t('auto.import_run_archive_csrf_missing'));
       return;
     }
+    const archiveCsrfToken = csrfToken;
 
     setArchiveImportState({
       phase: 'uploading',
@@ -638,14 +687,18 @@ export function ApplicationLogsPage({
           expected_sha256: archiveSha256,
           chunk_size_bytes: RUN_ARCHIVE_IMPORT_CHUNK_SIZE
         },
-        csrfToken
+        archiveCsrfToken
       );
 
       const chunkCount = Math.max(
         1,
         Math.ceil(file.size / RUN_ARCHIVE_IMPORT_CHUNK_SIZE)
       );
-      for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+      async function uploadChunk(chunkIndex: number): Promise<void> {
+        if (chunkIndex >= chunkCount) {
+          return;
+        }
+
         const start = chunkIndex * RUN_ARCHIVE_IMPORT_CHUNK_SIZE;
         const end = Math.min(file.size, start + RUN_ARCHIVE_IMPORT_CHUNK_SIZE);
         const chunk = file.slice(start, end);
@@ -656,19 +709,23 @@ export function ApplicationLogsPage({
           chunkIndex,
           chunk,
           chunkSha256,
-          csrfToken
+          archiveCsrfToken
         );
         setArchiveImportState({
           phase: 'uploading',
           percent: Math.round(((chunkIndex + 1) / chunkCount) * 80),
           fileName: file.name
         });
+
+        return uploadChunk(chunkIndex + 1);
       }
+
+      await uploadChunk(0);
 
       const queuedJob = await completeApplicationRunArchiveUploadSession(
         applicationId,
         session.session_id,
-        csrfToken
+        archiveCsrfToken
       );
       setArchiveImportState({
         phase: 'processing',
@@ -786,11 +843,14 @@ export function ApplicationLogsPage({
     () => ({
       selectedRowKeys: selectedVisibleRunIds,
       onChange: (nextSelectedRowKeys: Key[]) => {
-        setSelectedRunIds(
-          nextSelectedRowKeys
-            .map((key) => String(key))
-            .filter((runId) => visibleRunIds.has(runId))
-        );
+        const nextRunIds: string[] = [];
+        for (const key of nextSelectedRowKeys) {
+          const runId = String(key);
+          if (visibleRunIds.has(runId)) {
+            nextRunIds.push(runId);
+          }
+        }
+        setSelectedRunIds(nextRunIds);
       },
       getCheckboxProps: (run: ApplicationRunSummary) => ({
         name: run.id,
@@ -803,10 +863,7 @@ export function ApplicationLogsPage({
   );
 
   const archiveImportStatus = archiveImportState ? (
-    <div
-      className="application-logs-page__archive-import-status"
-      role="status"
-    >
+    <div className="application-logs-page__archive-import-status" role="status">
       <span className="application-logs-page__archive-import-status-text">
         {archiveImportState.phase === 'uploading'
           ? t('auto.import_run_archive_uploading', {
@@ -832,7 +889,7 @@ export function ApplicationLogsPage({
           aria-label={t('auto.time_range')}
           options={timeRangeOptions}
           value={timeRange}
-          onChange={setTimeRange}
+          onChange={changeTimeRange}
         />
         <span
           className="application-logs-page__sort-control"
@@ -849,7 +906,7 @@ export function ApplicationLogsPage({
               </span>
             }
             value={sortBy}
-            onChange={setSortBy}
+            onChange={changeSortBy}
           />
           <Button
             aria-label={getSortOrderToggleLabel(sortOrder, t)}
@@ -871,7 +928,7 @@ export function ApplicationLogsPage({
           placeholder={t('auto.search_title')}
           prefix={<SearchOutlined />}
           value={keywordSearch}
-          onChange={(event) => setKeywordSearch(event.target.value)}
+          onChange={changeKeywordSearch}
         />
         <div className="application-logs-page__filter-actions">
           <Tooltip title={t('auto.export_selected_runs_trace_dump')}>
@@ -889,6 +946,7 @@ export function ApplicationLogsPage({
             ref={archiveImportInputRef}
             accept="application/json,.json,application/zip,.zip"
             data-testid="application-logs-archive-import-input"
+            aria-label={t('auto.import_run_archive')}
             onChange={handleArchiveImportInputChange}
             style={{ display: 'none' }}
             type="file"
@@ -959,7 +1017,7 @@ export function ApplicationLogsPage({
           runs={runs}
           rowSelection={runsRowSelection}
           selectedRunId={selectedRunId}
-          onPageChange={setPage}
+          onPageChange={changePage}
           onSelectRun={selectRun}
         />
       )}
