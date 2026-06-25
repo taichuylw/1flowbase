@@ -71,6 +71,35 @@ async fn seed_store() -> (
     (store, workspace, actor)
 }
 
+fn runtime_profile_interface() -> domain::McpInterfaceCatalogEntry {
+    domain::McpInterfaceCatalogEntry {
+        interface_id: "get_runtime_profile".into(),
+        method: "GET".into(),
+        path: "/api/console/system/runtime-profile".into(),
+        name: "Get runtime profile".into(),
+        short_description: "Read system runtime profile.".into(),
+        parameter_schema: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "object",
+                    "properties": {
+                        "locale": { "type": "string" }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        }),
+        result_schema: serde_json::json!({"type": "object"}),
+        permission_code: None,
+        security: serde_json::json!([{ "sessionCookie": [] }]),
+        risk_level: domain::McpRiskLevel::Low,
+        bindable: true,
+        disabled_reason: None,
+    }
+}
+
 #[tokio::test]
 async fn mcp_management_catalog_read_does_not_seed_default_instance() {
     let (store, workspace, actor) = seed_store().await;
@@ -164,18 +193,14 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
     let tool = service
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
-            tool_id: None,
+            tool_id: "restart_worker".into(),
             name: "Restart Worker".into(),
             short_description: "Restart a worker".into(),
             usage_description: Some("Use only after checking status.".into()),
             full_description: "Restarts a selected worker through the backend interface.".into(),
-            interface_id: "settings.system_runtime.get_profile".into(),
-            parameter_schema: serde_json::json!({"type":"object"}),
-            result_schema: serde_json::json!({"type":"object"}),
+            interface_entry: runtime_profile_interface(),
             input_mapping: serde_json::json!({}),
             output_mapping: serde_json::json!({}),
-            permission_code: Some("system_runtime.view.all".into()),
-            risk_level: domain::McpRiskLevel::High,
             audit_policy: serde_json::json!({"enabled": true}),
             des_id_required: true,
             status: domain::McpToolStatus::Enabled,
@@ -283,18 +308,14 @@ async fn mcp_tool_binding_write_scope_is_limited_to_actor_workspace() {
     let tool = service
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
-            tool_id: Some("runtime_profile".into()),
+            tool_id: "runtime_profile".into(),
             name: "Runtime Profile".into(),
             short_description: "Read runtime profile".into(),
             usage_description: None,
             full_description: "Read the current runtime profile.".into(),
-            interface_id: "settings.system_runtime.get_profile".into(),
-            parameter_schema: serde_json::json!({}),
-            result_schema: serde_json::json!({}),
+            interface_entry: runtime_profile_interface(),
             input_mapping: serde_json::json!({}),
             output_mapping: serde_json::json!({}),
-            permission_code: Some("system_runtime.view.all".into()),
-            risk_level: domain::McpRiskLevel::High,
             audit_policy: serde_json::json!({}),
             des_id_required: true,
             status: domain::McpToolStatus::Enabled,
@@ -372,18 +393,14 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     let tool = service
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
-            tool_id: Some("runtime_profile".into()),
+            tool_id: "runtime_profile".into(),
             name: "Runtime Profile".into(),
             short_description: "Read runtime profile".into(),
             usage_description: None,
             full_description: "Read the current runtime profile.".into(),
-            interface_id: "settings.system_runtime.get_profile".into(),
-            parameter_schema: serde_json::json!({}),
-            result_schema: serde_json::json!({}),
+            interface_entry: runtime_profile_interface(),
             input_mapping: serde_json::json!({}),
             output_mapping: serde_json::json!({}),
-            permission_code: Some("system_runtime.view.all".into()),
-            risk_level: domain::McpRiskLevel::High,
             audit_policy: serde_json::json!({}),
             des_id_required: true,
             status: domain::McpToolStatus::Enabled,
@@ -393,18 +410,14 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
     let disabled_tool = service
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
-            tool_id: Some("disabled_runtime".into()),
+            tool_id: "disabled_runtime".into(),
             name: "Disabled Runtime".into(),
             short_description: "Disabled runtime profile".into(),
             usage_description: None,
             full_description: "Disabled runtime profile should not be visible.".into(),
-            interface_id: "settings.system_runtime.get_profile".into(),
-            parameter_schema: serde_json::json!({}),
-            result_schema: serde_json::json!({}),
+            interface_entry: runtime_profile_interface(),
             input_mapping: serde_json::json!({}),
             output_mapping: serde_json::json!({}),
-            permission_code: Some("system_runtime.view.all".into()),
-            risk_level: domain::McpRiskLevel::High,
             audit_policy: serde_json::json!({}),
             des_id_required: true,
             status: domain::McpToolStatus::Disabled,

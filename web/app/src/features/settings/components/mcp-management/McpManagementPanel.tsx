@@ -27,6 +27,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Tree,
   Typography,
   message
@@ -82,6 +83,7 @@ import {
   buildRandomToolIdSeed,
   buildReadableToolId
 } from './mcp-management-view-model';
+import { JsonSchemaInlineEditor } from '../../../agent-flow/components/detail/fields/json-schema/JsonSchemaSettingsPanel';
 import {
   createInitialMcpInstancesState,
   initialMcpToolsState,
@@ -116,14 +118,14 @@ type BindingFormValues = {
 };
 
 type ToolFormValues = {
-  tool_id?: string | null;
+  tool_id: string;
   name: string;
   short_description: string;
   usage_description: string | null;
   full_description: string;
   interface_id: string;
-  input_mapping_text: string;
-  output_mapping_text: string;
+  input_mapping: Record<string, unknown>;
+  output_mapping: Record<string, unknown>;
   audit_policy_text: string;
   des_id_required: boolean;
   status: string;
@@ -137,6 +139,36 @@ type MetaToolConfigFormValues = Omit<
 
 function useCsrfToken() {
   return useAuthStore((state) => state.csrfToken ?? '');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function emptyObjectSchema(): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: {},
+    additionalProperties: false
+  };
+}
+
+function schemaRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : emptyObjectSchema();
+}
+
+function interfaceOptionLabel(entry: ConsoleMcpInterfaceCapability) {
+  return `${entry.method} ${entry.path}`;
+}
+
+function applyInterfaceMappingSchemas(
+  form: { setFieldsValue: (values: Partial<ToolFormValues>) => void },
+  entry: ConsoleMcpInterfaceCapability | undefined
+) {
+  form.setFieldsValue({
+    input_mapping: schemaRecord(entry?.parameter_schema),
+    output_mapping: schemaRecord(entry?.result_schema)
+  });
 }
 
 export function McpManagementPanel({
@@ -155,12 +187,7 @@ export function McpManagementPanel({
         {
           key: 'instances',
           label: i18nText('settings', 'auto.mcp_instances'),
-          children: (
-            <McpInstancesTab
-              canManage={canManage}
-              catalog={catalog}
-            />
-          )
+          children: <McpInstancesTab canManage={canManage} catalog={catalog} />
         },
         {
           key: 'tools',
@@ -398,7 +425,9 @@ function McpInstancesTab({
     return (
       catalog.instances.find(
         (instance) => instance.id === binding.instance_record_id
-      )?.instance_id ?? selectedInstance?.instance_id ?? ''
+      )?.instance_id ??
+      selectedInstance?.instance_id ??
+      ''
     );
   }
 
@@ -409,7 +438,9 @@ function McpInstancesTab({
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           <Typography.Text strong>{record.name}</Typography.Text>
-          <Typography.Text type="secondary">{record.instance_id}</Typography.Text>
+          <Typography.Text type="secondary">
+            {record.instance_id}
+          </Typography.Text>
         </Space>
       )
     },
@@ -425,7 +456,9 @@ function McpInstancesTab({
     {
       title: i18nText('settings', 'auto.status'),
       dataIndex: 'status',
-      render: (status: string) => <Tag color={statusColor(status)}>{status}</Tag>
+      render: (status: string) => (
+        <Tag color={statusColor(status)}>{status}</Tag>
+      )
     },
     {
       title: i18nText('settings', 'auto.directory_summary'),
@@ -553,7 +586,11 @@ function McpInstancesTab({
                   <Typography.Text strong>
                     {i18nText('settings', 'auto.add_group')}
                   </Typography.Text>
-                  <Form.Item name="instance_id" label="instance_id" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="instance_id"
+                    label="instance_id"
+                    rules={[{ required: true }]}
+                  >
                     <Select
                       options={catalog.instances.map((instance) => ({
                         label: instance.name,
@@ -561,16 +598,28 @@ function McpInstancesTab({
                       }))}
                     />
                   </Form.Item>
-                  <Form.Item name="path" label="path" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="path"
+                    label="path"
+                    rules={[{ required: true }]}
+                  >
                     <Input placeholder="/ops" />
                   </Form.Item>
-                  <Form.Item name="display_name" label="display_name" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="display_name"
+                    label="display_name"
+                    rules={[{ required: true }]}
+                  >
                     <Input />
                   </Form.Item>
                   <Form.Item name="description_short" label="description_short">
                     <Input />
                   </Form.Item>
-                  <Form.Item name="enabled" label="enabled" valuePropName="checked">
+                  <Form.Item
+                    name="enabled"
+                    label="enabled"
+                    valuePropName="checked"
+                  >
                     <Switch />
                   </Form.Item>
                   <Form.Item name="sort_order" label="sort_order">
@@ -601,7 +650,11 @@ function McpInstancesTab({
                       ? i18nText('settings', 'auto.edit_tool_binding')
                       : i18nText('settings', 'auto.add_tool_binding')}
                   </Typography.Text>
-                  <Form.Item name="instance_id" label="instance_id" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="instance_id"
+                    label="instance_id"
+                    rules={[{ required: true }]}
+                  >
                     <Select
                       disabled={Boolean(editingBinding)}
                       options={catalog.instances.map((instance) => ({
@@ -610,10 +663,18 @@ function McpInstancesTab({
                       }))}
                     />
                   </Form.Item>
-                  <Form.Item name="group_path" label="group_path" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="group_path"
+                    label="group_path"
+                    rules={[{ required: true }]}
+                  >
                     <Input placeholder="/ops" />
                   </Form.Item>
-                  <Form.Item name="tool_id" label="tool_id" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="tool_id"
+                    label="tool_id"
+                    rules={[{ required: true }]}
+                  >
                     <Select
                       disabled={Boolean(editingBinding)}
                       options={catalog.tools.map((tool) => ({
@@ -625,7 +686,11 @@ function McpInstancesTab({
                   <Form.Item name="display_alias" label="display_alias">
                     <Input />
                   </Form.Item>
-                  <Form.Item name="visible" label="visible" valuePropName="checked">
+                  <Form.Item
+                    name="visible"
+                    label="visible"
+                    valuePropName="checked"
+                  >
                     <Switch />
                   </Form.Item>
                   <Form.Item name="sort_order" label="sort_order">
@@ -645,7 +710,10 @@ function McpInstancesTab({
                         onClick={() => {
                           setEditingBinding(null);
                           bindingForm.resetFields();
-                          bindingForm.setFieldValue('instance_id', selectedInstance.instance_id);
+                          bindingForm.setFieldValue(
+                            'instance_id',
+                            selectedInstance.instance_id
+                          );
                         }}
                       >
                         {i18nText('settings', 'auto.cancel')}
@@ -662,7 +730,11 @@ function McpInstancesTab({
             columns={[
               { title: 'path', dataIndex: 'path' },
               { title: 'display_name', dataIndex: 'display_name' },
-              { title: 'enabled', dataIndex: 'enabled', render: (value) => String(value) },
+              {
+                title: 'enabled',
+                dataIndex: 'enabled',
+                render: (value) => String(value)
+              },
               {
                 title: i18nText('settings', 'auto.operation'),
                 render: (_, record) => (
@@ -676,7 +748,9 @@ function McpInstancesTab({
                           (item) => item.id === record.instance_record_id
                         );
                         groupForm.setFieldsValue({
-                          instance_id: instance?.instance_id ?? selectedInstance.instance_id,
+                          instance_id:
+                            instance?.instance_id ??
+                            selectedInstance.instance_id,
                           path: record.path,
                           display_name: record.display_name,
                           description_short: record.description_short,
@@ -686,14 +760,19 @@ function McpInstancesTab({
                       }}
                     />
                     <Popconfirm
-                      title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
+                      title={i18nText(
+                        'settings',
+                        'auto.mcp_hard_delete_confirm'
+                      )}
                       disabled={!canManage}
                       onConfirm={() => {
                         const instance = catalog.instances.find(
                           (item) => item.id === record.instance_record_id
                         );
                         deleteGroupMutation.mutate({
-                          instanceId: instance?.instance_id ?? selectedInstance.instance_id,
+                          instanceId:
+                            instance?.instance_id ??
+                            selectedInstance.instance_id,
                           path: record.path
                         });
                       }}
@@ -719,7 +798,11 @@ function McpInstancesTab({
               { title: 'group_path', dataIndex: 'group_path' },
               { title: 'tool_id', dataIndex: 'tool_id' },
               { title: 'display_alias', dataIndex: 'display_alias' },
-              { title: 'visible', dataIndex: 'visible', render: (value) => String(value) },
+              {
+                title: 'visible',
+                dataIndex: 'visible',
+                render: (value) => String(value)
+              },
               {
                 title: i18nText('settings', 'auto.operation'),
                 render: (_, record) => (
@@ -741,7 +824,10 @@ function McpInstancesTab({
                       }}
                     />
                     <Popconfirm
-                      title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
+                      title={i18nText(
+                        'settings',
+                        'auto.mcp_hard_delete_confirm'
+                      )}
                       disabled={!canManage}
                       onConfirm={() => deleteBindingMutation.mutate(record.id)}
                     >
@@ -763,13 +849,25 @@ function McpInstancesTab({
       ) : null}
       <Modal
         open={instanceModalOpen}
-        title={editingInstance ? i18nText('settings', 'auto.edit') : i18nText('settings', 'auto.new')}
+        title={
+          editingInstance
+            ? i18nText('settings', 'auto.edit')
+            : i18nText('settings', 'auto.new')
+        }
         onCancel={() => setInstanceModalOpen(false)}
         onOk={() => instanceForm.submit()}
         confirmLoading={saveInstanceMutation.isPending}
       >
-        <Form form={instanceForm} layout="vertical" onFinish={(values) => saveInstanceMutation.mutate(values)}>
-          <Form.Item name="instance_id" label="instance_id" rules={[{ required: true }]}>
+        <Form
+          form={instanceForm}
+          layout="vertical"
+          onFinish={(values) => saveInstanceMutation.mutate(values)}
+        >
+          <Form.Item
+            name="instance_id"
+            label="instance_id"
+            rules={[{ required: true }]}
+          >
             <Input disabled={Boolean(editingInstance)} />
           </Form.Item>
           <Form.Item name="name" label="name" rules={[{ required: true }]}>
@@ -779,9 +877,17 @@ function McpInstancesTab({
             <Input />
           </Form.Item>
           <Form.Item name="status" label="status" rules={[{ required: true }]}>
-            <Select options={['draft', 'enabled', 'disabled', 'archived'].map((value) => ({ label: value, value }))} />
+            <Select
+              options={['draft', 'enabled', 'disabled', 'archived'].map(
+                (value) => ({ label: value, value })
+              )}
+            />
           </Form.Item>
-          <Form.Item name="default_entry_path" label="default_entry_path" rules={[{ required: true }]}>
+          <Form.Item
+            name="default_entry_path"
+            label="default_entry_path"
+            rules={[{ required: true }]}
+          >
             <Input />
           </Form.Item>
         </Form>
@@ -869,54 +975,73 @@ function McpToolsTab({
     []
   );
   const autoGeneratedToolIdRef = useRef('');
-  const columns = useMemo<Array<DataTableColumn<ConsoleMcpTool>>>(() => [
-    {
-      key: 'name',
-      title: i18nText('settings', 'auto.tool_name'),
-      dataIndex: 'name',
-      width: 220,
-      render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          <Typography.Text strong>{record.name}</Typography.Text>
-          <Typography.Text type="secondary">{record.tool_id}</Typography.Text>
-        </Space>
-      )
-    },
-    {
-      key: 'interface_id',
-      title: 'interface_id',
-      dataIndex: 'interface_id',
-      width: 240,
-      ellipsis: true
-    },
-    {
-      key: 'risk_level',
-      title: 'risk_level',
-      dataIndex: 'risk_level',
-      width: 120,
-      render: (value) => <Tag color={riskColor(String(value))}>{String(value)}</Tag>
-    },
-    {
-      key: 'des_id',
-      title: 'des_id',
-      dataIndex: 'des_id',
-      width: 140
-    },
-    {
-      key: 'status',
-      title: 'status',
-      dataIndex: 'status',
-      width: 120,
-      render: (value) => <Tag color={statusColor(String(value))}>{String(value)}</Tag>
-    }
-  ], []);
+  const inputMappingValidRef = useRef(true);
+  const outputMappingValidRef = useRef(true);
+  const [schemaEditorRevision, bumpSchemaEditorRevision] = useReducer(
+    (value: number) => value + 1,
+    0
+  );
+  const columns = useMemo<Array<DataTableColumn<ConsoleMcpTool>>>(
+    () => [
+      {
+        key: 'name',
+        title: i18nText('settings', 'auto.tool_name'),
+        dataIndex: 'name',
+        width: 220,
+        render: (_, record) => (
+          <Space direction="vertical" size={0}>
+            <Typography.Text strong>{record.name}</Typography.Text>
+            <Typography.Text type="secondary">{record.tool_id}</Typography.Text>
+          </Space>
+        )
+      },
+      {
+        key: 'interface_id',
+        title: 'interface_id',
+        dataIndex: 'interface_id',
+        width: 240,
+        ellipsis: true
+      },
+      {
+        key: 'risk_level',
+        title: 'risk_level',
+        dataIndex: 'risk_level',
+        width: 120,
+        render: (value) => (
+          <Tag color={riskColor(String(value))}>{String(value)}</Tag>
+        )
+      },
+      {
+        key: 'des_id',
+        title: 'des_id',
+        dataIndex: 'des_id',
+        width: 140
+      },
+      {
+        key: 'status',
+        title: 'status',
+        dataIndex: 'status',
+        width: 120,
+        render: (value) => (
+          <Tag color={statusColor(String(value))}>{String(value)}</Tag>
+        )
+      }
+    ],
+    []
+  );
   const saveToolMutation = useMutation({
     mutationFn: (values: ToolFormValues) => {
+      if (!inputMappingValidRef.current) {
+        throw new Error('input_mapping JSON');
+      }
+      if (!outputMappingValidRef.current) {
+        throw new Error('output_mapping JSON');
+      }
       const selectedInterface = interfaceCapabilities.find(
         (entry) => entry.interface_id === values.interface_id
       );
       const body: SaveConsoleMcpToolBody = {
-        tool_id: editingTool ? editingTool.tool_id : values.tool_id ?? null,
+        tool_id: editingTool ? editingTool.tool_id : values.tool_id,
         name: values.name,
         short_description: values.short_description,
         usage_description: values.usage_description,
@@ -924,8 +1049,8 @@ function McpToolsTab({
         interface_id: values.interface_id,
         parameter_schema: selectedInterface?.parameter_schema ?? {},
         result_schema: selectedInterface?.result_schema ?? {},
-        input_mapping: parseJsonText(values.input_mapping_text, 'input_mapping'),
-        output_mapping: parseJsonText(values.output_mapping_text, 'output_mapping'),
+        input_mapping: values.input_mapping,
+        output_mapping: values.output_mapping,
         permission_code: selectedInterface?.permission_code ?? null,
         risk_level: selectedInterface?.risk_level ?? 'medium',
         audit_policy: parseJsonText(values.audit_policy_text, 'audit_policy'),
@@ -949,7 +1074,11 @@ function McpToolsTab({
           des_id_required: body.des_id_required,
           status: body.status
         };
-        return updateSettingsMcpTool(editingTool.tool_id, updateBody, csrfToken);
+        return updateSettingsMcpTool(
+          editingTool.tool_id,
+          updateBody,
+          csrfToken
+        );
       }
       return createSettingsMcpTool(body, csrfToken);
     },
@@ -1015,12 +1144,15 @@ function McpToolsTab({
   }, [catalog.bindings]);
 
   const filteredTools = catalog.tools.filter((tool) => {
-    const text = `${tool.name} ${tool.tool_id} ${tool.interface_id}`.toLowerCase();
+    const text =
+      `${tool.name} ${tool.tool_id} ${tool.interface_id}`.toLowerCase();
     const paths = bindingPathsByToolId.get(tool.tool_id) ?? [];
     return (
       (!keyword || text.includes(keyword.toLowerCase())) &&
       (!pathFilter ||
-        paths.some((path) => path.toLowerCase().includes(pathFilter.toLowerCase()))) &&
+        paths.some((path) =>
+          path.toLowerCase().includes(pathFilter.toLowerCase())
+        )) &&
       (!interfaceId || tool.interface_id === interfaceId) &&
       (!riskLevel || tool.risk_level === riskLevel) &&
       (!status || tool.status === status) &&
@@ -1028,82 +1160,95 @@ function McpToolsTab({
     );
   });
 
-  const tableColumns = useMemo<Array<DataTableColumn<ConsoleMcpTool>>>(() => [
-    ...columns,
+  const tableColumns = useMemo<Array<DataTableColumn<ConsoleMcpTool>>>(
+    () => [
+      ...columns,
+      {
+        key: 'paths',
+        title: 'group_path',
+        width: 180,
+        render: (_, record) => (
+          <Space wrap size={[4, 4]}>
+            {(bindingPathsByToolId.get(record.tool_id) ?? ['/']).map((path) => (
+              <Tag key={path}>{path}</Tag>
+            ))}
+          </Space>
+        )
+      },
+      {
+        key: 'actions',
+        title: i18nText('settings', 'auto.operation'),
+        width: 180,
+        render: (_, record) => (
+          <Space>
+            <Button
+              icon={<EditOutlined />}
+              size="small"
+              disabled={!canManage}
+              onClick={() => {
+                autoGeneratedToolIdRef.current = '';
+                inputMappingValidRef.current = true;
+                outputMappingValidRef.current = true;
+                setEditingTool(record);
+                setStep('basic');
+                form.setFieldsValue({
+                  tool_id: record.tool_id,
+                  name: record.name,
+                  short_description: record.short_description,
+                  usage_description: record.usage_description,
+                  full_description: record.full_description,
+                  interface_id: record.interface_id,
+                  input_mapping: schemaRecord(record.input_mapping),
+                  output_mapping: schemaRecord(record.output_mapping),
+                  audit_policy_text: stringifyJson(record.audit_policy),
+                  des_id_required: record.des_id_required,
+                  status: record.status
+                });
+                bumpSchemaEditorRevision();
+                setModalOpen(true);
+              }}
+            />
+            <Button
+              icon={<ReloadOutlined />}
+              size="small"
+              disabled={!canManage}
+              loading={refreshMutation.isPending}
+              onClick={() => refreshMutation.mutate(record.tool_id)}
+            />
+            <Popconfirm
+              title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
+              disabled={!canManage}
+              onConfirm={() => deleteToolMutation.mutate(record.tool_id)}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+                disabled={!canManage}
+              />
+            </Popconfirm>
+          </Space>
+        )
+      }
+    ],
+    [
+      bindingPathsByToolId,
+      canManage,
+      columns,
+      deleteToolMutation,
+      form,
+      refreshMutation,
+      setEditingTool,
+      setModalOpen,
+      setStep
+    ]
+  );
+  const configuration = useUserPreferenceDataTableConfiguration<ConsoleMcpTool>(
     {
-      key: 'paths',
-      title: 'group_path',
-      width: 180,
-      render: (_, record) => (
-        <Space wrap size={[4, 4]}>
-          {(bindingPathsByToolId.get(record.tool_id) ?? ['/']).map((path) => (
-            <Tag key={path}>{path}</Tag>
-          ))}
-        </Space>
-      )
-    },
-    {
-      key: 'actions',
-      title: i18nText('settings', 'auto.operation'),
-      width: 180,
-      render: (_, record) => (
-        <Space>
-          <Button
-            icon={<EditOutlined />}
-            size="small"
-            disabled={!canManage}
-            onClick={() => {
-              autoGeneratedToolIdRef.current = '';
-              setEditingTool(record);
-              setStep('basic');
-              form.setFieldsValue({
-                tool_id: record.tool_id,
-                name: record.name,
-                short_description: record.short_description,
-                usage_description: record.usage_description,
-                full_description: record.full_description,
-                interface_id: record.interface_id,
-                input_mapping_text: stringifyJson(record.input_mapping),
-                output_mapping_text: stringifyJson(record.output_mapping),
-                audit_policy_text: stringifyJson(record.audit_policy),
-                des_id_required: record.des_id_required,
-                status: record.status
-              });
-              setModalOpen(true);
-            }}
-          />
-          <Button
-            icon={<ReloadOutlined />}
-            size="small"
-            disabled={!canManage}
-            loading={refreshMutation.isPending}
-            onClick={() => refreshMutation.mutate(record.tool_id)}
-          />
-          <Popconfirm
-            title={i18nText('settings', 'auto.mcp_hard_delete_confirm')}
-            disabled={!canManage}
-            onConfirm={() => deleteToolMutation.mutate(record.tool_id)}
-          >
-            <Button danger icon={<DeleteOutlined />} size="small" disabled={!canManage} />
-          </Popconfirm>
-        </Space>
-      )
+      preferenceKey: 'settings.mcp-management.tools',
+      columns: tableColumns
     }
-  ], [
-    bindingPathsByToolId,
-    canManage,
-    columns,
-    deleteToolMutation,
-    form,
-    refreshMutation,
-    setEditingTool,
-    setModalOpen,
-    setStep
-  ]);
-  const configuration = useUserPreferenceDataTableConfiguration<ConsoleMcpTool>({
-    preferenceKey: 'settings.mcp-management.tools',
-    columns: tableColumns
-  });
+  );
 
   return (
     <Space direction="vertical" size="middle" className="mcp-management__stack">
@@ -1128,7 +1273,7 @@ function McpToolsTab({
             placeholder="interface_id"
             value={interfaceId}
             options={interfaceCapabilities.map((entry) => ({
-              label: entry.interface_id,
+              label: `${interfaceOptionLabel(entry)} ${entry.interface_id}`,
               value: entry.interface_id
             }))}
             onChange={setInterfaceId}
@@ -1157,15 +1302,20 @@ function McpToolsTab({
             allowClear
             placeholder="status"
             value={status}
-            options={['draft', 'enabled', 'disabled', 'archived'].map((value) => ({
-              label: value,
-              value
-            }))}
+            options={['draft', 'enabled', 'disabled', 'archived'].map(
+              (value) => ({
+                label: value,
+                value
+              })
+            )}
             onChange={setStatus}
           />
         </Space>
         <Space>
-          <DataTableColumnSettings columns={tableColumns} configuration={configuration} />
+          <DataTableColumnSettings
+            columns={tableColumns}
+            configuration={configuration}
+          />
           <Button
             icon={<DownloadOutlined />}
             onClick={handleExportCatalog}
@@ -1178,26 +1328,25 @@ function McpToolsTab({
             icon={<PlusOutlined />}
             disabled={!canManage}
             onClick={() => {
-              const generatedToolId = buildReadableToolId(
-                '',
-                buildRandomToolIdSeed()
-              );
-              autoGeneratedToolIdRef.current = generatedToolId;
+              autoGeneratedToolIdRef.current = '';
+              inputMappingValidRef.current = true;
+              outputMappingValidRef.current = true;
               setEditingTool(null);
               setStep('basic');
               form.setFieldsValue({
-                tool_id: generatedToolId,
+                tool_id: '',
                 name: '',
                 short_description: '',
                 usage_description: '',
                 full_description: '',
-                interface_id: interfaceCapabilities.find((entry) => entry.bindable)?.interface_id,
-                input_mapping_text: '{}',
-                output_mapping_text: '{}',
+                interface_id: undefined,
+                input_mapping: emptyObjectSchema(),
+                output_mapping: emptyObjectSchema(),
                 audit_policy_text: '{"enabled":true}',
                 des_id_required: true,
                 status: 'draft'
               });
+              bumpSchemaEditorRevision();
               setModalOpen(true);
             }}
           >
@@ -1218,17 +1367,29 @@ function McpToolsTab({
       <Modal
         width={840}
         open={modalOpen}
-        title={editingTool ? i18nText('settings', 'auto.edit') : i18nText('settings', 'auto.new')}
+        title={
+          editingTool
+            ? i18nText('settings', 'auto.edit')
+            : i18nText('settings', 'auto.new')
+        }
         onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()}
         confirmLoading={saveToolMutation.isPending}
       >
         <Steps
           size="small"
-          current={['basic', 'interface', 'input', 'output', 'description'].indexOf(step)}
-          items={['basic', 'interface', 'input', 'output', 'description'].map((key) => ({
-            title: key
-          }))}
+          current={[
+            'basic',
+            'interface',
+            'input',
+            'output',
+            'description'
+          ].indexOf(step)}
+          items={['basic', 'interface', 'input', 'output', 'description'].map(
+            (key) => ({
+              title: key
+            })
+          )}
         />
         <Segmented
           block
@@ -1252,74 +1413,193 @@ function McpToolsTab({
               return;
             }
 
-            const generatedToolId = buildReadableToolId(
-              values.name ?? '',
-              autoGeneratedToolIdRef.current || buildRandomToolIdSeed()
-            );
             const currentToolId = values.tool_id ?? '';
-
             if (
-              !currentToolId ||
-              currentToolId === autoGeneratedToolIdRef.current
+              currentToolId &&
+              currentToolId !== autoGeneratedToolIdRef.current
             ) {
-              autoGeneratedToolIdRef.current = generatedToolId;
-              form.setFieldValue('tool_id', generatedToolId);
+              return;
             }
+
+            const generatedToolId = buildReadableToolId(values.name ?? '');
+            autoGeneratedToolIdRef.current = generatedToolId;
+            form.setFieldValue('tool_id', generatedToolId);
           }}
         >
           <div hidden={step !== 'basic'}>
             <Form.Item name="name" label="name" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
-            <Form.Item name="tool_id" label="tool_id">
-              <Input disabled={Boolean(editingTool)} />
+            <Form.Item
+              name="tool_id"
+              label="tool_id"
+              rules={[{ required: true, whitespace: true }]}
+            >
+              <Input
+                disabled={Boolean(editingTool)}
+                addonAfter={
+                  editingTool ? undefined : (
+                    <Tooltip title="随机生成 tool_id">
+                      <Button
+                        type="text"
+                        htmlType="button"
+                        size="small"
+                        icon={<ReloadOutlined />}
+                        onClick={() => {
+                          autoGeneratedToolIdRef.current = '';
+                          form.setFieldValue(
+                            'tool_id',
+                            buildReadableToolId('', buildRandomToolIdSeed())
+                          );
+                        }}
+                      />
+                    </Tooltip>
+                  )
+                }
+              />
             </Form.Item>
-            <Form.Item name="short_description" label="short_description" rules={[{ required: true }]}>
+            <Form.Item
+              name="short_description"
+              label="short_description"
+              rules={[{ required: true }]}
+            >
               <Input />
             </Form.Item>
-            <Form.Item name="status" label="status" rules={[{ required: true }]}>
-              <Select options={['draft', 'enabled', 'disabled', 'archived'].map((value) => ({ label: value, value }))} />
+            <Form.Item
+              name="status"
+              label="status"
+              rules={[{ required: true }]}
+            >
+              <Select
+                options={['draft', 'enabled', 'disabled', 'archived'].map(
+                  (value) => ({ label: value, value })
+                )}
+              />
             </Form.Item>
           </div>
           <div hidden={step !== 'interface'}>
-            <Form.Item name="interface_id" label="interface_id" rules={[{ required: true }]}>
+            <Form.Item
+              name="interface_id"
+              label="interface_id"
+              rules={[{ required: true }]}
+            >
               <Select
                 showSearch
                 optionFilterProp="label"
                 options={interfaceCapabilities.map((entry) => ({
-                  label: `${entry.interface_id}${entry.bindable ? '' : ` (${entry.disabled_reason})`}`,
+                  label: `${interfaceOptionLabel(entry)} - ${entry.interface_id}${
+                    entry.bindable ? '' : ` (${entry.disabled_reason})`
+                  }`,
                   value: entry.interface_id,
                   disabled: !entry.bindable
                 }))}
+                onChange={(nextInterfaceId) => {
+                  const selectedInterface = interfaceCapabilities.find(
+                    (entry) => entry.interface_id === nextInterfaceId
+                  );
+                  applyInterfaceMappingSchemas(form, selectedInterface);
+                  inputMappingValidRef.current = true;
+                  outputMappingValidRef.current = true;
+                  bumpSchemaEditorRevision();
+                }}
               />
             </Form.Item>
-            <Alert
-              type="info"
-              showIcon
-              message={i18nText('settings', 'auto.mcp_interface_source_hint')}
-            />
+            <Form.Item noStyle shouldUpdate>
+              {({ getFieldValue }) => {
+                const selectedInterface = interfaceCapabilities.find(
+                  (entry) => entry.interface_id === getFieldValue('interface_id')
+                );
+
+                if (!selectedInterface) {
+                  return (
+                    <Alert
+                      type="info"
+                      showIcon
+                      message={i18nText(
+                        'settings',
+                        'auto.mcp_interface_source_hint'
+                      )}
+                    />
+                  );
+                }
+
+                return (
+                  <Descriptions bordered size="small" column={1}>
+                    <Descriptions.Item label="operation">
+                      {interfaceOptionLabel(selectedInterface)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="operationId">
+                      {selectedInterface.interface_id}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="risk_level">
+                      {selectedInterface.risk_level}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="permission_code">
+                      {selectedInterface.permission_code ?? '-'}
+                    </Descriptions.Item>
+                  </Descriptions>
+                );
+              }}
+            </Form.Item>
           </div>
           <div hidden={step !== 'input'}>
-            <Form.Item name="input_mapping_text" label="input_mapping" rules={[{ required: true }]}>
-              <Input.TextArea rows={8} />
+            <Typography.Text type="secondary">input_mapping</Typography.Text>
+            <Form.Item noStyle shouldUpdate>
+              {({ getFieldValue, setFieldValue }) => (
+                <div className="mcp-management__schema-editor">
+                  <JsonSchemaInlineEditor
+                    resetKey={`input:${getFieldValue('interface_id') ?? 'none'}:${schemaEditorRevision}`}
+                    schema={schemaRecord(getFieldValue('input_mapping'))}
+                    onChange={(schema) => setFieldValue('input_mapping', schema)}
+                    onValidityChange={(valid) => {
+                      inputMappingValidRef.current = valid;
+                    }}
+                  />
+                </div>
+              )}
             </Form.Item>
           </div>
           <div hidden={step !== 'output'}>
-            <Form.Item name="output_mapping_text" label="output_mapping" rules={[{ required: true }]}>
-              <Input.TextArea rows={8} />
+            <Typography.Text type="secondary">output_mapping</Typography.Text>
+            <Form.Item noStyle shouldUpdate>
+              {({ getFieldValue, setFieldValue }) => (
+                <div className="mcp-management__schema-editor">
+                  <JsonSchemaInlineEditor
+                    fallbackRootType="object"
+                    resetKey={`output:${getFieldValue('interface_id') ?? 'none'}:${schemaEditorRevision}`}
+                    schema={schemaRecord(getFieldValue('output_mapping'))}
+                    onChange={(schema) => setFieldValue('output_mapping', schema)}
+                    onValidityChange={(valid) => {
+                      outputMappingValidRef.current = valid;
+                    }}
+                  />
+                </div>
+              )}
             </Form.Item>
           </div>
           <div hidden={step !== 'description'}>
             <Form.Item name="usage_description" label="usage_description">
               <Input.TextArea rows={3} />
             </Form.Item>
-            <Form.Item name="full_description" label="full_description" rules={[{ required: true }]}>
+            <Form.Item
+              name="full_description"
+              label="full_description"
+              rules={[{ required: true }]}
+            >
               <Input.TextArea rows={6} />
             </Form.Item>
-            <Form.Item name="audit_policy_text" label="audit_policy" rules={[{ required: true }]}>
+            <Form.Item
+              name="audit_policy_text"
+              label="audit_policy"
+              rules={[{ required: true }]}
+            >
               <Input.TextArea rows={4} />
             </Form.Item>
-            <Form.Item name="des_id_required" label="des_id_required" valuePropName="checked">
+            <Form.Item
+              name="des_id_required"
+              label="des_id_required"
+              valuePropName="checked"
+            >
               <Switch />
             </Form.Item>
             <Form.Item noStyle shouldUpdate>
@@ -1392,7 +1672,9 @@ function McpMetaConfigTab({
       ),
     onSuccess: () => {
       message.success(i18nText('settings', 'auto.mcp_saved'));
-      void queryClient.invalidateQueries({ queryKey: settingsMcpCatalogQueryKey });
+      void queryClient.invalidateQueries({
+        queryKey: settingsMcpCatalogQueryKey
+      });
     },
     onError: (error) => {
       message.error(error instanceof Error ? error.message : String(error));
@@ -1420,40 +1702,80 @@ function McpMetaConfigTab({
         className="mcp-management__meta-form"
       >
         <Flex gap={16} wrap="wrap">
-          <Form.Item name="list_default_limit" label="list_default_limit" rules={[{ required: true }]}>
+          <Form.Item
+            name="list_default_limit"
+            label="list_default_limit"
+            rules={[{ required: true }]}
+          >
             <InputNumber min={1} />
           </Form.Item>
-          <Form.Item name="list_max_depth" label="list_max_depth" rules={[{ required: true }]}>
+          <Form.Item
+            name="list_max_depth"
+            label="list_max_depth"
+            rules={[{ required: true }]}
+          >
             <InputNumber min={1} />
           </Form.Item>
-          <Form.Item name="list_regex_max_length" label="list_regex_max_length" rules={[{ required: true }]}>
+          <Form.Item
+            name="list_regex_max_length"
+            label="list_regex_max_length"
+            rules={[{ required: true }]}
+          >
             <InputNumber min={1} />
           </Form.Item>
         </Flex>
-        <Form.Item name="list_regex_enabled" label="list_regex_enabled" valuePropName="checked">
+        <Form.Item
+          name="list_regex_enabled"
+          label="list_regex_enabled"
+          valuePropName="checked"
+        >
           <Switch />
         </Form.Item>
-        <Form.Item name="list_return_fields_text" label="list_return_fields" rules={[{ required: true }]}>
+        <Form.Item
+          name="list_return_fields_text"
+          label="list_return_fields"
+          rules={[{ required: true }]}
+        >
           <Input.TextArea rows={4} />
         </Form.Item>
-        <Form.Item name="get_include_mapping_summary" label="get_include_mapping_summary" valuePropName="checked">
+        <Form.Item
+          name="get_include_mapping_summary"
+          label="get_include_mapping_summary"
+          valuePropName="checked"
+        >
           <Switch />
         </Form.Item>
-        <Form.Item name="get_include_interface_summary" label="get_include_interface_summary" valuePropName="checked">
+        <Form.Item
+          name="get_include_interface_summary"
+          label="get_include_interface_summary"
+          valuePropName="checked"
+        >
           <Switch />
         </Form.Item>
-        <Form.Item name="call_default_des_id_policy" label="call_default_des_id_policy">
+        <Form.Item
+          name="call_default_des_id_policy"
+          label="call_default_des_id_policy"
+        >
           <Select
-            options={['tool_config', 'required', 'optional', 'disabled'].map((value) => ({
-              label: value,
-              value
-            }))}
+            options={['tool_config', 'required', 'optional', 'disabled'].map(
+              (value) => ({
+                label: value,
+                value
+              })
+            )}
           />
         </Form.Item>
-        <Form.Item name="call_high_risk_requires_des_id" label="call_high_risk_requires_des_id" valuePropName="checked">
+        <Form.Item
+          name="call_high_risk_requires_des_id"
+          label="call_high_risk_requires_des_id"
+          valuePropName="checked"
+        >
           <Switch />
         </Form.Item>
-        <Form.Item name="call_validation_error_format" label="call_validation_error_format">
+        <Form.Item
+          name="call_validation_error_format"
+          label="call_validation_error_format"
+        >
           <Select
             options={['structured', 'field_errors'].map((value) => ({
               label: value,

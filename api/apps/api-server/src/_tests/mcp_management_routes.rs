@@ -81,15 +81,26 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
         .unwrap();
     assert_eq!(interface_response.status(), StatusCode::OK);
     let interface_payload = response_json(interface_response).await;
-    assert!(interface_payload["data"]
+    let runtime_profile_interface = interface_payload["data"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|entry| {
-            entry["interface_id"].as_str() == Some("settings.file_storages.list")
-                && entry["bindable"].as_bool() == Some(false)
-                && entry["disabled_reason"].as_str() == Some("root_only_service_contract")
-        }));
+        .find(|entry| entry["interface_id"].as_str() == Some("get_runtime_profile"))
+        .expect("MCP interface catalog should expose real OpenAPI operations");
+    assert_eq!(runtime_profile_interface["method"].as_str(), Some("GET"));
+    assert_eq!(
+        runtime_profile_interface["path"].as_str(),
+        Some("/api/console/system/runtime-profile")
+    );
+    assert_eq!(runtime_profile_interface["bindable"].as_bool(), Some(true));
+    assert!(
+        runtime_profile_interface["parameter_schema"]["properties"]["query"]["properties"]
+            .get("locale")
+            .is_some()
+    );
+    assert!(runtime_profile_interface["result_schema"]["properties"]
+        .get("topology")
+        .is_some());
 
     let create_tool_response = app
         .clone()
@@ -102,12 +113,12 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
-                        "tool_id": null,
+                        "tool_id": "runtime_profile",
                         "name": "Runtime profile",
                         "short_description": "Runtime profile",
                         "usage_description": "Read runtime profile",
                         "full_description": "Read system runtime topology and locale profile.",
-                        "interface_id": "settings.system_runtime.get_profile",
+                        "interface_id": "get_runtime_profile",
                         "parameter_schema": { "type": "object", "properties": { "fake": { "type": "string" } } },
                         "result_schema": { "type": "string" },
                         "input_mapping": {},
@@ -132,14 +143,14 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
     assert_eq!(first_des_id.len(), 8);
     assert_eq!(
         create_tool_payload["data"]["permission_code"].as_str(),
-        Some("system_runtime.view.all")
+        None
     );
     assert_eq!(
         create_tool_payload["data"]["risk_level"].as_str(),
-        Some("high")
+        Some("low")
     );
     assert!(
-        create_tool_payload["data"]["parameter_schema"]["properties"]
+        create_tool_payload["data"]["parameter_schema"]["properties"]["query"]["properties"]
             .get("locale")
             .is_some()
     );
@@ -300,6 +311,50 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
     assert_eq!(
         missing_description_check_response.status(),
         StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn mcp_tool_create_requires_tool_id() {
+    let app = test_app().await;
+    let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_tool_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/mcp/tools")
+                .header("cookie", &root_cookie)
+                .header("x-csrf-token", &root_csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "Runtime profile",
+                        "short_description": "Runtime profile",
+                        "usage_description": "Read runtime profile",
+                        "full_description": "Read system runtime topology and locale profile.",
+                        "interface_id": "get_runtime_profile",
+                        "parameter_schema": {},
+                        "result_schema": {},
+                        "input_mapping": {},
+                        "output_mapping": {},
+                        "permission_code": null,
+                        "risk_level": "low",
+                        "audit_policy": { "enabled": true },
+                        "des_id_required": true,
+                        "status": "enabled"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        create_tool_response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY
     );
 }
 

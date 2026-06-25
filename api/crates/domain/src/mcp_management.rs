@@ -165,11 +165,14 @@ pub struct McpMetaToolConfigRecord {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpInterfaceCatalogEntry {
     pub interface_id: String,
+    pub method: String,
+    pub path: String,
     pub name: String,
     pub short_description: String,
     pub parameter_schema: serde_json::Value,
     pub result_schema: serde_json::Value,
     pub permission_code: Option<String>,
+    pub security: serde_json::Value,
     pub risk_level: McpRiskLevel,
     pub bindable: bool,
     pub disabled_reason: Option<String>,

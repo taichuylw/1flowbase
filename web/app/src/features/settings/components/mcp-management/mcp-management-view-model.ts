@@ -61,17 +61,17 @@ function normalizeFallback(seed: string) {
   return normalized || 'tool';
 }
 
-export function buildReadableToolId(
-  name: string,
-  fallbackSeed = ''
-) {
+export function buildReadableToolId(name: string, fallbackSeed = '') {
   const nameSegment = slugSegment(name);
 
-  return nameSegment || normalizeFallback(fallbackSeed);
+  return nameSegment || (fallbackSeed ? normalizeFallback(fallbackSeed) : '');
 }
 
 export function buildRandomToolIdSeed() {
-  return Math.random().toString(36).replace(/[^a-z0-9]/gi, '').slice(0, 8);
+  return Math.random()
+    .toString(36)
+    .replace(/[^a-z0-9]/gi, '')
+    .slice(0, 8);
 }
 
 export function buildMcpDirectoryTreeData({
@@ -111,12 +111,20 @@ export function buildMcpDirectoryTreeData({
   }
 
   const groupNodes = Array.from(groupByPath.values())
-    .sort((left, right) => left.sort_order - right.sort_order || left.path.localeCompare(right.path))
+    .sort(
+      (left, right) =>
+        left.sort_order - right.sort_order ||
+        left.path.localeCompare(right.path)
+    )
     .map((group) => {
       const path = normalizePath(group.path);
       const groupBindings = instanceBindings
         .filter((binding) => normalizePath(binding.group_path) === path)
-        .sort((left, right) => left.sort_order - right.sort_order || left.tool_id.localeCompare(right.tool_id));
+        .sort(
+          (left, right) =>
+            left.sort_order - right.sort_order ||
+            left.tool_id.localeCompare(right.tool_id)
+        );
 
       return {
         key: `group:${path}`,

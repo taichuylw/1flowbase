@@ -64,13 +64,33 @@ const styleBoundaryMcpCatalog = {
       short_description: 'Read runtime profile',
       usage_description: null,
       full_description: 'Read the current system runtime profile.',
-      interface_id: 'settings.system_runtime.get_profile',
-      parameter_schema: { type: 'object' },
+      interface_id: 'get_runtime_profile',
+      parameter_schema: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'object',
+            properties: { locale: { type: 'string' } },
+            additionalProperties: false
+          }
+        },
+        additionalProperties: false
+      },
       result_schema: { type: 'object' },
-      input_mapping: {},
-      output_mapping: {},
-      permission_code: 'system_runtime.view.all',
-      risk_level: 'high',
+      input_mapping: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'object',
+            properties: { locale: { type: 'string' } },
+            additionalProperties: false
+          }
+        },
+        additionalProperties: false
+      },
+      output_mapping: { type: 'object' },
+      permission_code: null,
+      risk_level: 'low',
       audit_policy: { enabled: true },
       des_id: 'Abc_1234',
       des_id_required: true,
@@ -108,13 +128,26 @@ const styleBoundaryMcpCatalog = {
 
 const styleBoundaryMcpInterfaceCapabilities = [
   {
-    interface_id: 'settings.system_runtime.get_profile',
+    interface_id: 'get_runtime_profile',
+    method: 'GET',
+    path: '/api/console/system/runtime-profile',
     name: 'System runtime profile',
     short_description: 'Read current runtime profile',
-    parameter_schema: { type: 'object' },
+    parameter_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'object',
+          properties: { locale: { type: 'string' } },
+          additionalProperties: false
+        }
+      },
+      additionalProperties: false
+    },
     result_schema: { type: 'object' },
-    permission_code: 'system_runtime.view.all',
-    risk_level: 'high',
+    permission_code: null,
+    security: [{ sessionCookie: [] }],
+    risk_level: 'low',
     bindable: true,
     disabled_reason: null
   }

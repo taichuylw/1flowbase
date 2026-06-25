@@ -12,6 +12,7 @@ use control_plane::mcp_management::{
     UpdateMcpToolBindingCommand, UpdateMcpToolCommand, UpsertMcpGroupCommand,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -19,6 +20,7 @@ use crate::{
     app_state::ApiState,
     error_response::ApiError,
     middleware::{require_csrf::require_csrf, require_session::require_session},
+    openapi_docs::{ApiDocsRegistry, DocsCatalogOperation},
     response::ApiSuccess,
 };
 
@@ -117,6 +119,8 @@ pub struct McpCatalogResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct McpInterfaceCatalogEntryResponse {
     pub interface_id: String,
+    pub method: String,
+    pub path: String,
     pub name: String,
     pub short_description: String,
     #[schema(value_type = Object)]
@@ -124,6 +128,8 @@ pub struct McpInterfaceCatalogEntryResponse {
     #[schema(value_type = Object)]
     pub result_schema: serde_json::Value,
     pub permission_code: Option<String>,
+    #[schema(value_type = [Object])]
+    pub security: serde_json::Value,
     pub risk_level: String,
     pub bindable: bool,
     pub disabled_reason: Option<String>,
@@ -195,7 +201,7 @@ pub struct DeleteMcpGroupQuery {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateMcpToolBody {
-    pub tool_id: Option<String>,
+    pub tool_id: String,
     pub name: String,
     pub short_description: String,
     pub usage_description: Option<String>,
@@ -359,9 +365,10 @@ pub async fn list_mcp_interface_capabilities(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<Vec<McpInterfaceCatalogEntryResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let mut entries = McpManagementService::new(state.store.clone())
-        .interface_catalog(context.user.id)
+    McpManagementService::new(state.store.clone())
+        .authorize_interface_catalog_view(context.user.id)
         .await?;
+    let mut entries = mcp_interface_catalog_entries(&state.api_docs);
     if query.bindable_only.unwrap_or(false) {
         entries.retain(|entry| entry.bindable);
     }
@@ -548,8 +555,13 @@ pub async fn create_mcp_tool(
 ) -> Result<(StatusCode, Json<ApiSuccess<McpToolResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context)?;
+    let interface_entry = bindable_mcp_interface(&state.api_docs, &body.interface_id)?;
     let record = McpManagementService::new(state.store.clone())
-        .create_tool(to_create_tool_command(context.user.id, body)?)
+        .create_tool(to_create_tool_command(
+            context.user.id,
+            body,
+            interface_entry,
+        )?)
         .await?;
     Ok((
         StatusCode::CREATED,
@@ -579,8 +591,14 @@ pub async fn update_mcp_tool(
 ) -> Result<Json<ApiSuccess<McpToolResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context)?;
+    let interface_entry = bindable_mcp_interface(&state.api_docs, &body.interface_id)?;
     let record = McpManagementService::new(state.store.clone())
-        .update_tool(to_update_tool_command(context.user.id, tool_id, body)?)
+        .update_tool(to_update_tool_command(
+            context.user.id,
+            tool_id,
+            body,
+            interface_entry,
+        )?)
         .await?;
     Ok(Json(ApiSuccess::new(to_tool_response(record))))
 }
@@ -760,13 +778,343 @@ fn parse_tool_status(value: &str) -> Result<domain::McpToolStatus, ApiError> {
     }
 }
 
-fn parse_risk_level(value: &str) -> Result<domain::McpRiskLevel, ApiError> {
+fn mcp_interface_catalog_entries(
+    api_docs: &ApiDocsRegistry,
+) -> Vec<domain::McpInterfaceCatalogEntry> {
+    let mut entries = Vec::new();
+
+    for category in &api_docs.catalog().categories {
+        let Some(category_operations) = api_docs.category_operations(&category.id) else {
+            continue;
+        };
+
+        for operation in &category_operations.operations {
+            let Some(spec) = api_docs.operation_spec(&operation.id) else {
+                continue;
+            };
+            let Some(entry) = mcp_interface_entry_from_operation(operation, spec) else {
+                continue;
+            };
+            entries.push(entry);
+        }
+    }
+
+    entries
+}
+
+fn bindable_mcp_interface(
+    api_docs: &ApiDocsRegistry,
+    interface_id: &str,
+) -> Result<domain::McpInterfaceCatalogEntry, ApiError> {
+    let entry = mcp_interface_catalog_entries(api_docs)
+        .into_iter()
+        .find(|entry| entry.interface_id == interface_id)
+        .ok_or(control_plane::errors::ControlPlaneError::NotFound(
+            "mcp_interface",
+        ))?;
+
+    if !entry.bindable {
+        return Err(control_plane::errors::ControlPlaneError::InvalidInput("interface_id").into());
+    }
+
+    Ok(entry)
+}
+
+fn mcp_interface_entry_from_operation(
+    operation: &DocsCatalogOperation,
+    spec: &Value,
+) -> Option<domain::McpInterfaceCatalogEntry> {
+    let operation_node = openapi_operation_node(spec, operation)?;
+    let path_item_node = openapi_path_item_node(spec, operation)?;
+    let bindable = operation.path.starts_with("/api/console/");
+
+    Some(domain::McpInterfaceCatalogEntry {
+        interface_id: operation.id.clone(),
+        method: operation.method.clone(),
+        path: operation.path.clone(),
+        name: operation
+            .summary
+            .clone()
+            .unwrap_or_else(|| operation.id.clone()),
+        short_description: operation
+            .description
+            .clone()
+            .unwrap_or_else(|| format!("{} {}", operation.method, operation.path)),
+        parameter_schema: operation_input_schema(spec, path_item_node, operation_node),
+        result_schema: operation_response_schema(spec, operation_node),
+        permission_code: None,
+        security: operation_security(spec, operation_node),
+        risk_level: operation_risk_level(&operation.method),
+        bindable,
+        disabled_reason: if bindable {
+            None
+        } else {
+            Some("unsupported_mcp_interface_scope".into())
+        },
+    })
+}
+
+fn openapi_operation_node<'a>(
+    spec: &'a Value,
+    operation: &DocsCatalogOperation,
+) -> Option<&'a Value> {
+    let method = operation.method.to_ascii_lowercase();
+    spec.pointer(&format!(
+        "/paths/{}/{}",
+        escape_json_pointer_token(&operation.path),
+        method
+    ))
+}
+
+fn openapi_path_item_node<'a>(
+    spec: &'a Value,
+    operation: &DocsCatalogOperation,
+) -> Option<&'a Value> {
+    spec.pointer(&format!(
+        "/paths/{}",
+        escape_json_pointer_token(&operation.path)
+    ))
+}
+
+fn escape_json_pointer_token(token: &str) -> String {
+    token.replace('~', "~0").replace('/', "~1")
+}
+
+fn operation_input_schema(spec: &Value, path_item_node: &Value, operation_node: &Value) -> Value {
+    let mut properties = Map::new();
+    let mut required = Vec::new();
+
+    if let Some(path_schema) =
+        operation_parameter_location_schema(spec, path_item_node, operation_node, "path")
+    {
+        properties.insert("path".into(), path_schema);
+        required.push(Value::String("path".into()));
+    }
+
+    if let Some(query_schema) =
+        operation_parameter_location_schema(spec, path_item_node, operation_node, "query")
+    {
+        let query_required = query_schema
+            .get("required")
+            .and_then(Value::as_array)
+            .map(|items| !items.is_empty())
+            .unwrap_or(false);
+        properties.insert("query".into(), query_schema);
+        if query_required {
+            required.push(Value::String("query".into()));
+        }
+    }
+
+    if let Some((body_schema, body_required)) = operation_request_body_schema(spec, operation_node)
+    {
+        properties.insert("body".into(), body_schema);
+        if body_required {
+            required.push(Value::String("body".into()));
+        }
+    }
+
+    object_schema(properties, required)
+}
+
+fn operation_parameter_location_schema(
+    spec: &Value,
+    path_item_node: &Value,
+    operation_node: &Value,
+    location: &str,
+) -> Option<Value> {
+    let mut properties = Map::new();
+    let mut required = Vec::new();
+
+    for raw_parameter in path_item_node
+        .get("parameters")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .chain(
+            operation_node
+                .get("parameters")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten(),
+        )
+    {
+        let parameter = resolve_openapi_schema(spec, raw_parameter);
+        if parameter.get("in").and_then(Value::as_str) != Some(location) {
+            continue;
+        }
+        let Some(name) = parameter.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+
+        let mut schema = parameter
+            .get("schema")
+            .map(|schema| resolve_openapi_schema(spec, schema))
+            .unwrap_or_else(|| {
+                let mut fallback = Map::new();
+                fallback.insert("type".into(), Value::String("string".into()));
+                Value::Object(fallback)
+            });
+        if let Some(description) = parameter.get("description").and_then(Value::as_str) {
+            schema = schema_with_description(schema, description);
+        }
+        properties.insert(name.into(), schema);
+
+        if location == "path"
+            || parameter
+                .get("required")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        {
+            required.push(Value::String(name.into()));
+        }
+    }
+
+    if properties.is_empty() {
+        return None;
+    }
+
+    Some(object_schema(properties, required))
+}
+
+fn operation_request_body_schema(spec: &Value, operation_node: &Value) -> Option<(Value, bool)> {
+    let request_body = operation_node.get("requestBody")?;
+    let request_body = resolve_openapi_schema(spec, request_body);
+    let schema = json_content_schema(spec, request_body.get("content")?)?;
+    let required = request_body
+        .get("required")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Some((schema, required))
+}
+
+fn operation_response_schema(spec: &Value, operation_node: &Value) -> Value {
+    let Some(responses) = operation_node.get("responses").and_then(Value::as_object) else {
+        return object_schema(Map::new(), Vec::new());
+    };
+
+    let mut status_codes = responses
+        .keys()
+        .filter(|status| status.starts_with('2'))
+        .cloned()
+        .collect::<Vec<_>>();
+    status_codes.sort();
+
+    for status in status_codes {
+        let Some(response) = responses.get(&status) else {
+            continue;
+        };
+        let response = resolve_openapi_schema(spec, response);
+        if let Some(schema) = response
+            .get("content")
+            .and_then(|content| json_content_schema(spec, content))
+        {
+            return schema;
+        }
+    }
+
+    object_schema(Map::new(), Vec::new())
+}
+
+fn json_content_schema(spec: &Value, content: &Value) -> Option<Value> {
+    let content = content.as_object()?;
+    let media_schema = content
+        .get("application/json")
+        .or_else(|| {
+            content
+                .iter()
+                .find(|(content_type, _)| content_type.ends_with("+json"))
+                .map(|(_, media_type)| media_type)
+        })?
+        .get("schema")?;
+
+    Some(resolve_openapi_schema(spec, media_schema))
+}
+
+fn operation_security(spec: &Value, operation_node: &Value) -> Value {
+    operation_node
+        .get("security")
+        .or_else(|| spec.get("security"))
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()))
+}
+
+fn operation_risk_level(method: &str) -> domain::McpRiskLevel {
+    match method {
+        "GET" | "HEAD" | "OPTIONS" => domain::McpRiskLevel::Low,
+        "DELETE" => domain::McpRiskLevel::Critical,
+        "POST" | "PUT" | "PATCH" => domain::McpRiskLevel::High,
+        _ => domain::McpRiskLevel::Medium,
+    }
+}
+
+fn object_schema(properties: Map<String, Value>, required: Vec<Value>) -> Value {
+    let mut schema = Map::new();
+    schema.insert("type".into(), Value::String("object".into()));
+    schema.insert("properties".into(), Value::Object(properties));
+    schema.insert("additionalProperties".into(), Value::Bool(false));
+    if !required.is_empty() {
+        schema.insert("required".into(), Value::Array(required));
+    }
+    Value::Object(schema)
+}
+
+fn schema_with_description(mut schema: Value, description: &str) -> Value {
+    if let Value::Object(schema_map) = &mut schema {
+        schema_map
+            .entry("description")
+            .or_insert_with(|| Value::String(description.into()));
+    }
+    schema
+}
+
+fn resolve_openapi_schema(spec: &Value, value: &Value) -> Value {
+    resolve_openapi_schema_at_depth(spec, value, 0)
+}
+
+fn resolve_openapi_schema_at_depth(spec: &Value, value: &Value, depth: usize) -> Value {
+    if depth > 16 {
+        return value.clone();
+    }
+
     match value {
-        "low" => Ok(domain::McpRiskLevel::Low),
-        "medium" => Ok(domain::McpRiskLevel::Medium),
-        "high" => Ok(domain::McpRiskLevel::High),
-        "critical" => Ok(domain::McpRiskLevel::Critical),
-        _ => Err(control_plane::errors::ControlPlaneError::InvalidInput("risk_level").into()),
+        Value::Object(map) => {
+            if let Some(reference) = map.get("$ref").and_then(Value::as_str) {
+                if let Some(pointer) = reference.strip_prefix('#') {
+                    if let Some(target) = spec.pointer(pointer) {
+                        let mut resolved = resolve_openapi_schema_at_depth(spec, target, depth + 1);
+                        if let Value::Object(resolved_map) = &mut resolved {
+                            for (key, sibling) in map {
+                                if key != "$ref" {
+                                    resolved_map.insert(
+                                        key.clone(),
+                                        resolve_openapi_schema_at_depth(spec, sibling, depth + 1),
+                                    );
+                                }
+                            }
+                        }
+                        return resolved;
+                    }
+                }
+            }
+
+            Value::Object(
+                map.iter()
+                    .map(|(key, nested)| {
+                        (
+                            key.clone(),
+                            resolve_openapi_schema_at_depth(spec, nested, depth + 1),
+                        )
+                    })
+                    .collect(),
+            )
+        }
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| resolve_openapi_schema_at_depth(spec, item, depth + 1))
+                .collect(),
+        ),
+        _ => value.clone(),
     }
 }
 
@@ -787,6 +1135,7 @@ fn to_instance_command(
 fn to_create_tool_command(
     actor_user_id: Uuid,
     body: CreateMcpToolBody,
+    interface_entry: domain::McpInterfaceCatalogEntry,
 ) -> Result<CreateMcpToolCommand, ApiError> {
     Ok(CreateMcpToolCommand {
         actor_user_id,
@@ -795,13 +1144,9 @@ fn to_create_tool_command(
         short_description: body.short_description,
         usage_description: body.usage_description,
         full_description: body.full_description,
-        interface_id: body.interface_id,
-        parameter_schema: body.parameter_schema,
-        result_schema: body.result_schema,
+        interface_entry,
         input_mapping: body.input_mapping,
         output_mapping: body.output_mapping,
-        permission_code: body.permission_code,
-        risk_level: parse_risk_level(&body.risk_level)?,
         audit_policy: body.audit_policy,
         des_id_required: body.des_id_required,
         status: parse_tool_status(&body.status)?,
@@ -812,6 +1157,7 @@ fn to_update_tool_command(
     actor_user_id: Uuid,
     tool_id: String,
     body: UpdateMcpToolBody,
+    interface_entry: domain::McpInterfaceCatalogEntry,
 ) -> Result<UpdateMcpToolCommand, ApiError> {
     Ok(UpdateMcpToolCommand {
         actor_user_id,
@@ -820,13 +1166,9 @@ fn to_update_tool_command(
         short_description: body.short_description,
         usage_description: body.usage_description,
         full_description: body.full_description,
-        interface_id: body.interface_id,
-        parameter_schema: body.parameter_schema,
-        result_schema: body.result_schema,
+        interface_entry,
         input_mapping: body.input_mapping,
         output_mapping: body.output_mapping,
-        permission_code: body.permission_code,
-        risk_level: parse_risk_level(&body.risk_level)?,
         audit_policy: body.audit_policy,
         des_id_required: body.des_id_required,
         status: parse_tool_status(&body.status)?,
@@ -975,11 +1317,14 @@ fn to_interface_response(
 ) -> McpInterfaceCatalogEntryResponse {
     McpInterfaceCatalogEntryResponse {
         interface_id: entry.interface_id,
+        method: entry.method,
+        path: entry.path,
         name: entry.name,
         short_description: entry.short_description,
         parameter_schema: entry.parameter_schema,
         result_schema: entry.result_schema,
         permission_code: entry.permission_code,
+        security: entry.security,
         risk_level: entry.risk_level.as_str().into(),
         bindable: entry.bindable,
         disabled_reason: entry.disabled_reason,

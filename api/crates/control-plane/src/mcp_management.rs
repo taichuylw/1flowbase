@@ -35,18 +35,14 @@ pub struct UpsertMcpGroupCommand {
 
 pub struct CreateMcpToolCommand {
     pub actor_user_id: Uuid,
-    pub tool_id: Option<String>,
+    pub tool_id: String,
     pub name: String,
     pub short_description: String,
     pub usage_description: Option<String>,
     pub full_description: String,
-    pub interface_id: String,
-    pub parameter_schema: serde_json::Value,
-    pub result_schema: serde_json::Value,
+    pub interface_entry: domain::McpInterfaceCatalogEntry,
     pub input_mapping: serde_json::Value,
     pub output_mapping: serde_json::Value,
-    pub permission_code: Option<String>,
-    pub risk_level: domain::McpRiskLevel,
     pub audit_policy: serde_json::Value,
     pub des_id_required: bool,
     pub status: domain::McpToolStatus,
@@ -59,13 +55,9 @@ pub struct UpdateMcpToolCommand {
     pub short_description: String,
     pub usage_description: Option<String>,
     pub full_description: String,
-    pub interface_id: String,
-    pub parameter_schema: serde_json::Value,
-    pub result_schema: serde_json::Value,
+    pub interface_entry: domain::McpInterfaceCatalogEntry,
     pub input_mapping: serde_json::Value,
     pub output_mapping: serde_json::Value,
-    pub permission_code: Option<String>,
-    pub risk_level: domain::McpRiskLevel,
     pub audit_policy: serde_json::Value,
     pub des_id_required: bool,
     pub status: domain::McpToolStatus,
@@ -255,23 +247,19 @@ where
         command: CreateMcpToolCommand,
     ) -> Result<domain::McpToolRecord> {
         let actor = self.authorize_manage(command.actor_user_id).await?;
-        let tool_id = match command.tool_id {
-            Some(tool_id) if !tool_id.trim().is_empty() => tool_id,
-            _ => readable_tool_id(&command.name),
-        };
-        validate_identifier(&tool_id, "tool_id")?;
-        let interface = bindable_interface(&command.interface_id)?;
+        validate_identifier(&command.tool_id, "tool_id")?;
+        let interface = bindable_interface(command.interface_entry)?;
         self.repository
             .create_mcp_tool(&CreateMcpToolInput {
                 id: Uuid::now_v7(),
                 actor_user_id: command.actor_user_id,
                 workspace_id: actor.current_workspace_id,
-                tool_id,
+                tool_id: command.tool_id,
                 name: command.name,
                 short_description: command.short_description,
                 usage_description: command.usage_description,
                 full_description: command.full_description,
-                interface_id: command.interface_id,
+                interface_id: interface.interface_id,
                 parameter_schema: interface.parameter_schema,
                 result_schema: interface.result_schema,
                 input_mapping: command.input_mapping,
@@ -292,7 +280,7 @@ where
     ) -> Result<domain::McpToolRecord> {
         let actor = self.authorize_manage(command.actor_user_id).await?;
         validate_identifier(&command.tool_id, "tool_id")?;
-        let interface = bindable_interface(&command.interface_id)?;
+        let interface = bindable_interface(command.interface_entry)?;
         self.repository
             .update_mcp_tool(&UpdateMcpToolInput {
                 actor_user_id: command.actor_user_id,
@@ -302,7 +290,7 @@ where
                 short_description: command.short_description,
                 usage_description: command.usage_description,
                 full_description: command.full_description,
-                interface_id: command.interface_id,
+                interface_id: interface.interface_id,
                 parameter_schema: interface.parameter_schema,
                 result_schema: interface.result_schema,
                 input_mapping: command.input_mapping,
@@ -557,12 +545,9 @@ where
         Ok(items)
     }
 
-    pub async fn interface_catalog(
-        &self,
-        actor_user_id: Uuid,
-    ) -> Result<Vec<domain::McpInterfaceCatalogEntry>> {
+    pub async fn authorize_interface_catalog_view(&self, actor_user_id: Uuid) -> Result<()> {
         self.authorize_view(actor_user_id).await?;
-        Ok(interface_catalog_entries())
+        Ok(())
     }
 
     pub async fn export_workspace_catalog(
@@ -697,37 +682,6 @@ fn validate_allowed_value(value: &str, field: &'static str, allowed_values: &[&s
     Ok(())
 }
 
-fn readable_tool_id(name: &str) -> String {
-    let candidate = name
-        .split_whitespace()
-        .map(normalize_tool_id_part)
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("_");
-    if candidate.is_empty() {
-        generate_short_id()
-    } else {
-        candidate.chars().take(255).collect()
-    }
-}
-
-fn normalize_tool_id_part(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        .split('_')
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("_")
-}
-
 fn generate_short_id() -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
     let mut output = String::with_capacity(8);
@@ -800,89 +754,11 @@ fn compile_list_path_regex(
         .map_err(|_| ControlPlaneError::InvalidInput("path_regex").into())
 }
 
-fn bindable_interface(interface_id: &str) -> Result<domain::McpInterfaceCatalogEntry> {
-    let entry = interface_catalog_entries()
-        .into_iter()
-        .find(|entry| entry.interface_id == interface_id)
-        .ok_or(ControlPlaneError::NotFound("mcp_interface"))?;
+fn bindable_interface(
+    entry: domain::McpInterfaceCatalogEntry,
+) -> Result<domain::McpInterfaceCatalogEntry> {
     if !entry.bindable {
         return Err(ControlPlaneError::InvalidInput("interface_id").into());
     }
     Ok(entry)
-}
-
-fn interface_catalog_entries() -> Vec<domain::McpInterfaceCatalogEntry> {
-    vec![
-        domain::McpInterfaceCatalogEntry {
-            interface_id: "settings.system_runtime.get_profile".into(),
-            name: "Get system runtime profile".into(),
-            short_description: "Read system runtime topology and locale profile.".into(),
-            parameter_schema: serde_json::json!({"type": "object", "properties": {"locale": {"type": "string"}}, "additionalProperties": false}),
-            result_schema: serde_json::json!({"type": "object"}),
-            permission_code: Some("system_runtime.view.all".into()),
-            risk_level: domain::McpRiskLevel::High,
-            bindable: true,
-            disabled_reason: None,
-        },
-        domain::McpInterfaceCatalogEntry {
-            interface_id: "settings.permission_catalog.list".into(),
-            name: "List permission catalog".into(),
-            short_description: "Read the backend permission catalog.".into(),
-            parameter_schema: serde_json::json!({"type": "object", "additionalProperties": false}),
-            result_schema: serde_json::json!({"type": "array", "items": {"type": "object"}}),
-            permission_code: Some("role_permission.view.all".into()),
-            risk_level: domain::McpRiskLevel::Medium,
-            bindable: true,
-            disabled_reason: None,
-        },
-        domain::McpInterfaceCatalogEntry {
-            interface_id: "settings.file_storages.list".into(),
-            name: "List file storages".into(),
-            short_description: "Read configured file storage backends; disabled until root-only service contract exposes an explicit permission path.".into(),
-            parameter_schema: serde_json::json!({"type": "object", "additionalProperties": false}),
-            result_schema: serde_json::json!({"type": "array", "items": {"type": "object"}}),
-            permission_code: None,
-            risk_level: domain::McpRiskLevel::Medium,
-            bindable: false,
-            disabled_reason: Some("root_only_service_contract".into()),
-        },
-    ]
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeSet;
-
-    use super::*;
-
-    #[test]
-    fn interface_catalog_has_stable_bindable_permissions() {
-        let permission_codes = access_control::permission_catalog()
-            .into_iter()
-            .map(|permission| permission.code)
-            .collect::<BTreeSet<_>>();
-        let mut interface_ids = BTreeSet::new();
-
-        for entry in interface_catalog_entries() {
-            assert!(interface_ids.insert(entry.interface_id.clone()));
-            assert!(!entry.name.is_empty());
-            assert!(!entry.short_description.is_empty());
-            if entry.bindable {
-                let permission_code = entry
-                    .permission_code
-                    .as_ref()
-                    .expect("bindable interface must name a permission code");
-                assert!(permission_codes.contains(permission_code));
-                assert!(entry.disabled_reason.is_none());
-            } else {
-                assert!(entry.disabled_reason.is_some());
-            }
-        }
-    }
-
-    #[test]
-    fn tool_interface_source_of_truth_rejects_disabled_interfaces() {
-        let disabled = bindable_interface("settings.file_storages.list");
-        assert!(disabled.is_err());
-    }
 }

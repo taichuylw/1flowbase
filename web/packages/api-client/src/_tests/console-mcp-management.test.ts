@@ -24,8 +24,12 @@ import {
 } from '../console-mcp-management';
 
 describe('console-mcp-management client', () => {
-  vi.spyOn(transport, 'apiFetch').mockImplementation(async (input) => input as never);
-  vi.spyOn(transport, 'apiFetchVoid').mockImplementation(async (input) => input as never);
+  vi.spyOn(transport, 'apiFetch').mockImplementation(
+    async (input) => input as never
+  );
+  vi.spyOn(transport, 'apiFetchVoid').mockImplementation(
+    async (input) => input as never
+  );
 
   test.each([
     {
@@ -35,7 +39,8 @@ describe('console-mcp-management client', () => {
     },
     {
       name: 'interface capabilities with bindable filter',
-      request: () => fetchConsoleMcpInterfaceCapabilities({ bindable_only: true }),
+      request: () =>
+        fetchConsoleMcpInterfaceCapabilities({ bindable_only: true }),
       expected: {
         path: '/api/console/mcp/interface-capabilities?bindable_only=true'
       }
@@ -137,12 +142,12 @@ describe('console-mcp-management client', () => {
       request: () =>
         createConsoleMcpTool(
           {
-            tool_id: null,
+            tool_id: 'get_runtime',
             name: 'Get Runtime',
             short_description: 'Runtime profile',
             usage_description: null,
             full_description: 'Read runtime profile',
-            interface_id: 'settings.system_runtime.get_profile',
+            interface_id: 'get_runtime_profile',
             parameter_schema: {},
             result_schema: {},
             input_mapping: {},
@@ -171,7 +176,7 @@ describe('console-mcp-management client', () => {
             short_description: 'Runtime profile',
             usage_description: null,
             full_description: 'Read runtime profile',
-            interface_id: 'settings.system_runtime.get_profile',
+            interface_id: 'get_runtime_profile',
             parameter_schema: {},
             result_schema: {},
             input_mapping: {},
@@ -192,7 +197,8 @@ describe('console-mcp-management client', () => {
     },
     {
       name: 'description refresh',
-      request: () => refreshConsoleMcpToolDescription('runtime.get', 'csrf-123'),
+      request: () =>
+        refreshConsoleMcpToolDescription('runtime.get', 'csrf-123'),
       expected: {
         path: '/api/console/mcp/tools/runtime.get/description/refresh',
         method: 'POST',
@@ -263,9 +269,12 @@ describe('console-mcp-management client', () => {
         csrfToken: 'csrf-123'
       }
     }
-  ])('writes $name through the console mcp route', async ({ request, expected }) => {
-    await expect(request()).resolves.toMatchObject(expected);
-  });
+  ])(
+    'writes $name through the console mcp route',
+    async ({ request, expected }) => {
+      await expect(request()).resolves.toMatchObject(expected);
+    }
+  );
 
   test.each([
     {
@@ -304,7 +313,10 @@ describe('console-mcp-management client', () => {
         csrfToken: 'csrf-123'
       }
     }
-  ])('deletes $name through the console mcp route', async ({ request, expected }) => {
-    await expect(request()).resolves.toMatchObject(expected);
-  });
+  ])(
+    'deletes $name through the console mcp route',
+    async ({ request, expected }) => {
+      await expect(request()).resolves.toMatchObject(expected);
+    }
+  );
 });

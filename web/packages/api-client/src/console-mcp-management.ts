@@ -82,11 +82,14 @@ export interface ConsoleMcpCatalog {
 
 export interface ConsoleMcpInterfaceCapability {
   interface_id: string;
+  method: string;
+  path: string;
   name: string;
   short_description: string;
   parameter_schema: unknown;
   result_schema: unknown;
   permission_code: string | null;
+  security: unknown;
   risk_level: string;
   bindable: boolean;
   disabled_reason: string | null;
@@ -134,7 +137,7 @@ export interface SaveConsoleMcpGroupBody {
 }
 
 export interface SaveConsoleMcpToolBody {
-  tool_id?: string | null;
+  tool_id: string;
   name: string;
   short_description: string;
   usage_description: string | null;
@@ -151,10 +154,7 @@ export interface SaveConsoleMcpToolBody {
   status: string;
 }
 
-export type UpdateConsoleMcpToolBody = Omit<
-  SaveConsoleMcpToolBody,
-  'tool_id'
->;
+export type UpdateConsoleMcpToolBody = Omit<SaveConsoleMcpToolBody, 'tool_id'>;
 
 export interface SaveConsoleMcpToolBindingBody {
   group_path: string;
@@ -192,7 +192,12 @@ export function fetchConsoleMcpInterfaceCapabilities(
 }
 
 export function fetchConsoleMcpListItems(
-  options: { instance_id?: string; path?: string; path_regex?: string; limit?: number } = {},
+  options: {
+    instance_id?: string;
+    path?: string;
+    path_regex?: string;
+    limit?: number;
+  } = {},
   baseUrl?: string
 ) {
   const params = new URLSearchParams();
