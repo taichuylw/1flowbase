@@ -77,6 +77,25 @@ function findMemberRow(name: RegExp) {
   return screen.findByRole('row', { name });
 }
 
+function ignoreCircularReferenceWarning() {
+  const originalError = console.error;
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+    if (
+      args.some(
+        (arg) =>
+          typeof arg === 'string' &&
+          arg.includes('There may be circular references')
+      )
+    ) {
+      return;
+    }
+
+    originalError(...args);
+  });
+
+  return () => errorSpy.mockRestore();
+}
+
 describe('MemberManagementPanel', () => {
   beforeEach(() => {
     resetAuthStore();
@@ -253,55 +272,64 @@ describe('MemberManagementPanel', () => {
   test(
     'saves profile fields and role bindings from the edit profile dialog',
     async () => {
+      const restoreCircularReferenceWarning = ignoreCircularReferenceWarning();
       renderPanel();
 
-      const row = await findMemberRow(/root.*Root Name.*Root Nick/u);
-      fireEvent.click(within(row).getByRole('button', { name: /编辑$/ }));
+      try {
+        const row = await findMemberRow(/root.*Root Name.*Root Nick/u);
+        fireEvent.click(within(row).getByRole('button', { name: /编辑$/ }));
 
-      const dialog = await screen.findByRole('dialog', {
-        name: /编辑用户资料/
-      });
-      expect(
-        within(dialog).getByRole('combobox', { name: '角色' })
-      ).toBeInTheDocument();
+        const dialog = await screen.findByRole('dialog', {
+          name: /编辑用户资料/
+        });
+        expect(
+          within(dialog).getByRole('combobox', { name: '角色' })
+        ).toBeInTheDocument();
 
-      fireEvent.change(within(dialog).getByLabelText('姓名'), {
-        target: { value: 'Root Next' }
-      });
-      fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: '角色' }));
-      const [operatorOption] = await screen.findAllByText((_, element) => {
-        if (!element) {
-          return false;
-        }
-
-        return (
-          element.matches('.ant-select-item-option-content') &&
-          element.textContent === 'Operator'
+        fireEvent.change(within(dialog).getByLabelText('姓名'), {
+          target: { value: 'Root Next' }
+        });
+        fireEvent.mouseDown(
+          within(dialog).getByRole('combobox', { name: '角色' })
         );
-      });
-      fireEvent.click(operatorOption);
-      fireEvent.click(within(dialog).getByRole('button', { name: /保\s*存/ }));
+        const [operatorOption] = await screen.findAllByText((_, element) => {
+          if (!element) {
+            return false;
+          }
 
-      await waitFor(() => {
-        expect(membersApi.updateSettingsMember).toHaveBeenCalledWith(
-          'user-1',
-          {
-            name: 'Root Next',
-            nickname: 'Root Nick',
-            email: 'root@example.com',
-            phone: null,
-            introduction: ''
-          },
-          'csrf-123'
+          return (
+            element.matches('.ant-select-item-option-content') &&
+            element.textContent === 'Operator'
+          );
+        });
+        fireEvent.click(operatorOption);
+        fireEvent.click(
+          within(dialog).getByRole('button', { name: /保\s*存/ })
         );
-      });
-      await waitFor(() => {
-        expect(membersApi.replaceSettingsMemberRoles).toHaveBeenCalledWith(
-          'user-1',
-          { role_codes: ['root', 'manager', 'operator'] },
-          'csrf-123'
-        );
-      });
+
+        await waitFor(() => {
+          expect(membersApi.updateSettingsMember).toHaveBeenCalledWith(
+            'user-1',
+            {
+              name: 'Root Next',
+              nickname: 'Root Nick',
+              email: 'root@example.com',
+              phone: null,
+              introduction: ''
+            },
+            'csrf-123'
+          );
+        });
+        await waitFor(() => {
+          expect(membersApi.replaceSettingsMemberRoles).toHaveBeenCalledWith(
+            'user-1',
+            { role_codes: ['root', 'manager', 'operator'] },
+            'csrf-123'
+          );
+        });
+      } finally {
+        restoreCircularReferenceWarning();
+      }
     },
     MEMBER_EDIT_PROFILE_TEST_TIMEOUT
   );
