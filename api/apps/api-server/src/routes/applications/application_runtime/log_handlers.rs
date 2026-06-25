@@ -194,7 +194,32 @@ pub async fn list_application_run_conversation_messages(
     let context = require_session(&state, &headers).await?;
     ensure_application_visible(&state, context.user.id, id).await?;
 
-    let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
+    let projection_page =
+        <MainDurableStore as OrchestrationRuntimeRepository>::list_application_run_conversation_message_items_page(
+            &state.store,
+            id,
+            run_id,
+            ListApplicationRunConversationMessageItemsPageInput {
+                before_sequence: parse_run_conversation_message_sequence_cursor(
+                    run_id,
+                    query.before.as_deref(),
+                ),
+                after_sequence: parse_run_conversation_message_sequence_cursor(
+                    run_id,
+                    query.after.as_deref(),
+                ),
+                limit: query.limit.unwrap_or(5),
+            },
+        )
+        .await?;
+    if projection_page.total_count > 0 {
+        return Ok(Json(ApiSuccess::new(
+            conversation_messages_from_projection_page(run_id, projection_page),
+        )));
+    }
+
+    let current_item =
+        <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_conversation_current_item(
         &state.store,
         id,
         run_id,
@@ -202,20 +227,9 @@ pub async fn list_application_run_conversation_messages(
     .await?
     .ok_or(ControlPlaneError::NotFound("flow_run"))?;
 
-    let workspace_id = context.actor.current_workspace_id;
-    let load_debug_artifact = |artifact_id| {
-        let state = state.clone();
-
-        async move {
-            load_runtime_debug_artifact_json_value(state, workspace_id, id, artifact_id)
-                .await
-                .ok()
-        }
-    };
-    let fallback_page =
-        conversation_messages_from_run_detail(&detail, &query, &load_debug_artifact).await;
-
-    Ok(Json(ApiSuccess::new(fallback_page)))
+    Ok(Json(ApiSuccess::new(
+        conversation_messages_from_current_item(run_id, current_item),
+    )))
 }
 
 async fn ensure_application_run_trace_projection_status(

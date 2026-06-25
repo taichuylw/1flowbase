@@ -268,6 +268,35 @@ fn trace_tree_endpoints_read_projection_without_full_detail_fallback() {
 }
 
 #[test]
+fn run_conversation_messages_endpoint_reads_projection_without_full_detail_fallback() {
+    let function_source = application_runtime_function_source(
+        include_str!("../log_handlers.rs"),
+        "pub async fn list_application_run_conversation_messages",
+    );
+    let function_source = function_source
+        .split("\nasync fn ensure_application_run_trace_projection_status")
+        .next()
+        .expect("run conversation endpoint source should precede trace projection helper");
+
+    assert!(
+        function_source.contains("list_application_run_conversation_message_items_page"),
+        "run conversation endpoint must read the run-specific projection page"
+    );
+    assert!(
+        function_source.contains("get_application_run_conversation_current_item"),
+        "run conversation endpoint must use bounded current-item fallback for non-terminal or missing projection"
+    );
+    assert!(
+        !function_source.contains("get_application_run_detail"),
+        "run conversation endpoint must not materialize full run detail"
+    );
+    assert!(
+        !function_source.contains("conversation_messages_from_run_detail"),
+        "run conversation endpoint fallback must not scan node runs or debug detail fragments"
+    );
+}
+
+#[test]
 fn trace_projection_status_ensure_checks_lightweight_watermark_before_full_source() {
     let function_source = application_runtime_function_source(
         include_str!("../log_handlers.rs"),

@@ -158,6 +158,90 @@ async fn run_conversation_without_external_conversation_id_reads_imported_histor
     );
 }
 
+#[test]
+fn run_conversation_projection_page_preserves_existing_response_shape_and_cursors() {
+    let run_id = Uuid::now_v7();
+    let now = OffsetDateTime::UNIX_EPOCH;
+    let page = conversation_messages_from_projection_page(
+        run_id,
+        control_plane::ports::ApplicationRunConversationMessageItemsPage {
+            items: vec![
+                domain::ApplicationRunConversationMessageItem {
+                    id: Uuid::now_v7(),
+                    scope_id: Uuid::now_v7(),
+                    application_id: Uuid::now_v7(),
+                    flow_run_id: run_id,
+                    display_sequence: 4,
+                    source_kind: "imported_context".to_string(),
+                    role: Some("assistant".to_string()),
+                    content: Some("old answer".to_string()),
+                    query: None,
+                    model: Some("gpt-test".to_string()),
+                    answer: None,
+                    detail_run_id: None,
+                    can_open_detail: false,
+                    is_current: false,
+                    status: "succeeded".to_string(),
+                    started_at: now,
+                    finished_at: Some(now),
+                    projection_version: 1,
+                    created_at: now,
+                    updated_at: now,
+                },
+                domain::ApplicationRunConversationMessageItem {
+                    id: Uuid::now_v7(),
+                    scope_id: Uuid::now_v7(),
+                    application_id: Uuid::now_v7(),
+                    flow_run_id: run_id,
+                    display_sequence: 5,
+                    source_kind: "current_run".to_string(),
+                    role: None,
+                    content: None,
+                    query: Some("current question".to_string()),
+                    model: Some("gpt-test".to_string()),
+                    answer: Some("current answer".to_string()),
+                    detail_run_id: Some(run_id),
+                    can_open_detail: true,
+                    is_current: true,
+                    status: "succeeded".to_string(),
+                    started_at: now,
+                    finished_at: Some(now),
+                    projection_version: 1,
+                    created_at: now,
+                    updated_at: now,
+                },
+            ],
+            total_count: 6,
+            has_before: true,
+            has_after: false,
+            before_cursor: Some(4),
+            after_cursor: None,
+        },
+    );
+
+    assert_eq!(page.items.len(), 2);
+    assert_eq!(page.items[0].run_id, format!("{run_id}:context:4"));
+    assert_eq!(page.items[0].role.as_deref(), Some("assistant"));
+    assert_eq!(page.items[0].content.as_deref(), Some("old answer"));
+    assert_eq!(page.items[0].detail_run_id, None);
+    assert!(!page.items[0].can_open_detail);
+    assert_eq!(page.items[1].run_id, run_id.to_string());
+    assert_eq!(page.items[1].query.as_deref(), Some("current question"));
+    assert_eq!(page.items[1].answer.as_deref(), Some("current answer"));
+    assert_eq!(
+        page.items[1].detail_run_id.as_deref(),
+        Some(run_id.to_string().as_str())
+    );
+    assert!(page.items[1].is_current);
+    assert!(page.page.has_before);
+    assert!(!page.page.has_after);
+    assert_eq!(
+        page.page.before_cursor.as_deref(),
+        Some(format!("{run_id}:context:4").as_str())
+    );
+    assert_eq!(page.page.after_cursor, None);
+}
+
 #[tokio::test]
 async fn run_conversation_hides_claude_code_control_history_from_imported_context() {
     let run_id = Uuid::now_v7();

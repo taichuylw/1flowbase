@@ -3,16 +3,17 @@ use control_plane::{
     ports::{
         AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput, AppendRunEventInput,
         AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput,
-        ApplicationRepository, AttachCompiledPlanToFlowRunInput, CreateApplicationInput,
-        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        ApplicationRepository, AttachCompiledPlanToFlowRunInput, CompleteNodeRunInput,
+        CreateApplicationInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         FinishFlowRunCallbackResumeAttemptInput, FlowRepository,
         GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
         LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationConversationRunsPageInput,
-        ListApplicationRunsPageInput, OrchestrationRuntimeRepository,
-        RecordFlowRunCallbackResumeAttemptInput, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
-        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
-        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        ListApplicationRunConversationMessageItemsPageInput, ListApplicationRunsPageInput,
+        OrchestrationRuntimeRepository, RecordFlowRunCallbackResumeAttemptInput,
+        UpdateFlowRunInput, UpdateFlowRunPayloadsInput, UpdateNodeRunInput,
+        UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput, UpsertCompiledPlanInput,
+        UpsertDataModelSideEffectReceiptInput,
     },
 };
 use domain::{

@@ -951,6 +951,23 @@ pub trait OrchestrationRuntimeRepository: Send + Sync {
         let _ = (application_id, input);
         anyhow::bail!("list_application_conversation_runs_page not implemented")
     }
+    async fn list_application_run_conversation_message_items_page(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+        input: ListApplicationRunConversationMessageItemsPageInput,
+    ) -> anyhow::Result<ApplicationRunConversationMessageItemsPage> {
+        let _ = (application_id, flow_run_id, input);
+        anyhow::bail!("list_application_run_conversation_message_items_page not implemented")
+    }
+    async fn get_application_run_conversation_current_item(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> anyhow::Result<Option<domain::ApplicationRunConversationMessageItem>> {
+        let _ = (application_id, flow_run_id);
+        anyhow::bail!("get_application_run_conversation_current_item not implemented")
+    }
     async fn get_application_run_detail(
         &self,
         application_id: Uuid,
@@ -1096,6 +1113,23 @@ pub struct ApplicationConversationRunsPage {
     pub has_after: bool,
     pub before_cursor: Option<Uuid>,
     pub after_cursor: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListApplicationRunConversationMessageItemsPageInput {
+    pub before_sequence: Option<i64>,
+    pub after_sequence: Option<i64>,
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationRunConversationMessageItemsPage {
+    pub items: Vec<domain::ApplicationRunConversationMessageItem>,
+    pub total_count: i64,
+    pub has_before: bool,
+    pub has_after: bool,
+    pub before_cursor: Option<i64>,
+    pub after_cursor: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -324,6 +324,30 @@ pub struct ApplicationConversationRunSummary {
     pub finished_at: Option<OffsetDateTime>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunConversationMessageItem {
+    pub id: Uuid,
+    pub scope_id: Uuid,
+    pub application_id: Uuid,
+    pub flow_run_id: Uuid,
+    pub display_sequence: i64,
+    pub source_kind: String,
+    pub role: Option<String>,
+    pub content: Option<String>,
+    pub query: Option<String>,
+    pub model: Option<String>,
+    pub answer: Option<String>,
+    pub detail_run_id: Option<Uuid>,
+    pub can_open_detail: bool,
+    pub is_current: bool,
+    pub status: String,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+    pub projection_version: i32,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationRunTraceProjectionStatus {

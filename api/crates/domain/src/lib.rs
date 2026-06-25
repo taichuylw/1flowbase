@@ -87,9 +87,9 @@ pub use modeling::{
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{
-    ApplicationConversationRunSummary, ApplicationRunDetail, ApplicationRunLogSummary,
-    ApplicationRunStitchedTrace, ApplicationRunSubagentTrace, ApplicationRunSummary,
-    ApplicationRunTraceNodeContentRecord, ApplicationRunTraceNodeRecord,
+    ApplicationConversationRunSummary, ApplicationRunConversationMessageItem, ApplicationRunDetail,
+    ApplicationRunLogSummary, ApplicationRunStitchedTrace, ApplicationRunSubagentTrace,
+    ApplicationRunSummary, ApplicationRunTraceNodeContentRecord, ApplicationRunTraceNodeRecord,
     ApplicationRunTraceProjectionDiagnostic, ApplicationRunTraceProjectionStatus,
     ApplicationRunTraceProjectionStatusRecord, CallbackTaskRecord, CallbackTaskStatus,
     CheckpointRecord, CompiledPlanRecord, DataModelSideEffectReceiptRecord,

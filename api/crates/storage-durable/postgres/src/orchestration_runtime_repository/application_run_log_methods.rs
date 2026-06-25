@@ -7,6 +7,13 @@ impl PgControlPlaneStore {
         let mut tx = self.pool().begin().await?;
 
         Self::upsert_visible_application_run_log_summary_projection(&mut tx, flow_run).await?;
+        if is_terminal {
+            Self::ensure_application_run_conversation_message_items_projection(&mut tx, flow_run)
+                .await?;
+        } else {
+            Self::delete_application_run_conversation_message_items_projection(&mut tx, flow_run.id)
+                .await?;
+        }
         tx.commit().await?;
 
         if is_terminal {

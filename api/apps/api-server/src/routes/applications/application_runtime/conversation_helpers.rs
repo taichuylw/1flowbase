@@ -1,3 +1,4 @@
+#[cfg(test)]
 async fn to_application_conversation_message_response<F, Fut>(
     run: domain::FlowRunRecord,
     current_run_id: Option<Uuid>,
@@ -5,7 +6,7 @@ async fn to_application_conversation_message_response<F, Fut>(
 ) -> ApplicationConversationMessageResponse
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let run_id = run.id.to_string();
     let mut answer =
@@ -55,13 +56,14 @@ fn to_application_conversation_message_summary_response(
     }
 }
 
+#[cfg(test)]
 async fn application_conversation_answer_text<F, Fut>(
     payload: &serde_json::Value,
     load_debug_artifact: &F,
 ) -> Option<String>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     if let Some(full_payload) =
         load_referenced_runtime_debug_artifact(payload, load_debug_artifact).await
@@ -96,18 +98,20 @@ where
     inline_application_conversation_error_text(payload)
 }
 
+#[cfg(test)]
 async fn load_referenced_runtime_debug_artifact<F, Fut>(
     value: &serde_json::Value,
     load_debug_artifact: &F,
 ) -> Option<serde_json::Value>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let artifact_id = runtime_debug_artifact_id(value)?;
     load_debug_artifact(artifact_id).await
 }
 
+#[cfg(test)]
 fn inline_application_conversation_answer_text(payload: &serde_json::Value) -> Option<String> {
     ["answer", "text", "content", "message"]
         .into_iter()
@@ -115,6 +119,7 @@ fn inline_application_conversation_answer_text(payload: &serde_json::Value) -> O
         .find_map(inline_conversation_value_text)
 }
 
+#[cfg(test)]
 fn inline_application_conversation_error_text(payload: &serde_json::Value) -> Option<String> {
     payload
         .get("error")
@@ -122,6 +127,7 @@ fn inline_application_conversation_error_text(payload: &serde_json::Value) -> Op
         .and_then(inline_conversation_value_text)
 }
 
+#[cfg(test)]
 fn inline_conversation_value_text(value: &serde_json::Value) -> Option<String> {
     if runtime_debug_artifact_id(value).is_some() {
         return None;
@@ -155,6 +161,84 @@ fn parse_optional_uuid_cursor(value: Option<&str>) -> Option<Uuid> {
     value.and_then(|value| Uuid::parse_str(value).ok())
 }
 
+fn parse_run_conversation_message_sequence_cursor(
+    run_id: Uuid,
+    value: Option<&str>,
+) -> Option<i64> {
+    value
+        .and_then(|cursor| parse_imported_context_cursor(run_id, cursor))
+        .and_then(|sequence| i64::try_from(sequence).ok())
+}
+
+fn conversation_messages_from_projection_page(
+    run_id: Uuid,
+    page: control_plane::ports::ApplicationRunConversationMessageItemsPage,
+) -> ApplicationConversationMessagesPageResponse {
+    ApplicationConversationMessagesPageResponse {
+        items: page
+            .items
+            .into_iter()
+            .map(|item| application_run_conversation_message_item_response(run_id, item))
+            .collect(),
+        page: ApplicationConversationMessagesPageInfoResponse {
+            has_before: page.has_before,
+            has_after: page.has_after,
+            before_cursor: page
+                .before_cursor
+                .and_then(|cursor| usize::try_from(cursor).ok())
+                .map(|cursor| imported_context_cursor(run_id, cursor)),
+            after_cursor: page
+                .after_cursor
+                .and_then(|cursor| usize::try_from(cursor).ok())
+                .map(|cursor| imported_context_cursor(run_id, cursor)),
+        },
+    }
+}
+
+fn conversation_messages_from_current_item(
+    run_id: Uuid,
+    item: domain::ApplicationRunConversationMessageItem,
+) -> ApplicationConversationMessagesPageResponse {
+    ApplicationConversationMessagesPageResponse {
+        items: vec![application_run_conversation_message_item_response(run_id, item)],
+        page: ApplicationConversationMessagesPageInfoResponse {
+            has_before: false,
+            has_after: false,
+            before_cursor: None,
+            after_cursor: None,
+        },
+    }
+}
+
+fn application_run_conversation_message_item_response(
+    run_id: Uuid,
+    item: domain::ApplicationRunConversationMessageItem,
+) -> ApplicationConversationMessageResponse {
+    let item_run_id = if item.source_kind == "current_run" {
+        item.flow_run_id.to_string()
+    } else {
+        usize::try_from(item.display_sequence)
+            .ok()
+            .map(|sequence| imported_context_cursor(run_id, sequence))
+            .unwrap_or_else(|| item.flow_run_id.to_string())
+    };
+
+    ApplicationConversationMessageResponse {
+        run_id: item_run_id,
+        detail_run_id: item.detail_run_id.map(|value| value.to_string()),
+        can_open_detail: item.can_open_detail,
+        role: item.role,
+        content: item.content,
+        started_at: format_time(item.started_at),
+        finished_at: format_optional_time(item.finished_at),
+        status: item.status,
+        query: item.query,
+        model: item.model,
+        answer: item.answer,
+        is_current: item.is_current,
+    }
+}
+
 #[cfg(test)]
 async fn conversation_messages_from_single_run<F, Fut>(
     run: &domain::FlowRunRecord,
@@ -163,12 +247,13 @@ async fn conversation_messages_from_single_run<F, Fut>(
 ) -> ApplicationConversationMessagesPageResponse
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let items = imported_context_messages_from_run(run, load_debug_artifact).await;
     conversation_messages_from_context_items(run, items, query, load_debug_artifact).await
 }
 
+#[cfg(test)]
 async fn conversation_messages_from_run_detail<F, Fut>(
     detail: &domain::ApplicationRunDetail,
     query: &ApplicationConversationMessagesQuery,
@@ -176,7 +261,7 @@ async fn conversation_messages_from_run_detail<F, Fut>(
 ) -> ApplicationConversationMessagesPageResponse
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let mut items = imported_context_messages_from_run(&detail.flow_run, load_debug_artifact).await;
     if !items
@@ -195,6 +280,7 @@ where
         .await
 }
 
+#[cfg(test)]
 async fn conversation_messages_from_context_items<F, Fut>(
     run: &domain::FlowRunRecord,
     mut items: Vec<ApplicationConversationMessageResponse>,
@@ -203,7 +289,7 @@ async fn conversation_messages_from_context_items<F, Fut>(
 ) -> ApplicationConversationMessagesPageResponse
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let limit = query.limit.unwrap_or(5).clamp(1, 50) as usize;
     renumber_imported_context_items(run.id, &mut items);
@@ -234,6 +320,7 @@ where
     }
 }
 
+#[cfg(test)]
 fn renumber_imported_context_items(
     run_id: Uuid,
     items: &mut [ApplicationConversationMessageResponse],
@@ -243,13 +330,14 @@ fn renumber_imported_context_items(
     }
 }
 
+#[cfg(test)]
 async fn imported_context_messages_from_run<F, Fut>(
     run: &domain::FlowRunRecord,
     load_debug_artifact: &F,
 ) -> Vec<ApplicationConversationMessageResponse>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let source = resolve_runtime_debug_artifact_value(&run.input_payload, &load_debug_artifact)
         .await
@@ -323,6 +411,7 @@ where
     items
 }
 
+#[cfg(test)]
 fn is_hidden_conversation_history_message(message: &serde_json::Value) -> bool {
     message
         .get("metadata")
@@ -331,6 +420,7 @@ fn is_hidden_conversation_history_message(message: &serde_json::Value) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(test)]
 fn hidden_conversation_history_control_kind(
     message: &serde_json::Value,
 ) -> Option<&'static str> {
@@ -345,13 +435,14 @@ fn hidden_conversation_history_control_kind(
     }
 }
 
+#[cfg(test)]
 async fn llm_system_content_from_node_runs<F, Fut>(
     detail: &domain::ApplicationRunDetail,
     load_debug_artifact: &F,
 ) -> Option<String>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     for node_run in detail
         .node_runs
@@ -373,13 +464,14 @@ where
     None
 }
 
+#[cfg(test)]
 async fn llm_prompt_messages_system_content<F, Fut>(
     payload: &serde_json::Value,
     load_debug_artifact: &F,
 ) -> Option<String>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let prompt_messages_value = payload.get("prompt_messages")?;
     let prompt_messages =
@@ -397,13 +489,14 @@ where
     (!system.trim().is_empty()).then_some(system)
 }
 
+#[cfg(test)]
 async fn llm_effective_system_content<F, Fut>(
     payload: &serde_json::Value,
     load_debug_artifact: &F,
 ) -> Option<String>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let effective_system = payload
         .get("llm_context")
@@ -417,13 +510,14 @@ where
         .or_else(|| conversation_prompt_text(effective_system))
 }
 
+#[cfg(test)]
 async fn resolve_runtime_debug_artifact_value<F, Fut>(
     value: &serde_json::Value,
     load_debug_artifact: &F,
 ) -> Option<serde_json::Value>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let artifact_id = runtime_debug_artifact_id(value)?;
 
@@ -432,6 +526,7 @@ where
         .or_else(|| decode_runtime_debug_artifact_preview(value))
 }
 
+#[cfg(test)]
 fn runtime_debug_artifact_id(value: &serde_json::Value) -> Option<Uuid> {
     if !value
         .get("__runtime_debug_artifact")
@@ -447,6 +542,7 @@ fn runtime_debug_artifact_id(value: &serde_json::Value) -> Option<Uuid> {
         .and_then(|value| Uuid::parse_str(value).ok())
 }
 
+#[cfg(test)]
 fn imported_context_window(
     run_id: Uuid,
     total: usize,
@@ -491,6 +587,7 @@ fn parse_imported_context_cursor(run_id: Uuid, cursor: &str) -> Option<usize> {
     index.parse().ok()
 }
 
+#[cfg(test)]
 fn imported_context_item(
     run: &domain::FlowRunRecord,
     index: usize,
@@ -513,13 +610,14 @@ fn imported_context_item(
     }
 }
 
+#[cfg(test)]
 async fn run_level_system_content<F, Fut>(
     payload: &serde_json::Value,
     load_debug_artifact: &F,
 ) -> Option<String>
 where
     F: Fn(Uuid) -> Fut,
-    Fut: Future<Output = Option<serde_json::Value>>,
+    Fut: std::future::Future<Output = Option<serde_json::Value>>,
 {
     let start_payload = start_input_payload(payload);
     let system_value = start_payload
@@ -534,6 +632,7 @@ where
         .or_else(|| conversation_prompt_text(system_value))
 }
 
+#[cfg(test)]
 fn conversation_prompt_text(value: &serde_json::Value) -> Option<String> {
     if let Some(text) = value
         .as_str()
@@ -555,6 +654,7 @@ fn conversation_prompt_text(value: &serde_json::Value) -> Option<String> {
     conversation_content_part_text(value).or_else(|| conversation_preview_text(value))
 }
 
+#[cfg(test)]
 fn conversation_preview_text(value: &serde_json::Value) -> Option<String> {
     let preview = value
         .get("preview")
@@ -569,6 +669,7 @@ fn conversation_preview_text(value: &serde_json::Value) -> Option<String> {
         .or_else(|| Some(preview.to_string()))
 }
 
+#[cfg(test)]
 fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
     let content = message.get("content")?;
     if let Some(text) = content
@@ -591,6 +692,7 @@ fn conversation_message_content(message: &serde_json::Value) -> Option<String> {
     conversation_content_part_text(content)
 }
 
+#[cfg(test)]
 fn conversation_content_part_text(part: &serde_json::Value) -> Option<String> {
     if let Some(text) = part
         .as_str()

@@ -28,7 +28,8 @@ use control_plane::{
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
         FinishFlowRunCallbackResumeAttemptInput, GetApplicationRunMonitoringReportInput,
         GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        ListApplicationConversationRunsPageInput, ListApplicationRunTraceChildrenPage,
+        ListApplicationConversationRunsPageInput,
+        ListApplicationRunConversationMessageItemsPageInput, ListApplicationRunTraceChildrenPage,
         ListApplicationRunTraceChildrenPageInput, ListApplicationRunsPageInput,
         OrchestrationRuntimeRepository, RecordFlowRunCallbackResumeAttemptInput,
         RecordFlowRunCallbackResumeAttemptOutput, ReplaceApplicationRunTraceProjectionInput,
@@ -56,6 +57,7 @@ use sequencing::*;
 include!("event_methods.rs");
 include!("artifact_methods.rs");
 include!("application_run_log_methods.rs");
+include!("application_run_logs/run_conversation_message_item_methods.rs");
 include!("application_run_trace_projection_methods.rs");
 include!("application_run_monitoring_methods.rs");
 include!("debug_variable_cache_methods.rs");
@@ -520,6 +522,34 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
     ) -> Result<control_plane::ports::ApplicationConversationRunsPage> {
         PgControlPlaneStore::list_application_conversation_runs_page(self, application_id, input)
             .await
+    }
+
+    async fn list_application_run_conversation_message_items_page(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+        input: ListApplicationRunConversationMessageItemsPageInput,
+    ) -> Result<control_plane::ports::ApplicationRunConversationMessageItemsPage> {
+        PgControlPlaneStore::list_application_run_conversation_message_items_page(
+            self,
+            application_id,
+            flow_run_id,
+            input,
+        )
+        .await
+    }
+
+    async fn get_application_run_conversation_current_item(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunConversationMessageItem>> {
+        PgControlPlaneStore::get_application_run_conversation_current_item(
+            self,
+            application_id,
+            flow_run_id,
+        )
+        .await
     }
 
     async fn get_application_run_detail(
