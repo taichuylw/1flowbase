@@ -623,10 +623,8 @@ impl TraceProjectionBuilder {
                 subagent_trace.source_flow_run.id, first_node_run.id
             )
         };
-        let source_trace_node_id = trace_node_id_for_locator(
-            subagent_trace.source_flow_run.id,
-            &source_stable_locator,
-        );
+        let source_trace_node_id =
+            trace_node_id_for_locator(subagent_trace.source_flow_run.id, &source_stable_locator);
         let node_run_ids = node_runs
             .iter()
             .map(|node_run| node_run.id)

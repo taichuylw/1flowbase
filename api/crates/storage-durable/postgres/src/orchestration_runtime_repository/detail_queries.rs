@@ -452,7 +452,7 @@ pub(super) async fn list_subagent_traces_for_flow_run(
                 continue;
             };
 
-            let candidates = list_subagent_flow_run_candidates(
+            let candidates = find_subagent_flow_run_candidates(
                 store,
                 current_run,
                 external_conversation_id,
@@ -498,7 +498,7 @@ fn agent_tool_calls_from_callback_task(
         .collect()
 }
 
-async fn list_subagent_flow_run_candidates(
+async fn find_subagent_flow_run_candidates(
     store: &PgControlPlaneStore,
     current_run: &domain::FlowRunRecord,
     external_conversation_id: &str,

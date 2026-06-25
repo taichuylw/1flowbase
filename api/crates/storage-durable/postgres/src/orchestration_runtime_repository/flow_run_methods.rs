@@ -664,7 +664,13 @@ impl PgControlPlaneStore {
             update node_runs
             set status = $2,
                 output_payload = $3,
-                error_payload = $4,
+                error_payload = case
+                    when $4::jsonb is null
+                        and node_runs.status = 'failed'
+                        and $2 <> 'retrying'
+                    then node_runs.error_payload
+                    else $4
+                end,
                 metrics_payload = $5,
                 debug_payload = $6,
                 finished_at = $7

@@ -483,7 +483,7 @@ async fn build_run_archive_v1_document(
 ) -> Result<RunArchiveV1Response, ApiError> {
     let mut entries = Vec::with_capacity(run_ids.len());
     for run_id in &run_ids {
-        let mut entry = build_run_archive_v1_entry(
+        let entry = build_run_archive_v1_entry(
             state.clone(),
             workspace_id,
             application,
@@ -492,20 +492,10 @@ async fn build_run_archive_v1_document(
             exported_at,
         )
         .await?;
-        entry.content_digest = sha256_bytes(&serde_json::to_vec(&entry)?);
         entries.push(entry);
     }
-    let manifest_entries = entries
-        .iter()
-        .map(|entry| {
-            Ok(RunArchiveV1ManifestEntryResponse {
-                source_run_id: entry.source_run_id.clone(),
-                content_sha256: sha256_bytes(&serde_json::to_vec(entry)?),
-                content_digest: entry.content_digest.clone(),
-            })
-        })
-        .collect::<Result<Vec<_>, ApiError>>()?;
-    let content_sha256 = sha256_bytes(&serde_json::to_vec(&entries)?);
+    let manifest_entries = finalize_run_archive_v1_entries(&mut entries)?;
+    let content_sha256 = run_archive_v1_entries_content_sha256(&entries)?;
     let exported_at_text = application_logs::format_time(exported_at);
     let selected_run_ids = run_ids.iter().map(ToString::to_string).collect::<Vec<_>>();
     let manifest = RunArchiveV1ManifestResponse {
@@ -1135,20 +1125,8 @@ fn build_archive_from_trace_exports(
         .into_iter()
         .map(trace_export_to_archive_entry)
         .collect::<Result<Vec<_>, ApiError>>()?;
-    for entry in &mut entries {
-        entry.content_digest = sha256_bytes(&serde_json::to_vec(entry)?);
-    }
-    let manifest_entries = entries
-        .iter()
-        .map(|entry| {
-            Ok(RunArchiveV1ManifestEntryResponse {
-                source_run_id: entry.source_run_id.clone(),
-                content_sha256: sha256_bytes(&serde_json::to_vec(entry)?),
-                content_digest: entry.content_digest.clone(),
-            })
-        })
-        .collect::<Result<Vec<_>, ApiError>>()?;
-    let content_sha256 = sha256_bytes(&serde_json::to_vec(&entries)?);
+    let manifest_entries = finalize_run_archive_v1_entries(&mut entries)?;
+    let content_sha256 = run_archive_v1_entries_content_sha256(&entries)?;
     let archive_manifest = RunArchiveV1ManifestResponse {
         archive_version: RUN_ARCHIVE_VERSION,
         archive_semantics: APPLICATION_RUN_ARCHIVE_SEMANTICS.to_string(),
@@ -1214,6 +1192,61 @@ fn normalize_run_archive_trace_tree_projection_status(trace_tree: &mut serde_jso
     projection_status.insert("last_success_at".to_string(), serde_json::Value::Null);
 }
 
+fn finalize_run_archive_v1_entries(
+    entries: &mut [RunArchiveV1EntryResponse],
+) -> Result<Vec<RunArchiveV1ManifestEntryResponse>, ApiError> {
+    for entry in entries.iter_mut() {
+        entry.content_digest = run_archive_v1_entry_content_sha256(entry)?;
+    }
+
+    Ok(entries
+        .iter()
+        .map(|entry| RunArchiveV1ManifestEntryResponse {
+            source_run_id: entry.source_run_id.clone(),
+            content_sha256: entry.content_digest.clone(),
+            content_digest: entry.content_digest.clone(),
+        })
+        .collect())
+}
+
+fn run_archive_v1_entries_content_sha256(
+    entries: &[RunArchiveV1EntryResponse],
+) -> Result<String, ApiError> {
+    let payload = entries
+        .iter()
+        .map(run_archive_v1_entry_digest_payload)
+        .collect::<Vec<_>>();
+    Ok(sha256_bytes(&serde_json::to_vec(&payload)?))
+}
+
+fn run_archive_v1_entry_content_sha256(
+    entry: &RunArchiveV1EntryResponse,
+) -> Result<String, ApiError> {
+    Ok(sha256_bytes(&serde_json::to_vec(
+        &run_archive_v1_entry_digest_payload(entry),
+    )?))
+}
+
+fn run_archive_v1_entry_digest_payload(entry: &RunArchiveV1EntryResponse) -> serde_json::Value {
+    serde_json::json!({
+        "source_run_id": &entry.source_run_id,
+        "flow_run": &entry.flow_run,
+        "flow_run_fact": &entry.flow_run_fact,
+        "compiled_plan": &entry.compiled_plan,
+        "node_runs": &entry.node_runs,
+        "checkpoints": &entry.checkpoints,
+        "callback_tasks": &entry.callback_tasks,
+        "events": &entry.events,
+        "runtime_spans": &entry.runtime_spans,
+        "runtime_events": &entry.runtime_events,
+        "runtime_items": &entry.runtime_items,
+        "context_projections": &entry.context_projections,
+        "usage_ledger": &entry.usage_ledger,
+        "model_failover_attempts": &entry.model_failover_attempts,
+        "capability_invocations": &entry.capability_invocations,
+    })
+}
+
 fn trace_export_flow_run_fact(flow_run: &FlowRunResponse) -> Result<serde_json::Value, ApiError> {
     let mut value = serde_json::to_value(flow_run)?;
     let object = value
@@ -1247,7 +1280,7 @@ fn parse_run_archive_v1(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> 
     {
         return Err(ControlPlaneError::InvalidInput("archive_version").into());
     }
-    let content_sha256 = sha256_bytes(&serde_json::to_vec(&archive.entries)?);
+    let content_sha256 = run_archive_v1_entries_content_sha256(&archive.entries)?;
     if normalize_sha256(&content_sha256) != normalize_sha256(&archive.manifest.content_sha256) {
         return Err(ControlPlaneError::InvalidInput("archive_content_sha256").into());
     }
@@ -1268,14 +1301,13 @@ fn parse_run_archive_v1(bytes: &[u8]) -> Result<RunArchiveV1Response, ApiError> 
         if entry.source_run_id != manifest_entry.source_run_id {
             return Err(ControlPlaneError::InvalidInput("archive_entries").into());
         }
-        let mut entry_without_digest = entry.clone();
-        entry_without_digest.content_digest.clear();
-        let entry_content_digest = sha256_bytes(&serde_json::to_vec(&entry_without_digest)?);
+        let entry_content_digest = run_archive_v1_entry_content_sha256(entry)?;
         if normalize_sha256(&entry_content_digest) != normalize_sha256(&entry.content_digest) {
             return Err(ControlPlaneError::InvalidInput("archive_entry_digest").into());
         }
-        let entry_sha256 = sha256_bytes(&serde_json::to_vec(entry)?);
-        if normalize_sha256(&entry_sha256) != normalize_sha256(&manifest_entry.content_sha256) {
+        if normalize_sha256(&entry_content_digest)
+            != normalize_sha256(&manifest_entry.content_sha256)
+        {
             return Err(ControlPlaneError::InvalidInput("archive_entry_sha256").into());
         }
         if normalize_sha256(&entry.content_digest)
