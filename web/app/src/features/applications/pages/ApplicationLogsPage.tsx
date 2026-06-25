@@ -669,6 +669,7 @@ export function ApplicationLogsPage({
       message.error(t('auto.import_run_archive_csrf_missing'));
       return;
     }
+    const archiveCsrfToken = csrfToken;
 
     setArchiveImportState({
       phase: 'uploading',
@@ -686,7 +687,7 @@ export function ApplicationLogsPage({
           expected_sha256: archiveSha256,
           chunk_size_bytes: RUN_ARCHIVE_IMPORT_CHUNK_SIZE
         },
-        csrfToken
+        archiveCsrfToken
       );
 
       const chunkCount = Math.max(
@@ -708,7 +709,7 @@ export function ApplicationLogsPage({
           chunkIndex,
           chunk,
           chunkSha256,
-          csrfToken
+          archiveCsrfToken
         );
         setArchiveImportState({
           phase: 'uploading',
@@ -724,7 +725,7 @@ export function ApplicationLogsPage({
       const queuedJob = await completeApplicationRunArchiveUploadSession(
         applicationId,
         session.session_id,
-        csrfToken
+        archiveCsrfToken
       );
       setArchiveImportState({
         phase: 'processing',
