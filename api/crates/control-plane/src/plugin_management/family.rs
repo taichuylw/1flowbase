@@ -337,6 +337,7 @@ where
             &current,
             &target,
             command.actor_user_id,
+            None,
         )
         .await
     }
@@ -534,6 +535,7 @@ where
         current: &domain::PluginInstallationRecord,
         target: &domain::PluginInstallationRecord,
         actor_user_id: Uuid,
+        compatibility_override: Option<&serde_json::Value>,
     ) -> Result<domain::PluginTaskRecord> {
         if matches!(target.desired_state, domain::PluginDesiredState::Disabled) {
             self.enable_plugin(EnablePluginCommand {
@@ -558,18 +560,22 @@ where
                 actor_user_id: Some(actor_user_id),
             })
             .await?;
+        let mut running_detail_json = json!({
+            "provider_code": provider_code,
+            "previous_installation_id": current.id,
+            "previous_version": current.plugin_version,
+            "target_installation_id": target.id,
+            "target_version": target.plugin_version,
+        });
+        if let Some(compatibility_override) = compatibility_override.cloned() {
+            running_detail_json["compatibility_override"] = compatibility_override;
+        }
         let running_task = self
             .transition_task(
                 &task,
                 domain::PluginTaskStatus::Running,
                 Some("running".into()),
-                json!({
-                    "provider_code": provider_code,
-                    "previous_installation_id": current.id,
-                    "previous_version": current.plugin_version,
-                    "target_installation_id": target.id,
-                    "target_version": target.plugin_version,
-                }),
+                running_detail_json,
             )
             .await?;
 
@@ -612,6 +618,16 @@ where
                     actor_user_id,
                 })
                 .await?;
+            let mut switch_audit_detail = json!({
+                "provider_code": provider_code,
+                "previous_installation_id": current.id,
+                "previous_version": current.plugin_version,
+                "target_installation_id": local_target.id,
+                "target_version": local_target.plugin_version,
+            });
+            if let Some(compatibility_override) = compatibility_override.cloned() {
+                switch_audit_detail["compatibility_override"] = compatibility_override;
+            }
             self.repository
                 .append_audit_log(&audit_log(
                     Some(actor.current_workspace_id),
@@ -619,13 +635,7 @@ where
                     "plugin_assignment",
                     Some(target.id),
                     "plugin.version_switched",
-                    json!({
-                        "provider_code": provider_code,
-                        "previous_installation_id": current.id,
-                        "previous_version": current.plugin_version,
-                        "target_installation_id": local_target.id,
-                        "target_version": local_target.plugin_version,
-                    }),
+                    switch_audit_detail,
                 ))
                 .await?;
             self.repository
@@ -647,18 +657,22 @@ where
 
         match switch_result {
             Ok(migrated_instance_count) => {
+                let mut success_detail_json = json!({
+                    "provider_code": provider_code,
+                    "previous_installation_id": current.id,
+                    "previous_version": current.plugin_version,
+                    "target_installation_id": target.id,
+                    "target_version": target.plugin_version,
+                    "migrated_instance_count": migrated_instance_count,
+                });
+                if let Some(compatibility_override) = compatibility_override.cloned() {
+                    success_detail_json["compatibility_override"] = compatibility_override;
+                }
                 self.transition_task(
                     &running_task,
                     domain::PluginTaskStatus::Succeeded,
                     Some("switched".into()),
-                    json!({
-                        "provider_code": provider_code,
-                        "previous_installation_id": current.id,
-                        "previous_version": current.plugin_version,
-                        "target_installation_id": target.id,
-                        "target_version": target.plugin_version,
-                        "migrated_instance_count": migrated_instance_count,
-                    }),
+                    success_detail_json,
                 )
                 .await
             }

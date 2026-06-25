@@ -115,11 +115,34 @@ function buildInstance(): SettingsModelProviderInstance {
   };
 }
 
+function buildPluginTask(id: string) {
+  return {
+    id,
+    installation_id: 'installation-1',
+    workspace_id: null,
+    provider_code: 'openai_compatible',
+    task_kind: 'install',
+    status: 'queued',
+    status_message: null,
+    detail_json: {},
+    created_at: '2026-04-18T10:05:00Z',
+    updated_at: '2026-04-18T10:05:00Z',
+    finished_at: null
+  };
+}
+
 describe('useModelProviderMutations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     modelProvidersApi.updateSettingsModelProviderInstance.mockResolvedValue(
       buildInstance()
+    );
+    pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
+      installation: {},
+      task: buildPluginTask('task-install')
+    });
+    pluginsApi.upgradeSettingsPluginFamilyLatest.mockResolvedValue(
+      buildPluginTask('task-upgrade')
     );
   });
 
@@ -151,6 +174,42 @@ describe('useModelProviderMutations', () => {
         config: {}
       },
       'csrf-123'
+    );
+  });
+
+  test('passes official plugin host compatibility override to install and upgrade mutations', async () => {
+    const mutations = setupMutations();
+    const compatibilityOverride = {
+      reason: 'below_minimum_host_version',
+      acknowledged_current_host_version: '0.2.0',
+      acknowledged_minimum_host_version: '0.3.0'
+    } as const;
+
+    await act(async () => {
+      await mutations.current.officialInstallMutation.mutateAsync({
+        pluginId: '1flowbase.openai_compatible',
+        compatibilityOverride
+      });
+    });
+
+    expect(pluginsApi.installSettingsOfficialPlugin).toHaveBeenCalledWith(
+      '1flowbase.openai_compatible',
+      'csrf-123',
+      compatibilityOverride
+    );
+
+    await act(async () => {
+      await mutations.current.versionMutation.mutateAsync({
+        mode: 'upgrade',
+        providerCode: 'openai_compatible',
+        compatibilityOverride
+      });
+    });
+
+    expect(pluginsApi.upgradeSettingsPluginFamilyLatest).toHaveBeenCalledWith(
+      'openai_compatible',
+      'csrf-123',
+      compatibilityOverride
     );
   });
 });

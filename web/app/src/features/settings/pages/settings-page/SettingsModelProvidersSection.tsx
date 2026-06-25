@@ -490,18 +490,22 @@ export function SettingsModelProvidersSection({
                     ? (versionMutation.variables.providerCode ?? null)
                     : null
                 }
-                onInstall={(entry) => {
-                  officialInstallMutation.mutate(entry.plugin_id);
+                onInstall={(entry, compatibilityOverride) => {
+                  officialInstallMutation.mutate({
+                    pluginId: entry.plugin_id,
+                    compatibilityOverride
+                  });
                 }}
                 onOpenUpload={() => {
                   setUploadModalOpen(true);
                   clearUploadState();
                 }}
                 onSearchQueryChange={setOfficialSearchQuery}
-                onUpgradeLatest={(entry) => {
+                onUpgradeLatest={(entry, compatibilityOverride) => {
                   versionMutation.mutate({
                     mode: 'upgrade',
-                    providerCode: entry.provider_code
+                    providerCode: entry.provider_code,
+                    compatibilityOverride
                   });
                 }}
               />

@@ -14,8 +14,8 @@ use uuid::Uuid;
 use crate::{
     plugin_management::{
         AssignPluginCommand, DeletePluginFamilyCommand, EnablePluginCommand, InstallPluginCommand,
-        PluginCatalogFilter, PluginManagementService, SwitchPluginVersionCommand,
-        UpgradeLatestPluginFamilyCommand,
+        PluginCatalogFilter, PluginCompatibilityOverride, PluginManagementService,
+        SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
     },
     ports::{
         CreatePluginAssignmentInput, DownloadedOfficialPluginPackage, ModelProviderRepository,
@@ -195,6 +195,7 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
                     namespace: "plugin.fixture_provider".into(),
                     protocol: "openai_compatible".into(),
                     latest_version: "0.2.0".into(),
+                    minimum_host_version: "0.1.0".into(),
                     icon: None,
                     selected_artifact: super::support::sample_artifact(
                         "linux",
@@ -271,6 +272,7 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
         .upgrade_latest(UpgradeLatestPluginFamilyCommand {
             actor_user_id: repository.actor.user_id,
             provider_code: "fixture_provider".into(),
+            compatibility_override: None,
         })
         .await
         .unwrap();
@@ -281,6 +283,132 @@ async fn plugin_management_service_upgrades_to_latest_without_redownloading_when
     assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
     assert_eq!(task.status, PluginTaskStatus::Succeeded);
     assert_eq!(download_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn plugin_management_service_requires_override_when_upgrading_to_below_minimum_latest() {
+    #[derive(Clone)]
+    struct IncompatibleLatestAlreadyInstalledSource;
+
+    #[async_trait]
+    impl OfficialPluginSourcePort for IncompatibleLatestAlreadyInstalledSource {
+        async fn list_official_catalog(&self) -> Result<OfficialPluginCatalogSnapshot> {
+            Ok(OfficialPluginCatalogSnapshot {
+                source: OfficialPluginCatalogSource {
+                    source_kind: "official_registry".into(),
+                    source_label: "官方源".into(),
+                    registry_url: "https://example.com/official-registry.json".into(),
+                },
+                entries: vec![OfficialPluginSourceEntry {
+                    plugin_id: "1flowbase.fixture_provider".into(),
+                    plugin_type: "model_provider".into(),
+                    provider_code: "fixture_provider".into(),
+                    namespace: "plugin.fixture_provider".into(),
+                    protocol: "openai_compatible".into(),
+                    latest_version: "0.2.0".into(),
+                    minimum_host_version: "999.0.0".into(),
+                    icon: None,
+                    selected_artifact: super::support::sample_artifact(
+                        "linux",
+                        "amd64",
+                        Some("musl"),
+                    ),
+                    i18n_summary: super::support::sample_i18n_summary(),
+                    release_tag: "fixture_provider-v0.2.0".into(),
+                    trust_mode: "allow_unsigned".into(),
+                    help_url: Some("https://example.com/help".into()),
+                    model_discovery_mode: "hybrid".into(),
+                }],
+            })
+        }
+
+        async fn download_plugin(
+            &self,
+            _entry: &OfficialPluginSourceEntry,
+        ) -> Result<DownloadedOfficialPluginPackage> {
+            anyhow::bail!("download should not be called when latest is already installed")
+        }
+
+        fn trusted_public_keys(&self) -> Vec<plugin_framework::TrustedPublicKey> {
+            Vec::new()
+        }
+    }
+
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-upgrade-incompatible-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(IncompatibleLatestAlreadyInstalledSource),
+        &install_root,
+    );
+
+    let current_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    let target_installation = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.2.0",
+        PluginDesiredState::Disabled,
+    )
+    .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id: current_installation,
+            workspace_id,
+            provider_code: "fixture_provider".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+
+    let blocked = service
+        .upgrade_latest(UpgradeLatestPluginFamilyCommand {
+            actor_user_id: repository.actor.user_id,
+            provider_code: "fixture_provider".into(),
+            compatibility_override: None,
+        })
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        blocked.downcast_ref::<crate::errors::ControlPlaneError>(),
+        Some(crate::errors::ControlPlaneError::Conflict(
+            "plugin_host_version_below_minimum"
+        ))
+    ));
+
+    let task = service
+        .upgrade_latest(UpgradeLatestPluginFamilyCommand {
+            actor_user_id: repository.actor.user_id,
+            provider_code: "fixture_provider".into(),
+            compatibility_override: Some(PluginCompatibilityOverride {
+                reason: "below_minimum_host_version".into(),
+                acknowledged_current_host_version: env!("CARGO_PKG_VERSION").into(),
+                acknowledged_minimum_host_version: "999.0.0".into(),
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(task.task_kind, PluginTaskKind::SwitchVersion);
+    assert_eq!(
+        task.detail_json["compatibility_override"]["reason"],
+        "below_minimum_host_version"
+    );
+    let assignments = repository.list_assignments(workspace_id).await.unwrap();
+    assert_eq!(assignments[0].installation_id, target_installation);
 }
 
 #[tokio::test]

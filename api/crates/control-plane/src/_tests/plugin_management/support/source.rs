@@ -18,6 +18,7 @@ pub(crate) struct MemoryOfficialPluginSource {
     source_label: String,
     trust_mode: String,
     include_signature: bool,
+    minimum_host_version: String,
     trusted_public_keys: Vec<plugin_framework::TrustedPublicKey>,
 }
 
@@ -28,6 +29,7 @@ impl Default for MemoryOfficialPluginSource {
             source_label: "官方源".to_string(),
             trust_mode: "allow_unsigned".to_string(),
             include_signature: false,
+            minimum_host_version: "0.1.0".to_string(),
             trusted_public_keys: Vec::new(),
         }
     }
@@ -83,6 +85,13 @@ impl MemoryOfficialPluginSource {
             ..Self::default()
         }
     }
+
+    pub(crate) fn with_minimum_host_version(minimum_host_version: impl Into<String>) -> Self {
+        Self {
+            minimum_host_version: minimum_host_version.into(),
+            ..Self::default()
+        }
+    }
 }
 
 #[async_trait]
@@ -102,6 +111,7 @@ impl OfficialPluginSourcePort for MemoryOfficialPluginSource {
                 namespace: "plugin.openai_compatible".to_string(),
                 protocol: "openai_compatible".to_string(),
                 latest_version: "0.1.0".to_string(),
+                minimum_host_version: self.minimum_host_version.clone(),
                 icon: None,
                 selected_artifact: OfficialPluginArtifact {
                     checksum: format!("sha256:{:x}", Sha256::digest(&package_bytes)),

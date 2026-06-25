@@ -375,6 +375,11 @@
   margin: 0;
 }
 
+.model-provider-panel__install-warning-detail {
+  display: grid;
+  gap: 4px;
+}
+
 .model-provider-panel__upload-modal {
   display: grid;
   gap: 16px;

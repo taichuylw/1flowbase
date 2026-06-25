@@ -85,6 +85,19 @@ async fn plugin_routes_list_official_catalog_with_source_metadata() {
         payload["data"]["entries"][0]["icon"],
         "https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/runtime-extensions/model-providers/openai_compatible/_assets/icon.svg"
     );
+    assert_eq!(
+        payload["data"]["entries"][0]["minimum_host_version"],
+        "0.1.0"
+    );
+    assert_eq!(
+        payload["data"]["entries"][0]["current_host_version"],
+        env!("CARGO_PKG_VERSION")
+    );
+    assert_eq!(
+        payload["data"]["entries"][0]["compatibility_status"],
+        "compatible"
+    );
+    assert!(payload["data"]["entries"][0]["compatibility_warning_reason"].is_null());
 }
 
 #[tokio::test]

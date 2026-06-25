@@ -75,6 +75,16 @@ export type ConsoleOfficialPluginInstallStatus =
   | 'installed'
   | 'assigned';
 
+export type ConsoleOfficialPluginCompatibilityStatus =
+  | 'compatible'
+  | 'below_minimum_host_version';
+
+export interface ConsolePluginCompatibilityOverride {
+  reason: 'below_minimum_host_version';
+  acknowledged_current_host_version: string;
+  acknowledged_minimum_host_version: string;
+}
+
 export interface ConsoleOfficialPluginArtifact {
   os: string;
   arch: string;
@@ -95,6 +105,10 @@ export interface ConsoleOfficialPluginCatalogEntry {
   icon?: string | null;
   protocol: string;
   latest_version: string;
+  minimum_host_version: string;
+  current_host_version: string;
+  compatibility_status: ConsoleOfficialPluginCompatibilityStatus;
+  compatibility_warning_reason: string | null;
   selected_artifact: ConsoleOfficialPluginArtifact;
   help_url: string | null;
   model_discovery_mode: string;
@@ -173,6 +187,11 @@ export interface InstallConsolePluginInput {
 
 export interface InstallConsoleOfficialPluginInput {
   plugin_id: string;
+  compatibility_override?: ConsolePluginCompatibilityOverride;
+}
+
+export interface UpgradeConsolePluginFamilyLatestInput {
+  compatibility_override?: ConsolePluginCompatibilityOverride;
 }
 
 export interface InstallConsolePluginResult {
@@ -583,13 +602,20 @@ export function installConsolePluginCurrentNodeArtifact(
 export function upgradeConsolePluginFamilyLatest(
   providerCode: string,
   csrfToken: string,
+  inputOrBaseUrl?: UpgradeConsolePluginFamilyLatestInput | string,
   baseUrl?: string
 ) {
+  const input =
+    typeof inputOrBaseUrl === 'string' ? undefined : inputOrBaseUrl;
+  const resolvedBaseUrl =
+    typeof inputOrBaseUrl === 'string' ? inputOrBaseUrl : baseUrl;
+
   return apiFetch<ConsolePluginTask>({
     path: `/api/console/plugins/families/${providerCode}/upgrade-latest`,
     method: 'POST',
+    body: input,
     csrfToken,
-    baseUrl
+    baseUrl: resolvedBaseUrl
   });
 }
 

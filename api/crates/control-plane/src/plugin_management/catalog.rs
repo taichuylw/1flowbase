@@ -110,6 +110,10 @@ pub struct OfficialPluginCatalogEntry {
     pub description: Option<String>,
     pub protocol: String,
     pub latest_version: String,
+    pub minimum_host_version: String,
+    pub current_host_version: String,
+    pub compatibility_status: String,
+    pub compatibility_warning_reason: Option<String>,
     pub icon: Option<String>,
     pub selected_artifact: OfficialPluginArtifact,
     pub help_url: Option<String>,
@@ -484,6 +488,11 @@ where
                     "plugin.description",
                 );
 
+                let compatibility = official_plugin_host_compatibility(
+                    &entry.minimum_host_version,
+                    &self.host_version,
+                );
+
                 OfficialPluginCatalogEntry {
                     plugin_id: entry.plugin_id,
                     plugin_type: entry.plugin_type,
@@ -492,6 +501,10 @@ where
                     description,
                     protocol: entry.protocol,
                     latest_version: entry.latest_version,
+                    minimum_host_version: compatibility.minimum_host_version,
+                    current_host_version: compatibility.current_host_version,
+                    compatibility_status: compatibility.status,
+                    compatibility_warning_reason: compatibility.warning_reason,
                     icon: entry.icon,
                     selected_artifact: entry.selected_artifact,
                     help_url: entry.help_url,

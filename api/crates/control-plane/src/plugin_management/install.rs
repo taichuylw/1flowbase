@@ -13,6 +13,7 @@ pub struct InstallPluginCommand {
 pub struct InstallOfficialPluginCommand {
     pub actor_user_id: Uuid,
     pub plugin_id: String,
+    pub compatibility_override: Option<PluginCompatibilityOverride>,
 }
 
 pub struct InstallUploadedPluginCommand {
@@ -24,6 +25,7 @@ pub struct InstallUploadedPluginCommand {
 pub struct UpgradeLatestPluginFamilyCommand {
     pub actor_user_id: Uuid,
     pub provider_code: String,
+    pub compatibility_override: Option<PluginCompatibilityOverride>,
 }
 
 #[derive(Debug, Clone)]
@@ -367,6 +369,11 @@ where
             .into_iter()
             .find(|item| item.plugin_id == command.plugin_id)
             .ok_or(ControlPlaneError::NotFound("official_plugin"))?;
+        let compatibility_override = validate_official_plugin_compatibility_override(
+            &entry,
+            &self.host_version,
+            command.compatibility_override.as_ref(),
+        )?;
         let downloaded = self.official_source.download_plugin(&entry).await?;
         let intake = intake_package_bytes(
             &downloaded.package_bytes,
@@ -380,16 +387,20 @@ where
         )
         .await?;
         let result = async {
+            let mut detail_json = json!({
+                "install_kind": "official_source",
+                "plugin_id": command.plugin_id,
+                "file_name": downloaded.file_name,
+            });
+            if let Some(compatibility_override) = compatibility_override.clone() {
+                detail_json["compatibility_override"] = compatibility_override;
+            }
             let install = self
                 .install_intake_result(
                     command.actor_user_id,
                     intake,
                     Some(downloaded.package_bytes.clone()),
-                    json!({
-                        "install_kind": "official_source",
-                        "plugin_id": command.plugin_id,
-                        "file_name": downloaded.file_name,
-                    }),
+                    detail_json,
                 )
                 .await?;
             if is_host_extension_installation(&install.installation) {
@@ -433,6 +444,11 @@ where
             .into_iter()
             .find(|entry| entry.provider_code == command.provider_code)
             .ok_or(ControlPlaneError::NotFound("official_plugin"))?;
+        let compatibility_override = validate_official_plugin_compatibility_override(
+            &official_entry,
+            &self.host_version,
+            command.compatibility_override.as_ref(),
+        )?;
         let installed_target = self
             .repository
             .list_installations()
@@ -467,16 +483,20 @@ where
                     },
                 )
                 .await?;
+                let mut detail_json = json!({
+                    "install_kind": "official_upgrade",
+                    "plugin_id": snapshot_entry.plugin_id,
+                    "provider_code": snapshot_entry.provider_code,
+                    "file_name": downloaded.file_name,
+                });
+                if let Some(compatibility_override) = compatibility_override.clone() {
+                    detail_json["compatibility_override"] = compatibility_override;
+                }
                 self.install_intake_result(
                     command.actor_user_id,
                     intake,
                     Some(downloaded.package_bytes.clone()),
-                    json!({
-                        "install_kind": "official_upgrade",
-                        "plugin_id": snapshot_entry.plugin_id,
-                        "provider_code": snapshot_entry.provider_code,
-                        "file_name": downloaded.file_name,
-                    }),
+                    detail_json,
                 )
                 .await?
                 .installation
@@ -492,6 +512,7 @@ where
             &current,
             &target,
             command.actor_user_id,
+            compatibility_override.as_ref(),
         )
         .await
     }
@@ -608,9 +629,7 @@ where
                     ensure_root_actor(&actor)?;
                     ensure_uploaded_host_extensions_enabled(self.allow_uploaded_host_extensions)?;
                     let mut metadata_json = json!({});
-                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
-                        metadata_json["install_kind"] = install_kind;
-                    }
+                    merge_install_detail_metadata(&mut metadata_json, &detail_json);
                     let installation = self
                         .repository
                         .upsert_installation(&UpsertPluginInstallationInput {
@@ -654,11 +673,7 @@ where
                             "plugin_installation",
                             Some(installation.id),
                             "plugin.installed",
-                            json!({
-                                "provider_code": installation.provider_code,
-                                "plugin_id": installation.plugin_id,
-                                "restart_required": true,
-                            }),
+                            plugin_install_audit_detail(&installation, &detail_json, true),
                         ))
                         .await?;
                     Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
@@ -672,9 +687,7 @@ where
                         "icon": installed_package.manifest.icon,
                         "supported_model_types": ["llm"],
                     });
-                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
-                        metadata_json["install_kind"] = install_kind;
-                    }
+                    merge_install_detail_metadata(&mut metadata_json, &detail_json);
                     let installation = self
                         .repository
                         .upsert_installation(&UpsertPluginInstallationInput {
@@ -742,10 +755,7 @@ where
                             "plugin_installation",
                             Some(installation.id),
                             "plugin.installed",
-                            json!({
-                                "provider_code": installation.provider_code,
-                                "plugin_id": installation.plugin_id,
-                            }),
+                            plugin_install_audit_detail(&installation, &detail_json, false),
                         ))
                         .await?;
                     Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
@@ -759,9 +769,7 @@ where
                         "auth_modes": installed_package.definition.auth_modes,
                         "capabilities": installed_package.definition.capabilities,
                     });
-                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
-                        metadata_json["install_kind"] = install_kind;
-                    }
+                    merge_install_detail_metadata(&mut metadata_json, &detail_json);
                     let installation = self
                         .repository
                         .upsert_installation(&UpsertPluginInstallationInput {
@@ -805,10 +813,7 @@ where
                             "plugin_installation",
                             Some(installation.id),
                             "plugin.installed",
-                            json!({
-                                "provider_code": installation.provider_code,
-                                "plugin_id": installation.plugin_id,
-                            }),
+                            plugin_install_audit_detail(&installation, &detail_json, false),
                         ))
                         .await?;
                     Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
@@ -827,9 +832,7 @@ where
                             .map(|entry| entry.contribution_code.clone())
                             .collect::<Vec<_>>(),
                     });
-                    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
-                        metadata_json["install_kind"] = install_kind;
-                    }
+                    merge_install_detail_metadata(&mut metadata_json, &detail_json);
                     let installation = self
                         .repository
                         .upsert_installation(&UpsertPluginInstallationInput {
@@ -890,10 +893,7 @@ where
                             "plugin_installation",
                             Some(installation.id),
                             "plugin.installed",
-                            json!({
-                                "provider_code": installation.provider_code,
-                                "plugin_id": installation.plugin_id,
-                            }),
+                            plugin_install_audit_detail(&installation, &detail_json, false),
                         ))
                         .await?;
                     Ok::<domain::PluginInstallationRecord, anyhow::Error>(installation)
@@ -923,17 +923,23 @@ where
                 } else {
                     "installed"
                 };
+                let mut task_detail_json = json!({
+                    "installation_id": installation.id,
+                    "provider_code": installation.provider_code,
+                    "plugin_id": installation.plugin_id,
+                    "installed_path": installation.installed_path,
+                });
+                if let Some(compatibility_override) =
+                    detail_json.get("compatibility_override").cloned()
+                {
+                    task_detail_json["compatibility_override"] = compatibility_override;
+                }
                 let task = self
                     .transition_task(
                         &running_task,
                         domain::PluginTaskStatus::Succeeded,
                         Some(installed_message.to_string()),
-                        json!({
-                            "installation_id": installation.id,
-                            "provider_code": installation.provider_code,
-                            "plugin_id": installation.plugin_id,
-                            "installed_path": installation.installed_path,
-                        }),
+                        task_detail_json,
                     )
                     .await?;
                 Ok(InstallPluginResult { installation, task })

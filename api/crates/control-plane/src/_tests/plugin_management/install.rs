@@ -4,7 +4,8 @@ use crate::{
     plugin_management::{
         AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
         InstallPluginCommand, InstallUploadedPluginCommand, OfficialPluginCatalogFilter,
-        PluginCatalogFilter, PluginManagementService, RefreshCurrentNodePluginArtifactCommand,
+        PluginCatalogFilter, PluginCompatibilityOverride, PluginManagementService,
+        RefreshCurrentNodePluginArtifactCommand,
     },
     ports::{
         FrontendBlockCatalogRepository, JsDependencyRepository, NodeContributionRepository,
@@ -265,6 +266,7 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
         .install_official_plugin(InstallOfficialPluginCommand {
             actor_user_id: repository.actor.user_id,
             plugin_id: "1flowbase.openai_compatible".to_string(),
+            compatibility_override: None,
         })
         .await
         .unwrap();
@@ -281,6 +283,108 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
     );
     assert_eq!(install.installation.trust_level, "unverified");
     assert_eq!(install.task.status, PluginTaskStatus::Succeeded);
+}
+
+#[tokio::test]
+async fn plugin_management_service_marks_official_catalog_entry_below_minimum_host_version() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::with_minimum_host_version(
+            "999.0.0",
+        )),
+        std::env::temp_dir().join(format!("plugin-installed-{}", Uuid::now_v7())),
+    );
+
+    let catalog = service
+        .list_official_catalog(
+            repository.actor.user_id,
+            OfficialPluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+
+    let entry = &catalog.entries[0];
+    assert_eq!(entry.minimum_host_version, "999.0.0");
+    assert_eq!(entry.current_host_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(entry.compatibility_status, "below_minimum_host_version");
+    assert_eq!(
+        entry.compatibility_warning_reason.as_deref(),
+        Some("below_minimum_host_version")
+    );
+}
+
+#[tokio::test]
+async fn plugin_management_service_requires_explicit_override_for_below_minimum_official_install() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::with_minimum_host_version(
+            "999.0.0",
+        )),
+        std::env::temp_dir().join(format!("plugin-installed-{}", Uuid::now_v7())),
+    );
+
+    let blocked = service
+        .install_official_plugin(InstallOfficialPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            plugin_id: "1flowbase.openai_compatible".to_string(),
+            compatibility_override: None,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        blocked.downcast_ref::<crate::errors::ControlPlaneError>(),
+        Some(crate::errors::ControlPlaneError::Conflict(
+            "plugin_host_version_below_minimum"
+        ))
+    ));
+
+    let install = service
+        .install_official_plugin(InstallOfficialPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            plugin_id: "1flowbase.openai_compatible".to_string(),
+            compatibility_override: Some(PluginCompatibilityOverride {
+                reason: "below_minimum_host_version".to_string(),
+                acknowledged_current_host_version: env!("CARGO_PKG_VERSION").to_string(),
+                acknowledged_minimum_host_version: "999.0.0".to_string(),
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        install.installation.metadata_json["compatibility_override"]["reason"],
+        "below_minimum_host_version"
+    );
+    assert_eq!(
+        install.installation.metadata_json["compatibility_override"]
+            ["acknowledged_minimum_host_version"],
+        "999.0.0"
+    );
+    let install_task = repository
+        .list_tasks()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|task| task.task_kind == domain::PluginTaskKind::Install)
+        .expect("install task should be recorded");
+    assert_eq!(
+        install_task.detail_json["compatibility_override"]["reason"],
+        "below_minimum_host_version"
+    );
 }
 
 #[tokio::test]
@@ -301,6 +405,7 @@ async fn plugin_management_service_rejects_unsigned_signature_required_official_
         .install_official_plugin(InstallOfficialPluginCommand {
             actor_user_id: repository.actor.user_id,
             plugin_id: "1flowbase.openai_compatible".into(),
+            compatibility_override: None,
         })
         .await
         .expect_err("unsigned official package must fail");

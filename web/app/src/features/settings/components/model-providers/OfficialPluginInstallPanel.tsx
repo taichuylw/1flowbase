@@ -1,16 +1,31 @@
 import { useMemo, useState } from 'react';
 
 import { QuestionCircleOutlined } from '@ant-design/icons';
-import { Button, Empty, Modal, Select, Tag, Tooltip, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Empty,
+  Modal,
+  Select,
+  Tag,
+  Tooltip,
+  Typography
+} from 'antd';
 
 import { ScrollableSurface } from '../../../../shared/ui/scrollable-surface/ScrollableSurface';
 import type {
+  SettingsPluginCompatibilityOverride,
   SettingsOfficialPluginCatalogEntry,
   SettingsPluginFamilyEntry
 } from '../../api/plugins';
 import { i18nText } from '../../../../shared/i18n/text';
 
 type InstallState = 'idle' | 'installing' | 'success' | 'failed';
+const BELOW_MINIMUM_HOST_VERSION = 'below_minimum_host_version';
+
+function isBelowMinimumHostVersion(entry: SettingsOfficialPluginCatalogEntry) {
+  return entry.compatibility_status === BELOW_MINIMUM_HOST_VERSION;
+}
 
 function getInstallButtonLabel(
   entry: SettingsOfficialPluginCatalogEntry,
@@ -30,6 +45,10 @@ function getInstallButtonLabel(
 
   if (activePluginId === entry.plugin_id && installState === 'failed') {
     return i18nText('settings', 'auto.retry_installation');
+  }
+
+  if (isBelowMinimumHostVersion(entry)) {
+    return i18nText('settings', 'auto.still_install');
   }
 
   return i18nText('settings', 'auto.install_workspace');
@@ -103,6 +122,8 @@ function getTagColor(tag: string) {
       return 'processing';
     case 'failed':
       return 'red';
+    case BELOW_MINIMUM_HOST_VERSION:
+      return 'orange';
     case 'hybrid':
       return 'purple';
     case 'dynamic':
@@ -129,6 +150,10 @@ function renderTagLabel(tag: string) {
         </Tooltip>
       </span>
     );
+  }
+
+  if (tag === BELOW_MINIMUM_HOST_VERSION) {
+    return i18nText('settings', 'auto.host_version_risk');
   }
 
   if (tag === 'hybrid' || tag === 'dynamic' || tag === 'static') {
@@ -177,6 +202,9 @@ function getStatusTags(
         ? family.latest_version
         : 'latest'
     );
+    if (isBelowMinimumHostVersion(entry)) {
+      tags.push(BELOW_MINIMUM_HOST_VERSION);
+    }
     tags.push(entry.model_discovery_mode);
     return tags;
   }
@@ -193,6 +221,10 @@ function getStatusTags(
     tags.push('failed');
   } else {
     tags.push('latest');
+  }
+
+  if (isBelowMinimumHostVersion(entry)) {
+    tags.push(BELOW_MINIMUM_HOST_VERSION);
   }
 
   tags.push(entry.model_discovery_mode);
@@ -227,10 +259,16 @@ export function OfficialPluginInstallPanel({
   activePluginId: string | null;
   installState: InstallState;
   upgradingProviderCode: string | null;
-  onInstall: (entry: SettingsOfficialPluginCatalogEntry) => void;
+  onInstall: (
+    entry: SettingsOfficialPluginCatalogEntry,
+    compatibilityOverride?: SettingsPluginCompatibilityOverride
+  ) => void;
   onOpenUpload: () => void;
   onSearchQueryChange: (query: string) => void;
-  onUpgradeLatest: (entry: SettingsOfficialPluginCatalogEntry) => void;
+  onUpgradeLatest: (
+    entry: SettingsOfficialPluginCatalogEntry,
+    compatibilityOverride?: SettingsPluginCompatibilityOverride
+  ) => void;
 }) {
   const [modal, contextHolder] = Modal.useModal();
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
@@ -353,14 +391,26 @@ export function OfficialPluginInstallPanel({
               (activePluginId === entry.plugin_id &&
                 installState === 'success');
             const upgrading = upgradingProviderCode === entry.provider_code;
+            const belowMinimumHostVersion = isBelowMinimumHostVersion(entry);
             const buttonLabel = family
               ? family.has_update
                 ? upgrading
                   ? i18nText('settings', 'auto.upgrading')
-                  : i18nText('settings', 'auto.upgrade_latest_version')
+                  : belowMinimumHostVersion
+                    ? i18nText('settings', 'auto.still_update')
+                    : i18nText('settings', 'auto.upgrade_latest_version')
                 : i18nText('settings', 'auto.currently_latest_version')
               : getInstallButtonLabel(entry, installState, activePluginId);
             const buttonDisabled = family ? !family.has_update : installed;
+            const compatibilityOverride = belowMinimumHostVersion
+              ? ({
+                  reason: BELOW_MINIMUM_HOST_VERSION,
+                  acknowledged_current_host_version:
+                    entry.current_host_version,
+                  acknowledged_minimum_host_version:
+                    entry.minimum_host_version
+                } satisfies SettingsPluginCompatibilityOverride)
+              : undefined;
 
             return (
               <article
@@ -468,16 +518,75 @@ export function OfficialPluginInstallPanel({
                                     {entry.model_discovery_mode}
                                   </span>
                                 </div>
+                                {belowMinimumHostVersion ? (
+                                  <Alert
+                                    type="warning"
+                                    showIcon
+                                    message={i18nText(
+                                      'settings',
+                                      'auto.host_version_below_minimum_warning'
+                                    )}
+                                    description={
+                                      <div className="model-provider-panel__install-warning-detail">
+                                        <Typography.Text>
+                                          {i18nText(
+                                            'settings',
+                                            'auto.current_host_version_value',
+                                            {
+                                              value1:
+                                                entry.current_host_version
+                                            }
+                                          )}
+                                        </Typography.Text>
+                                        <Typography.Text>
+                                          {i18nText(
+                                            'settings',
+                                            'auto.minimum_host_version_value',
+                                            {
+                                              value1:
+                                                entry.minimum_host_version
+                                            }
+                                          )}
+                                        </Typography.Text>
+                                        <Typography.Text>
+                                          {i18nText(
+                                            'settings',
+                                            'auto.plugin_version_value',
+                                            { value1: entry.latest_version }
+                                          )}
+                                        </Typography.Text>
+                                        <Typography.Text>
+                                          {i18nText(
+                                            'settings',
+                                            'auto.possible_risk_value',
+                                            {
+                                              value1: i18nText(
+                                                'settings',
+                                                'auto.host_version_below_minimum_risk'
+                                              )
+                                            }
+                                          )}
+                                        </Typography.Text>
+                                        <Typography.Text>
+                                          {i18nText(
+                                            'settings',
+                                            'auto.upgrade_one_flowbase_before_continuing'
+                                          )}
+                                        </Typography.Text>
+                                      </div>
+                                    }
+                                  />
+                                ) : null}
                               </div>
                             </div>
                           ),
                           onOk: async () => {
                             if (family) {
-                              onUpgradeLatest(entry);
+                              onUpgradeLatest(entry, compatibilityOverride);
                               return;
                             }
 
-                            onInstall(entry);
+                            onInstall(entry, compatibilityOverride);
                           }
                         });
                       }}

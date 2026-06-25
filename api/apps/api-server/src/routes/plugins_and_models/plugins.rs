@@ -11,9 +11,10 @@ use control_plane::plugin_management::{
     InstallCurrentNodePluginArtifactCommand, InstallOfficialPluginCommand, InstallPluginCommand,
     InstallPluginResult, InstallUploadedPluginCommand, OfficialPluginCatalogEntry,
     OfficialPluginCatalogFilter, OfficialPluginCatalogView, PluginCatalogEntry,
-    PluginCatalogFilter, PluginFamilyView, PluginInstalledVersionView, PluginManagementService,
-    RefreshCurrentNodePluginArtifactCommand, RefreshPluginPackageCatalogProjectionCommand,
-    SwitchPluginVersionCommand, UpgradeLatestPluginFamilyCommand,
+    PluginCatalogFilter, PluginCompatibilityOverride, PluginFamilyView, PluginInstalledVersionView,
+    PluginManagementService, RefreshCurrentNodePluginArtifactCommand,
+    RefreshPluginPackageCatalogProjectionCommand, SwitchPluginVersionCommand,
+    UpgradeLatestPluginFamilyCommand,
 };
 use control_plane::resource_action::{
     ActionDefinition, ResourceActionKernel, ResourceActionRegistry, ResourceDefinition,
@@ -45,6 +46,19 @@ pub struct InstallPluginBody {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct InstallOfficialPluginBody {
     pub plugin_id: String,
+    pub compatibility_override: Option<PluginCompatibilityOverrideBody>,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct PluginCompatibilityOverrideBody {
+    pub reason: String,
+    pub acknowledged_current_host_version: String,
+    pub acknowledged_minimum_host_version: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpgradeLatestPluginFamilyBody {
+    pub compatibility_override: Option<PluginCompatibilityOverrideBody>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -176,6 +190,10 @@ pub struct OfficialPluginCatalogEntryResponse {
     pub icon: Option<String>,
     pub protocol: String,
     pub latest_version: String,
+    pub minimum_host_version: String,
+    pub current_host_version: String,
+    pub compatibility_status: String,
+    pub compatibility_warning_reason: Option<String>,
     pub selected_artifact: OfficialPluginArtifactResponse,
     pub help_url: Option<String>,
     pub model_discovery_mode: String,
@@ -356,6 +374,16 @@ fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
         .map_err(|_| control_plane::errors::ControlPlaneError::InvalidInput(field).into())
 }
 
+fn to_compatibility_override(
+    compatibility_override: Option<PluginCompatibilityOverrideBody>,
+) -> Option<PluginCompatibilityOverride> {
+    compatibility_override.map(|value| PluginCompatibilityOverride {
+        reason: value.reason,
+        acknowledged_current_host_version: value.acknowledged_current_host_version,
+        acknowledged_minimum_host_version: value.acknowledged_minimum_host_version,
+    })
+}
+
 async fn read_upload_file(multipart: &mut Multipart) -> Result<(String, Vec<u8>), ApiError> {
     while let Some(field) = multipart
         .next_field()
@@ -509,6 +537,10 @@ fn to_official_catalog_entry_response(
         icon: entry.icon,
         protocol: entry.protocol,
         latest_version: entry.latest_version,
+        minimum_host_version: entry.minimum_host_version,
+        current_host_version: entry.current_host_version,
+        compatibility_status: entry.compatibility_status,
+        compatibility_warning_reason: entry.compatibility_warning_reason,
         selected_artifact: OfficialPluginArtifactResponse {
             os: entry.selected_artifact.os,
             arch: entry.selected_artifact.arch,
@@ -862,6 +894,7 @@ pub async fn install_official_plugin(
         .install_official_plugin(InstallOfficialPluginCommand {
             actor_user_id: context.user.id,
             plugin_id: body.plugin_id,
+            compatibility_override: to_compatibility_override(body.compatibility_override),
         })
         .await?;
 
@@ -953,6 +986,7 @@ pub async fn upgrade_latest(
     State(state): State<Arc<ApiState>>,
     Path(provider_code): Path<String>,
     headers: HeaderMap,
+    body: Option<Json<UpgradeLatestPluginFamilyBody>>,
 ) -> Result<Json<ApiSuccess<PluginTaskResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context)?;
@@ -960,6 +994,9 @@ pub async fn upgrade_latest(
         .upgrade_latest(UpgradeLatestPluginFamilyCommand {
             actor_user_id: context.user.id,
             provider_code,
+            compatibility_override: body
+                .map(|Json(body)| body.compatibility_override)
+                .and_then(to_compatibility_override),
         })
         .await?;
     Ok(Json(ApiSuccess::new(to_task_response(task))))

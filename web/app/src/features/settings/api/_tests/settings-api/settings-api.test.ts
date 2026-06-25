@@ -800,6 +800,10 @@ describe('settings api wrappers', () => {
           icon: 'https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/runtime-extensions/model-providers/openai_compatible/_assets/icon.svg',
           protocol: 'openai_compatible',
           latest_version: '0.3.7',
+          minimum_host_version: '0.1.0',
+          current_host_version: '0.2.0',
+          compatibility_status: 'compatible',
+          compatibility_warning_reason: null,
           selected_artifact: {
             os: 'linux',
             arch: 'amd64',
