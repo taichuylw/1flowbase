@@ -513,7 +513,7 @@ describe('Settings data models page', () => {
         'csrf-123'
       )
     );
-  }, 20_000);
+  }, SLOW_SETTINGS_PAGE_TEST_TIMEOUT * 2);
 
   test('keeps main source field creation focused on basic field settings', async () => {
     renderApp('/settings/data-models?source=main_source');

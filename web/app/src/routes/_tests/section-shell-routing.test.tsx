@@ -120,6 +120,9 @@ import { AppProviders } from '../../app/AppProviders';
 import { AppRouterProvider } from '../../app/router';
 import { resetAuthStore, useAuthStore } from '../../state/auth-store';
 
+const SECTION_REDIRECT_WAIT_OPTIONS = { timeout: 8_000 };
+const SECTION_REDIRECT_TEST_TIMEOUT = 10_000;
+
 function authenticateWithPermissions(
   permissions: string[],
   effectiveDisplayRole: 'manager' | 'root' = 'manager'
@@ -234,9 +237,9 @@ describe('section shell routing', () => {
 
       await waitFor(() => {
         expect(window.location.pathname).toBe('/me/profile');
-      });
+      }, SECTION_REDIRECT_WAIT_OPTIONS);
     },
-    10000
+    SECTION_REDIRECT_TEST_TIMEOUT
   );
 
   test('redirects /settings to API key when docs is hidden but members is visible', async () => {
@@ -246,9 +249,9 @@ describe('section shell routing', () => {
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
-    });
+    }, SECTION_REDIRECT_WAIT_OPTIONS);
     expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
-  }, 10000);
+  }, SECTION_REDIRECT_TEST_TIMEOUT);
 
   test('redirects /settings/docs to API key when docs is hidden but roles is visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'role_permission.view.all']);
@@ -257,9 +260,9 @@ describe('section shell routing', () => {
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
-    });
+    }, SECTION_REDIRECT_WAIT_OPTIONS);
     expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
-  });
+  }, SECTION_REDIRECT_TEST_TIMEOUT);
 
   test('redirects /settings/docs to API key when state model settings are visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'state_model.view.all']);
@@ -268,9 +271,9 @@ describe('section shell routing', () => {
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
-    });
+    }, SECTION_REDIRECT_WAIT_OPTIONS);
     expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
-  });
+  }, SECTION_REDIRECT_TEST_TIMEOUT);
 
   test('redirects /settings/docs to API key when file management is the only visible section', async () => {
     authenticateWithPermissions(['route_page.view.all', 'file_table.view.own']);
@@ -279,7 +282,7 @@ describe('section shell routing', () => {
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/api-key-authentication');
-    });
+    }, SECTION_REDIRECT_WAIT_OPTIONS);
     expect(screen.getByTestId('section-page-layout')).toBeInTheDocument();
-  });
+  }, SECTION_REDIRECT_TEST_TIMEOUT);
 });

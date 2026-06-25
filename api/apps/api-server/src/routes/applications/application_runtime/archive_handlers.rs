@@ -15,6 +15,7 @@ const RUN_ARCHIVE_UPLOAD_MAX_CHUNKS: i64 = 4096;
 #[derive(Debug)]
 struct RunArchiveUploadSessionRow {
     session_id: Uuid,
+    scope_id: Uuid,
     application_id: Uuid,
     status: String,
     filename: Option<String>,
@@ -42,6 +43,16 @@ struct RunArchiveImportJobRow {
     updated_at: OffsetDateTime,
     started_at: Option<OffsetDateTime>,
     finished_at: Option<OffsetDateTime>,
+}
+
+struct CreateRunArchiveImportJobInput<'a> {
+    workspace_id: Uuid,
+    application_id: Uuid,
+    actor_user_id: Uuid,
+    session_id: Uuid,
+    archive_version: i32,
+    archive_sha256: &'a str,
+    run_count: i32,
 }
 
 #[utoipa::path(
@@ -220,8 +231,10 @@ pub async fn create_run_archive_upload_session(
             total_size_bytes,
             expected_sha256,
             chunk_size_bytes,
-            status
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, 'uploading')
+            status,
+            created_by,
+            updated_by
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, 'uploading', $9, $9)
         "#,
     )
     .bind(session_id)
@@ -232,6 +245,7 @@ pub async fn create_run_archive_upload_session(
     .bind(body.total_size_bytes)
     .bind(expected_sha256)
     .bind(chunk_size_bytes)
+    .bind(context.actor.user_id)
     .execute(state.store.pool())
     .await?;
 
@@ -292,28 +306,37 @@ pub async fn upload_run_archive_chunk(
         return Err(ControlPlaneError::InvalidInput("chunk_sha256").into());
     }
 
+    let chunk_id = Uuid::now_v7();
     let mut tx = state.store.pool().begin().await?;
     sqlx::query(
         r#"
         insert into run_archive_upload_chunks (
+            id,
+            scope_id,
             session_id,
             chunk_index,
             chunk_size_bytes,
             chunk_sha256,
-            content
-        ) values ($1, $2, $3, $4, $5)
+            content,
+            created_by,
+            updated_by
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $8)
         on conflict (session_id, chunk_index) do update
         set chunk_size_bytes = excluded.chunk_size_bytes,
             chunk_sha256 = excluded.chunk_sha256,
             content = excluded.content,
-            created_at = now()
+            updated_at = now(),
+            updated_by = excluded.updated_by
         "#,
     )
+    .bind(chunk_id)
+    .bind(session.scope_id)
     .bind(session_id)
     .bind(chunk_index)
     .bind(i64::try_from(body.len()).unwrap_or(i64::MAX))
     .bind(&actual_sha256)
     .bind(body.as_ref())
+    .bind(context.actor.user_id)
     .execute(&mut *tx)
     .await?;
     let received_bytes =
@@ -377,13 +400,15 @@ pub async fn complete_run_archive_upload_session(
     let archive = parse_run_archive_v1(&archive_bytes)?;
     let job_id = create_run_archive_import_job(
         &state,
-        application.workspace_id,
-        application.id,
-        context.actor.user_id,
-        session_id,
-        archive.archive_version,
-        &archive_sha256,
-        i32::try_from(archive.entries.len()).unwrap_or(i32::MAX),
+        CreateRunArchiveImportJobInput {
+            workspace_id: application.workspace_id,
+            application_id: application.id,
+            actor_user_id: context.actor.user_id,
+            session_id,
+            archive_version: archive.archive_version,
+            archive_sha256: &archive_sha256,
+            run_count: i32::try_from(archive.entries.len()).unwrap_or(i32::MAX),
+        },
     )
     .await?;
 
@@ -640,13 +665,7 @@ async fn build_run_archive_v1_entry(
 
 async fn create_run_archive_import_job(
     state: &Arc<ApiState>,
-    workspace_id: Uuid,
-    application_id: Uuid,
-    actor_user_id: Uuid,
-    session_id: Uuid,
-    archive_version: i32,
-    archive_sha256: &str,
-    run_count: i32,
+    input: CreateRunArchiveImportJobInput<'_>,
 ) -> Result<Uuid, ApiError> {
     let job_id = Uuid::now_v7();
     sqlx::query(
@@ -660,18 +679,20 @@ async fn create_run_archive_import_job(
             status,
             archive_version,
             archive_sha256,
-            run_count
-        ) values ($1, $2, $3, $4, $5, 'queued', $6, $7, $8)
+            run_count,
+            created_by,
+            updated_by
+        ) values ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $4, $4)
         "#,
     )
     .bind(job_id)
-    .bind(workspace_id)
-    .bind(application_id)
-    .bind(actor_user_id)
-    .bind(session_id)
-    .bind(archive_version)
-    .bind(archive_sha256)
-    .bind(run_count)
+    .bind(input.workspace_id)
+    .bind(input.application_id)
+    .bind(input.actor_user_id)
+    .bind(input.session_id)
+    .bind(input.archive_version)
+    .bind(input.archive_sha256)
+    .bind(input.run_count)
     .execute(state.store.pool())
     .await?;
     Ok(job_id)
@@ -808,6 +829,7 @@ async fn load_run_archive_upload_session(
         r#"
         select
             id,
+            scope_id,
             application_id,
             status,
             original_filename,
@@ -830,6 +852,7 @@ async fn load_run_archive_upload_session(
 
     Ok(RunArchiveUploadSessionRow {
         session_id: row.get("id"),
+        scope_id: row.get("scope_id"),
         application_id: row.get("application_id"),
         status: row.get("status"),
         filename: row.get("original_filename"),

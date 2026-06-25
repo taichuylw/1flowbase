@@ -25,7 +25,7 @@ pub enum PluginFrameworkError {
     #[error("invalid provider contract: {message}")]
     InvalidProviderContract { message: String },
     #[error("provider runtime error: {error}")]
-    RuntimeContract { error: ProviderRuntimeError },
+    RuntimeContract { error: Box<ProviderRuntimeError> },
     #[error("I/O error while loading provider package{path_display}: {message}")]
     Io {
         path: Option<PathBuf>,
@@ -73,7 +73,9 @@ impl PluginFrameworkError {
     }
 
     pub fn runtime(error: ProviderRuntimeError) -> Self {
-        Self::RuntimeContract { error }
+        Self::RuntimeContract {
+            error: Box::new(error),
+        }
     }
 
     pub fn io(path: Option<&Path>, message: impl Into<String>) -> Self {

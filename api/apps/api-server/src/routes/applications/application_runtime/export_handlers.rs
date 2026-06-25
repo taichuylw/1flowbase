@@ -217,16 +217,16 @@ async fn build_application_run_trace_export_document(
     let mut warnings = Vec::new();
     let mut artifact_cache = std::collections::HashMap::new();
     let mut visiting_artifacts = HashSet::new();
-    value = materialize_export_artifacts(
+    value = materialize_export_artifacts(MaterializeExportArtifactsInput {
         state,
         workspace_id,
         application_id,
         value,
-        &mut warnings,
-        &mut artifact_cache,
-        &mut visiting_artifacts,
-        "$".to_string(),
-    )
+        warnings: &mut warnings,
+        artifact_cache: &mut artifact_cache,
+        visiting_artifacts: &mut visiting_artifacts,
+        source: "$".to_string(),
+    })
     .await;
     let export_status = if warnings.is_empty() {
         "complete"
@@ -422,7 +422,7 @@ fn empty_trace_projection_statistics_response() -> application_logs::Application
     })
 }
 
-fn materialize_export_artifacts<'a>(
+struct MaterializeExportArtifactsInput<'a> {
     state: Arc<ApiState>,
     workspace_id: Uuid,
     application_id: Uuid,
@@ -431,8 +431,23 @@ fn materialize_export_artifacts<'a>(
     artifact_cache: &'a mut std::collections::HashMap<Uuid, serde_json::Value>,
     visiting_artifacts: &'a mut HashSet<Uuid>,
     source: String,
+}
+
+fn materialize_export_artifacts<'a>(
+    input: MaterializeExportArtifactsInput<'a>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = serde_json::Value> + Send + 'a>> {
     Box::pin(async move {
+        let MaterializeExportArtifactsInput {
+            state,
+            workspace_id,
+            application_id,
+            value,
+            warnings,
+            artifact_cache,
+            visiting_artifacts,
+            source,
+        } = input;
+
         if let Some(artifact_ref) = runtime_debug_artifact_ref(&value) {
             if let Some(cached) = artifact_cache.get(&artifact_ref).cloned() {
                 return cached;
@@ -454,16 +469,16 @@ fn materialize_export_artifacts<'a>(
             .await
             {
                 Ok(full_value) => {
-                    let materialized = materialize_export_artifacts(
+                    let materialized = materialize_export_artifacts(MaterializeExportArtifactsInput {
                         state,
                         workspace_id,
                         application_id,
-                        full_value,
+                        value: full_value,
                         warnings,
                         artifact_cache,
                         visiting_artifacts,
                         source,
-                    )
+                    })
                     .await;
                     visiting_artifacts.remove(&artifact_ref);
                     artifact_cache.insert(artifact_ref, materialized.clone());
@@ -486,16 +501,16 @@ fn materialize_export_artifacts<'a>(
                 let mut materialized = Vec::with_capacity(items.len());
                 for (index, item) in items.into_iter().enumerate() {
                     materialized.push(
-                        materialize_export_artifacts(
-                            state.clone(),
+                        materialize_export_artifacts(MaterializeExportArtifactsInput {
+                            state: state.clone(),
                             workspace_id,
                             application_id,
-                            item,
+                            value: item,
                             warnings,
                             artifact_cache,
                             visiting_artifacts,
-                            format!("{source}[{index}]"),
-                        )
+                            source: format!("{source}[{index}]"),
+                        })
                         .await,
                     );
                 }
@@ -505,16 +520,16 @@ fn materialize_export_artifacts<'a>(
                 let mut materialized = serde_json::Map::with_capacity(object.len());
                 for (key, item) in object {
                     let child_source = format!("{source}.{key}");
-                    let child = materialize_export_artifacts(
-                        state.clone(),
+                    let child = materialize_export_artifacts(MaterializeExportArtifactsInput {
+                        state: state.clone(),
                         workspace_id,
                         application_id,
-                        item,
+                        value: item,
                         warnings,
                         artifact_cache,
                         visiting_artifacts,
-                        child_source,
-                    )
+                        source: child_source,
+                    })
                     .await;
                     materialized.insert(key, child);
                 }

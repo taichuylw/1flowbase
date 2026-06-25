@@ -70,8 +70,10 @@ async fn error_response_http_status_matches_body_status() {
 
 #[tokio::test]
 async fn internal_error_exposes_real_message_with_sanitization() {
-    let response =
-        ApiError(anyhow::anyhow!("connection failed: api_key=secret123 token")).into_response();
+    let response = ApiError(anyhow::anyhow!(
+        "connection failed: api_key=secret123 token"
+    ))
+    .into_response();
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -91,10 +93,8 @@ async fn internal_error_exposes_real_message_with_sanitization() {
 
 #[tokio::test]
 async fn sanitize_bearer_token() {
-    let response = ApiError(anyhow::anyhow!(
-        "auth failed: Bearer sk-1234567890abcdef"
-    ))
-    .into_response();
+    let response =
+        ApiError(anyhow::anyhow!("auth failed: Bearer sk-1234567890abcdef")).into_response();
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -141,11 +141,13 @@ async fn provider_runtime_error_preserves_detailed_message() {
     use plugin_framework::provider_contract::{ProviderRuntimeError, ProviderRuntimeErrorKind};
 
     let runtime_error = PluginFrameworkError::RuntimeContract {
-        error: ProviderRuntimeError::new(
-            ProviderRuntimeErrorKind::ModelNotFound,
-            "model 'gpt-5' not found: available models are gpt-4, gpt-3.5-turbo",
-        )
-        .with_provider_summary("openai provider error"),
+        error: Box::new(
+            ProviderRuntimeError::new(
+                ProviderRuntimeErrorKind::ModelNotFound,
+                "model 'gpt-5' not found: available models are gpt-4, gpt-3.5-turbo",
+            )
+            .with_provider_summary("openai provider error"),
+        ),
     };
     let response = ApiError(anyhow::Error::from(runtime_error)).into_response();
 
@@ -162,4 +164,3 @@ async fn provider_runtime_error_preserves_detailed_message() {
     assert!(message.contains("not found"));
     assert!(message.contains("available models"));
 }
-
