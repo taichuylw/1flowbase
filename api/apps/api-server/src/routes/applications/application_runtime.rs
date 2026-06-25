@@ -31,6 +31,7 @@ use control_plane::{
     },
 };
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use storage_durable::MainDurableStore;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use tokio::sync::mpsc;

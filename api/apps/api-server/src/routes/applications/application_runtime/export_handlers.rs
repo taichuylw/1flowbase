@@ -1,5 +1,3 @@
-use sqlx::Row;
-
 const APPLICATION_RUN_TRACE_EXPORT_VERSION: i32 = 1;
 
 struct ApplicationRunTraceExportDocument {
