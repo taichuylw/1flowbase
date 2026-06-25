@@ -564,12 +564,13 @@ async fn build_run_archive_v1_entry(
     let checkpoints = required_json_field(&export_value, "checkpoints")?;
     let callback_tasks = required_json_field(&export_value, "callback_tasks")?;
     let events = required_json_field(&export_value, "events")?;
-    let trace_tree = export_value
+    let mut trace_tree = export_value
         .get("trace_tree")
         .cloned()
         .ok_or(ControlPlaneError::Conflict(
             "application_run_archive_trace_tree",
         ))?;
+    normalize_run_archive_trace_tree_projection_status(&mut trace_tree);
     let export_warnings = required_json_field(&export_value, "export_warnings")?;
     let detail = <MainDurableStore as OrchestrationRuntimeRepository>::get_application_run_detail(
         &state.store,
@@ -1176,7 +1177,8 @@ fn trace_export_to_archive_entry(
 ) -> Result<RunArchiveV1EntryResponse, ApiError> {
     let source_run_id = document.flow_run.id.clone();
     let flow_run_fact = trace_export_flow_run_fact(&document.flow_run)?;
-    let trace_tree = serde_json::to_value(document.trace_tree)?;
+    let mut trace_tree = serde_json::to_value(document.trace_tree)?;
+    normalize_run_archive_trace_tree_projection_status(&mut trace_tree);
 
     Ok(RunArchiveV1EntryResponse {
         source_run_id,
@@ -1198,6 +1200,18 @@ fn trace_export_to_archive_entry(
         trace_tree,
         export_warnings: document.export_warnings,
     })
+}
+
+fn normalize_run_archive_trace_tree_projection_status(trace_tree: &mut serde_json::Value) {
+    let Some(projection_status) = trace_tree
+        .get_mut("projection_status")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+
+    projection_status.insert("last_attempt_at".to_string(), serde_json::Value::Null);
+    projection_status.insert("last_success_at".to_string(), serde_json::Value::Null);
 }
 
 fn trace_export_flow_run_fact(flow_run: &FlowRunResponse) -> Result<serde_json::Value, ApiError> {

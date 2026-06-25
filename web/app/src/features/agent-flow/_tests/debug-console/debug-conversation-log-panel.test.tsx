@@ -721,8 +721,7 @@ describe('debug conversation log panel', () => {
         .mockImplementation(
           async (
             _runId: string,
-            traceNodeId: string,
-            _detailRefId: string
+            traceNodeId: string
           ) => ({
             trace_node_id: traceNodeId,
             detail_ref_id: 'node_run',

@@ -198,6 +198,15 @@ struct ToolCallProjection<'a> {
     tool_call: serde_json::Value,
 }
 
+struct SubagentNodeRunProjectionContext<'a> {
+    order_key: String,
+    parent_trace_node_id: Uuid,
+    parent_stable_locator: &'a str,
+    node_alias: &'a str,
+    parent_tool_call_description: Option<&'a str>,
+    subagent_trace: &'a domain::ApplicationRunSubagentTrace,
+}
+
 impl TraceProjectionBuilder {
     fn new(flow_run_id: Uuid, source_watermark: String) -> Self {
         Self {
@@ -504,12 +513,14 @@ impl TraceProjectionBuilder {
             let node_alias = subagent_display_alias(parent_tool_call_description.as_deref());
             if let Some(node_runs) = subagent_primary_node_run_group(subagent_trace) {
                 self.push_subagent_node_run(
-                    child_order_key(&order_key, subagent_index),
-                    trace_node_id,
-                    &stable_locator,
-                    &node_alias,
-                    parent_tool_call_description.as_deref(),
-                    subagent_trace,
+                    SubagentNodeRunProjectionContext {
+                        order_key: child_order_key(&order_key, subagent_index),
+                        parent_trace_node_id: trace_node_id,
+                        parent_stable_locator: &stable_locator,
+                        node_alias: &node_alias,
+                        parent_tool_call_description: parent_tool_call_description.as_deref(),
+                        subagent_trace,
+                    },
                     &node_runs,
                 )?;
             } else {
@@ -581,14 +592,17 @@ impl TraceProjectionBuilder {
 
     fn push_subagent_node_run(
         &mut self,
-        order_key: String,
-        parent_trace_node_id: Uuid,
-        parent_stable_locator: &str,
-        node_alias: &str,
-        parent_tool_call_description: Option<&str>,
-        subagent_trace: &domain::ApplicationRunSubagentTrace,
+        context: SubagentNodeRunProjectionContext<'_>,
         node_runs: &[domain::NodeRunRecord],
     ) -> Result<()> {
+        let SubagentNodeRunProjectionContext {
+            order_key,
+            parent_trace_node_id,
+            parent_stable_locator,
+            node_alias,
+            parent_tool_call_description,
+            subagent_trace,
+        } = context;
         let first_node_run = &node_runs[0];
         let summary_node_run = merge_node_run_group(node_runs);
         let stable_locator = format!(
@@ -609,8 +623,10 @@ impl TraceProjectionBuilder {
                 subagent_trace.source_flow_run.id, first_node_run.id
             )
         };
-        let source_trace_node_id =
-            trace_node_id_for_locator(subagent_trace.source_flow_run.id, &source_stable_locator);
+        let source_trace_node_id = trace_node_id_for_locator(
+            subagent_trace.source_flow_run.id,
+            &source_stable_locator,
+        );
         let node_run_ids = node_runs
             .iter()
             .map(|node_run| node_run.id)

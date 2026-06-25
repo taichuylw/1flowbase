@@ -658,6 +658,7 @@ impl PgControlPlaneStore {
     }
 
     async fn update_node_run(&self, input: &UpdateNodeRunInput) -> Result<domain::NodeRunRecord> {
+        let mut tx = self.pool().begin().await?;
         let row = sqlx::query(
             r#"
             update node_runs
@@ -691,10 +692,24 @@ impl PgControlPlaneStore {
         .bind(&input.metrics_payload)
         .bind(&input.debug_payload)
         .bind(input.finished_at)
-        .fetch_one(self.pool())
+        .fetch_one(&mut *tx)
         .await?;
 
-        map_node_run_record(row)
+        let node_run = map_node_run_record(row)?;
+        sqlx::query(
+            r#"
+            update flow_runs
+            set updated_at = coalesce($2, now())
+            where id = $1
+            "#,
+        )
+        .bind(node_run.flow_run_id)
+        .bind(input.finished_at)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+
+        Ok(node_run)
     }
 
     async fn complete_node_run(

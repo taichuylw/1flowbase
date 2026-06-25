@@ -36,6 +36,12 @@ async fn migration_creates_run_conversation_message_item_projection_table_and_in
             .any(|name| name == "application_run_conversation_message_items_run_sequence_idx"),
         "projection reads need application_id + flow_run_id + display_sequence index"
     );
+    assert!(
+        indexes.iter().any(|name| {
+            name == "application_run_conversation_message_items_scope_created_id_idx"
+        }),
+        "managed table expansion reads need scope_id + created_at + id index"
+    );
 }
 
 #[tokio::test]
