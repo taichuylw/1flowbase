@@ -538,32 +538,36 @@ where
             .repository
             .get_instance(self.workspace_id, provider_instance_id)
             .await?
-            .ok_or(ControlPlaneError::InvalidInput("source_instance_id"))?;
-        if instance.provider_code != runtime.provider_code
-            || instance.status != domain::ModelProviderInstanceStatus::Ready
-            || !instance.included_in_main
-        {
-            return Err(ControlPlaneError::InvalidInput("source_instance_id").into());
+            .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
+        if instance.provider_code != runtime.provider_code {
+            return Err(ControlPlaneError::InvalidInput("provider_code").into());
+        }
+        if instance.status != domain::ModelProviderInstanceStatus::Ready {
+            return Err(ControlPlaneError::Conflict("provider_instance_not_ready").into());
+        }
+        if !instance.included_in_main {
+            return Err(ControlPlaneError::Conflict("provider_instance_not_in_main").into());
         }
         let installation = self
             .repository
             .get_installation(instance.installation_id)
             .await?
-            .ok_or(ControlPlaneError::InvalidInput("source_instance_id"))?;
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
         let assigned = self
             .repository
             .list_assignments(self.workspace_id)
             .await?
             .into_iter()
             .any(|assignment| assignment.installation_id == installation.id);
-        if !assigned
-            || matches!(
-                installation.desired_state,
-                domain::PluginDesiredState::Disabled
-            )
-            || installation.availability_status != domain::PluginAvailabilityStatus::Available
+        if !assigned {
+            return Err(ControlPlaneError::Conflict("plugin_assignment_required").into());
+        }
+        if matches!(
+            installation.desired_state,
+            domain::PluginDesiredState::Disabled
+        ) || installation.availability_status != domain::PluginAvailabilityStatus::Available
         {
-            return Err(ControlPlaneError::InvalidInput("source_instance_id").into());
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
         }
         if !instance.enabled_model_ids.is_empty()
             && !instance
