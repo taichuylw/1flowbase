@@ -165,7 +165,6 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
             tool_id: None,
-            suggested_group_path: Some("/ops".into()),
             name: "Restart Worker".into(),
             short_description: "Restart a worker".into(),
             usage_description: Some("Use only after checking status.".into()),
@@ -183,6 +182,7 @@ async fn mcp_management_refreshes_des_id_and_exports_configuration_only() {
         })
         .await
         .unwrap();
+    assert_eq!(tool.tool_id, "restart_worker");
     assert_eq!(tool.des_id.len(), 8);
     assert!(
         service
@@ -284,7 +284,6 @@ async fn mcp_tool_binding_write_scope_is_limited_to_actor_workspace() {
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
             tool_id: Some("runtime_profile".into()),
-            suggested_group_path: Some("/ops".into()),
             name: "Runtime Profile".into(),
             short_description: "Read runtime profile".into(),
             usage_description: None,
@@ -374,7 +373,6 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
             tool_id: Some("runtime_profile".into()),
-            suggested_group_path: Some("/ops".into()),
             name: "Runtime Profile".into(),
             short_description: "Read runtime profile".into(),
             usage_description: None,
@@ -396,7 +394,6 @@ async fn mcp_instance_directory_rules_cover_visibility_and_directory_export() {
         .create_tool(CreateMcpToolCommand {
             actor_user_id: actor.id,
             tool_id: Some("disabled_runtime".into()),
-            suggested_group_path: Some("/ops".into()),
             name: "Disabled Runtime".into(),
             short_description: "Disabled runtime profile".into(),
             usage_description: None,

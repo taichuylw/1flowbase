@@ -63,17 +63,11 @@ function normalizeFallback(seed: string) {
 
 export function buildReadableToolId(
   name: string,
-  groupPath = '/',
   fallbackSeed = ''
 ) {
-  const pathSegments = normalizePath(groupPath)
-    .split('/')
-    .map(slugSegment)
-    .filter(Boolean);
   const nameSegment = slugSegment(name);
-  const readableId = [...pathSegments, nameSegment].filter(Boolean).join('_');
 
-  return readableId || normalizeFallback(fallbackSeed);
+  return nameSegment || normalizeFallback(fallbackSeed);
 }
 
 export function buildRandomToolIdSeed() {

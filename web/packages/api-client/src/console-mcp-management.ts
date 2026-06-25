@@ -135,7 +135,6 @@ export interface SaveConsoleMcpGroupBody {
 
 export interface SaveConsoleMcpToolBody {
   tool_id?: string | null;
-  suggested_group_path?: string | null;
   name: string;
   short_description: string;
   usage_description: string | null;
@@ -154,7 +153,7 @@ export interface SaveConsoleMcpToolBody {
 
 export type UpdateConsoleMcpToolBody = Omit<
   SaveConsoleMcpToolBody,
-  'tool_id' | 'suggested_group_path'
+  'tool_id'
 >;
 
 export interface SaveConsoleMcpToolBindingBody {

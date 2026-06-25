@@ -46,6 +46,8 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   start: createElement(PlaySquareOutlined),
   answer: createElement(MessageOutlined),
   llm: createElement(ThunderboltOutlined),
+  agents: createElement(ThunderboltOutlined),
+  agent: createElement(ThunderboltOutlined),
   code: codeNodeIcon(),
   template_transform: createElement(FileTextOutlined),
   knowledge_retrieval: createElement(SearchOutlined),

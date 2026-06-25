@@ -196,7 +196,6 @@ pub struct DeleteMcpGroupQuery {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateMcpToolBody {
     pub tool_id: Option<String>,
-    pub suggested_group_path: Option<String>,
     pub name: String,
     pub short_description: String,
     pub usage_description: Option<String>,
@@ -792,7 +791,6 @@ fn to_create_tool_command(
     Ok(CreateMcpToolCommand {
         actor_user_id,
         tool_id: body.tool_id,
-        suggested_group_path: body.suggested_group_path,
         name: body.name,
         short_description: body.short_description,
         usage_description: body.usage_description,
