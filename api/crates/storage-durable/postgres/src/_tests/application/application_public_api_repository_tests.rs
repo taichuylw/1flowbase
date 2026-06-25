@@ -140,7 +140,7 @@ async fn seed_flow_version_and_compiled_plan(
     .await
     .unwrap();
     sqlx::query(
-        "insert into flow_drafts (id, flow_id, schema_version, document, updated_by) values ($1, $2, $3, $4, $5)",
+        "insert into flow_drafts (id, flow_id, scope_id, schema_version, document, created_by, updated_by) values ($1, $2, (select scope_id from flows where id = $2), $3, $4, $5, $5)",
     )
     .bind(draft_id)
     .bind(flow_id)

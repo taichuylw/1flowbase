@@ -1,7 +1,7 @@
 use control_plane::ports::{
     ApiKeyRepository, CreateApiKeyInput, RoleRepository, UpsertApiKeyDataModelPermissionInput,
 };
-use domain::{ApiKeyKind, DataModelScopeKind};
+use domain::{ApiKeyKind, DataModelScopeKind, SYSTEM_SCOPE_ID};
 use sqlx::PgPool;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
 use uuid::Uuid;
@@ -55,9 +55,9 @@ async fn role_queries_respect_requested_workspace_instead_of_first_workspace() {
     sqlx::query(
         r#"
         insert into roles (
-            id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
+            id, scope_id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
         )
-        values ($1, 'workspace', $2, 'reviewer', 'Reviewer', '', false, true)
+        values ($1, $2, 'workspace', $2, 'reviewer', 'Reviewer', '', false, true)
         "#,
     )
     .bind(Uuid::now_v7())
@@ -148,17 +148,36 @@ async fn api_key_data_model_permissions_reject_cross_scope_model_permission() {
             audit_namespace, created_by, updated_by
         )
         values
-            ($1, 'workspace', $2, 'cross_scope_orders', 'Cross Scope Orders',
-             'cross_scope_orders', 'cross_scope_orders', 'cross_scope_orders', $5, $5),
-            ($3, 'workspace', $4, 'same_scope_orders', 'Same Scope Orders',
-             'same_scope_orders', 'same_scope_orders', 'same_scope_orders', $5, $5)
+            ($1, 'system', $2, 'cross_scope_orders', 'Cross Scope Orders',
+             'cross_scope_orders', 'cross_scope_orders', 'cross_scope_orders', $4, $4),
+            ($3, 'system', $2, 'same_scope_orders', 'Same Scope Orders',
+             'same_scope_orders', 'same_scope_orders', 'same_scope_orders', $4, $4)
         "#,
     )
     .bind(cross_scope_model_id)
-    .bind(other_workspace_id)
+    .bind(SYSTEM_SCOPE_ID)
     .bind(same_scope_model_id)
+    .bind(actor_user_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        insert into scope_data_model_grants (
+            id, scope_kind, scope_id, data_model_id, enabled, permission_profile, created_by
+        )
+        values
+            ($1, 'workspace', $2, $3, true, 'scope_all', $6),
+            ($4, 'workspace', $5, $7, true, 'scope_all', $6)
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(other_workspace_id)
+    .bind(cross_scope_model_id)
+    .bind(Uuid::now_v7())
     .bind(workspace_id)
     .bind(actor_user_id)
+    .bind(same_scope_model_id)
     .execute(store.pool())
     .await
     .unwrap();
@@ -180,7 +199,7 @@ async fn api_key_data_model_permissions_reject_cross_scope_model_permission() {
     .unwrap_err();
     assert!(error
         .to_string()
-        .contains("api_key_data_model_permission owner scope mismatch"));
+        .contains("api_key_data_model_permission scope grant mismatch"));
 
     let permission_count: i64 = sqlx::query_scalar(
         "select count(*) from api_key_data_model_permissions where api_key_id = $1",

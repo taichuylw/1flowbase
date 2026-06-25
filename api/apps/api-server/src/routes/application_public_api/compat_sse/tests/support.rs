@@ -152,7 +152,7 @@ pub(super) async fn seed_flow_run_for_compat_sse_test(state: &ApiState, run: &Na
     .await
     .unwrap();
     sqlx::query(
-        "insert into flows (id, application_id, created_by, updated_by) values ($1, $2, $3, $3)",
+        "insert into flows (id, application_id, scope_id, created_by, updated_by) values ($1, $2, (select scope_id from applications where id = $2), $3, $3)",
     )
     .bind(flow_id)
     .bind(run.application_id)
@@ -161,7 +161,7 @@ pub(super) async fn seed_flow_run_for_compat_sse_test(state: &ApiState, run: &Na
     .await
     .unwrap();
     sqlx::query(
-            "insert into flow_drafts (id, flow_id, schema_version, document, updated_by) values ($1, $2, '1flowbase.flow/v2', '{}'::jsonb, $3)",
+            "insert into flow_drafts (id, flow_id, scope_id, schema_version, document, created_by, updated_by) values ($1, $2, (select scope_id from flows where id = $2), '1flowbase.flow/v2', '{}'::jsonb, $3, $3)",
         )
         .bind(flow_draft_id)
         .bind(flow_id)
@@ -173,10 +173,10 @@ pub(super) async fn seed_flow_run_for_compat_sse_test(state: &ApiState, run: &Na
         r#"
             insert into flow_compiled_plans (
                 id, flow_id, flow_draft_id, schema_version, document_hash,
-                document_updated_at, plan, created_by
+                document_updated_at, plan, scope_id, created_by, updated_by
             ) values (
                 $1, $2, $3, '1flowbase.flow/v2', 'compat-sse-test',
-                now(), '{}'::jsonb, $4
+                now(), '{}'::jsonb, (select scope_id from flows where id = $2), $4, $4
             )
             "#,
     )

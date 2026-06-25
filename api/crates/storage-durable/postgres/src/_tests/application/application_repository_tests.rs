@@ -250,8 +250,9 @@ async fn delete_application_cascades_flow_runtime_and_tag_bindings() {
     .unwrap();
     sqlx::query(
         r#"
-        insert into flow_drafts (id, flow_id, schema_version, document, updated_by)
-        values ($1, $2, '1', '{}'::jsonb, $3)
+        insert into flow_drafts (
+            id, flow_id, scope_id, schema_version, document, created_by, updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), '1', '{}'::jsonb, $3, $3)
         "#,
     )
     .bind(draft_id)

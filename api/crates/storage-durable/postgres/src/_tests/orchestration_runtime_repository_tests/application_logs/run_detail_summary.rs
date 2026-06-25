@@ -906,8 +906,10 @@ async fn attach_import_job_to_run(
             expected_sha256,
             chunk_size_bytes,
             status,
-            completed_at
-        ) values ($1, $2, $3, $4, 'fixture.zip', 8, 8, $5, 8, 'completed', now())
+            completed_at,
+            created_by,
+            updated_by
+        ) values ($1, $2, $3, $4, 'fixture.zip', 8, 8, $5, 8, 'completed', now(), $4, $4)
         "#,
     )
     .bind(upload_session_id)
@@ -935,8 +937,10 @@ async fn attach_import_job_to_run(
             error_payload,
             result_payload,
             started_at,
-            finished_at
-        ) values ($1, $2, $3, $4, $5, $6, 1, $7, 1, 1, '{}', '{}', now(), now())
+            finished_at,
+            created_by,
+            updated_by
+        ) values ($1, $2, $3, $4, $5, $6, 1, $7, 1, 1, '{}', '{}', now(), now(), $4, $4)
         "#,
     )
     .bind(import_job_id)

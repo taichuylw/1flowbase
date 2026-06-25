@@ -401,11 +401,17 @@ async fn seed_runtime_data_source_instance_with_options(
     sqlx::query(
         r#"
         insert into data_source_secrets (
-            data_source_instance_id, encrypted_secret_json, secret_version
-        ) values ($1, '{"client_secret":"route-runtime-secret"}', 1)
+            id, scope_id, data_source_instance_id, encrypted_secret_json,
+            secret_version, created_by, updated_by
+        ) values (
+            $1, (select scope_id from data_source_instances where id = $2),
+            $2, '{"client_secret":"route-runtime-secret"}', 1, $3, $3
+        )
         "#,
     )
+    .bind(uuid::Uuid::now_v7())
     .bind(data_source_instance_id)
+    .bind(actor_user_id)
     .execute(&pool)
     .await
     .unwrap();
