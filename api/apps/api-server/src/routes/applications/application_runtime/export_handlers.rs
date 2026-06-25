@@ -1,3 +1,5 @@
+use sqlx::Row;
+
 const APPLICATION_RUN_TRACE_EXPORT_VERSION: i32 = 1;
 
 struct ApplicationRunTraceExportDocument {
@@ -214,6 +216,7 @@ async fn build_application_run_trace_export_document(
         trace_tree,
     };
     let mut value = serde_json::to_value(response)?;
+    backfill_export_node_run_error_payloads(&state, run_id, &mut value).await?;
     let mut warnings = Vec::new();
     let mut artifact_cache = std::collections::HashMap::new();
     let mut visiting_artifacts = HashSet::new();
@@ -253,6 +256,66 @@ async fn build_application_run_trace_export_document(
         export_warning_count: warning_count,
         value,
     })
+}
+
+async fn backfill_export_node_run_error_payloads(
+    state: &Arc<ApiState>,
+    run_id: Uuid,
+    value: &mut serde_json::Value,
+) -> Result<(), ApiError> {
+    let rows = sqlx::query(
+        r#"
+        select id, error_payload
+        from node_runs
+        where flow_run_id = $1
+          and error_payload is not null
+        "#,
+    )
+    .bind(run_id)
+    .fetch_all(state.store.pool())
+    .await?;
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    let error_payloads = rows
+        .into_iter()
+        .map(|row| {
+            (
+                row.get::<Uuid, _>("id").to_string(),
+                row.get::<serde_json::Value, _>("error_payload"),
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let Some(node_runs) = value
+        .get_mut("node_runs")
+        .and_then(serde_json::Value::as_array_mut)
+    else {
+        return Ok(());
+    };
+
+    for node_run in node_runs {
+        let Some(node_run_object) = node_run.as_object_mut() else {
+            continue;
+        };
+        let Some(node_run_id) = node_run_object
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+        else {
+            continue;
+        };
+        if !node_run_object
+            .get("error_payload")
+            .is_none_or(serde_json::Value::is_null)
+        {
+            continue;
+        }
+        if let Some(error_payload) = error_payloads.get(node_run_id) {
+            node_run_object.insert("error_payload".to_string(), error_payload.clone());
+        }
+    }
+
+    Ok(())
 }
 
 async fn build_application_run_trace_export_tree(

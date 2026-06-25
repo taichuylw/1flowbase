@@ -1228,7 +1228,7 @@ fn run_archive_v1_entry_content_sha256(
 }
 
 fn run_archive_v1_entry_digest_payload(entry: &RunArchiveV1EntryResponse) -> serde_json::Value {
-    serde_json::json!({
+    let mut value = serde_json::json!({
         "source_run_id": &entry.source_run_id,
         "flow_run": &entry.flow_run,
         "flow_run_fact": &entry.flow_run_fact,
@@ -1244,7 +1244,26 @@ fn run_archive_v1_entry_digest_payload(entry: &RunArchiveV1EntryResponse) -> ser
         "usage_ledger": &entry.usage_ledger,
         "model_failover_attempts": &entry.model_failover_attempts,
         "capability_invocations": &entry.capability_invocations,
-    })
+    });
+    remove_run_archive_digest_volatile_fields(&mut value);
+    value
+}
+
+fn remove_run_archive_digest_volatile_fields(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Array(items) => {
+            for item in items {
+                remove_run_archive_digest_volatile_fields(item);
+            }
+        }
+        serde_json::Value::Object(object) => {
+            object.remove("updated_at");
+            for item in object.values_mut() {
+                remove_run_archive_digest_volatile_fields(item);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn trace_export_flow_run_fact(flow_run: &FlowRunResponse) -> Result<serde_json::Value, ApiError> {
