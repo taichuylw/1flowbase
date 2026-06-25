@@ -56,7 +56,7 @@ function getServiceDefinitions(repoRoot) {
       bindHost: '0.0.0.0',
       probeHost: '127.0.0.1',
       port: 7800,
-      startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
+      startupTimeoutMs: CARGO_COLD_STARTUP_TIMEOUT_MS,
       envFile: path.join(apiServerEnvDir, '.env'),
       envExampleFile: path.join(apiServerEnvDir, '.env.example'),
       logFile: path.join(paths.logDir, 'api-server.log'),

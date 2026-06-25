@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('path');
 
 const {
+  CARGO_COLD_STARTUP_TIMEOUT_MS,
   DEFAULT_STARTUP_TIMEOUT_MS,
   buildDevDatabaseMaintenanceHintLines,
   parseCliArgs,
@@ -92,13 +93,13 @@ test('getServiceDefinitions uses repo default ports and explicit backend binarie
   assert.deepEqual(services['plugin-runner'].args, ['run', '-p', 'plugin-runner', '--bin', 'plugin-runner']);
 });
 
-test('getServiceDefinitions gives plugin-runner extra startup time for cold cargo builds', () => {
+test('getServiceDefinitions gives cargo services extra startup time for cold cargo builds', () => {
   const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
   const services = getServiceDefinitions(repoRoot);
 
   assert.equal(services.web.startupTimeoutMs, 60_000);
-  assert.equal(services['api-server'].startupTimeoutMs, DEFAULT_STARTUP_TIMEOUT_MS);
-  assert.equal(services['plugin-runner'].startupTimeoutMs, 60_000);
+  assert.equal(services['api-server'].startupTimeoutMs, CARGO_COLD_STARTUP_TIMEOUT_MS);
+  assert.equal(services['plugin-runner'].startupTimeoutMs, CARGO_COLD_STARTUP_TIMEOUT_MS);
 });
 
 test('getServiceDefinitions leaves frontend pnpm startup interactive', () => {

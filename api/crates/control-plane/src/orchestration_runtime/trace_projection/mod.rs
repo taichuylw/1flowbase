@@ -10,7 +10,7 @@ use crate::ports::{
     ReplaceApplicationRunTraceProjectionInput,
 };
 
-pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 9;
+pub const APPLICATION_RUN_TRACE_PROJECTION_VERSION: i32 = 10;
 
 pub fn trace_node_id_for_locator(flow_run_id: Uuid, stable_locator: &str) -> Uuid {
     let mut hasher = Sha256::new();
@@ -352,6 +352,7 @@ impl TraceProjectionBuilder {
                 child_order_key(parent_order_key, child_index),
                 parent_trace_node_id,
                 parent_stable_locator,
+                detail,
                 &linked_subagent_traces,
             )?;
         }
@@ -456,6 +457,7 @@ impl TraceProjectionBuilder {
         order_key: String,
         parent_trace_node_id: Uuid,
         parent_stable_locator: &str,
+        detail: &domain::ApplicationRunDetail,
         subagent_traces: &[&domain::ApplicationRunSubagentTrace],
     ) -> Result<()> {
         let stable_locator = format!("{parent_stable_locator}/agents");
@@ -497,11 +499,16 @@ impl TraceProjectionBuilder {
         let mut subagent_index = 0_usize;
         for subagent_trace in subagent_traces {
             subagent_index += 1;
+            let parent_tool_call_description =
+                subagent_parent_tool_call_description(detail, subagent_trace);
+            let node_alias = subagent_display_alias(parent_tool_call_description.as_deref());
             if let Some(node_runs) = subagent_primary_node_run_group(subagent_trace) {
                 self.push_subagent_node_run(
                     child_order_key(&order_key, subagent_index),
                     trace_node_id,
                     &stable_locator,
+                    &node_alias,
+                    parent_tool_call_description.as_deref(),
                     subagent_trace,
                     &node_runs,
                 )?;
@@ -510,6 +517,8 @@ impl TraceProjectionBuilder {
                     child_order_key(&order_key, subagent_index),
                     trace_node_id,
                     &stable_locator,
+                    &node_alias,
+                    parent_tool_call_description.as_deref(),
                     subagent_trace,
                 )?;
             }
@@ -523,6 +532,8 @@ impl TraceProjectionBuilder {
         order_key: String,
         parent_trace_node_id: Uuid,
         parent_stable_locator: &str,
+        node_alias: &str,
+        parent_tool_call_description: Option<&str>,
         subagent_trace: &domain::ApplicationRunSubagentTrace,
     ) -> Result<()> {
         let source_run = &subagent_trace.source_flow_run;
@@ -543,7 +554,7 @@ impl TraceProjectionBuilder {
             node_id: None,
             node_type: Some("llm".to_string()),
             node_mode: None,
-            node_alias: subagent_flow_run_alias(source_run),
+            node_alias: node_alias.to_string(),
             status: source_run.status.as_str().to_string(),
             started_at: source_run.started_at,
             finished_at: source_run.finished_at,
@@ -562,6 +573,7 @@ impl TraceProjectionBuilder {
         self.contents.push(subagent_flow_run_fallback_content(
             trace_node_id,
             subagent_trace,
+            parent_tool_call_description,
         )?);
 
         Ok(())
@@ -572,6 +584,8 @@ impl TraceProjectionBuilder {
         order_key: String,
         parent_trace_node_id: Uuid,
         parent_stable_locator: &str,
+        node_alias: &str,
+        parent_tool_call_description: Option<&str>,
         subagent_trace: &domain::ApplicationRunSubagentTrace,
         node_runs: &[domain::NodeRunRecord],
     ) -> Result<()> {
@@ -635,7 +649,7 @@ impl TraceProjectionBuilder {
             node_id: Some(first_node_run.node_id.clone()),
             node_type: Some(first_node_run.node_type.clone()),
             node_mode: None,
-            node_alias: subagent_node_alias(subagent_trace, first_node_run),
+            node_alias: node_alias.to_string(),
             status: subagent_trace.source_flow_run.status.as_str().to_string(),
             started_at: first_node_run.started_at,
             finished_at: summary_node_run.finished_at,
@@ -655,6 +669,7 @@ impl TraceProjectionBuilder {
             trace_node_id,
             node_runs,
             subagent_trace,
+            parent_tool_call_description,
         )?);
 
         if total_tool_call_count > 0 {
@@ -1569,28 +1584,89 @@ fn subagent_group_finished_at(
         .max()
 }
 
-fn subagent_node_alias(
-    subagent_trace: &domain::ApplicationRunSubagentTrace,
-    first_node_run: &domain::NodeRunRecord,
-) -> String {
-    if !subagent_trace.source_flow_run.title.trim().is_empty() {
-        return subagent_trace.source_flow_run.title.clone();
-    }
-
-    first_node_run.node_alias.clone()
+fn subagent_display_alias(parent_tool_call_description: Option<&str>) -> String {
+    parent_tool_call_description
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| "Subagent".to_string())
 }
 
-fn subagent_flow_run_alias(source_run: &domain::FlowRunRecord) -> String {
-    if !source_run.title.trim().is_empty() {
-        return source_run.title.clone();
+fn subagent_parent_tool_call_description(
+    detail: &domain::ApplicationRunDetail,
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+) -> Option<String> {
+    for task in &detail.callback_tasks {
+        if task.id != subagent_trace.parent_callback_task_id {
+            continue;
+        }
+        for tool_call in tool_calls_from_callback_task(task) {
+            if tool_call_id(&tool_call) != Some(subagent_trace.parent_tool_call_id.as_str()) {
+                continue;
+            }
+
+            return tool_call
+                .get("arguments")
+                .and_then(|arguments| arguments.get("description"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|description| !description.is_empty())
+                .map(ToOwned::to_owned);
+        }
     }
 
-    "Agent".to_string()
+    None
+}
+
+fn subagent_parent_agent_tool_call_debug_payload(
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+    description: Option<&str>,
+) -> serde_json::Value {
+    let mut parent_tool_call = serde_json::Map::new();
+    parent_tool_call.insert(
+        "callback_task_id".to_string(),
+        serde_json::json!(subagent_trace.parent_callback_task_id),
+    );
+    parent_tool_call.insert(
+        "tool_call_id".to_string(),
+        serde_json::json!(subagent_trace.parent_tool_call_id.clone()),
+    );
+    if let Some(description) = description {
+        parent_tool_call.insert("description".to_string(), serde_json::json!(description));
+    }
+
+    let mut debug_payload = serde_json::Map::new();
+    debug_payload.insert(
+        "parent_agent_tool_call".to_string(),
+        serde_json::Value::Object(parent_tool_call),
+    );
+
+    serde_json::Value::Object(debug_payload)
+}
+
+fn subagent_flow_run_fallback_debug_payload(
+    subagent_trace: &domain::ApplicationRunSubagentTrace,
+    description: Option<&str>,
+) -> serde_json::Value {
+    let mut debug_payload =
+        subagent_parent_agent_tool_call_debug_payload(subagent_trace, description);
+    let Some(debug_payload_object) = debug_payload.as_object_mut() else {
+        return debug_payload;
+    };
+    debug_payload_object.insert(
+        "source_flow_run_id".to_string(),
+        serde_json::json!(subagent_trace.source_flow_run.id),
+    );
+    debug_payload_object.insert(
+        "runtime_event_count".to_string(),
+        serde_json::json!(subagent_trace.runtime_events.len()),
+    );
+
+    debug_payload
 }
 
 fn subagent_flow_run_fallback_content(
     trace_node_id: Uuid,
     subagent_trace: &domain::ApplicationRunSubagentTrace,
+    parent_tool_call_description: Option<&str>,
 ) -> Result<ApplicationRunTraceNodeContentProjectionInput> {
     let source_run = &subagent_trace.source_flow_run;
     let source_refs = serde_json::json!([{
@@ -1619,12 +1695,10 @@ fn subagent_flow_run_fallback_content(
             "output_payload": source_run.output_payload.clone(),
             "error_payload": source_run.error_payload.clone(),
             "metrics_payload": {},
-            "debug_payload": {
-                "source_flow_run_id": source_run.id,
-                "parent_callback_task_id": subagent_trace.parent_callback_task_id,
-                "parent_tool_call_id": subagent_trace.parent_tool_call_id.clone(),
-                "runtime_event_count": subagent_trace.runtime_events.len()
-            }
+            "debug_payload": subagent_flow_run_fallback_debug_payload(
+                subagent_trace,
+                parent_tool_call_description
+            )
         }),
         source_refs,
     })
@@ -1634,6 +1708,7 @@ fn subagent_node_run_group_content(
     trace_node_id: Uuid,
     node_runs: &[domain::NodeRunRecord],
     subagent_trace: &domain::ApplicationRunSubagentTrace,
+    parent_tool_call_description: Option<&str>,
 ) -> Result<ApplicationRunTraceNodeContentProjectionInput> {
     let primary_node_run = &node_runs[0];
     let source_ref_values = node_runs
@@ -1700,6 +1775,10 @@ fn subagent_node_run_group_content(
             },
             "source_refs": source_ref_values.clone(),
             "detail_refs": detail_refs,
+            "debug_payload": subagent_parent_agent_tool_call_debug_payload(
+                subagent_trace,
+                parent_tool_call_description
+            ),
             "node_run_refs": node_run_refs
         }),
         source_refs: serde_json::Value::Array(source_ref_values),

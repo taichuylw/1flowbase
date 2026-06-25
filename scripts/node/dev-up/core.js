@@ -17,6 +17,7 @@ const {
 } = require('./process.js');
 const { runServicePrestartCommands } = require('./postgres-reset.js');
 const {
+  CARGO_COLD_STARTUP_TIMEOUT_MS,
   DEFAULT_STARTUP_TIMEOUT_MS,
   ensureRuntimeDirs,
   getRepoRoot,
@@ -74,6 +75,7 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 module.exports = {
+  CARGO_COLD_STARTUP_TIMEOUT_MS,
   DEFAULT_STARTUP_TIMEOUT_MS,
   buildDevDatabaseMaintenanceHintLines,
   buildServiceEnv,

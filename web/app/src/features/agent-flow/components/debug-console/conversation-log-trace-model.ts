@@ -443,6 +443,9 @@ function mapNodeRunRecordToTraceItem(
   const inputPayload = payloadRecordField(nodeRun, 'input_payload');
   const outputPayload = payloadRecordField(nodeRun, 'output_payload');
   const debugPayload = payloadRecordField(nodeRun, 'debug_payload');
+  const fallbackDebugPayload = isRecord(fallback.debugPayload)
+    ? fallback.debugPayload
+    : {};
   const metricsPayload = payloadRecordField(nodeRun, 'metrics_payload');
   const errorPayload = payloadRecordField(nodeRun, 'error_payload');
 
@@ -455,7 +458,10 @@ function mapNodeRunRecordToTraceItem(
       Object.keys(metricsPayload).length > 0
         ? metricsPayload
         : fallback.metricsPayload,
-    debugPayload
+    debugPayload: {
+      ...fallbackDebugPayload,
+      ...debugPayload
+    }
   };
 }
 

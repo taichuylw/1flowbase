@@ -208,7 +208,14 @@ fn builder_projects_linked_agent_tools_as_subagent_llm_nodes() {
             request_payload: json!({
                 "tool_calls": [
                     { "id": "call-read", "name": "Read" },
-                    { "id": "call-agent", "name": "Agent" }
+                    {
+                        "id": "call-agent",
+                        "name": "Agent",
+                        "arguments": {
+                            "description": "Backend worker",
+                            "prompt": "Long implementation prompt"
+                        }
+                    }
                 ]
             }),
             response_payload: Some(json!({
@@ -228,7 +235,7 @@ fn builder_projects_linked_agent_tools_as_subagent_llm_nodes() {
             parent_callback_task_id: callback_task_id,
             source_flow_run: domain::FlowRunRecord {
                 id: subagent_run_id,
-                title: "Backend ErrorBody refactor".to_string(),
+                title: "Long implementation prompt".to_string(),
                 status: domain::FlowRunStatus::Succeeded,
                 started_at: now + time::Duration::seconds(2),
                 finished_at: Some(now + time::Duration::seconds(8)),
@@ -326,7 +333,7 @@ fn builder_projects_linked_agent_tools_as_subagent_llm_nodes() {
     assert_eq!(agents.child_count, 1);
     assert_eq!(subagent_node.node_kind, "node_run");
     assert_eq!(subagent_node.node_type.as_deref(), Some("llm"));
-    assert_eq!(subagent_node.node_alias, "Backend ErrorBody refactor");
+    assert_eq!(subagent_node.node_alias, "Backend worker");
     assert_eq!(subagent_node.child_count, 1);
     assert_eq!(subagent_node.source_flow_run_id, Some(subagent_run_id));
     assert_eq!(
@@ -350,13 +357,32 @@ fn builder_projects_linked_agent_tools_as_subagent_llm_nodes() {
     );
     assert_eq!(subagent_tools.node_alias, "Tools");
     assert_eq!(subagent_tool_aliases, vec!["Bash"]);
-    assert!(projection.contents.iter().any(|content| {
-        content.trace_node_id == subagent_node.trace_node_id
-            && content.content_kind == "node_run"
-            && content.source_refs[0]["source_kind"] == json!("subagent_node_run")
-            && content.source_refs[0]["source_locator"]
-                == json!(subagent_llm_node_run_id.to_string())
-    }));
+    let subagent_content = projection
+        .contents
+        .iter()
+        .find(|content| {
+            content.trace_node_id == subagent_node.trace_node_id
+                && content.content_kind == "node_run"
+        })
+        .expect("subagent node should expose projected content");
+    assert_eq!(
+        subagent_content.source_refs[0]["source_kind"],
+        json!("subagent_node_run")
+    );
+    assert_eq!(
+        subagent_content.source_refs[0]["source_locator"],
+        json!(subagent_llm_node_run_id.to_string())
+    );
+    assert_eq!(
+        subagent_content.payload["debug_payload"]["parent_agent_tool_call"]["description"],
+        json!("Backend worker")
+    );
+    assert!(subagent_content
+        .payload
+        .as_object()
+        .expect("subagent content payload should be an object")
+        .get("input_payload")
+        .is_none());
 }
 
 #[test]
@@ -462,7 +488,7 @@ fn builder_projects_linked_agent_without_llm_node_run_as_fallback_llm_node() {
     assert_eq!(agents.child_count, 1);
     assert_eq!(subagent_node.node_kind, "node_run");
     assert_eq!(subagent_node.node_type.as_deref(), Some("llm"));
-    assert_eq!(subagent_node.node_alias, "Failed investigation agent");
+    assert_eq!(subagent_node.node_alias, "Subagent");
     assert_eq!(subagent_node.status, domain::NodeRunStatus::Failed.as_str());
     assert!(!subagent_node.has_children);
     assert_eq!(subagent_node.child_count, 0);

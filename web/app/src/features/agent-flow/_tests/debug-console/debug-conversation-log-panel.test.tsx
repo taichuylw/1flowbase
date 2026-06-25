@@ -693,6 +693,11 @@ describe('debug conversation log panel', () => {
                     node_run_count: 1,
                     checkpoint_count: 0,
                     event_count: 0
+                  },
+                  debug_payload: {
+                    parent_agent_tool_call: {
+                      description: 'Research agent short brief'
+                    }
                   }
                 },
           detail_refs:
@@ -838,8 +843,14 @@ describe('debug conversation log panel', () => {
       within(subagentDetail).getByLabelText('输入 JSON')
     ).toHaveTextContent('Investigate agent projection');
     expect(
+      within(subagentDetail).getByLabelText('输入 JSON')
+    ).not.toHaveTextContent('Research agent short brief');
+    expect(
       within(subagentDetail).getByLabelText('数据处理 JSON')
     ).toHaveTextContent('anthropic');
+    expect(
+      within(subagentDetail).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('Research agent short brief');
     expect(
       within(subagentDetail).getByLabelText('输出 JSON')
     ).toHaveTextContent('Use a dedicated Agents group');
