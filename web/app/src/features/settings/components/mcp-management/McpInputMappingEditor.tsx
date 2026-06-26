@@ -1,3 +1,4 @@
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   Button,
   Checkbox,
@@ -7,7 +8,6 @@ import {
   Select,
   Space,
   Tabs,
-  Tag,
   Typography
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
@@ -124,17 +124,6 @@ function stringifyMapping(value: McpInputMappingValue) {
   return JSON.stringify(value, null, 2);
 }
 
-function parameterTypeLabel(parameterType: ConsoleMcpParameterType) {
-  switch (parameterType) {
-    case 'url':
-      return 'URL';
-    case 'form':
-      return 'form';
-    case 'json_body':
-      return i18nText('settings', 'auto.json_request_body');
-  }
-}
-
 function mappingFromInterfaceParameter(
   parameter: McpInputInterfaceParameter
 ): McpInputParameterMapping {
@@ -144,6 +133,42 @@ function mappingFromInterfaceParameter(
     description: parameter.description,
     required: parameter.required
   };
+}
+
+function nextInterfaceParameterName(parameters: McpInputInterfaceParameter[]) {
+  const names = new Set(parameters.map((parameter) => parameter.name));
+  let index = parameters.length + 1;
+  let name = `param_${index}`;
+
+  while (names.has(name)) {
+    index += 1;
+    name = `param_${index}`;
+  }
+
+  return name;
+}
+
+function emptyInterfaceParameter(
+  parameters: McpInputInterfaceParameter[]
+): McpInputInterfaceParameter {
+  return {
+    name: nextInterfaceParameterName(parameters),
+    field_type: 'string',
+    parameter_type: 'json_body',
+    description: '',
+    required: false
+  };
+}
+
+function parameterTypeOptions() {
+  return [
+    { label: 'URL', value: 'url' },
+    { label: 'form', value: 'form' },
+    {
+      label: i18nText('settings', 'auto.json_request_body'),
+      value: 'json_body'
+    }
+  ];
 }
 
 export function buildInputMappingFromParameterDescriptors(
@@ -159,7 +184,7 @@ export function buildInputMappingFromParameterDescriptors(
 
   return {
     interface_parameters: interfaceParameters,
-    mappings: interfaceParameters.map(mappingFromInterfaceParameter)
+    mappings: []
   };
 }
 
@@ -179,10 +204,10 @@ export function buildInputMappingFromInterface(
 
   return {
     ...nextMapping,
-    mappings: nextMapping.mappings.map((mapping) => ({
-      ...mapping,
-      ...currentMappings.get(mapping.interface_param)
-    }))
+    mappings: nextMapping.interface_parameters.flatMap((parameter) => {
+      const mapping = currentMappings.get(parameter.name);
+      return mapping ? [mapping] : [];
+    })
   };
 }
 
@@ -243,6 +268,68 @@ export function McpInputMappingEditor({
     });
   }
 
+  function addInterfaceParameter() {
+    emit({
+      ...mapping,
+      interface_parameters: [
+        ...mapping.interface_parameters,
+        emptyInterfaceParameter(mapping.interface_parameters)
+      ]
+    });
+  }
+
+  function updateInterfaceParameter(
+    index: number,
+    patch: Partial<McpInputInterfaceParameter>
+  ) {
+    const currentParameter = mapping.interface_parameters[index];
+    if (!currentParameter) {
+      return;
+    }
+
+    const nextParameter = { ...currentParameter, ...patch };
+    const nextMappings =
+      patch.name === undefined
+        ? mapping.mappings
+        : mapping.mappings.map((entry) => {
+            if (entry.interface_param !== currentParameter.name) {
+              return entry;
+            }
+
+            return {
+              ...entry,
+              interface_param: nextParameter.name,
+              mcp_param:
+                entry.mcp_param === currentParameter.name
+                  ? nextParameter.name
+                  : entry.mcp_param
+            };
+          });
+
+    emit({
+      interface_parameters: mapping.interface_parameters.map(
+        (entry, entryIndex) => (entryIndex === index ? nextParameter : entry)
+      ),
+      mappings: nextMappings
+    });
+  }
+
+  function removeInterfaceParameter(index: number) {
+    const parameter = mapping.interface_parameters[index];
+    if (!parameter) {
+      return;
+    }
+
+    emit({
+      interface_parameters: mapping.interface_parameters.filter(
+        (_, entryIndex) => entryIndex !== index
+      ),
+      mappings: mapping.mappings.filter(
+        (entry) => entry.interface_param !== parameter.name
+      )
+    });
+  }
+
   function addMapping(interfaceParam: string | undefined) {
     const parameter = mapping.interface_parameters.find(
       (entry) => entry.name === interfaceParam
@@ -256,6 +343,13 @@ export function McpInputMappingEditor({
       mappings: [...mapping.mappings, mappingFromInterfaceParameter(parameter)]
     });
     setPendingInterfaceParam(undefined);
+  }
+
+  function removeMapping(index: number) {
+    emit({
+      ...mapping,
+      mappings: mapping.mappings.filter((_, entryIndex) => entryIndex !== index)
+    });
   }
 
   function updateJsonText(nextText: string) {
@@ -276,7 +370,7 @@ export function McpInputMappingEditor({
     mapping.mappings.map((entry) => entry.interface_param)
   );
   const addableOptions = mapping.interface_parameters
-    .filter((entry) => !mappedParameters.has(entry.name))
+    .filter((entry) => entry.name && !mappedParameters.has(entry.name))
     .map((entry) => ({ label: entry.name, value: entry.name }));
 
   return (
@@ -286,30 +380,87 @@ export function McpInputMappingEditor({
           {
             key: 'interface',
             label: i18nText('settings', 'auto.mcp_input_interface_layer'),
-            children:
-              mapping.interface_parameters.length > 0 ? (
-                <div className="mcp-input-mapping-editor__table">
-                  <div className="mcp-input-mapping-editor__head">
-                    <span>{i18nText('settings', 'auto.field_name')}</span>
-                    <span>{i18nText('settings', 'auto.field_type')}</span>
-                    <span>{i18nText('settings', 'auto.parameter_type')}</span>
-                    <span>{i18nText('settings', 'auto.required')}</span>
-                  </div>
-                  {mapping.interface_parameters.map((parameter) => (
-                    <div
-                      className="mcp-input-mapping-editor__row"
-                      key={parameter.name}
-                    >
-                      <Input readOnly value={parameter.name} />
-                      <Input readOnly value={parameter.field_type} />
-                      <Tag>{parameterTypeLabel(parameter.parameter_type)}</Tag>
-                      <Checkbox disabled checked={parameter.required} />
+            children: (
+              <Space
+                className="mcp-input-mapping-editor__stack"
+                direction="vertical"
+                size="middle"
+              >
+                <Flex justify="flex-end">
+                  <Button icon={<PlusOutlined />} onClick={addInterfaceParameter}>
+                    {i18nText('settings', 'auto.add_new_field')}
+                  </Button>
+                </Flex>
+                {mapping.interface_parameters.length > 0 ? (
+                  <div className="mcp-input-mapping-editor__table">
+                    <div className="mcp-input-mapping-editor__head">
+                      <span>{i18nText('settings', 'auto.field_name')}</span>
+                      <span>{i18nText('settings', 'auto.field_type')}</span>
+                      <span>{i18nText('settings', 'auto.parameter_type')}</span>
+                      <span>{i18nText('settings', 'auto.required')}</span>
+                      <span />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )
+                    {mapping.interface_parameters.map((parameter, index) => (
+                      <div
+                        className="mcp-input-mapping-editor__row"
+                        key={`${parameter.name}:${index}`}
+                      >
+                        <Input
+                          aria-label={`field_name ${index + 1}`}
+                          value={parameter.name}
+                          onChange={(event) =>
+                            updateInterfaceParameter(index, {
+                              name: event.target.value
+                            })
+                          }
+                        />
+                        <Input
+                          aria-label={`field_type ${
+                            parameter.name || index + 1
+                          }`}
+                          value={parameter.field_type}
+                          onChange={(event) =>
+                            updateInterfaceParameter(index, {
+                              field_type: event.target.value
+                            })
+                          }
+                        />
+                        <Select
+                          aria-label={`parameter_type ${
+                            parameter.name || index + 1
+                          }`}
+                          options={parameterTypeOptions()}
+                          value={parameter.parameter_type}
+                          onChange={(nextParameterType) =>
+                            updateInterfaceParameter(index, {
+                              parameter_type: nextParameterType
+                            })
+                          }
+                        />
+                        <Checkbox
+                          aria-label={`required ${parameter.name || index + 1}`}
+                          checked={parameter.required}
+                          onChange={(event) =>
+                            updateInterfaceParameter(index, {
+                              required: event.target.checked
+                            })
+                          }
+                        />
+                        <Button
+                          aria-label={`delete_field ${
+                            parameter.name || index + 1
+                          }`}
+                          icon={<DeleteOutlined />}
+                          onClick={() => removeInterfaceParameter(index)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                )}
+              </Space>
+            )
           },
           {
             key: 'mapping',
@@ -330,6 +481,7 @@ export function McpInputMappingEditor({
                     onChange={setPendingInterfaceParam}
                   />
                   <Button
+                    icon={<PlusOutlined />}
                     disabled={!pendingInterfaceParam}
                     onClick={() => addMapping(pendingInterfaceParam)}
                   >
@@ -343,6 +495,7 @@ export function McpInputMappingEditor({
                       <span>{i18nText('settings', 'auto.mcp_param')}</span>
                       <span>{i18nText('settings', 'auto.description')}</span>
                       <span>{i18nText('settings', 'auto.required')}</span>
+                      <span />
                     </div>
                     {mapping.mappings.map((entry, index) => (
                       <div
@@ -376,6 +529,11 @@ export function McpInputMappingEditor({
                               required: event.target.checked
                             })
                           }
+                        />
+                        <Button
+                          aria-label={`delete_mapping ${entry.interface_param}`}
+                          icon={<DeleteOutlined />}
+                          onClick={() => removeMapping(index)}
                         />
                       </div>
                     ))}

@@ -253,9 +253,13 @@ describe('ApplicationLogsPage - table field settings', () => {
     expect(
       screen.getByRole('columnheader', { name: '命中缓存 tokens' })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('columnheader', { name: '缓存命中率' })
+    ).toBeInTheDocument();
     expect(screen.getByText('100')).toBeInTheDocument();
     expect(screen.getByText('28')).toBeInTheDocument();
     expect(screen.getByText('64')).toBeInTheDocument();
+    expect(screen.getByText('39.02%')).toBeInTheDocument();
   });
 
   test('persists table column visibility in user preferences meta', async () => {

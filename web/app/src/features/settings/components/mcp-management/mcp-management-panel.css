@@ -61,14 +61,16 @@
 
 .mcp-input-mapping-editor__head,
 .mcp-input-mapping-editor__row {
-  grid-template-columns: minmax(160px, 1.2fr) minmax(120px, 0.8fr) 120px 72px;
+  grid-template-columns:
+    minmax(160px, 1.2fr) minmax(120px, 0.8fr)
+    minmax(140px, 0.9fr) 72px 40px;
 }
 
 .mcp-input-mapping-editor__mapping-head,
 .mcp-input-mapping-editor__mapping-row {
   grid-template-columns:
     minmax(160px, 1fr) minmax(160px, 1fr)
-    minmax(180px, 1.2fr) 72px;
+    minmax(180px, 1.2fr) 72px 40px;
 }
 
 .mcp-input-mapping-editor__head,

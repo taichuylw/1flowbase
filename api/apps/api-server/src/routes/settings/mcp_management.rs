@@ -860,7 +860,7 @@ fn mcp_interface_entry_from_operation(
         ),
         parameter_schema: operation_input_schema(spec, path_item_node, operation_node),
         result_schema: operation_response_schema(spec, operation_node),
-        permission_code: None,
+        permission_code: operation_permission_code(&operation.method, &operation.path),
         security: operation_security(spec, operation_node),
         risk_level: operation_risk_level(&operation.method),
         bindable,
@@ -1227,6 +1227,130 @@ fn operation_risk_level(method: &str) -> domain::McpRiskLevel {
         "POST" | "PUT" | "PATCH" => domain::McpRiskLevel::High,
         _ => domain::McpRiskLevel::Medium,
     }
+}
+
+fn permission_code(code: &str) -> Option<String> {
+    Some(code.to_string())
+}
+
+fn read_or_manage_permission(method: &str, resource: &str) -> Option<String> {
+    let action = match method {
+        "GET" | "HEAD" | "OPTIONS" => "view",
+        _ => "manage",
+    };
+    permission_code(&format!("{resource}.{action}.all"))
+}
+
+fn view_or_configure_permission(method: &str, resource: &str) -> Option<String> {
+    let action = match method {
+        "GET" | "HEAD" | "OPTIONS" => "view",
+        _ => "configure",
+    };
+    permission_code(&format!("{resource}.{action}.all"))
+}
+
+fn application_permission(method: &str, path: &str) -> Option<String> {
+    match method {
+        "GET" | "HEAD" | "OPTIONS" => permission_code("application.view.all"),
+        "POST" if path == "/api/console/applications" => permission_code("application.create.all"),
+        "DELETE" => permission_code("application.delete.all"),
+        "POST" if path.contains("/actions/") || path.contains("/runs/") => {
+            permission_code("application.use.all")
+        }
+        _ => permission_code("application.edit.all"),
+    }
+}
+
+fn file_table_permission(method: &str, path: &str) -> Option<String> {
+    match method {
+        "GET" | "HEAD" | "OPTIONS" => permission_code("file_table.view.all"),
+        "POST" if path == "/api/console/file-tables" => permission_code("file_table.create.all"),
+        "DELETE" => permission_code("file_table.delete.all"),
+        "PUT" if path.ends_with("/binding") => permission_code("file_table.bind.all"),
+        _ => permission_code("file_table.bind.all"),
+    }
+}
+
+fn role_permission(method: &str) -> Option<String> {
+    match method {
+        "GET" | "HEAD" | "OPTIONS" => permission_code("role_permission.view.all"),
+        _ => permission_code("role_permission.manage.all"),
+    }
+}
+
+fn state_model_permission(method: &str, path: &str) -> Option<String> {
+    match method {
+        "GET" | "HEAD" | "OPTIONS" => permission_code("state_model.view.all"),
+        "POST" if path == "/api/console/models" => permission_code("state_model.create.all"),
+        "POST" if path == "/api/console/models:batchDelete" => {
+            permission_code("state_model.delete.all")
+        }
+        "DELETE" => permission_code("state_model.delete.all"),
+        _ => permission_code("state_model.edit.all"),
+    }
+}
+
+fn external_data_source_permission(method: &str, path: &str) -> Option<String> {
+    match method {
+        "GET" | "HEAD" | "OPTIONS" => permission_code("external_data_source.view.all"),
+        "POST" if path == "/api/console/data-sources" => {
+            permission_code("external_data_source.create.all")
+        }
+        "DELETE" => permission_code("external_data_source.delete.all"),
+        _ => permission_code("external_data_source.configure.all"),
+    }
+}
+
+fn operation_permission_code(method: &str, path: &str) -> Option<String> {
+    if path.starts_with("/api/console/docs/") {
+        return permission_code("api_reference.view.all");
+    }
+    if path.starts_with("/api/console/system/runtime-profile")
+        || path.starts_with("/api/console/system/release-status")
+    {
+        return permission_code("system_runtime.view.all");
+    }
+    if path.starts_with("/api/console/permissions") || path.starts_with("/api/console/roles") {
+        return role_permission(method);
+    }
+    if path.starts_with("/api/console/members") {
+        return read_or_manage_permission(method, "user");
+    }
+    if path.starts_with("/api/console/workspace") || path.starts_with("/api/console/workspaces") {
+        return view_or_configure_permission(method, "workspace");
+    }
+    if path.starts_with("/api/console/mcp/") {
+        return read_or_manage_permission(method, "mcp_management");
+    }
+    if path.starts_with("/api/console/file-storages") {
+        return read_or_manage_permission(method, "file_storage");
+    }
+    if path.starts_with("/api/console/file-tables") {
+        return file_table_permission(method, path);
+    }
+    if path.starts_with("/api/console/model-providers")
+        || path.starts_with("/api/console/plugins")
+        || path.starts_with("/api/console/host-infrastructure")
+    {
+        return view_or_configure_permission(method, "plugin_config");
+    }
+    if path.starts_with("/api/console/data-sources") {
+        return external_data_source_permission(method, path);
+    }
+    if path.starts_with("/api/console/models") {
+        return state_model_permission(method, path);
+    }
+    if path.starts_with("/api/console/applications") {
+        return application_permission(method, path);
+    }
+    if path.starts_with("/api/console/node-contributions")
+        || path.starts_with("/api/console/frontend-blocks")
+        || path.starts_with("/api/console/js-dependencies")
+    {
+        return permission_code("plugin_config.view.all");
+    }
+
+    None
 }
 
 fn object_schema(properties: Map<String, Value>, required: Vec<Value>) -> Value {

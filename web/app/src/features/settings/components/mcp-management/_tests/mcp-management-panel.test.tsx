@@ -83,7 +83,9 @@ const interfaceCapabilities = [
   }
 ];
 
-function renderPanel() {
+function renderPanel(
+  capabilities: typeof interfaceCapabilities = interfaceCapabilities
+) {
   return render(
     <AppProviders>
       <McpManagementPanel
@@ -108,7 +110,7 @@ function renderPanel() {
             call_validation_error_format: 'json'
           }
         }}
-        interfaceCapabilities={interfaceCapabilities}
+        interfaceCapabilities={capabilities}
       />
     </AppProviders>
   );
@@ -177,6 +179,20 @@ describe('McpManagementPanel', () => {
     expect(within(dialog).queryByDisplayValue('type')).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByText('映射层'));
+    fireEvent.mouseDown(
+      within(dialog).getByRole('combobox', { name: 'interface_param' })
+    );
+    await selectAntdOption('app_id');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /添加映射/ })
+    );
+    fireEvent.mouseDown(
+      within(dialog).getByRole('combobox', { name: 'interface_param' })
+    );
+    await selectAntdOption('display_name');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /添加映射/ })
+    );
     expect(within(dialog).getByLabelText('mcp_param app_id')).toHaveValue(
       'app_id'
     );
@@ -270,5 +286,100 @@ describe('McpManagementPanel', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '确 定' }));
 
     expect(mcpManagementApi.createSettingsMcpTool).not.toHaveBeenCalled();
+  });
+
+  test('allows manually adding interface parameters and mappings when descriptors are empty', async () => {
+    renderPanel([
+      {
+        ...interfaceCapabilities[0],
+        parameter_descriptors: []
+      }
+    ]);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tool 配置' }));
+    fireEvent.click(screen.getByRole('button', { name: /新增/ }));
+
+    const dialog = await screen.findByRole('dialog');
+
+    fireEvent.change(within(dialog).getByLabelText('name'), {
+      target: { value: 'Create App' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('short_description'), {
+      target: { value: 'Create app' }
+    });
+    clickSegmentedOption(dialog, 'interface');
+    fireEvent.mouseDown(
+      within(dialog).getByRole('combobox', { name: 'interface_id' })
+    );
+    await selectAntdOption('create_app');
+
+    clickSegmentedOption(dialog, 'input_mapping');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: '获取接口参数' })
+    );
+    expect(
+      await within(dialog).findByRole('button', { name: /新增字段/ })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /新增字段/ }));
+    fireEvent.change(await within(dialog).findByLabelText('field_name 1'), {
+      target: { value: 'user_id' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('field_type user_id'), {
+      target: { value: 'string' }
+    });
+    fireEvent.mouseDown(
+      within(dialog).getByRole('combobox', { name: 'parameter_type user_id' })
+    );
+    await selectAntdOption('URL');
+    fireEvent.click(within(dialog).getByLabelText('required user_id'));
+
+    fireEvent.click(within(dialog).getByText('映射层'));
+    fireEvent.mouseDown(
+      within(dialog).getByRole('combobox', { name: 'interface_param' })
+    );
+    await selectAntdOption('user_id');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /添加映射/ })
+    );
+    fireEvent.change(within(dialog).getByLabelText('mcp_param user_id'), {
+      target: { value: 'userId' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('description user_id'), {
+      target: { value: 'User id' }
+    });
+
+    clickSegmentedOption(dialog, 'preview');
+    fireEvent.change(within(dialog).getByLabelText('full_description'), {
+      target: { value: 'Create app' }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '确 定' }));
+
+    await waitFor(() => {
+      expect(mcpManagementApi.createSettingsMcpTool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input_mapping: {
+            interface_parameters: [
+              {
+                name: 'user_id',
+                field_type: 'string',
+                parameter_type: 'url',
+                description: '',
+                required: true
+              }
+            ],
+            mappings: [
+              {
+                interface_param: 'user_id',
+                mcp_param: 'userId',
+                description: 'User id',
+                required: true
+              }
+            ]
+          }
+        }),
+        expect.any(String)
+      );
+    });
   });
 });

@@ -92,6 +92,10 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
         runtime_profile_interface["path"].as_str(),
         Some("/api/console/system/runtime-profile")
     );
+    assert_eq!(
+        runtime_profile_interface["permission_code"].as_str(),
+        Some("system_runtime.view.all")
+    );
     assert_eq!(runtime_profile_interface["bindable"].as_bool(), Some(true));
     assert!(
         runtime_profile_interface["parameter_schema"]["properties"]["query"]["properties"]
@@ -110,6 +114,16 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
     assert!(runtime_profile_interface["result_schema"]["properties"]
         .get("topology")
         .is_some());
+    let application_api_docs_interface = interface_payload["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["interface_id"].as_str() == Some("get_application_api_docs_catalog"))
+        .expect("MCP interface catalog should expose application API docs catalog");
+    assert_eq!(
+        application_api_docs_interface["permission_code"].as_str(),
+        Some("application.view.all")
+    );
 
     let create_tool_response = app
         .clone()
@@ -152,7 +166,7 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
     assert_eq!(first_des_id.len(), 8);
     assert_eq!(
         create_tool_payload["data"]["permission_code"].as_str(),
-        None
+        Some("system_runtime.view.all")
     );
     assert_eq!(
         create_tool_payload["data"]["risk_level"].as_str(),

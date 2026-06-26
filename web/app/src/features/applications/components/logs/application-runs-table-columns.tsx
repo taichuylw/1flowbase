@@ -28,6 +28,30 @@ function formatRunStatisticNumber(value: number | null | undefined) {
     : '-';
 }
 
+function formatInputCacheHitRate(
+  inputTokens: number | null | undefined,
+  inputCacheHitTokens: number | null | undefined
+) {
+  if (
+    typeof inputTokens !== 'number' ||
+    !Number.isFinite(inputTokens) ||
+    typeof inputCacheHitTokens !== 'number' ||
+    !Number.isFinite(inputCacheHitTokens)
+  ) {
+    return '-';
+  }
+
+  const totalInputTokens = inputTokens + inputCacheHitTokens;
+  if (totalInputTokens <= 0) {
+    return '-';
+  }
+
+  return formatNumber(inputCacheHitTokens / totalInputTokens, {
+    style: 'percent',
+    maximumFractionDigits: 2
+  });
+}
+
 export function getApplicationRunsTableColumns(
   t: TFunction<'applications'>
 ): Array<DataTableColumn<ApplicationRunSummary>> {
@@ -120,6 +144,13 @@ export function getApplicationRunsTableColumns(
     width: 150,
     render: (_value, run) =>
       formatRunStatisticNumber(run.input_cache_hit_tokens)
+  },
+  {
+    key: 'input_cache_hit_rate',
+    title: t('auto.input_cache_hit_rate'),
+    width: 130,
+    render: (_value, run) =>
+      formatInputCacheHitRate(run.input_tokens, run.input_cache_hit_tokens)
   },
   {
     key: 'unique_node_count',
