@@ -83,7 +83,7 @@ async fn application_runtime_routes_logs_report_run_statistics() {
             "node-llm",
             "llm",
             "LLM",
-            json!({ "usage": { "total_tokens": 12 } }),
+            json!({ "usage": { "total_tokens": 12, "input_cache_hit_tokens": 49 } }),
         ),
         (
             Uuid::now_v7(),
@@ -223,7 +223,8 @@ async fn application_runtime_routes_logs_report_run_statistics() {
         "total_tokens": 50,
         "input_tokens": 10,
         "output_tokens": 20,
-        "input_cache_hit_tokens": null,
+        "input_cache_hit_tokens": 49,
+        "input_cache_hit_rate": 0.98,
         "unique_node_count": 3,
         "tool_callback_count": 20
     });

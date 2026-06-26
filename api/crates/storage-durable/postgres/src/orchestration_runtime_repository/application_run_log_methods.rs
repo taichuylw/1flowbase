@@ -286,6 +286,31 @@ impl PgControlPlaneStore {
         .execute(&mut **tx)
         .await?;
 
+        sqlx::query(
+            r#"
+            update application_run_log_summaries
+            set input_cache_hit_rate = case
+                    when input_cache_hit_tokens is not null
+                     and coalesce(input_tokens, 0) + input_cache_hit_tokens > 0
+                    then input_cache_hit_tokens::double precision
+                       / (coalesce(input_tokens, 0) + input_cache_hit_tokens)::double precision
+                    else null
+                end,
+                log_updated_at = now()
+            where flow_run_id = $1
+              and input_cache_hit_rate is distinct from case
+                    when input_cache_hit_tokens is not null
+                     and coalesce(input_tokens, 0) + input_cache_hit_tokens > 0
+                    then input_cache_hit_tokens::double precision
+                       / (coalesce(input_tokens, 0) + input_cache_hit_tokens)::double precision
+                    else null
+                end
+            "#,
+        )
+        .bind(flow_run.id)
+        .execute(&mut **tx)
+        .await?;
+
         Ok(())
     }
 
@@ -507,7 +532,7 @@ impl PgControlPlaneStore {
                 compatibility_mode,
                 idempotency_key,
                 total_tokens,
-                input_tokens, output_tokens, input_cache_hit_tokens,
+                input_tokens, output_tokens, input_cache_hit_tokens, input_cache_hit_rate,
                 unique_node_count,
                 tool_callback_count,
                 started_at,

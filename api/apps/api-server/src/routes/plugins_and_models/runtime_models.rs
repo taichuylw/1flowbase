@@ -86,6 +86,52 @@ pub struct RuntimeListResponse {
     pub total: i64,
 }
 
+fn round_cache_hit_rate(value: f64) -> Option<f64> {
+    value.is_finite().then(|| (value * 100.0).round() / 100.0)
+}
+
+fn application_log_cache_hit_rate_for_response(record: &Value) -> Option<f64> {
+    let total_tokens = record.get("total_tokens").and_then(Value::as_f64);
+    let input_cache_hit_tokens = record.get("input_cache_hit_tokens").and_then(Value::as_f64);
+
+    if let (Some(total_tokens), Some(input_cache_hit_tokens)) =
+        (total_tokens, input_cache_hit_tokens)
+    {
+        if total_tokens > 0.0 && total_tokens.is_finite() && input_cache_hit_tokens.is_finite() {
+            return round_cache_hit_rate(input_cache_hit_tokens / total_tokens);
+        }
+    }
+
+    None
+}
+
+fn normalize_application_log_cache_hit_rate(record: &mut Value) {
+    let value = application_log_cache_hit_rate_for_response(record)
+        .map_or(serde_json::Value::Null, serde_json::Value::from);
+
+    if let Some(object) = record.as_object_mut() {
+        object.insert("input_cache_hit_rate".to_string(), value);
+    }
+}
+
+fn runtime_record_response(model_code: &str, mut record: Value) -> Value {
+    if model_code == "application_run_log_summaries" {
+        normalize_application_log_cache_hit_rate(&mut record);
+    }
+
+    record
+}
+
+fn runtime_list_response(model_code: &str, items: Vec<Value>, total: i64) -> RuntimeListResponse {
+    RuntimeListResponse {
+        items: items
+            .into_iter()
+            .map(|record| runtime_record_response(model_code, record))
+            .collect(),
+        total,
+    }
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route(
@@ -628,7 +674,11 @@ pub async fn list_records(
     };
     if let Some(cache_key) = &cache_key {
         if let Some(response) = cached_runtime_list_response(&state, cache_key).await {
-            return Ok(Json(ApiSuccess::new(response)));
+            return Ok(Json(ApiSuccess::new(runtime_list_response(
+                &model_code,
+                response.items,
+                response.total,
+            ))));
         }
     }
     let filter = parse_filter(query.filter.as_deref())?;
@@ -664,10 +714,7 @@ pub async fn list_records(
         }
     };
 
-    let response = RuntimeListResponse {
-        items: result.items,
-        total: result.total,
-    };
+    let response = runtime_list_response(&model_code, result.items, result.total);
     if let Some(cache_key) = &cache_key {
         cache_runtime_list_response(&state, cache_key, &response).await;
     }
@@ -712,7 +759,10 @@ pub async fn get_record(
     };
     if let Some(cache_key) = &cache_key {
         if let Some(record) = cached_runtime_record(&state, cache_key).await {
-            return Ok(Json(ApiSuccess::new(record)));
+            return Ok(Json(ApiSuccess::new(runtime_record_response(
+                &model_code,
+                record,
+            ))));
         }
     }
     let record = state
@@ -740,11 +790,59 @@ pub async fn get_record(
             return Err(map_runtime_error(error));
         }
     };
+    let record = runtime_record_response(&model_code, record);
     if let Some(cache_key) = &cache_key {
         cache_runtime_record(&state, cache_key, &record).await;
     }
 
     Ok(Json(ApiSuccess::new(record)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn runtime_record_response_rounds_application_log_cache_hit_rate() {
+        let record = runtime_record_response(
+            "application_run_log_summaries",
+            json!({
+                "id": "run-1",
+                "total_tokens": 49901,
+                "input_cache_hit_tokens": 49063,
+                "input_cache_hit_rate": 0.9505703422053232
+            }),
+        );
+
+        assert_eq!(record["input_cache_hit_rate"], json!(0.98));
+    }
+
+    #[test]
+    fn runtime_record_response_does_not_fall_back_to_projected_cache_hit_rate() {
+        let record = runtime_record_response(
+            "application_run_log_summaries",
+            json!({
+                "id": "run-1",
+                "input_cache_hit_rate": 1.0
+            }),
+        );
+
+        assert_eq!(record["input_cache_hit_rate"], Value::Null);
+    }
+
+    #[test]
+    fn runtime_record_response_leaves_other_models_unchanged() {
+        let record = runtime_record_response(
+            "orders",
+            json!({
+                "id": "order-1",
+                "input_cache_hit_rate": 0.9505703422053232
+            }),
+        );
+
+        assert_eq!(record["input_cache_hit_rate"], json!(0.9505703422053232));
+    }
 }
 
 #[utoipa::path(

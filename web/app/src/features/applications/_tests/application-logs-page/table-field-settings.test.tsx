@@ -180,6 +180,7 @@ describe('ApplicationLogsPage - table field settings', () => {
           input_tokens: 100,
           output_tokens: 28,
           input_cache_hit_tokens: 64,
+          input_cache_hit_rate: 0.5,
           started_at: '2026-04-17T09:00:00Z',
           finished_at: '2026-04-17T09:00:01Z',
           created_at: '2026-04-17T09:00:00Z',
@@ -259,7 +260,7 @@ describe('ApplicationLogsPage - table field settings', () => {
     expect(screen.getByText('100')).toBeInTheDocument();
     expect(screen.getByText('28')).toBeInTheDocument();
     expect(screen.getByText('64')).toBeInTheDocument();
-    expect(screen.getByText('39.02%')).toBeInTheDocument();
+    expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
   test('persists table column visibility in user preferences meta', async () => {

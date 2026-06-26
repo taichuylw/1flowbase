@@ -177,6 +177,10 @@ fn application_run_statistics(
         input_tokens,
         output_tokens,
         input_cache_hit_tokens,
+        input_cache_hit_rate: application_logs::input_cache_hit_rate_for_response(
+            total_tokens,
+            input_cache_hit_tokens,
+        ),
         unique_node_count: unique_node_ids.len() as i64,
         tool_callback_count: application_run_tool_callback_count(detail),
     }

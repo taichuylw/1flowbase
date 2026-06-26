@@ -352,6 +352,7 @@ pub struct StoredApplicationRunLogSummaryRow {
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
     pub input_cache_hit_tokens: Option<i64>,
+    pub input_cache_hit_rate: Option<f64>,
     pub unique_node_count: i64,
     pub tool_callback_count: i64,
 }
@@ -747,6 +748,7 @@ impl PgOrchestrationRuntimeMapper {
             input_tokens: row.input_tokens,
             output_tokens: row.output_tokens,
             input_cache_hit_tokens: row.input_cache_hit_tokens,
+            input_cache_hit_rate: row.input_cache_hit_rate,
             unique_node_count: row.unique_node_count,
             tool_callback_count: row.tool_callback_count,
         })

@@ -74,6 +74,7 @@ export interface ConsoleApplicationRunStatistics {
   input_tokens: number | null;
   output_tokens: number | null;
   input_cache_hit_tokens: number | null;
+  input_cache_hit_rate: number | null;
   unique_node_count: number;
   tool_callback_count: number;
 }

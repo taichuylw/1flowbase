@@ -96,6 +96,7 @@ export function sampleRunDetail(): ApplicationRunDetail {
       input_tokens: 40,
       output_tokens: 10,
       input_cache_hit_tokens: 12,
+      input_cache_hit_rate: null,
       unique_node_count: 3,
       tool_callback_count: 20
     },
@@ -225,6 +226,7 @@ export function sampleTraceTree() {
       input_tokens: 40,
       output_tokens: 10,
       input_cache_hit_tokens: 12,
+      input_cache_hit_rate: null,
       unique_node_count: 3,
       tool_callback_count: 20
     },

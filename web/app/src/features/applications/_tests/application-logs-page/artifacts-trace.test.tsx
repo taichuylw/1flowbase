@@ -425,6 +425,7 @@ describe('ApplicationLogsPage - artifacts trace overview', () => {
       input_tokens: 3414,
       output_tokens: 799,
       input_cache_hit_tokens: 37376,
+      input_cache_hit_rate: null,
       unique_node_count: 3,
       tool_callback_count: 1
     };
@@ -438,6 +439,7 @@ describe('ApplicationLogsPage - artifacts trace overview', () => {
       input_tokens: 3353,
       output_tokens: 490,
       input_cache_hit_tokens: 38336,
+      input_cache_hit_rate: null,
       unique_node_count: 3,
       tool_callback_count: 0
     };

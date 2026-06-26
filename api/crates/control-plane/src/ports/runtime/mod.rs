@@ -1088,7 +1088,7 @@ pub struct ApplicationRunSummaryPage {
     pub page_size: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ApplicationRunLogSummaryPage {
     pub items: Vec<domain::ApplicationRunLogSummary>,
     pub total: i64,

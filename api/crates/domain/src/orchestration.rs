@@ -302,13 +302,14 @@ pub struct ApplicationRunSummary {
     pub updated_at: OffsetDateTime,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ApplicationRunLogSummary {
     pub run: ApplicationRunSummary,
     pub total_tokens: Option<i64>,
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
     pub input_cache_hit_tokens: Option<i64>,
+    pub input_cache_hit_rate: Option<f64>,
     pub unique_node_count: i64,
     pub tool_callback_count: i64,
 }

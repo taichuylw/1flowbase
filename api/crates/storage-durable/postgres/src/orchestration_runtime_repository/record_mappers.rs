@@ -442,6 +442,7 @@ pub(super) fn map_application_run_log_summary(
             input_tokens: row.get("input_tokens"),
             output_tokens: row.get("output_tokens"),
             input_cache_hit_tokens: row.get("input_cache_hit_tokens"),
+            input_cache_hit_rate: row.get("input_cache_hit_rate"),
             unique_node_count: row.get("unique_node_count"),
             tool_callback_count: row.get("tool_callback_count"),
         },

@@ -43,6 +43,11 @@ async fn runtime_record_repository_registers_builtin_runtime_read_models() {
     assert!(run_logs.fields.iter().any(|field| {
         field.code == "scope_id" && field.physical_column_name == "scope_id" && !field.is_writable
     }));
+    assert!(run_logs.fields.iter().any(|field| {
+        field.code == "input_cache_hit_rate"
+            && field.physical_column_name == "input_cache_hit_rate"
+            && !field.is_writable
+    }));
     assert!(run_logs.fields.iter().all(|field| !field.is_writable));
 
     let node_runs = metadata

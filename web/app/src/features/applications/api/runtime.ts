@@ -76,6 +76,7 @@ export type ApplicationRunSummary = {
   input_tokens: number | null;
   output_tokens: number | null;
   input_cache_hit_tokens: number | null;
+  input_cache_hit_rate: number | null;
   unique_node_count: number;
   tool_callback_count: number;
   started_at: string;
@@ -1088,6 +1089,7 @@ function toApplicationRunSummary(
       record,
       'input_cache_hit_tokens'
     ),
+    input_cache_hit_rate: optionalNumberField(record, 'input_cache_hit_rate'),
     unique_node_count: numberField(record, 'unique_node_count'),
     tool_callback_count: numberField(record, 'tool_callback_count'),
     started_at: stringField(record, 'started_at'),

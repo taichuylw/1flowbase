@@ -250,9 +250,9 @@ async fn terminal_flow_run_writes_static_application_run_log_summary() {
             error_payload: None,
             metrics_payload: json!({
                 "usage": {
-                    "input_tokens": 3,
-                    "output_tokens": 4,
-                    "cache_read_tokens": 2
+                    "input_tokens": 13,
+                    "output_tokens": 9,
+                    "cache_read_tokens": 250
                 }
             }),
             debug_payload: json!({}),
@@ -321,10 +321,12 @@ async fn terminal_flow_run_writes_static_application_run_log_summary() {
 
     assert_eq!(logs.total, 1);
     assert_eq!(logs.items[0].run.id, run.id);
-    assert_eq!(logs.items[0].total_tokens, Some(7));
-    assert_eq!(logs.items[0].input_tokens, Some(3));
-    assert_eq!(logs.items[0].output_tokens, Some(4));
-    assert_eq!(logs.items[0].input_cache_hit_tokens, Some(2));
+    assert_eq!(logs.items[0].total_tokens, Some(22));
+    assert_eq!(logs.items[0].input_tokens, Some(13));
+    assert_eq!(logs.items[0].output_tokens, Some(9));
+    assert_eq!(logs.items[0].input_cache_hit_tokens, Some(250));
+    let cache_hit_rate = logs.items[0].input_cache_hit_rate.unwrap();
+    assert!((cache_hit_rate - (250.0 / 263.0)).abs() < f64::EPSILON);
     assert_eq!(logs.items[0].unique_node_count, 2);
     assert_eq!(logs.items[0].tool_callback_count, 2);
 }

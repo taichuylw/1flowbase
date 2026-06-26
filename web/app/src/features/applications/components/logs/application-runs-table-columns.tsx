@@ -28,28 +28,13 @@ function formatRunStatisticNumber(value: number | null | undefined) {
     : '-';
 }
 
-function formatInputCacheHitRate(
-  inputTokens: number | null | undefined,
-  inputCacheHitTokens: number | null | undefined
-) {
-  if (
-    typeof inputTokens !== 'number' ||
-    !Number.isFinite(inputTokens) ||
-    typeof inputCacheHitTokens !== 'number' ||
-    !Number.isFinite(inputCacheHitTokens)
-  ) {
-    return '-';
-  }
-
-  const totalInputTokens = inputTokens + inputCacheHitTokens;
-  if (totalInputTokens <= 0) {
-    return '-';
-  }
-
-  return formatNumber(inputCacheHitTokens / totalInputTokens, {
-    style: 'percent',
-    maximumFractionDigits: 2
-  });
+function formatRunStatisticRate(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? formatNumber(value, {
+        style: 'percent',
+        maximumFractionDigits: 2
+      })
+    : '-';
 }
 
 export function getApplicationRunsTableColumns(
@@ -150,7 +135,7 @@ export function getApplicationRunsTableColumns(
     title: t('auto.input_cache_hit_rate'),
     width: 130,
     render: (_value, run) =>
-      formatInputCacheHitRate(run.input_tokens, run.input_cache_hit_tokens)
+      formatRunStatisticRate(run.input_cache_hit_rate)
   },
   {
     key: 'unique_node_count',

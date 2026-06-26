@@ -1273,6 +1273,10 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
                 correlation: {},
                 statistics: {
                   total_tokens: 50,
+                  input_tokens: 40,
+                  output_tokens: 10,
+                  input_cache_hit_tokens: 12,
+                  input_cache_hit_rate: 0.2307692308,
                   unique_node_count: 3,
                   tool_callback_count: 20
                 },
@@ -1306,6 +1310,10 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
           subject: { kind: 'agent_flow' },
           statistics: {
             total_tokens: 50,
+            input_tokens: 40,
+            output_tokens: 10,
+            input_cache_hit_tokens: 12,
+            input_cache_hit_rate: 0.2307692308,
             unique_node_count: 3,
             tool_callback_count: 20
           }

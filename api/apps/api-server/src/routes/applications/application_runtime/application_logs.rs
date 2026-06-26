@@ -72,8 +72,43 @@ pub struct ApplicationRunStatisticsResponse {
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
     pub input_cache_hit_tokens: Option<i64>,
+    pub input_cache_hit_rate: Option<f64>,
     pub unique_node_count: i64,
     pub tool_callback_count: i64,
+}
+
+pub fn input_cache_hit_rate_for_response(
+    total_tokens: Option<i64>,
+    input_cache_hit_tokens: Option<i64>,
+) -> Option<f64> {
+    let total_tokens = total_tokens?;
+    let input_cache_hit_tokens = input_cache_hit_tokens?;
+    if total_tokens <= 0 {
+        return None;
+    }
+
+    Some(((input_cache_hit_tokens as f64 / total_tokens as f64) * 100.0).round() / 100.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn input_cache_hit_rate_for_response_uses_total_tokens() {
+        assert_eq!(
+            input_cache_hit_rate_for_response(Some(49_901), Some(49_063)),
+            Some(0.98)
+        );
+    }
+
+    #[test]
+    fn input_cache_hit_rate_for_response_ignores_empty_total() {
+        assert_eq!(
+            input_cache_hit_rate_for_response(Some(0), Some(49_063)),
+            None
+        );
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
