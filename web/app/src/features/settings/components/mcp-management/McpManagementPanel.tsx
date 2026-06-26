@@ -84,12 +84,12 @@ import {
   buildReadableToolId
 } from './mcp-management-view-model';
 import {
-  McpInputMappingEditor,
   buildInputMappingFromInterface,
   inputMappingHasContent,
   normalizeInputMapping,
   type McpInputMappingValue
-} from './McpInputMappingEditor';
+} from './mcp-input-mapping-model';
+import { McpInputMappingEditor } from './McpInputMappingEditor';
 import { JsonSchemaInlineEditor } from '../../../agent-flow/components/detail/fields/json-schema/JsonSchemaSettingsPanel';
 import {
   createInitialMcpInstancesState,
