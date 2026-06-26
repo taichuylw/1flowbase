@@ -1,0 +1,274 @@
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+
+const mcpManagementApi = vi.hoisted(() => ({
+  settingsMcpCatalogQueryKey: ['settings', 'mcp-management', 'catalog'],
+  createSettingsMcpInstance: vi.fn(),
+  createSettingsMcpTool: vi.fn(),
+  createSettingsMcpToolBinding: vi.fn(),
+  deleteSettingsMcpGroup: vi.fn(),
+  deleteSettingsMcpInstance: vi.fn(),
+  deleteSettingsMcpTool: vi.fn(),
+  deleteSettingsMcpToolBinding: vi.fn(),
+  exportSettingsMcpCatalog: vi.fn(),
+  exportSettingsMcpInstanceDirectory: vi.fn(),
+  refreshSettingsMcpToolDescription: vi.fn(),
+  updateSettingsMcpInstance: vi.fn(),
+  updateSettingsMcpMetaToolConfig: vi.fn(),
+  updateSettingsMcpTool: vi.fn(),
+  updateSettingsMcpToolBinding: vi.fn(),
+  upsertSettingsMcpGroup: vi.fn()
+}));
+
+vi.mock('../../../api/mcp-management', () => mcpManagementApi);
+
+import { AppProviders } from '../../../../../app/AppProviders';
+import { McpManagementPanel } from '../McpManagementPanel';
+
+const interfaceCapabilities = [
+  {
+    interface_id: 'create_app',
+    method: 'POST',
+    path: '/api/console/apps',
+    name: 'Create app',
+    short_description: 'Create app',
+    parameter_schema: {
+      type: 'object',
+      properties: {
+        app_id: {
+          type: 'string',
+          description: 'Application id'
+        }
+      },
+      required: ['app_id']
+    },
+    parameter_descriptors: [
+      {
+        name: 'app_id',
+        field_type: 'string',
+        parameter_type: 'url' as const,
+        description: 'Application id',
+        required: true,
+        schema: { type: 'string' }
+      },
+      {
+        name: 'display_name',
+        field_type: 'string',
+        parameter_type: 'json_body' as const,
+        description: 'Display name',
+        required: false,
+        schema: { type: 'string' }
+      }
+    ],
+    result_schema: {
+      type: 'object',
+      properties: {
+        run_id: {
+          type: 'string',
+          description: 'Flow run id'
+        }
+      }
+    },
+    permission_code: 'app.manage.all',
+    security: {},
+    risk_level: 'medium',
+    bindable: true,
+    disabled_reason: null
+  }
+];
+
+function renderPanel() {
+  return render(
+    <AppProviders>
+      <McpManagementPanel
+        canManage
+        catalog={{
+          instances: [],
+          groups: [],
+          tools: [],
+          bindings: [],
+          meta_tool_config: {
+            id: 'meta-1',
+            workspace_id: 'workspace-1',
+            list_default_limit: 20,
+            list_max_depth: 3,
+            list_regex_enabled: false,
+            list_regex_max_length: 120,
+            list_return_fields: [],
+            get_include_mapping_summary: true,
+            get_include_interface_summary: true,
+            call_default_des_id_policy: 'optional',
+            call_high_risk_requires_des_id: true,
+            call_validation_error_format: 'json'
+          }
+        }}
+        interfaceCapabilities={interfaceCapabilities}
+      />
+    </AppProviders>
+  );
+}
+
+async function selectAntdOption(label: string) {
+  const [option] = await screen.findAllByText((_, element) => {
+    return Boolean(
+      element?.matches('.ant-select-item-option-content') &&
+      element.textContent?.includes(label)
+    );
+  });
+
+  fireEvent.click(option);
+}
+
+function clickSegmentedOption(root: HTMLElement, label: string) {
+  const option = within(root).getByText((text, element) => {
+    return Boolean(
+      text === label && element?.matches('.ant-segmented-item-label')
+    );
+  });
+
+  fireEvent.click(option);
+}
+
+describe('McpManagementPanel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('loads interface descriptors into dedicated input mappings after the explicit mapping action', async () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tool 配置' }));
+    fireEvent.click(screen.getByRole('button', { name: /新增/ }));
+
+    const dialog = await screen.findByRole('dialog');
+
+    fireEvent.change(within(dialog).getByLabelText('name'), {
+      target: { value: 'Create App' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('short_description'), {
+      target: { value: 'Create app' }
+    });
+    clickSegmentedOption(dialog, 'interface');
+    fireEvent.mouseDown(
+      within(dialog).getByRole('combobox', { name: 'interface_id' })
+    );
+    await selectAntdOption('create_app');
+
+    clickSegmentedOption(dialog, 'input_mapping');
+    expect(
+      within(dialog).queryByDisplayValue('app_id')
+    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByDisplayValue('type')).not.toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: '获取接口参数' })
+    );
+    expect(await within(dialog).findByText('接口层')).toBeInTheDocument();
+    expect(within(dialog).getByText('映射层')).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue('app_id')).toBeInTheDocument();
+    expect(within(dialog).getByText('URL')).toBeInTheDocument();
+    expect(within(dialog).getByText('JSON 请求体')).toBeInTheDocument();
+    expect(within(dialog).queryByDisplayValue('type')).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByText('映射层'));
+    expect(within(dialog).getByLabelText('mcp_param app_id')).toHaveValue(
+      'app_id'
+    );
+    fireEvent.change(within(dialog).getByLabelText('mcp_param app_id'), {
+      target: { value: 'appId' }
+    });
+
+    clickSegmentedOption(dialog, 'preview');
+    fireEvent.change(within(dialog).getByLabelText('full_description'), {
+      target: { value: 'Create app' }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '确 定' }));
+
+    await waitFor(() => {
+      expect(mcpManagementApi.createSettingsMcpTool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input_mapping: {
+            interface_parameters: [
+              {
+                name: 'app_id',
+                field_type: 'string',
+                parameter_type: 'url',
+                description: 'Application id',
+                required: true
+              },
+              {
+                name: 'display_name',
+                field_type: 'string',
+                parameter_type: 'json_body',
+                description: 'Display name',
+                required: false
+              }
+            ],
+            mappings: [
+              {
+                interface_param: 'app_id',
+                mcp_param: 'appId',
+                description: 'Application id',
+                required: true
+              },
+              {
+                interface_param: 'display_name',
+                mcp_param: 'display_name',
+                description: 'Display name',
+                required: false
+              }
+            ]
+          }
+        }),
+        expect.any(String)
+      );
+    });
+  });
+
+  test('blocks saving when the input mapping JSON parse view is invalid', async () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tool 配置' }));
+    fireEvent.click(screen.getByRole('button', { name: /新增/ }));
+
+    const dialog = await screen.findByRole('dialog');
+
+    fireEvent.change(within(dialog).getByLabelText('name'), {
+      target: { value: 'Create App' }
+    });
+    fireEvent.change(within(dialog).getByLabelText('short_description'), {
+      target: { value: 'Create app' }
+    });
+    clickSegmentedOption(dialog, 'interface');
+    fireEvent.mouseDown(
+      within(dialog).getByRole('combobox', { name: 'interface_id' })
+    );
+    await selectAntdOption('create_app');
+    clickSegmentedOption(dialog, 'input_mapping');
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: '获取接口参数' })
+    );
+    fireEvent.click(await within(dialog).findByText('JSON 解析'));
+    const editor = await within(dialog).findByRole('textbox', {
+      name: 'input_mapping JSON'
+    });
+    fireEvent.change(editor, {
+      target: { value: '{"interface_parameters":' }
+    });
+
+    clickSegmentedOption(dialog, 'preview');
+    fireEvent.change(within(dialog).getByLabelText('full_description'), {
+      target: { value: 'Create app' }
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '确 定' }));
+
+    expect(mcpManagementApi.createSettingsMcpTool).not.toHaveBeenCalled();
+  });
+});

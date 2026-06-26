@@ -98,6 +98,15 @@ async fn mcp_management_routes_read_empty_catalog_without_seeding_default_instan
             .get("locale")
             .is_some()
     );
+    assert!(runtime_profile_interface["parameter_descriptors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|descriptor| descriptor["name"].as_str() == Some("locale")
+            && descriptor["parameter_type"].as_str() == Some("url")
+            && descriptor["required"].as_bool() == Some(false)
+            && descriptor["field_type"].as_str().is_some()
+            && descriptor["schema"].is_object()));
     assert!(runtime_profile_interface["result_schema"]["properties"]
         .get("topology")
         .is_some());

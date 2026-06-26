@@ -69,6 +69,34 @@ pub enum McpListItemKind {
     Tool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum McpParameterType {
+    Url,
+    Form,
+    JsonBody,
+}
+
+impl McpParameterType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Url => "url",
+            Self::Form => "form",
+            Self::JsonBody => "json_body",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct McpParameterDescriptor {
+    pub name: String,
+    pub field_type: String,
+    pub parameter_type: McpParameterType,
+    pub description: Option<String>,
+    pub required: bool,
+    pub schema: serde_json::Value,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpInstanceRecord {
     pub id: Uuid,
@@ -169,6 +197,7 @@ pub struct McpInterfaceCatalogEntry {
     pub path: String,
     pub name: String,
     pub short_description: String,
+    pub parameter_descriptors: Vec<McpParameterDescriptor>,
     pub parameter_schema: serde_json::Value,
     pub result_schema: serde_json::Value,
     pub permission_code: Option<String>,

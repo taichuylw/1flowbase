@@ -11,6 +11,7 @@ use control_plane::mcp_management::{
     McpManagementService, RefreshMcpToolDescriptionCommand, UpdateMcpMetaToolConfigCommand,
     UpdateMcpToolBindingCommand, UpdateMcpToolCommand, UpsertMcpGroupCommand,
 };
+use domain::mcp_management::{McpParameterDescriptor, McpParameterType};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use utoipa::{IntoParams, ToSchema};
@@ -117,12 +118,24 @@ pub struct McpCatalogResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct McpParameterDescriptorResponse {
+    pub name: String,
+    pub field_type: String,
+    pub parameter_type: String,
+    pub description: Option<String>,
+    pub required: bool,
+    #[schema(value_type = Object)]
+    pub schema: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct McpInterfaceCatalogEntryResponse {
     pub interface_id: String,
     pub method: String,
     pub path: String,
     pub name: String,
     pub short_description: String,
+    pub parameter_descriptors: Vec<McpParameterDescriptorResponse>,
     #[schema(value_type = Object)]
     pub parameter_schema: serde_json::Value,
     #[schema(value_type = Object)]
@@ -840,6 +853,11 @@ fn mcp_interface_entry_from_operation(
             .description
             .clone()
             .unwrap_or_else(|| format!("{} {}", operation.method, operation.path)),
+        parameter_descriptors: operation_parameter_descriptors(
+            spec,
+            path_item_node,
+            operation_node,
+        ),
         parameter_schema: operation_input_schema(spec, path_item_node, operation_node),
         result_schema: operation_response_schema(spec, operation_node),
         permission_code: None,
@@ -916,6 +934,82 @@ fn operation_input_schema(spec: &Value, path_item_node: &Value, operation_node: 
     object_schema(properties, required)
 }
 
+fn operation_parameter_descriptors(
+    spec: &Value,
+    path_item_node: &Value,
+    operation_node: &Value,
+) -> Vec<McpParameterDescriptor> {
+    let mut descriptors = Vec::new();
+
+    for location in ["path", "query"] {
+        descriptors.extend(operation_parameter_location_descriptors(
+            spec,
+            path_item_node,
+            operation_node,
+            location,
+        ));
+    }
+
+    descriptors.extend(operation_request_body_descriptors(spec, operation_node));
+    descriptors
+}
+
+fn operation_parameter_location_descriptors(
+    spec: &Value,
+    path_item_node: &Value,
+    operation_node: &Value,
+    location: &str,
+) -> Vec<McpParameterDescriptor> {
+    let mut descriptors = Vec::new();
+
+    for raw_parameter in path_item_node
+        .get("parameters")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .chain(
+            operation_node
+                .get("parameters")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten(),
+        )
+    {
+        let parameter = resolve_openapi_schema(spec, raw_parameter);
+        if parameter.get("in").and_then(Value::as_str) != Some(location) {
+            continue;
+        }
+        let Some(name) = parameter.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+
+        let schema = parameter
+            .get("schema")
+            .map(|schema| resolve_openapi_schema(spec, schema))
+            .unwrap_or_else(default_string_schema);
+        let description = parameter
+            .get("description")
+            .and_then(Value::as_str)
+            .map(ToString::to_string);
+        let required = location == "path"
+            || parameter
+                .get("required")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+
+        descriptors.push(McpParameterDescriptor {
+            name: name.into(),
+            field_type: schema_field_type(&schema),
+            parameter_type: McpParameterType::Url,
+            description,
+            required,
+            schema,
+        });
+    }
+
+    descriptors
+}
+
 fn operation_parameter_location_schema(
     spec: &Value,
     path_item_node: &Value,
@@ -949,11 +1043,7 @@ fn operation_parameter_location_schema(
         let mut schema = parameter
             .get("schema")
             .map(|schema| resolve_openapi_schema(spec, schema))
-            .unwrap_or_else(|| {
-                let mut fallback = Map::new();
-                fallback.insert("type".into(), Value::String("string".into()));
-                Value::Object(fallback)
-            });
+            .unwrap_or_else(default_string_schema);
         if let Some(description) = parameter.get("description").and_then(Value::as_str) {
             schema = schema_with_description(schema, description);
         }
@@ -985,6 +1075,98 @@ fn operation_request_body_schema(spec: &Value, operation_node: &Value) -> Option
         .and_then(Value::as_bool)
         .unwrap_or(false);
     Some((schema, required))
+}
+
+fn operation_request_body_descriptors(
+    spec: &Value,
+    operation_node: &Value,
+) -> Vec<McpParameterDescriptor> {
+    let Some(request_body) = operation_node.get("requestBody") else {
+        return Vec::new();
+    };
+    let request_body = resolve_openapi_schema(spec, request_body);
+    let request_body_required = request_body
+        .get("required")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let Some((schema, parameter_type)) =
+        request_body_descriptor_schema(spec, request_body.get("content").unwrap_or(&Value::Null))
+    else {
+        return Vec::new();
+    };
+
+    schema_property_descriptors(schema, parameter_type, request_body_required)
+}
+
+fn request_body_descriptor_schema(
+    spec: &Value,
+    content: &Value,
+) -> Option<(Value, McpParameterType)> {
+    let content = content.as_object()?;
+
+    for content_type in ["application/x-www-form-urlencoded", "multipart/form-data"] {
+        if let Some(media_type) = content.get(content_type) {
+            if let Some(schema) = media_type.get("schema") {
+                return Some((resolve_openapi_schema(spec, schema), McpParameterType::Form));
+            }
+        }
+    }
+
+    if let Some(media_type) = content.get("application/json").or_else(|| {
+        content
+            .iter()
+            .find(|(content_type, _)| content_type.ends_with("+json"))
+            .map(|(_, media_type)| media_type)
+    }) {
+        if let Some(schema) = media_type.get("schema") {
+            return Some((
+                resolve_openapi_schema(spec, schema),
+                McpParameterType::JsonBody,
+            ));
+        }
+    }
+
+    None
+}
+
+fn schema_property_descriptors(
+    schema: Value,
+    parameter_type: McpParameterType,
+    request_body_required: bool,
+) -> Vec<McpParameterDescriptor> {
+    let required_fields = schema
+        .get("required")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect::<BTreeSet<_>>();
+
+    let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
+        return vec![McpParameterDescriptor {
+            name: "body".into(),
+            field_type: schema_field_type(&schema),
+            parameter_type,
+            description: schema_description(&schema),
+            required: request_body_required,
+            schema,
+        }];
+    };
+
+    properties
+        .iter()
+        .map(|(name, property_schema)| {
+            let schema = property_schema.clone();
+            McpParameterDescriptor {
+                name: name.clone(),
+                field_type: schema_field_type(&schema),
+                parameter_type,
+                description: schema_description(&schema),
+                required: required_fields.contains(name.as_str()),
+                schema,
+            }
+        })
+        .collect()
 }
 
 fn operation_response_schema(spec: &Value, operation_node: &Value) -> Value {
@@ -1056,6 +1238,27 @@ fn object_schema(properties: Map<String, Value>, required: Vec<Value>) -> Value 
         schema.insert("required".into(), Value::Array(required));
     }
     Value::Object(schema)
+}
+
+fn default_string_schema() -> Value {
+    let mut fallback = Map::new();
+    fallback.insert("type".into(), Value::String("string".into()));
+    Value::Object(fallback)
+}
+
+fn schema_field_type(schema: &Value) -> String {
+    schema
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or("object")
+        .into()
+}
+
+fn schema_description(schema: &Value) -> Option<String> {
+    schema
+        .get("description")
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
 }
 
 fn schema_with_description(mut schema: Value, description: &str) -> Value {
@@ -1321,6 +1524,11 @@ fn to_interface_response(
         path: entry.path,
         name: entry.name,
         short_description: entry.short_description,
+        parameter_descriptors: entry
+            .parameter_descriptors
+            .into_iter()
+            .map(to_parameter_descriptor_response)
+            .collect(),
         parameter_schema: entry.parameter_schema,
         result_schema: entry.result_schema,
         permission_code: entry.permission_code,
@@ -1328,6 +1536,19 @@ fn to_interface_response(
         risk_level: entry.risk_level.as_str().into(),
         bindable: entry.bindable,
         disabled_reason: entry.disabled_reason,
+    }
+}
+
+fn to_parameter_descriptor_response(
+    descriptor: McpParameterDescriptor,
+) -> McpParameterDescriptorResponse {
+    McpParameterDescriptorResponse {
+        name: descriptor.name,
+        field_type: descriptor.field_type,
+        parameter_type: descriptor.parameter_type.as_str().into(),
+        description: descriptor.description,
+        required: descriptor.required,
+        schema: descriptor.schema,
     }
 }
 
@@ -1398,5 +1619,161 @@ fn to_list_item_response(
         } else {
             None
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn operation(id: &str, method: &str, path: &str) -> DocsCatalogOperation {
+        DocsCatalogOperation {
+            id: id.into(),
+            method: method.into(),
+            path: path.into(),
+            summary: None,
+            description: None,
+            tags: Vec::new(),
+            group: "settings".into(),
+            deprecated: false,
+        }
+    }
+
+    #[test]
+    fn mcp_interface_descriptors_classify_url_json_body_and_form_parameters() {
+        let spec = json!({
+            "paths": {
+                "/api/console/widgets/{widget_id}": {
+                    "parameters": [
+                        {
+                            "name": "widget_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "post": {
+                        "operationId": "create_widget",
+                        "parameters": [
+                            {
+                                "name": "locale",
+                                "in": "query",
+                                "required": false,
+                                "schema": { "type": "string" }
+                            }
+                        ],
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ["title"],
+                                        "properties": {
+                                            "title": {
+                                                "type": "string",
+                                                "description": "Widget title"
+                                            },
+                                            "enabled": { "type": "boolean" }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": { "type": "object" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "/api/console/uploads": {
+                    "post": {
+                        "operationId": "upload_widget",
+                        "requestBody": {
+                            "content": {
+                                "multipart/form-data": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ["file"],
+                                        "properties": {
+                                            "file": { "type": "string", "format": "binary" },
+                                            "label": { "type": "string" }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": { "type": "object" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let json_entry = mcp_interface_entry_from_operation(
+            &operation("create_widget", "POST", "/api/console/widgets/{widget_id}"),
+            &spec,
+        )
+        .expect("JSON operation should become an MCP interface entry");
+        assert!(json_entry
+            .parameter_descriptors
+            .iter()
+            .any(|descriptor| descriptor.name == "widget_id"
+                && descriptor.parameter_type == McpParameterType::Url
+                && descriptor.required));
+        assert!(json_entry
+            .parameter_descriptors
+            .iter()
+            .any(|descriptor| descriptor.name == "locale"
+                && descriptor.parameter_type == McpParameterType::Url
+                && !descriptor.required));
+        assert!(json_entry
+            .parameter_descriptors
+            .iter()
+            .any(|descriptor| descriptor.name == "title"
+                && descriptor.parameter_type == McpParameterType::JsonBody
+                && descriptor.field_type == "string"
+                && descriptor.required
+                && descriptor.description.as_deref() == Some("Widget title")));
+        assert!(json_entry
+            .parameter_descriptors
+            .iter()
+            .any(|descriptor| descriptor.name == "enabled"
+                && descriptor.parameter_type == McpParameterType::JsonBody
+                && descriptor.field_type == "boolean"
+                && !descriptor.required));
+
+        let form_entry = mcp_interface_entry_from_operation(
+            &operation("upload_widget", "POST", "/api/console/uploads"),
+            &spec,
+        )
+        .expect("form operation should become an MCP interface entry");
+        assert!(form_entry
+            .parameter_descriptors
+            .iter()
+            .any(|descriptor| descriptor.name == "file"
+                && descriptor.parameter_type == McpParameterType::Form
+                && descriptor.required));
+        assert!(form_entry
+            .parameter_descriptors
+            .iter()
+            .any(|descriptor| descriptor.name == "label"
+                && descriptor.parameter_type == McpParameterType::Form
+                && !descriptor.required));
     }
 }

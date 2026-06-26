@@ -72,6 +72,17 @@ export interface ConsoleMcpMetaToolConfig {
   call_validation_error_format: string;
 }
 
+export type ConsoleMcpParameterType = 'url' | 'form' | 'json_body';
+
+export interface ConsoleMcpParameterDescriptor {
+  name: string;
+  field_type: string;
+  parameter_type: ConsoleMcpParameterType;
+  description: string | null;
+  required: boolean;
+  schema: unknown;
+}
+
 export interface ConsoleMcpCatalog {
   instances: ConsoleMcpInstance[];
   groups: ConsoleMcpGroup[];
@@ -86,6 +97,7 @@ export interface ConsoleMcpInterfaceCapability {
   path: string;
   name: string;
   short_description: string;
+  parameter_descriptors: ConsoleMcpParameterDescriptor[];
   parameter_schema: unknown;
   result_schema: unknown;
   permission_code: string | null;

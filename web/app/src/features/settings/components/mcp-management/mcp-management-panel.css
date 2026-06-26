@@ -38,6 +38,56 @@
   margin-top: 8px;
 }
 
+.mcp-management__input-mapping-editor {
+  margin-top: 8px;
+}
+
+.mcp-input-mapping-editor__stack {
+  width: 100%;
+}
+
+.mcp-input-mapping-editor__table {
+  min-width: 620px;
+}
+
+.mcp-input-mapping-editor__head,
+.mcp-input-mapping-editor__row,
+.mcp-input-mapping-editor__mapping-head,
+.mcp-input-mapping-editor__mapping-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-input-mapping-editor__head,
+.mcp-input-mapping-editor__row {
+  grid-template-columns: minmax(160px, 1.2fr) minmax(120px, 0.8fr) 120px 72px;
+}
+
+.mcp-input-mapping-editor__mapping-head,
+.mcp-input-mapping-editor__mapping-row {
+  grid-template-columns:
+    minmax(160px, 1fr) minmax(160px, 1fr)
+    minmax(180px, 1.2fr) 72px;
+}
+
+.mcp-input-mapping-editor__head,
+.mcp-input-mapping-editor__mapping-head {
+  margin-bottom: 8px;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mcp-input-mapping-editor__row,
+.mcp-input-mapping-editor__mapping-row {
+  margin-bottom: 8px;
+}
+
+.mcp-input-mapping-editor .ant-select {
+  width: 100%;
+}
+
 .mcp-management__schema-editor .agent-flow-json-schema-settings {
   display: flex;
   min-height: 0;
@@ -167,5 +217,9 @@
     grid-template-columns:
       minmax(96px, 1fr) minmax(120px, 1.2fr)
       104px 56px 56px;
+  }
+
+  .mcp-input-mapping-editor {
+    overflow-x: auto;
   }
 }

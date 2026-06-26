@@ -1,7 +1,7 @@
 ---
 memory_type: project
 topic: MCP Interface Catalog 接入 OpenAPI operation
-summary: MCP Tool 的 interface 选择以现有 API docs operation registry 为来源，不再维护手写 interface 清单；input_mapping/output_mapping 基于所选 operation 的输入/输出 JSON Schema 配置。
+summary: MCP Tool 的 interface 选择以现有 API docs operation registry 为来源，不再维护手写 interface 清单；后续已新增 #1138，要求 input_mapping 改为后端提供 parameter_descriptors 并由前端专用映射组件编辑。
 keywords:
   - mcp-management
   - interface-capabilities
@@ -13,8 +13,8 @@ match_when:
   - 调整 MCP Tool input_mapping/output_mapping 表单、JSON Schema 编辑器或执行适配器
   - 继续推进 GitHub issue #770 的系统级 MCP 管理
 created_at: 2026-06-26 00
-updated_at: 2026-06-26 00
-last_verified_at: 2026-06-26 00
+updated_at: 2026-06-26 12
+last_verified_at: 2026-06-26 12
 decision_policy: verify_before_decision
 scope:
   - api/apps/api-server/src/routes/settings/mcp_management.rs
@@ -53,3 +53,12 @@ MCP Tool 选择的是后端真实 API operation，而不是另起一套需要人
 ## 关联文档
 
 - GitHub issue #770
+- GitHub issue #1138
+
+## 2026-06-26 12 补充 L3：MCP Input Mapping 参数来源与映射组件
+
+用户确认 `from` 按 `form` 处理，并要求后端一起调整。已创建 GitHub issue #1138：`[待开发]MCP Tool 入参映射支持接口参数来源与专用映射组件`。
+
+该 L3 继承已关闭的 MCP L2 #772 作为历史工作流背景，聚焦 `input_mapping`：后端在 `/api/console/mcp/interface-capabilities` response 中新增 `parameter_descriptors`，用 `url` / `form` / `json_body` 表达参数来源；前端新增 MCP 专用 input mapping 组件，表单层包含 `接口层` 与 `映射层`，JSON 解析视图复用现有能力并读写同一份 `input_mapping` JSON。
+
+本 L3 不改变 `output_mapping`，不做 DB migration，不实现 MCP runtime call 执行链路；若实现时发现需要改变 runtime、权限模型或无法从 OpenAPI 稳定区分参数来源，必须回到需求 / ADR 确认。

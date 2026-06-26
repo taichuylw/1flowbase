@@ -110,6 +110,7 @@ describe('OfficialPluginInstallPanel', () => {
         '当前 1flowbase 版本低于该插件声明的最低适配版本。'
       )
     ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveStyle({ width: '640px' });
     expect(screen.getByText('当前宿主版本：0.2.0')).toBeInTheDocument();
     expect(screen.getByText('插件最低适配版本：0.3.0')).toBeInTheDocument();
     expect(screen.getByText('插件版本：0.3.0')).toBeInTheDocument();

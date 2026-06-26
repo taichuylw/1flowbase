@@ -78,6 +78,14 @@ fn runtime_profile_interface() -> domain::McpInterfaceCatalogEntry {
         path: "/api/console/system/runtime-profile".into(),
         name: "Get runtime profile".into(),
         short_description: "Read system runtime profile.".into(),
+        parameter_descriptors: vec![domain::mcp_management::McpParameterDescriptor {
+            name: "locale".into(),
+            field_type: "string".into(),
+            parameter_type: domain::mcp_management::McpParameterType::Url,
+            description: None,
+            required: false,
+            schema: serde_json::json!({ "type": "string" }),
+        }],
         parameter_schema: serde_json::json!({
             "type": "object",
             "properties": {

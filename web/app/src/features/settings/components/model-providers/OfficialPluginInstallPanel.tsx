@@ -105,6 +105,7 @@ function pickPreferredOfficialEntry(
 const OFFICIAL_PLUGIN_RELEASES_URL =
   'https://github.com/taichuy/1flowbase-official-plugins/releases';
 const DEFAULT_PROVIDER_ICON_SRC = '/icon.svg';
+const INSTALL_CONFIRM_MODAL_WIDTH = 640;
 
 function getOfficialPluginIconSrc(entry: SettingsOfficialPluginCatalogEntry) {
   return entry.icon?.trim() || DEFAULT_PROVIDER_ICON_SRC;
@@ -477,6 +478,7 @@ export function OfficialPluginInstallPanel({
                             : i18nText('settings', 'auto.install_plugin'),
                           icon: null,
                           centered: true,
+                          width: INSTALL_CONFIRM_MODAL_WIDTH,
                           okText: buttonLabel,
                           cancelText: i18nText('settings', 'auto.cancel'),
                           okButtonProps: {
