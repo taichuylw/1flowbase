@@ -87,7 +87,9 @@ pub struct RuntimeListResponse {
 }
 
 fn round_cache_hit_rate(value: f64) -> Option<f64> {
-    value.is_finite().then(|| (value * 100.0).round() / 100.0)
+    value
+        .is_finite()
+        .then(|| (value * 10_000.0).round() / 10_000.0)
 }
 
 fn application_log_cache_hit_rate_for_response(record: &Value) -> Option<f64> {
@@ -815,7 +817,7 @@ mod tests {
             }),
         );
 
-        assert_eq!(record["input_cache_hit_rate"], json!(0.98));
+        assert_eq!(record["input_cache_hit_rate"], json!(0.9832));
     }
 
     #[test]

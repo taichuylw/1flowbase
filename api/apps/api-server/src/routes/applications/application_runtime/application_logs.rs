@@ -87,7 +87,7 @@ pub fn input_cache_hit_rate_for_response(
         return None;
     }
 
-    Some(((input_cache_hit_tokens as f64 / total_tokens as f64) * 100.0).round() / 100.0)
+    Some(((input_cache_hit_tokens as f64 / total_tokens as f64) * 10_000.0).round() / 10_000.0)
 }
 
 #[cfg(test)]
@@ -98,7 +98,7 @@ mod tests {
     fn input_cache_hit_rate_for_response_uses_total_tokens() {
         assert_eq!(
             input_cache_hit_rate_for_response(Some(49_901), Some(49_063)),
-            Some(0.98)
+            Some(0.9832)
         );
     }
 
