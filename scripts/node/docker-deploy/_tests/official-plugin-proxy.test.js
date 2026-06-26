@@ -290,9 +290,20 @@ exit 0
   const updateResult = runInteractiveShellDeploy({
     tempRoot,
     tempBin,
-    input: ['y', 'new-password', '', 'new-root-password', 'new-provider-secret', '4100', 'n', 'n', 'n', ''].join(
-      '\n',
-    ),
+    input: [
+      'y',
+      '',
+      'new-password',
+      '',
+      'new-root-password',
+      'new-provider-secret',
+      '4100',
+      'n',
+      'n',
+      'n',
+      '',
+      '',
+    ].join('\n'),
   });
   assert.equal(updateResult.status, 0, `${updateResult.stdout}\n${updateResult.stderr}`);
   assert.match(
@@ -371,6 +382,109 @@ exit 0
   assert.match(calls, /compose up -d db/u);
   assert.match(calls, /ALTER USER postgres WITH PASSWORD 'new''password'/u);
   assert.match(fs.readFileSync(path.join(dockerDir, '.env'), 'utf8'), /^POSTGRES_PASSWORD=new'password$/mu);
+});
+
+test('docker deploy shell script can configure and start with external postgres', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowbase-docker-deploy-'));
+  const tempBin = path.join(tempRoot, 'bin');
+  const dockerDir = path.join(tempRoot, 'docker');
+  const callsFile = path.join(tempRoot, 'docker-calls.log');
+  fs.mkdirSync(tempBin);
+  fs.mkdirSync(dockerDir);
+  fs.writeFileSync(
+    path.join(dockerDir, '.env.example'),
+    [
+      'FLOWBASE_WEB_VERSION=latest',
+      'FLOWBASE_API_SERVER_VERSION=latest',
+      'FLOWBASE_PLUGIN_RUNNER_VERSION=latest',
+      'DATABASE_MODE=internal',
+      'POSTGRES_DB=1flowbase',
+      'POSTGRES_USER=postgres',
+      'POSTGRES_PASSWORD=change-me-db-password',
+      'API_PROVIDER_SECRET_MASTER_KEY=example-secret',
+      'BOOTSTRAP_ROOT_PASSWORD=example-root-password',
+      'API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=',
+      '',
+    ].join('\n'),
+  );
+  makeExecutable(
+    path.join(tempBin, 'docker'),
+    `#!/usr/bin/env sh
+printf '%s\\n' "$*" >> ${shellQuote(callsFile)}
+if [ "$1 $2" = "compose version" ]; then exit 0; fi
+if [ "$1" = "info" ]; then
+  if [ "$2" = "--format" ]; then
+    printf '%s\\n' 'linux/amd64'
+  fi
+  exit 0
+fi
+if [ "$1 $2" = "manifest inspect" ]; then
+  cat <<'EOF'
+{
+  "schemaVersion": 2,
+  "manifests": [
+    { "platform": { "architecture": "amd64", "os": "linux" } }
+  ]
+}
+EOF
+  exit 0
+fi
+if [ "$1 $2" = "compose up" ]; then exit 0; fi
+exit 0
+`,
+  );
+
+  const result = spawnSync(
+    'sh',
+    [
+      path.join(repoRoot, 'scripts', 'shell', 'docker-deploy.sh'),
+      '--non-interactive',
+      '--no-pull',
+      '--start',
+      '--database-mode',
+      'external',
+      '--external-postgres-host',
+      'db.internal.example',
+      '--external-postgres-port',
+      '6543',
+      '--external-postgres-db',
+      'flowbase_prod',
+      '--external-postgres-user',
+      'flowbase_user',
+      '--external-postgres-password',
+      'p@ss:word',
+      '--external-postgres-sslmode',
+      'require',
+      '--cookie-secure',
+      'false',
+    ],
+    {
+      cwd: tempRoot,
+      env: {
+        ...process.env,
+        PATH: `${tempBin}${path.delimiter}${process.env.PATH || ''}`,
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  const envFile = fs.readFileSync(path.join(dockerDir, '.env'), 'utf8');
+  const calls = fs.readFileSync(callsFile, 'utf8');
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(envFile, /^DATABASE_MODE=external$/mu);
+  assert.match(envFile, /^EXTERNAL_POSTGRES_HOST=db\.internal\.example$/mu);
+  assert.match(envFile, /^EXTERNAL_POSTGRES_PORT=6543$/mu);
+  assert.match(envFile, /^EXTERNAL_POSTGRES_DB=flowbase_prod$/mu);
+  assert.match(envFile, /^EXTERNAL_POSTGRES_USER=flowbase_user$/mu);
+  assert.match(envFile, /^EXTERNAL_POSTGRES_PASSWORD=p@ss:word$/mu);
+  assert.match(envFile, /^EXTERNAL_POSTGRES_SSLMODE=require$/mu);
+  assert.match(envFile, /^API_COOKIE_SECURE=false$/mu);
+  assert.match(
+    envFile,
+    /^API_DATABASE_URL=postgres:\/\/flowbase_user:p%40ss%3Aword@db\.internal\.example:6543\/flowbase_prod\?sslmode=require$/mu,
+  );
+  assert.match(calls, /compose -f docker-compose\.external-db\.yaml up -d/u);
+  assert.doesNotMatch(calls, /compose up -d db/u);
 });
 
 test('docker deploy shell script asks before updating local latest images', () => {
@@ -465,6 +579,57 @@ test('docker compose and env example expose an empty official plugin GitHub prox
   assert.match(envExample, /^API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL=$/mu);
   assert.match(compose, /^\s+API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED: \$\{API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED:-true\}$/mu);
   assert.match(envExample, /^API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true$/mu);
+});
+
+test('docker deploy assets expose external postgres configuration consistently', () => {
+  const compose = readRepoFile('docker', 'docker-compose.yaml');
+  const externalCompose = readRepoFile('docker', 'docker-compose.external-db.yaml');
+  const envExample = readRepoFile('docker', '.env.example');
+  const readme = readRepoFile('docker', 'README.md');
+  const shellScript = readRepoFile('scripts', 'shell', 'docker-deploy.sh');
+  const powershellScript = readRepoFile('scripts', 'powershell', 'docker-deploy.ps1');
+
+  assert.match(
+    compose,
+    /^\s+API_DATABASE_URL: \$\{API_DATABASE_URL:-postgres:\/\/\$\{POSTGRES_USER:-postgres\}:\$\{POSTGRES_PASSWORD:\?POSTGRES_PASSWORD is required for production compose\}@db:5432\/\$\{POSTGRES_DB:-1flowbase\}\}$/mu,
+  );
+  assert.match(
+    externalCompose,
+    /^\s+API_DATABASE_URL: \$\{API_DATABASE_URL:\?API_DATABASE_URL is required for external database compose\}$/mu,
+  );
+  assert.doesNotMatch(externalCompose, /^\s+db:/mu);
+
+  for (const key of [
+    'DATABASE_MODE=internal',
+    'API_DATABASE_URL=',
+    'EXTERNAL_POSTGRES_HOST=',
+    'EXTERNAL_POSTGRES_PORT=5432',
+    'EXTERNAL_POSTGRES_DB=1flowbase',
+    'EXTERNAL_POSTGRES_USER=postgres',
+    'EXTERNAL_POSTGRES_PASSWORD=',
+    'EXTERNAL_POSTGRES_SSLMODE=prefer',
+    'API_COOKIE_SECURE=true',
+  ]) {
+    assert.match(envExample, new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`, 'mu'));
+  }
+
+  for (const script of [shellScript, powershellScript]) {
+    assert.match(script, /Database mode/u);
+    assert.match(script, /EXTERNAL_POSTGRES_HOST/u);
+    assert.match(script, /EXTERNAL_POSTGRES_SSLMODE/u);
+    assert.match(script, /API_DATABASE_URL/u);
+    assert.match(script, /API_COOKIE_SECURE/u);
+    assert.match(script, /docker-compose\.external-db\.yaml/u);
+  }
+  assert.match(shellScript, /cookie-secure/u);
+  assert.match(powershellScript, /CookieSecure/u);
+
+  assert.match(readme, /外部 PostgreSQL/u);
+  assert.match(readme, /DATABASE_MODE=external/u);
+  assert.match(readme, /docker-compose\.external-db\.yaml/u);
+  assert.match(readme, /API_COOKIE_SECURE=false/u);
+  assert.match(readme, /API_ALLOWED_ORIGINS=http:\/\/localhost:3200/u);
+  assert.match(readme, /127\.0\.0\.1/u);
 });
 
 test('docker deploy scripts document the CN accelerator prompt and default proxy URL', () => {

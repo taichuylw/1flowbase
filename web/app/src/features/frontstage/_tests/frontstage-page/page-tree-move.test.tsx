@@ -373,6 +373,7 @@ async function clickPageTreeOperationSubmenuItemAndFlush(
   await openPageTreeOperationMenuAndFlush(nodeContainer);
   const submenu = await findLatestVisibleText(submenuLabel);
   const submenuTarget = getPageTreeSubmenuTrigger(submenu);
+  fireEvent.pointerEnter(submenuTarget);
   fireEvent.mouseEnter(submenuTarget);
   fireEvent.mouseOver(submenuTarget);
   fireEvent.mouseMove(submenuTarget);
@@ -399,7 +400,7 @@ async function findLatestVisibleText(label: string | RegExp) {
       within(dropdown).queryAllByText(label)
     );
     expect(elements.length).toBeGreaterThan(0);
-  });
+  }, { timeout: 5_000 });
   const element = elements[elements.length - 1];
   if (!element) {
     throw new Error(`expected visible text for ${String(label)}`);

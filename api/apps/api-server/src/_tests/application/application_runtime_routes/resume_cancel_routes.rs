@@ -61,7 +61,31 @@ async fn application_runtime_routes_start_debug_run_and_resume_waiting_human() {
             .any(|entry| { entry.key.contains(":run-detail:") && entry.key.contains(run_id) }),
         "waiting run detail must not be cached: {cache_entries:?}"
     );
-    let checkpoint_id = detail["checkpoints"][0]["id"].as_str().unwrap();
+    let mut checkpoint_id = None;
+    for trace_node in detail["nodes"].as_array().unwrap() {
+        let Some(trace_node_id) = trace_node["trace_node_id"].as_str() else {
+            continue;
+        };
+        let Some(checkpoint_detail_payload) = load_trace_node_detail_payload_for_kind(
+            &app,
+            &cookie,
+            &application_id,
+            run_id,
+            trace_node_id,
+            "checkpoints",
+        )
+        .await
+        else {
+            continue;
+        };
+        if let Some(value) =
+            checkpoint_detail_payload["data"]["payload"]["checkpoints"][0]["id"].as_str()
+        {
+            checkpoint_id = Some(value.to_string());
+            break;
+        }
+    }
+    let checkpoint_id = checkpoint_id.expect("waiting checkpoint should be available from content");
 
     let resume = app
         .clone()

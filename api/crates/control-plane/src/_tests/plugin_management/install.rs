@@ -4,9 +4,13 @@ use crate::{
     plugin_management::{
         AssignPluginCommand, EnablePluginCommand, InstallOfficialPluginCommand,
         InstallPluginCommand, InstallUploadedPluginCommand, OfficialPluginCatalogFilter,
-        PluginCatalogFilter, PluginManagementService,
+        PluginCatalogFilter, PluginCompatibilityOverride, PluginManagementService,
+        RefreshCurrentNodePluginArtifactCommand,
     },
-    ports::{FrontendBlockCatalogRepository, JsDependencyRepository, NodeContributionRepository},
+    ports::{
+        FrontendBlockCatalogRepository, JsDependencyRepository, NodeContributionRepository,
+        PluginRepository, UpdatePluginArtifactSnapshotInput,
+    },
 };
 use domain::{NodeContributionDependencyStatus, PluginTaskStatus};
 use sha2::{Digest, Sha256};
@@ -16,8 +20,8 @@ use super::support::{
     actor_with_permissions, build_openai_compatible_package_bytes,
     build_signed_openai_upload_package, create_capability_plugin_fixture,
     create_frontend_block_fixture, create_js_dependency_pack_fixture, create_provider_fixture,
-    create_provider_fixture_with_node_contribution, requested_locales, MemoryOfficialPluginSource,
-    MemoryPluginManagementRepository, MemoryProviderRuntime,
+    create_provider_fixture_with_node_contribution, requested_locales, seed_test_installation,
+    MemoryOfficialPluginSource, MemoryPluginManagementRepository, MemoryProviderRuntime,
 };
 
 #[tokio::test]
@@ -61,6 +65,174 @@ async fn plugin_management_service_blocks_manage_actions_without_configure_permi
 }
 
 #[tokio::test]
+async fn plugin_management_service_refreshes_empty_current_node_without_global_path_mutation() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let root_a = std::env::temp_dir().join(format!("plugin-node-a-{}", Uuid::now_v7()));
+    let root_b = std::env::temp_dir().join(format!("plugin-node-b-{}", Uuid::now_v7()));
+    let service_a = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &root_a,
+    )
+    .with_node_id("node-a");
+    let service_b = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &root_b,
+    )
+    .with_node_id("node-b");
+
+    let install = service_a
+        .install_uploaded_plugin(InstallUploadedPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            file_name: "openai_compatible-0.1.0.1flowbasepkg".into(),
+            package_bytes: build_openai_compatible_package_bytes("0.1.0", false),
+        })
+        .await
+        .unwrap();
+    let global_installed_path = install.installation.installed_path.clone();
+
+    let node_b_artifact = service_b
+        .refresh_current_node_artifact(RefreshCurrentNodePluginArtifactCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: install.installation.id,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(node_b_artifact.node_id, "node-b");
+    assert_eq!(node_b_artifact.artifact_status.as_str(), "missing");
+    assert!(node_b_artifact.local_version.is_none());
+    assert!(node_b_artifact.installed_path.is_none());
+    let global_after_refresh = repository
+        .get_installation(install.installation.id)
+        .await
+        .unwrap()
+        .expect("installation should remain present");
+    assert_eq!(global_after_refresh.installed_path, global_installed_path);
+    assert_eq!(global_after_refresh.artifact_status.as_str(), "ready");
+}
+
+#[tokio::test]
+async fn plugin_management_service_marks_current_node_artifact_outdated_for_stale_local_version() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let root_a = std::env::temp_dir().join(format!("plugin-node-new-{}", Uuid::now_v7()));
+    let root_b = std::env::temp_dir().join(format!("plugin-node-old-{}", Uuid::now_v7()));
+    let service_a = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &root_a,
+    )
+    .with_node_id("node-new");
+    let service_b = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &root_b,
+    )
+    .with_node_id("node-old");
+
+    service_b
+        .install_uploaded_plugin(InstallUploadedPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            file_name: "openai_compatible-0.1.0.1flowbasepkg".into(),
+            package_bytes: build_openai_compatible_package_bytes("0.1.0", false),
+        })
+        .await
+        .unwrap();
+    let expected = service_a
+        .install_uploaded_plugin(InstallUploadedPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            file_name: "openai_compatible-0.2.0.1flowbasepkg".into(),
+            package_bytes: build_openai_compatible_package_bytes("0.2.0", false),
+        })
+        .await
+        .unwrap()
+        .installation;
+
+    let stale_artifact = service_b
+        .refresh_current_node_artifact(RefreshCurrentNodePluginArtifactCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id: expected.id,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(stale_artifact.node_id, "node-old");
+    assert_eq!(stale_artifact.local_version.as_deref(), Some("0.1.0"));
+    assert_eq!(stale_artifact.artifact_status.as_str(), "outdated");
+    assert_ne!(
+        stale_artifact.installed_path.as_deref(),
+        Some(expected.installed_path.as_str())
+    );
+}
+
+#[tokio::test]
+async fn plugin_management_service_marks_current_node_artifact_mismatched_when_expected_checksum_is_missing_from_marker(
+) {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-checksum-marker-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        domain::PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    let installation = repository
+        .get_installation(installation_id)
+        .await
+        .unwrap()
+        .expect("installation should exist");
+    repository
+        .update_artifact_snapshot(&UpdatePluginArtifactSnapshotInput {
+            installation_id,
+            artifact_status: installation.artifact_status,
+            availability_status: installation.availability_status,
+            package_path: installation.package_path,
+            installed_path: installation.installed_path,
+            checksum: Some(format!("sha256:{}", "b".repeat(64))),
+            manifest_fingerprint: installation.manifest_fingerprint,
+        })
+        .await
+        .unwrap();
+
+    let artifact = service
+        .refresh_current_node_artifact(RefreshCurrentNodePluginArtifactCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(artifact.artifact_status.as_str(), "mismatched");
+    assert_eq!(artifact.last_error.as_deref(), Some("checksum_missing"));
+}
+
+#[tokio::test]
 async fn plugin_management_service_lists_official_catalog_and_installs_latest_release_asset() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
@@ -94,6 +266,7 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
         .install_official_plugin(InstallOfficialPluginCommand {
             actor_user_id: repository.actor.user_id,
             plugin_id: "1flowbase.openai_compatible".to_string(),
+            compatibility_override: None,
         })
         .await
         .unwrap();
@@ -110,6 +283,108 @@ async fn plugin_management_service_lists_official_catalog_and_installs_latest_re
     );
     assert_eq!(install.installation.trust_level, "unverified");
     assert_eq!(install.task.status, PluginTaskStatus::Succeeded);
+}
+
+#[tokio::test]
+async fn plugin_management_service_marks_official_catalog_entry_below_minimum_host_version() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::with_minimum_host_version(
+            "999.0.0",
+        )),
+        std::env::temp_dir().join(format!("plugin-installed-{}", Uuid::now_v7())),
+    );
+
+    let catalog = service
+        .list_official_catalog(
+            repository.actor.user_id,
+            OfficialPluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+
+    let entry = &catalog.entries[0];
+    assert_eq!(entry.minimum_host_version, "999.0.0");
+    assert_eq!(entry.current_host_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(entry.compatibility_status, "below_minimum_host_version");
+    assert_eq!(
+        entry.compatibility_warning_reason.as_deref(),
+        Some("below_minimum_host_version")
+    );
+}
+
+#[tokio::test]
+async fn plugin_management_service_requires_explicit_override_for_below_minimum_official_install() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::with_minimum_host_version(
+            "999.0.0",
+        )),
+        std::env::temp_dir().join(format!("plugin-installed-{}", Uuid::now_v7())),
+    );
+
+    let blocked = service
+        .install_official_plugin(InstallOfficialPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            plugin_id: "1flowbase.openai_compatible".to_string(),
+            compatibility_override: None,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        blocked.downcast_ref::<crate::errors::ControlPlaneError>(),
+        Some(crate::errors::ControlPlaneError::Conflict(
+            "plugin_host_version_below_minimum"
+        ))
+    ));
+
+    let install = service
+        .install_official_plugin(InstallOfficialPluginCommand {
+            actor_user_id: repository.actor.user_id,
+            plugin_id: "1flowbase.openai_compatible".to_string(),
+            compatibility_override: Some(PluginCompatibilityOverride {
+                reason: "below_minimum_host_version".to_string(),
+                acknowledged_current_host_version: env!("CARGO_PKG_VERSION").to_string(),
+                acknowledged_minimum_host_version: "999.0.0".to_string(),
+            }),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        install.installation.metadata_json["compatibility_override"]["reason"],
+        "below_minimum_host_version"
+    );
+    assert_eq!(
+        install.installation.metadata_json["compatibility_override"]
+            ["acknowledged_minimum_host_version"],
+        "999.0.0"
+    );
+    let install_task = repository
+        .list_tasks()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|task| task.task_kind == domain::PluginTaskKind::Install)
+        .expect("install task should be recorded");
+    assert_eq!(
+        install_task.detail_json["compatibility_override"]["reason"],
+        "below_minimum_host_version"
+    );
 }
 
 #[tokio::test]
@@ -130,6 +405,7 @@ async fn plugin_management_service_rejects_unsigned_signature_required_official_
         .install_official_plugin(InstallOfficialPluginCommand {
             actor_user_id: repository.actor.user_id,
             plugin_id: "1flowbase.openai_compatible".into(),
+            compatibility_override: None,
         })
         .await
         .expect_err("unsigned official package must fail");

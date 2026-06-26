@@ -51,11 +51,27 @@ Forbidden:
 
 - 只读取当前请求、最近相关的 AGENTS / README / docs，以及直接受影响的代码路径。
 - 只追一层相邻影响面；进入二阶路线图工作前停止。
-- 阻塞问题最多 3 个，并一次性集中提出。
+- 最多进行 3 轮批量追问；每轮集中提出当前阶段所有阻塞问题。
 - 普通需求必须至少给出简短对齐：现状、2-3 个轻量方向、风险收益、明确建议，并等待用户确认。
 - 需要落地开发计划时，默认产出 L0 -> L1 -> L2 -> L3 四层；纯查询、机械精确改动或用户明确跳过规划除外。
 - 任何存在多方向选择，或涉及数据 / contract / 架构风险的决策，都必须给出 3 个方案：conservative、balanced、aggressive。
 - 推荐必须绑定证据；无证据支撑的判断标为假设。
+
+## Grilling Pass
+
+issue gate 前先写一段可给用户核对的 `需求复述`。如果无法基于现有证据说清以下任一项，必须进入最多 3 轮追问收敛可执行意图；目标是达到足够安全的 issue 草案，不追求完整意图。
+
+- `最终产品效果`: 用户最终会看到、操作或得到什么；前端写页面 / 入口 / 主操作 / 成功后的可见变化，后端写调用方 / 接口结果 / 领域状态变化。
+- `触发与结果`: 谁在什么场景触发，成功、失败、空状态、无权限或过期状态分别应该怎样表现。
+- `范围边界`: 这次做什么、不做什么，哪些历史问题、兼容逻辑或路线图事项不带入。
+- `验收证据`: 用户或维护者用什么截图、接口响应、测试、日志或 issue 条件确认需求已满足。
+
+- 每轮尽可能一次性抛出当前阶段所有阻塞问题，避免逐条挤牙膏式追问。
+- 每个问题必须给出可选项、推荐选项和选择后的影响。
+- 每轮问题前先给出当前 `需求复述`，让用户可以直接纠正整体理解。
+- 能通过代码、文档、现有 issue 或日志确认的事实，不问用户。
+- 不追问偏好型细节，除非它会改变架构、contract、数据、权限、用户内容或验收证据。
+- 三轮后仍未明确的内容，写入 issue 的 `假设` / `风险` / `待确认项`，不继续无限追问。
 
 ## Design Alignment Gate
 
@@ -120,7 +136,7 @@ Forbidden:
 - 接口边界：method / path / plane、DTO 字段原名、status、response / error shape。
 - 认证与状态：session、CSRF、ACL、`workspace/system`、过期 / 禁用 / 缺失等异常状态。
 - 结果正确性：需要改变或读取的领域状态、返回值是否正确、是否过期、是否可见。
-- 验收证据：哪些行为用 TDD 锁住，哪些接口 / mock / fixture / 质量门禁在 QA 阶段验证；需要运行态接口取证时可使用 `node scripts/node/tooling.js api-debug ...`。
+- 验收证据：先定义必须证明的行为、状态和接口 contract；再说明哪些用 TDD 锁住，哪些用接口 / mock / fixture / 质量门禁在 QA 阶段验证。重验证、workspace 级 build/test/clippy、服务重启和 `api-debug` 的收益、成本、是否本地执行必须在这里前置说明；`api-debug` 只在需要真实运行态接口取证时作为候选工具，不写成默认验收步骤。
 
 这里不写测试代码步骤、不指定实现细节；测试写法交给 `test-driven-development`，项目体检和质量门禁交给 `qa-evaluation`。
 
@@ -137,16 +153,17 @@ Forbidden:
 1. 整理事实：分离已确认事实、假设、未知点、不变量、失败模式和需要用户决策的问题。
 2. 做计算表达假设：使用本文件 `Computational Framing` 判断数学 / 算法 / 数据结构 / 物理公式是否应该成为方案生成维度；命中则写入方向和风险收益，不命中则不要展开。
 3. 检查设计对齐：使用本文件 `Design Alignment Gate` 判断是否需要补齐业务目标、非目标、关键约束、复杂度分配、可选方向、核心取舍和推荐倾向；命中后端 API / 状态入口时补齐 `Backend API Acceptance Framing`。
-4. 先做简短对齐：普通需求按“现状、方向、风险收益、建议”输出 2-3 个轻量做法，明确推荐其中一个，并等待用户确认；命中设计对齐时，把复杂度归属和长期维护影响写入方向说明。
-5. 检查阶段顺序：使用本文件 `Phase Order Gate` 判断当前只允许输出什么；到阶段边界就停。
-6. 检查设计规则：方案可能引入抽象、接口、flag、helper、重复校验或 pass-through 时，读取 `references/design-rules.md`；违反时先输出更小 redesign。
-7. 搭四层计划：需要落地开发时，使用 `references/issue-lifecycle.md` 默认建立 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task；每一层可以有多个 issue，下一层只关联直接 parent。
-8. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
-9. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
-10. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
-11. 管理 issue：需要落地开发时，按 L0/L1/L2/L3 分级、打标签、明确阶段、直接 parent 和关闭条件；用户未确认 issue 前停止。
-12. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
-13. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
+4. 执行追问收敛：issue gate 前先写可核对的 `需求复述`；若最终产品效果、触发结果、范围边界或验收证据说不清，使用 `Grilling Pass` 批量追问；每轮给选项、推荐和影响，三轮后把剩余未知写入 issue 假设。
+5. 先做简短对齐：普通需求按“现状、方向、风险收益、建议”输出 2-3 个轻量做法，明确推荐其中一个，并等待用户确认；命中设计对齐时，把复杂度归属和长期维护影响写入方向说明。
+6. 检查阶段顺序：使用本文件 `Phase Order Gate` 判断当前只允许输出什么；到阶段边界就停。
+7. 检查设计规则：方案可能引入抽象、接口、flag、helper、重复校验或 pass-through 时，读取 `references/design-rules.md`；违反时先输出更小 redesign。
+8. 搭四层计划：需要落地开发时，使用 `references/issue-lifecycle.md` 默认建立 L0 Umbrella -> L1 ADR -> L2 Epic -> L3 Task；每一层可以有多个 issue，下一层只关联直接 parent。
+9. 拆分概念：在命名 API、service、enum、目录或 migration 前，先识别被混用的概念。
+10. 建立矩阵：任务涉及 defaults、contract、schema、state、permissions、migration、history 或 user content 时，使用 `references/domain-matrix.md`。
+11. 输出方案：存在多个有效方向，或任务涉及数据 / contract / 架构风险时，必须使用 conservative / balanced / aggressive 三方案；用户批准前不要压缩成单一最佳答案。
+12. 管理 issue：需要落地开发时，按 L0/L1/L2/L3 分级、打标签、明确阶段、直接 parent 和关闭条件；用户未确认 issue 前停止。
+13. 反方评审：向用户请求批准前，先 red-team 推荐方案，使用 `references/options-and-red-team.md`。
+14. 停在决策产物：使用 `references/artifacts.md` 输出 brief、issue、ADR 或 implementation handoff。
 
 ## User Decision Format
 
@@ -172,7 +189,8 @@ Forbidden:
 - 设计对齐已经形成可审阅的目标、非目标、关键约束、复杂度分配、方向和推荐。
 - 方案触发 `references/design-rules.md`，需要先给更小 redesign。
 - 三个方案和一个清晰推荐已经给出。
-- 阻塞决策已经收敛到最多 3 个问题。
+- 当前轮阻塞问题已经批量提出，正在等待用户选择。
+- 三轮追问后仍无法明确的内容已经写入假设、风险或待确认项。
 - 证据不足，无法安全区分方案。
 - 用户否定或修改了核心假设。
 

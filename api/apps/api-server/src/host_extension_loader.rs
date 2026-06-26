@@ -5,9 +5,13 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use control_plane::{
+    errors::ControlPlaneError,
     host_extension::{is_host_extension_installation, is_host_extension_manifest},
-    plugin_lifecycle::{derive_availability_status, reconcile_installation_snapshot},
-    ports::{PluginRepository, UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput},
+    plugin_lifecycle::derive_availability_status,
+    plugin_management::{
+        mark_current_node_plugin_runtime_status, ready_current_node_plugin_installation,
+    },
+    ports::{PluginRepository, UpdatePluginDesiredStateInput},
 };
 use domain::{PluginArtifactStatus, PluginDesiredState, PluginRuntimeStatus};
 use plugin_framework::{
@@ -87,7 +91,11 @@ async fn activate_pending_restart_installation(
     state: &ApiState,
     installation_id: uuid::Uuid,
 ) -> Result<ActivationOutcome> {
-    let installation = reconcile_installation_snapshot(&state.store, installation_id).await?;
+    let installation = state
+        .store
+        .get_installation(installation_id)
+        .await?
+        .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
     if !is_host_extension_installation(&installation) {
         return Ok(ActivationOutcome::Skipped);
     }
@@ -95,54 +103,71 @@ async fn activate_pending_restart_installation(
         return Ok(ActivationOutcome::Skipped);
     }
 
-    let desired_state = PluginDesiredState::ActiveRequested;
-    let installation = state
-        .store
-        .update_desired_state(&UpdatePluginDesiredStateInput {
-            installation_id,
-            desired_state,
-            availability_status: derive_availability_status(
-                desired_state,
-                installation.artifact_status,
-                installation.runtime_status,
-            ),
-        })
-        .await?;
+    let local_installation = match ready_current_node_plugin_installation(
+        &state.store,
+        &state.api_node_id,
+        Path::new(&state.provider_install_root),
+        installation_id,
+    )
+    .await
+    {
+        Ok(local_installation) => local_installation,
+        Err(error) if is_current_node_artifact_conflict(&error) => {
+            return Ok(ActivationOutcome::Skipped);
+        }
+        Err(error) => return Err(error),
+    };
 
-    match validate_host_extension_installation(&installation) {
+    match validate_host_extension_installation(&local_installation) {
         Ok(()) => {
+            let desired_state = PluginDesiredState::ActiveRequested;
             state
                 .store
-                .update_runtime_snapshot(&UpdatePluginRuntimeSnapshotInput {
+                .update_desired_state(&UpdatePluginDesiredStateInput {
                     installation_id,
-                    runtime_status: PluginRuntimeStatus::Active,
                     availability_status: derive_availability_status(
                         desired_state,
-                        installation.artifact_status,
+                        PluginArtifactStatus::Ready,
                         PluginRuntimeStatus::Active,
                     ),
-                    last_load_error: None,
+                    desired_state,
                 })
                 .await?;
+            mark_current_node_plugin_runtime_status(
+                &state.store,
+                &state.api_node_id,
+                &local_installation,
+                PluginRuntimeStatus::Active,
+                None,
+            )
+            .await?;
             Ok(ActivationOutcome::Loaded)
         }
         Err(error) => {
-            state
-                .store
-                .update_runtime_snapshot(&UpdatePluginRuntimeSnapshotInput {
-                    installation_id,
-                    runtime_status: PluginRuntimeStatus::LoadFailed,
-                    availability_status: derive_availability_status(
-                        desired_state,
-                        installation.artifact_status,
-                        PluginRuntimeStatus::LoadFailed,
-                    ),
-                    last_load_error: Some(format!("{error:#}")),
-                })
-                .await?;
+            mark_current_node_plugin_runtime_status(
+                &state.store,
+                &state.api_node_id,
+                &local_installation,
+                PluginRuntimeStatus::LoadFailed,
+                Some(format!("{error:#}")),
+            )
+            .await?;
             Ok(ActivationOutcome::Failed)
         }
     }
+}
+
+fn is_current_node_artifact_conflict(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict(
+            "plugin_artifact_missing"
+                | "plugin_artifact_outdated"
+                | "plugin_artifact_mismatched"
+                | "plugin_artifact_corrupted"
+                | "plugin_runtime_load_failed"
+        ))
+    )
 }
 
 fn validate_host_extension_installation(

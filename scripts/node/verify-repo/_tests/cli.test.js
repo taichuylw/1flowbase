@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const { buildCommands, main } = require('../../verify-repo.js');
 
-test('buildCommands composes gate router, hygiene, i18n hygiene, security risk, script tests, contract tests, frontend gates and backend verify gate', () => {
+test('buildCommands composes gate router, hygiene, schema hygiene, growth report, raw JSONB report, log query contract report, capacity report, i18n hygiene, security risk, Vite lazy deps, script tests, contract tests, frontend gates and backend verify gate', () => {
   const repoRoot = '/repo-root';
 
   assert.deepEqual(buildCommands({ repoRoot }), [
@@ -29,6 +29,36 @@ test('buildCommands composes gate router, hygiene, i18n hygiene, security risk, 
       cwd: repoRoot,
     },
     {
+      label: 'repo-schema-hygiene',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'schema-hygiene'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-growth-table-report',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'growth-table-report'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-raw-jsonb-report',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'raw-jsonb-report'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-log-query-contract-report',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'log-query-contract-report'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-capacity-report',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'capacity-report'],
+      cwd: repoRoot,
+    },
+    {
       label: 'repo-security-risk',
       command: process.execPath,
       args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'security-risk'],
@@ -44,6 +74,12 @@ test('buildCommands composes gate router, hygiene, i18n hygiene, security risk, 
       label: 'repo-contract-tests',
       command: process.execPath,
       args: [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'contracts'],
+      cwd: repoRoot,
+    },
+    {
+      label: 'repo-vite-lazy-deps-gate',
+      command: process.execPath,
+      args: [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'vite-lazy-deps-gate'],
       cwd: repoRoot,
     },
     {
@@ -76,6 +112,11 @@ test('buildCommands can select repository gate slices for parallel CI jobs', () 
       'repo-gate-router',
       'repo-hygiene',
       'repo-i18n-hygiene',
+      'repo-schema-hygiene',
+      'repo-growth-table-report',
+      'repo-raw-jsonb-report',
+      'repo-log-query-contract-report',
+      'repo-capacity-report',
       'repo-security-risk',
       'repo-script-tests',
       'repo-contract-tests',
@@ -83,11 +124,11 @@ test('buildCommands can select repository gate slices for parallel CI jobs', () 
   );
   assert.deepEqual(
     buildCommands({ repoRoot, target: 'frontend' }).map((command) => command.label),
-    ['repo-frontend-full', 'repo-frontend-page-regression']
+    ['repo-vite-lazy-deps-gate', 'repo-frontend-full', 'repo-frontend-page-regression']
   );
   assert.deepEqual(
     buildCommands({ repoRoot, target: 'frontend-pr' }).map((command) => command.label),
-    ['repo-frontend-pr']
+    ['repo-vite-lazy-deps-gate', 'repo-frontend-pr']
   );
   assert.deepEqual(
     buildCommands({ repoRoot, target: 'backend' }).map((command) => command.label),
@@ -116,16 +157,22 @@ test('main runs repository full gate in order and captures advisory output', asy
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 9);
+  assert.equal(calls.length, 15);
   assert.deepEqual(
     calls.map((call) => call.args),
     [
       [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'gate-router'],
       [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'repo-hygiene'],
       [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'i18n-hygiene'],
+      [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'schema-hygiene'],
+      [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'growth-table-report'],
+      [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'raw-jsonb-report'],
+      [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'log-query-contract-report'],
+      [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'capacity-report'],
       [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'security-risk'],
       [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'scripts'],
       [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'contracts'],
+      [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'vite-lazy-deps-gate'],
       [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'full'],
       [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'page-regression'],
       [path.join(repoRoot, 'scripts', 'node', 'verify.js'), 'backend'],
@@ -138,9 +185,15 @@ test('main runs repository full gate in order and captures advisory output', asy
   assert.match(warningLog, /warning: .*tooling\.js\/gate-router advisory/u);
   assert.match(warningLog, /warning: .*tooling\.js\/repo-hygiene advisory/u);
   assert.match(warningLog, /warning: .*tooling\.js\/i18n-hygiene advisory/u);
+  assert.match(warningLog, /warning: .*tooling\.js\/schema-hygiene advisory/u);
+  assert.match(warningLog, /warning: .*tooling\.js\/growth-table-report advisory/u);
+  assert.match(warningLog, /warning: .*tooling\.js\/raw-jsonb-report advisory/u);
+  assert.match(warningLog, /warning: .*tooling\.js\/log-query-contract-report advisory/u);
+  assert.match(warningLog, /warning: .*tooling\.js\/capacity-report advisory/u);
   assert.match(warningLog, /warning: .*tooling\.js\/security-risk advisory/u);
   assert.match(warningLog, /warning: .*test\.js\/scripts advisory/u);
   assert.match(warningLog, /warning: .*test\.js\/contracts advisory/u);
+  assert.match(warningLog, /warning: .*tooling\.js\/vite-lazy-deps-gate advisory/u);
   assert.match(warningLog, /warning: .*test\.js\/frontend advisory/u);
   assert.match(warningLog, /warning: .*verify\.js\/backend advisory/u);
 });
@@ -161,9 +214,10 @@ test('main runs only the requested repository gate slice', async () => {
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 2);
-  assert.deepEqual(calls[0].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'full']);
-  assert.deepEqual(calls[1].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'page-regression']);
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls[0].args, [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'vite-lazy-deps-gate']);
+  assert.deepEqual(calls[1].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'full']);
+  assert.deepEqual(calls[2].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'page-regression']);
 });
 
 test('main runs the requested frontend PR repository gate slice', async () => {
@@ -182,8 +236,9 @@ test('main runs the requested frontend PR repository gate slice', async () => {
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'pr']);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].args, [path.join(repoRoot, 'scripts', 'node', 'tooling.js'), 'vite-lazy-deps-gate']);
+  assert.deepEqual(calls[1].args, [path.join(repoRoot, 'scripts', 'node', 'test.js'), 'frontend', 'pr']);
 });
 
 test('main passes the inherited lock token through every repository gate command', async () => {
@@ -202,16 +257,11 @@ test('main passes the inherited lock token through every repository gate command
   });
 
   assert.equal(status, 0);
-  assert.equal(calls.length, 9);
-  assert.equal(calls[0].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[1].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[2].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[3].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[4].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[5].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[6].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[7].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
-  assert.equal(calls[8].options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN, 'chain-token');
+  assert.equal(calls.length, 15);
+  assert.equal(
+    calls.every((call) => call.options.env.ONEFLOWBASE_VERIFY_LOCK_TOKEN === 'chain-token'),
+    true
+  );
 });
 
 test('main routes the repository gate through the heavy managed runner', async () => {

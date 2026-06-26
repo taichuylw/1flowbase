@@ -40,6 +40,58 @@ async fn provider_error_marks_flow_failed_and_redacts_summary() {
 }
 
 #[tokio::test]
+async fn provider_upstream_error_keeps_raw_details_in_error_payload() {
+    let outcome = start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &ProviderUpstreamErrorInvoker,
+    )
+    .await
+    .unwrap();
+
+    match outcome.stop_reason {
+        ExecutionStopReason::Failed(ref failure) => {
+            assert_eq!(failure.node_id, "node-llm");
+            assert_eq!(
+                failure.error_payload["error_code"],
+                json!("provider_upstream_error")
+            );
+            assert!(failure.error_payload["message"]
+                .as_str()
+                .expect("message should be a string")
+                .contains("OpenAI codex passthrough requires a non-empty instructions field"));
+            assert!(failure.error_payload["provider_summary"]
+                .as_str()
+                .expect("provider_summary should be a string")
+                .contains("[REDACTED]"));
+
+            let provider_details = &failure.error_payload["provider_details"];
+            assert_eq!(provider_details["status"], json!(400));
+            assert_eq!(
+                provider_details["content_type"],
+                json!("application/json; charset=utf-8")
+            );
+            assert_eq!(
+                provider_details["headers"]["x-request-id"],
+                json!("req_123")
+            );
+            assert_eq!(
+                provider_details["raw_body"],
+                json!(concat!(
+                    "{\"error\":{\"message\":\"OpenAI codex passthrough requires a non-empty instructions field\"}}\n",
+                    "data: {\"type\":\"response.failed\"}\n\n"
+                ))
+            );
+            assert_eq!(
+                outcome.node_traces[1].error_payload.as_ref().unwrap()["provider_details"],
+                failure.error_payload["provider_details"]
+            );
+        }
+        other => panic!("expected failed stop reason, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn provider_runtime_contract_error_is_renormalized_for_llm_output() {
     let outcome = start_flow_debug_run(
         &base_plan(),
@@ -176,6 +228,79 @@ async fn llm_runtime_sends_enabled_model_parameters_and_keeps_undeclared_structu
         .output_payload
         .get("structured_output")
         .is_none());
+}
+
+#[tokio::test]
+async fn llm_runtime_forwards_client_protocol_envelope_to_provider_invocation() {
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: Arc::new(Mutex::new(None)),
+        final_content: "ok".to_string(),
+    };
+    start_flow_debug_run(
+        &base_plan(),
+        &json!({
+            "__client_protocol_envelope": {
+                "source_protocol": "anthropic_messages",
+                "policy": "anthropic_messages_v1",
+                "headers": {
+                    "anthropic-version": "2023-06-01",
+                    "anthropic-beta": "prompt-caching",
+                    "x-claude-code-session-id": "session-123"
+                }
+            },
+            "node-start": { "query": "退款政策" }
+        }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured_input = invoker
+        .captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+    let envelope = captured_input
+        .client_protocol_envelope
+        .expect("client protocol envelope should be forwarded");
+
+    assert_eq!(envelope.source_protocol, "anthropic_messages");
+    assert_eq!(
+        envelope.headers.get("anthropic-beta").map(String::as_str),
+        Some("prompt-caching")
+    );
+    assert!(captured_input
+        .run_context
+        .get("resolved_inputs")
+        .and_then(|value| value.get("__client_protocol_envelope"))
+        .is_none());
+}
+
+#[tokio::test]
+async fn llm_runtime_leaves_plain_workflow_invocations_without_client_protocol_envelope() {
+    let invoker = StubProviderInvoker {
+        fail: false,
+        captured_input: Arc::new(Mutex::new(None)),
+        final_content: "ok".to_string(),
+    };
+    start_flow_debug_run(
+        &base_plan(),
+        &json!({ "node-start": { "query": "退款政策" } }),
+        &invoker,
+    )
+    .await
+    .unwrap();
+
+    let captured_input = invoker
+        .captured_input
+        .lock()
+        .expect("captured input mutex poisoned")
+        .clone()
+        .expect("provider input should be captured");
+
+    assert!(captured_input.client_protocol_envelope.is_none());
 }
 
 #[tokio::test]

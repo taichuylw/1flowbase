@@ -1,3 +1,4 @@
+mod artifact_instance;
 mod catalog;
 mod catalog_projection;
 mod family;
@@ -19,6 +20,7 @@ use plugin_framework::{
     compute_manifest_fingerprint, intake_package_bytes, parse_plugin_manifest,
     provider_package::ProviderPackage, PackageIntakePolicy, PackageIntakeResult, PluginManifestV1,
 };
+use semver::Version;
 use serde_json::json;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -31,10 +33,9 @@ use crate::{
         is_model_provider_installation, plugin_code_from_plugin_id,
     },
     i18n::{
-        merge_i18n_catalog, plugin_namespace, trim_json_bundles, trim_provider_bundles,
-        I18nCatalog, RequestedLocales,
+        merge_i18n_catalog, plugin_namespace, trim_json_bundles, I18nCatalog, RequestedLocales,
     },
-    plugin_lifecycle::{derive_availability_status, reconcile_installation_snapshot},
+    plugin_lifecycle::derive_availability_status,
     ports::{
         AuthRepository, CreatePluginAssignmentInput, CreatePluginTaskInput,
         FrontendBlockCatalogRegistryInput, FrontendBlockCatalogRepository,
@@ -45,11 +46,12 @@ use crate::{
         ReplaceInstallationJsDependenciesInput, ReplaceInstallationNodeContributionsInput,
         UpdatePluginDesiredStateInput, UpdatePluginRuntimeSnapshotInput,
         UpdatePluginTaskStatusInput, UpsertModelProviderCatalogCacheInput,
-        UpsertPluginInstallationInput,
+        UpsertPluginArtifactInstanceInput, UpsertPluginInstallationInput,
     },
     state_transition::ensure_plugin_task_transition,
 };
 
+pub use artifact_instance::*;
 pub use catalog::*;
 pub use catalog_projection::*;
 pub use family::*;
@@ -61,7 +63,29 @@ pub struct PluginManagementService<R, H> {
     runtime: H,
     official_source: Arc<dyn OfficialPluginSourcePort>,
     install_root: PathBuf,
+    node_id: String,
+    host_version: String,
     allow_uploaded_host_extensions: bool,
+}
+
+pub const PLUGIN_HOST_COMPATIBILITY_BELOW_MINIMUM: &str = "below_minimum_host_version";
+const PLUGIN_HOST_COMPATIBILITY_COMPATIBLE: &str = "compatible";
+const PLUGIN_HOST_VERSION_BELOW_MINIMUM_CONFLICT: &str = "plugin_host_version_below_minimum";
+const PLUGIN_COMPATIBILITY_OVERRIDE_INVALID: &str = "plugin_compatibility_override";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginCompatibilityOverride {
+    pub reason: String,
+    pub acknowledged_current_host_version: String,
+    pub acknowledged_minimum_host_version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct OfficialPluginHostCompatibility {
+    pub minimum_host_version: String,
+    pub current_host_version: String,
+    pub status: String,
+    pub warning_reason: Option<String>,
 }
 
 impl<R, H> PluginManagementService<R, H>
@@ -85,12 +109,128 @@ where
             runtime,
             official_source,
             install_root: install_root.into(),
+            node_id: String::new(),
+            host_version: default_current_host_version(),
             allow_uploaded_host_extensions: true,
         }
+        .with_default_node_id()
     }
 
     pub fn with_allow_uploaded_host_extensions(mut self, allow: bool) -> Self {
         self.allow_uploaded_host_extensions = allow;
         self
     }
+
+    fn with_default_node_id(mut self) -> Self {
+        if self.node_id.is_empty() {
+            self.node_id = format!("local:{}", self.install_root.display());
+        }
+        self
+    }
+
+    pub fn with_node_id(mut self, node_id: impl Into<String>) -> Self {
+        let node_id = node_id.into();
+        let node_id = node_id.trim();
+        if !node_id.is_empty() {
+            self.node_id = node_id.to_string();
+        }
+        self
+    }
+}
+
+fn default_current_host_version() -> String {
+    option_env!("FLOWBASE_API_SERVER_VERSION")
+        .map(str::trim)
+        .filter(|version| !version.is_empty())
+        .unwrap_or(env!("CARGO_PKG_VERSION"))
+        .to_string()
+}
+
+fn parse_semver(value: &str) -> Option<Version> {
+    let version = value.trim().trim_start_matches('v');
+    Version::parse(version).ok()
+}
+
+pub(super) fn official_plugin_host_compatibility(
+    minimum_host_version: &str,
+    current_host_version: &str,
+) -> OfficialPluginHostCompatibility {
+    let is_below_minimum = match (
+        parse_semver(current_host_version),
+        parse_semver(minimum_host_version),
+    ) {
+        (Some(current), Some(minimum)) => current < minimum,
+        _ => false,
+    };
+    let status = if is_below_minimum {
+        PLUGIN_HOST_COMPATIBILITY_BELOW_MINIMUM
+    } else {
+        PLUGIN_HOST_COMPATIBILITY_COMPATIBLE
+    };
+
+    OfficialPluginHostCompatibility {
+        minimum_host_version: minimum_host_version.to_string(),
+        current_host_version: current_host_version.to_string(),
+        status: status.to_string(),
+        warning_reason: is_below_minimum
+            .then(|| PLUGIN_HOST_COMPATIBILITY_BELOW_MINIMUM.to_string()),
+    }
+}
+
+pub(super) fn validate_official_plugin_compatibility_override(
+    entry: &OfficialPluginSourceEntry,
+    current_host_version: &str,
+    compatibility_override: Option<&PluginCompatibilityOverride>,
+) -> Result<Option<serde_json::Value>> {
+    let compatibility =
+        official_plugin_host_compatibility(&entry.minimum_host_version, current_host_version);
+    if compatibility.status != PLUGIN_HOST_COMPATIBILITY_BELOW_MINIMUM {
+        return Ok(None);
+    }
+
+    let Some(compatibility_override) = compatibility_override else {
+        return Err(ControlPlaneError::Conflict(PLUGIN_HOST_VERSION_BELOW_MINIMUM_CONFLICT).into());
+    };
+    if compatibility_override.reason != PLUGIN_HOST_COMPATIBILITY_BELOW_MINIMUM
+        || compatibility_override.acknowledged_current_host_version != current_host_version
+        || compatibility_override.acknowledged_minimum_host_version != entry.minimum_host_version
+    {
+        return Err(ControlPlaneError::InvalidInput(PLUGIN_COMPATIBILITY_OVERRIDE_INVALID).into());
+    }
+
+    Ok(Some(json!({
+        "reason": compatibility_override.reason,
+        "acknowledged_current_host_version": compatibility_override.acknowledged_current_host_version,
+        "acknowledged_minimum_host_version": compatibility_override.acknowledged_minimum_host_version,
+    })))
+}
+
+fn merge_install_detail_metadata(
+    metadata_json: &mut serde_json::Value,
+    detail_json: &serde_json::Value,
+) {
+    if let Some(install_kind) = detail_json.get("install_kind").cloned() {
+        metadata_json["install_kind"] = install_kind;
+    }
+    if let Some(compatibility_override) = detail_json.get("compatibility_override").cloned() {
+        metadata_json["compatibility_override"] = compatibility_override;
+    }
+}
+
+fn plugin_install_audit_detail(
+    installation: &domain::PluginInstallationRecord,
+    detail_json: &serde_json::Value,
+    restart_required: bool,
+) -> serde_json::Value {
+    let mut audit_detail = json!({
+        "provider_code": installation.provider_code,
+        "plugin_id": installation.plugin_id,
+    });
+    if restart_required {
+        audit_detail["restart_required"] = json!(true);
+    }
+    if let Some(compatibility_override) = detail_json.get("compatibility_override").cloned() {
+        audit_detail["compatibility_override"] = compatibility_override;
+    }
+    audit_detail
 }

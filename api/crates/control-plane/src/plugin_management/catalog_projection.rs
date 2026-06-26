@@ -37,10 +37,8 @@ where
         ensure_permission(&actor, "plugin_config.configure.all")
             .map_err(ControlPlaneError::PermissionDenied)?;
         let installation = self
-            .repository
-            .get_installation(command.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+            .ready_current_node_installation(command.installation_id)
+            .await?;
         match load_provider_package(&installation.installed_path) {
             Ok(package) => {
                 refresh_provider_package_catalog_projection(

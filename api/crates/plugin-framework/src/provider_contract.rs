@@ -5,6 +5,8 @@ use serde_json::Value;
 
 use crate::error::PluginFrameworkError;
 
+pub const CLIENT_PROTOCOL_ENVELOPE_PAYLOAD_KEY: &str = "__client_protocol_envelope";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelDiscoveryMode {
@@ -65,6 +67,8 @@ pub struct ProviderStdioError {
     pub message: String,
     #[serde(default)]
     pub provider_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_details: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -302,6 +306,14 @@ pub struct ProviderMessage {
     pub content_blocks: Option<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ClientProtocolEnvelope {
+    pub source_protocol: String,
+    pub policy: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ProviderInvocationInput {
     pub provider_instance_id: String,
@@ -322,6 +334,8 @@ pub struct ProviderInvocationInput {
     pub response_format: Option<Value>,
     #[serde(default)]
     pub model_parameters: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_protocol_envelope: Option<ClientProtocolEnvelope>,
     #[serde(default)]
     pub trace_context: BTreeMap<String, String>,
     #[serde(default)]
@@ -351,14 +365,18 @@ pub enum ProviderRuntimeErrorKind {
     EndpointUnreachable,
     ModelNotFound,
     RateLimited,
+    ProviderUpstreamError,
     ProviderInvalidResponse,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProviderRuntimeError {
     pub kind: ProviderRuntimeErrorKind,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_details: Option<Value>,
 }
 
 impl ProviderRuntimeError {
@@ -367,11 +385,17 @@ impl ProviderRuntimeError {
             kind,
             message: message.into(),
             provider_summary: None,
+            provider_details: None,
         }
     }
 
     pub fn with_provider_summary(mut self, provider_summary: impl Into<String>) -> Self {
         self.provider_summary = Some(provider_summary.into());
+        self
+    }
+
+    pub fn with_provider_details(mut self, provider_details: Value) -> Self {
+        self.provider_details = Some(provider_details);
         self
     }
 

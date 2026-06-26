@@ -27,6 +27,7 @@ struct InMemoryOrchestrationRuntimeState {
     application_js_dependency_selections:
         HashMap<(Uuid, String, String), domain::ApplicationJsDependencySelection>,
     installations_by_id: HashMap<Uuid, domain::PluginInstallationRecord>,
+    artifact_instances_by_key: HashMap<(String, Uuid), domain::PluginArtifactInstanceRecord>,
     assignments_by_workspace: HashMap<Uuid, Vec<domain::PluginAssignmentRecord>>,
     node_contributions_by_workspace: HashMap<Uuid, Vec<domain::NodeContributionRegistryEntry>>,
     instances_by_id: HashMap<Uuid, domain::ModelProviderInstanceRecord>,
@@ -110,7 +111,7 @@ impl InMemoryOrchestrationRuntimeRepository {
             runtime_status: domain::PluginRuntimeStatus::Active,
             availability_status: domain::PluginAvailabilityStatus::Available,
             package_path: None,
-            installed_path: install_path,
+            installed_path: install_path.clone(),
             checksum: None,
             manifest_fingerprint: None,
             signature_status: None,
@@ -138,7 +139,7 @@ impl InMemoryOrchestrationRuntimeRepository {
             runtime_status: domain::PluginRuntimeStatus::Active,
             availability_status: domain::PluginAvailabilityStatus::Available,
             package_path: None,
-            installed_path: capability_install_path,
+            installed_path: capability_install_path.clone(),
             checksum: None,
             manifest_fingerprint: None,
             signature_status: None,
@@ -266,6 +267,36 @@ impl InMemoryOrchestrationRuntimeRepository {
                 installations_by_id: HashMap::from([
                     (installation_id, installation),
                     (capability_installation_id, capability_installation),
+                ]),
+                artifact_instances_by_key: HashMap::from([
+                    (
+                        ("local:test".to_string(), installation_id),
+                        domain::PluginArtifactInstanceRecord {
+                            node_id: "local:test".to_string(),
+                            installation_id,
+                            local_version: Some("0.1.0".to_string()),
+                            local_checksum: None,
+                            installed_path: Some(install_path),
+                            artifact_status: domain::PluginArtifactInstanceStatus::Ready,
+                            runtime_status: domain::PluginRuntimeStatus::Active,
+                            checked_at: now,
+                            last_error: None,
+                        },
+                    ),
+                    (
+                        ("local:test".to_string(), capability_installation_id),
+                        domain::PluginArtifactInstanceRecord {
+                            node_id: "local:test".to_string(),
+                            installation_id: capability_installation_id,
+                            local_version: Some("0.1.0".to_string()),
+                            local_checksum: None,
+                            installed_path: Some(capability_install_path),
+                            artifact_status: domain::PluginArtifactInstanceStatus::Ready,
+                            runtime_status: domain::PluginRuntimeStatus::Active,
+                            checked_at: now,
+                            last_error: None,
+                        },
+                    ),
                 ]),
                 assignments_by_workspace: HashMap::from([(
                     workspace_id,

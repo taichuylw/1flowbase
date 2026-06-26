@@ -5,6 +5,7 @@ export interface LlmToolCallback {
   callbackStatus: 'returned' | 'waiting_callback' | 'cancelled';
   executionStatus:
     | 'succeeded'
+    | 'intercepted'
     | 'failed'
     | 'timed_out'
     | 'cancelled'
@@ -19,6 +20,7 @@ export interface LlmToolCallback {
   duration_ms: number | null;
   routeTrace: LlmToolRouteTraceSummary | null;
   detailArtifactRef?: string | null;
+  detailRef?: string | null;
 }
 
 export interface LlmToolRouteTraceSummary {
@@ -278,6 +280,7 @@ function executionStatusValue(
   value: unknown
 ): LlmToolCallback['executionStatus'] {
   return value === 'succeeded' ||
+    value === 'intercepted' ||
     value === 'failed' ||
     value === 'timed_out' ||
     value === 'cancelled' ||
@@ -290,45 +293,50 @@ function nullableRoundIndex(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function readIndexedToolCallback(
+  toolCallback: Record<string, unknown>,
+  index: number
+): LlmToolCallback {
+  const id =
+    firstStringField(toolCallback, ['id', 'tool_call_id', 'call_id']) ??
+    `tool-callback-${index + 1}`;
+
+  return {
+    key: `${id}-${index}`,
+    id,
+    name: firstStringField(toolCallback, ['name']) ?? 'Tool',
+    callbackStatus: callbackStatusValue(toolCallback.callback_status),
+    executionStatus: executionStatusValue(toolCallback.execution_status),
+    requestPayload: {},
+    callbackPayload: null,
+    parsedResult: null,
+    requestRoundIndex: nullableRoundIndex(toolCallback.request_round_index),
+    resultRoundIndex: nullableRoundIndex(toolCallback.result_round_index),
+    call_usage: optionalRecordField(toolCallback, ['call_usage']),
+    result_context_usage: optionalRecordField(toolCallback, [
+      'result_context_usage'
+    ]),
+    duration_ms: optionalNumberField(toolCallback, ['duration_ms']),
+    routeTrace: readRouteTraceSummary(toolCallback.route_trace)?.trace ?? null,
+    detailArtifactRef: firstStringField(toolCallback, [
+      'artifact_ref',
+      'detail_artifact_ref'
+    ]),
+    detailRef: firstStringField(toolCallback, ['detail_ref'])
+  };
+}
+
 function readIndexedToolCallbacks(debugPayload: unknown): LlmToolCallback[] {
-  if (
-    !isRecord(debugPayload) ||
-    !isRuntimeDebugArtifactPreview(debugPayload.llm_rounds)
-  ) {
+  if (!isRecord(debugPayload)) {
     return [];
   }
 
-  return recordArray(debugPayload.llm_rounds.tool_callbacks).map(
-    (toolCallback, index) => {
-      const id =
-        firstStringField(toolCallback, ['id', 'tool_call_id', 'call_id']) ??
-        `tool-callback-${index + 1}`;
+  const rootCallbacks = recordArray(debugPayload.tool_callbacks);
+  const llmRoundsCallbacks = isRecord(debugPayload.llm_rounds)
+    ? recordArray(debugPayload.llm_rounds.tool_callbacks)
+    : [];
 
-      return {
-        key: `${id}-${index}`,
-        id,
-        name: firstStringField(toolCallback, ['name']) ?? 'Tool',
-        callbackStatus: callbackStatusValue(toolCallback.callback_status),
-        executionStatus: executionStatusValue(toolCallback.execution_status),
-        requestPayload: {},
-        callbackPayload: null,
-        parsedResult: null,
-        requestRoundIndex: nullableRoundIndex(toolCallback.request_round_index),
-        resultRoundIndex: nullableRoundIndex(toolCallback.result_round_index),
-        call_usage: optionalRecordField(toolCallback, ['call_usage']),
-        result_context_usage: optionalRecordField(toolCallback, [
-          'result_context_usage'
-        ]),
-        duration_ms: optionalNumberField(toolCallback, ['duration_ms']),
-        routeTrace:
-          readRouteTraceSummary(toolCallback.route_trace)?.trace ?? null,
-        detailArtifactRef: firstStringField(toolCallback, [
-          'artifact_ref',
-          'detail_artifact_ref'
-        ])
-      };
-    }
-  );
+  return [...rootCallbacks, ...llmRoundsCallbacks].map(readIndexedToolCallback);
 }
 
 export function readLlmToolCallbackDetail(
@@ -374,7 +382,8 @@ export function readLlmToolCallbackDetail(
       firstStringField(loadedPayload, [
         'artifact_ref',
         'detail_artifact_ref'
-      ]) ?? null
+      ]) ?? null,
+    detailRef: firstStringField(loadedPayload, ['detail_ref'])
   };
 }
 
@@ -396,13 +405,16 @@ export function debugPayloadWithLoadedLlmRounds(
 export function stripLlmRoundsFromDebugPayload(debugPayload: unknown) {
   if (
     !isRecord(debugPayload) ||
-    !Object.prototype.hasOwnProperty.call(debugPayload, 'llm_rounds')
+    (!Object.prototype.hasOwnProperty.call(debugPayload, 'llm_rounds') &&
+      !Object.prototype.hasOwnProperty.call(debugPayload, 'tool_callbacks'))
   ) {
     return debugPayload;
   }
 
   return Object.fromEntries(
-    Object.entries(debugPayload).filter(([key]) => key !== 'llm_rounds')
+    Object.entries(debugPayload).filter(
+      ([key]) => key !== 'llm_rounds' && key !== 'tool_callbacks'
+    )
   );
 }
 
@@ -461,6 +473,7 @@ function normalizedExecutionStatus(
   }
 
   return status === 'succeeded' ||
+    status === 'intercepted' ||
     status === 'failed' ||
     status === 'timed_out' ||
     status === 'cancelled' ||
@@ -623,6 +636,7 @@ function mergeLlmToolCallbacks(callbacks: LlmToolCallback[]) {
         callback.resultRoundIndex ?? currentCallback.resultRoundIndex,
       detailArtifactRef:
         callback.detailArtifactRef ?? currentCallback.detailArtifactRef,
+      detailRef: callback.detailRef ?? currentCallback.detailRef,
       call_usage: callback.call_usage ?? currentCallback.call_usage,
       result_context_usage:
         callback.result_context_usage ?? currentCallback.result_context_usage,

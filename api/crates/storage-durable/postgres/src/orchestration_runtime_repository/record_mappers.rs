@@ -3,13 +3,13 @@ use sqlx::{postgres::PgRow, Row};
 use uuid::Uuid;
 
 use crate::mappers::orchestration_runtime_mapper::{
-    parse_flow_run_callback_resume_attempt_status, PgOrchestrationRuntimeMapper,
-    StoredApplicationRunLogSummaryRow, StoredApplicationRunSummaryRow, StoredAuditHashRow,
-    StoredBillingSessionRow, StoredCallbackTaskRow, StoredCapabilityInvocationRow,
-    StoredCheckpointRow, StoredCompiledPlanRow, StoredContextProjectionRow, StoredCostLedgerRow,
-    StoredCreditLedgerRow, StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow, StoredNodeRunRow,
-    StoredRunEventRow, StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow,
-    StoredUsageLedgerRow,
+    parse_flow_run_callback_resume_attempt_status, parse_flow_run_status,
+    PgOrchestrationRuntimeMapper, StoredApplicationRunLogSummaryRow,
+    StoredApplicationRunSummaryRow, StoredAuditHashRow, StoredBillingSessionRow,
+    StoredCallbackTaskRow, StoredCapabilityInvocationRow, StoredCheckpointRow,
+    StoredCompiledPlanRow, StoredContextProjectionRow, StoredCostLedgerRow, StoredCreditLedgerRow,
+    StoredFlowRunRow, StoredModelFailoverAttemptLedgerRow, StoredNodeRunRow, StoredRunEventRow,
+    StoredRuntimeEventRow, StoredRuntimeItemRow, StoredRuntimeSpanRow, StoredUsageLedgerRow,
 };
 
 pub(super) fn map_compiled_plan_record(row: PgRow) -> Result<domain::CompiledPlanRecord> {
@@ -446,4 +446,18 @@ pub(super) fn map_application_run_log_summary(
             tool_callback_count: row.get("tool_callback_count"),
         },
     )
+}
+
+pub(super) fn map_application_conversation_run_summary(
+    row: PgRow,
+) -> Result<domain::ApplicationConversationRunSummary> {
+    Ok(domain::ApplicationConversationRunSummary {
+        id: row.get("id"),
+        status: parse_flow_run_status(row.get::<String, _>("status").as_str())?,
+        query: row.get("query"),
+        model: row.get("model"),
+        answer: row.get("answer"),
+        started_at: row.get("started_at"),
+        finished_at: row.get("finished_at"),
+    })
 }

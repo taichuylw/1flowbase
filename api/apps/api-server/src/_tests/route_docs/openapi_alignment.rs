@@ -79,6 +79,9 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
         "/api/console/model-providers/options",
         "/api/console/system/runtime-profile",
         "/api/console/api-keys",
+        "/api/console/user-api-keys",
+        "/api/console/user-api-keys/role-options",
+        "/api/console/user-api-keys/{api_key_id}/revoke",
         "/api/runtime/models/{model_code}/records",
         "/api/runtime/models/{model_code}/records/{id}",
         "/api/console/session/actions/revoke-all",
@@ -373,7 +376,11 @@ async fn openapi_contains_application_console_routes() {
         "/api/console/applications/{id}/orchestration/nodes/{node_id}/debug-runs",
         "/api/console/applications/{id}/orchestration/nodes/{node_id}/last-run",
         "/api/console/applications/{id}/logs/runs",
-        "/api/console/applications/{id}/logs/runs/{run_id}",
+        "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree",
+        "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes",
+        "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/content",
+        "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/details/{detail_ref_id}",
+        "/api/console/applications/{id}/logs/runs/{run_id}/resume-timeline",
         "/api/console/applications/{id}/logs/runs/{run_id}/nodes/{node_id}",
     ] {
         assert!(paths.contains_key(route), "missing path {route}");

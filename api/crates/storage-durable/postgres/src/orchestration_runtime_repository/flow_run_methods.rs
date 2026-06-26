@@ -13,8 +13,10 @@ impl PgControlPlaneStore {
                 document_hash,
                 document_updated_at,
                 plan,
-                created_by
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+                scope_id,
+                created_by,
+                updated_by
+            ) values ($1, $2, $3, $4, $5, $6, $7, (select scope_id from flows where id = $2), $8, $8)
             returning
                 id,
                 flow_id,
@@ -656,12 +658,19 @@ impl PgControlPlaneStore {
     }
 
     async fn update_node_run(&self, input: &UpdateNodeRunInput) -> Result<domain::NodeRunRecord> {
+        let mut tx = self.pool().begin().await?;
         let row = sqlx::query(
             r#"
             update node_runs
             set status = $2,
                 output_payload = $3,
-                error_payload = $4,
+                error_payload = case
+                    when $4::jsonb is null
+                        and node_runs.status = 'failed'
+                        and $2 <> 'retrying'
+                    then node_runs.error_payload
+                    else $4
+                end,
                 metrics_payload = $5,
                 debug_payload = $6,
                 finished_at = $7
@@ -689,10 +698,24 @@ impl PgControlPlaneStore {
         .bind(&input.metrics_payload)
         .bind(&input.debug_payload)
         .bind(input.finished_at)
-        .fetch_one(self.pool())
+        .fetch_one(&mut *tx)
         .await?;
 
-        map_node_run_record(row)
+        let node_run = map_node_run_record(row)?;
+        sqlx::query(
+            r#"
+            update flow_runs
+            set updated_at = coalesce($2, now())
+            where id = $1
+            "#,
+        )
+        .bind(node_run.flow_run_id)
+        .bind(input.finished_at)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+
+        Ok(node_run)
     }
 
     async fn complete_node_run(
@@ -763,6 +786,13 @@ impl PgControlPlaneStore {
 
         let flow_run = map_flow_run_record(row)?;
         Self::upsert_visible_application_run_log_summary_projection(&mut tx, &flow_run).await?;
+        if is_terminal_application_run_log_status(flow_run.status) {
+            Self::replace_application_run_conversation_message_items_projection(&mut tx, &flow_run)
+                .await?;
+        } else {
+            Self::delete_application_run_conversation_message_items_projection(&mut tx, flow_run.id)
+                .await?;
+        }
         tx.commit().await?;
 
         if is_terminal_application_run_log_status(flow_run.status) {
@@ -833,6 +863,19 @@ impl PgControlPlaneStore {
             let flow_run = map_flow_run_record(row)?;
             Self::upsert_visible_application_run_log_summary_projection(&mut tx, &flow_run)
                 .await?;
+            if is_terminal_application_run_log_status(flow_run.status) {
+                Self::replace_application_run_conversation_message_items_projection(
+                    &mut tx,
+                    &flow_run,
+                )
+                .await?;
+            } else {
+                Self::delete_application_run_conversation_message_items_projection(
+                    &mut tx,
+                    flow_run.id,
+                )
+                .await?;
+            }
             tx.commit().await?;
             if is_terminal_application_run_log_status(flow_run.status) {
                 self.upsert_application_conversation_messages_for_flow_run(&flow_run)

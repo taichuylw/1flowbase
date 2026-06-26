@@ -136,6 +136,7 @@ impl OfficialPluginSourcePort for ApiOfficialPluginRegistry {
                         namespace,
                         protocol: entry.protocol,
                         latest_version: entry.latest_version,
+                        minimum_host_version: entry.minimum_host_version,
                         icon: entry.icon.map(|url| {
                             rewrite_github_raw_url(&url, self.github_proxy_url.as_deref())
                         }),
@@ -218,6 +219,8 @@ pub struct OfficialRegistryEntry {
     pub display_name: String,
     pub protocol: String,
     pub latest_version: String,
+    #[serde(default = "default_minimum_host_version")]
+    pub minimum_host_version: String,
     #[serde(default)]
     pub icon: Option<String>,
     pub help_url: Option<String>,
@@ -270,6 +273,10 @@ pub(crate) fn rewrite_github_raw_url(url: &str, github_proxy_url: Option<&str>) 
 
 fn default_plugin_type() -> String {
     "model_provider".to_string()
+}
+
+fn default_minimum_host_version() -> String {
+    "0.1.0".to_string()
 }
 
 fn default_registry_locale() -> String {

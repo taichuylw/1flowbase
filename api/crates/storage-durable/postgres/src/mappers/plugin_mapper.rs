@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Result};
 use domain::{
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
-    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
-    PluginTaskStatus, PluginVerificationStatus,
+    PluginArtifactInstanceRecord, PluginArtifactInstanceStatus, PluginArtifactStatus,
+    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginPackageCatalogProjectionRecord, PluginPackageCatalogProjectionStatus,
+    PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
+    PluginVerificationStatus,
 };
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -46,6 +47,19 @@ pub struct StoredPluginAssignmentRow {
     pub provider_code: String,
     pub assigned_by: Uuid,
     pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredPluginArtifactInstanceRow {
+    pub node_id: String,
+    pub installation_id: Uuid,
+    pub local_version: Option<String>,
+    pub local_checksum: Option<String>,
+    pub installed_path: Option<String>,
+    pub artifact_status: String,
+    pub runtime_status: String,
+    pub checked_at: OffsetDateTime,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +137,22 @@ impl PgPluginMapper {
         })
     }
 
+    pub fn to_artifact_instance_record(
+        row: StoredPluginArtifactInstanceRow,
+    ) -> Result<PluginArtifactInstanceRecord> {
+        Ok(PluginArtifactInstanceRecord {
+            node_id: row.node_id,
+            installation_id: row.installation_id,
+            local_version: row.local_version,
+            local_checksum: row.local_checksum,
+            installed_path: row.installed_path,
+            artifact_status: parse_artifact_instance_status(&row.artifact_status)?,
+            runtime_status: parse_runtime_status(&row.runtime_status)?,
+            checked_at: row.checked_at,
+            last_error: row.last_error,
+        })
+    }
+
     pub fn to_task_record(row: StoredPluginTaskRow) -> Result<PluginTaskRecord> {
         Ok(PluginTaskRecord {
             id: row.id,
@@ -193,6 +223,18 @@ pub fn parse_artifact_status(value: &str) -> Result<PluginArtifactStatus> {
         "corrupted" => Ok(PluginArtifactStatus::Corrupted),
         "install_incomplete" => Ok(PluginArtifactStatus::InstallIncomplete),
         _ => Err(anyhow!("unknown plugin artifact_status: {value}")),
+    }
+}
+
+pub fn parse_artifact_instance_status(value: &str) -> Result<PluginArtifactInstanceStatus> {
+    match value {
+        "missing" => Ok(PluginArtifactInstanceStatus::Missing),
+        "ready" => Ok(PluginArtifactInstanceStatus::Ready),
+        "outdated" => Ok(PluginArtifactInstanceStatus::Outdated),
+        "mismatched" => Ok(PluginArtifactInstanceStatus::Mismatched),
+        "corrupted" => Ok(PluginArtifactInstanceStatus::Corrupted),
+        "load_failed" => Ok(PluginArtifactInstanceStatus::LoadFailed),
+        _ => Err(anyhow!("unknown plugin artifact instance status: {value}")),
     }
 }
 

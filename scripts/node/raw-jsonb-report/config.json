@@ -1,0 +1,296 @@
+{
+  "version": 1,
+  "sourceSearchDirs": [
+    "api/apps/api-server/src",
+    "api/crates/storage-durable/postgres/src",
+    "api/crates/control-plane/src",
+    "api/crates/orchestration-runtime/src"
+  ],
+  "contract": {
+    "summary": "Small bounded fields derived from raw payload or stable metadata. List and overview APIs should prefer summary fields.",
+    "preview": "Truncated or artifact-backed display value with explicit size/ref metadata. UI snippets must use preview instead of raw.",
+    "raw": "Complete JSONB truth retained in PostgreSQL. Raw payload reads must be primary-key, run-scope, or detail entrypoints."
+  },
+  "fields": [
+    {
+      "table": "application_run_log_summaries",
+      "column": "input_payload",
+      "purpose": "application run log list projection placeholder; title/statistics are the summary contract",
+      "payloadKind": "summary",
+      "readContract": "summary_or_preview_only",
+      "listPolicy": "constant_projection_only",
+      "summaryOrPreview": "title, status, actor, correlation, and statistics fields are the list response",
+      "protectedBy": ["application_id", "created_at"]
+    },
+    {
+      "table": "application_run_trace_nodes",
+      "column": "metrics_payload",
+      "purpose": "trace tree summary metrics",
+      "payloadKind": "summary",
+      "readContract": "summary_tree",
+      "listPolicy": "allowed_summary",
+      "summaryOrPreview": "trace node metrics are bounded summary metadata",
+      "protectedBy": ["flow_run_id", "trace_node_id"]
+    },
+    {
+      "table": "application_run_trace_node_contents",
+      "column": "payload",
+      "purpose": "trace node raw content loaded after selecting a trace node",
+      "payloadKind": "raw",
+      "readContract": "detail_by_trace_node_id",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "application_run_trace_nodes carries tree summary metadata and content refs",
+      "protectedBy": ["flow_run_id", "trace_node_id"]
+    },
+    {
+      "table": "application_run_trace_node_contents",
+      "column": "source_refs",
+      "purpose": "trace content source references",
+      "payloadKind": "summary",
+      "readContract": "detail_by_trace_node_id",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "source refs are returned with trace content detail, not tree list rows",
+      "protectedBy": ["flow_run_id", "trace_node_id"]
+    },
+    {
+      "table": "flow_runs",
+      "column": "input_payload",
+      "purpose": "flow run input truth",
+      "payloadKind": "raw",
+      "readContract": "detail_or_run_scope",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "FlowRunSummaryResponse exposes title, query, model, actor, correlation, and statistics",
+      "protectedBy": ["application_id", "flow_run_id"]
+    },
+    {
+      "table": "flow_runs",
+      "column": "output_payload",
+      "purpose": "flow run output truth",
+      "payloadKind": "raw",
+      "readContract": "detail_or_run_scope",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "overview and answer_snapshot expose bounded answer summary fields",
+      "protectedBy": ["application_id", "flow_run_id"]
+    },
+    {
+      "table": "flow_runs",
+      "column": "error_payload",
+      "purpose": "flow run error truth",
+      "payloadKind": "raw",
+      "readContract": "detail_or_run_scope",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "run status and error state are exposed as summary fields; raw error stays in detail",
+      "protectedBy": ["application_id", "flow_run_id"]
+    },
+    {
+      "table": "node_runs",
+      "column": "input_payload",
+      "purpose": "node input truth",
+      "payloadKind": "raw",
+      "readContract": "detail_or_run_scope",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "trace node summary uses node metadata; node payload is loaded through detail/content refs",
+      "protectedBy": ["flow_run_id", "node_run_id"]
+    },
+    {
+      "table": "node_runs",
+      "column": "output_payload",
+      "purpose": "node output truth",
+      "payloadKind": "raw",
+      "readContract": "detail_or_run_scope",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "trace node summary uses status, alias, duration, metrics, and content refs",
+      "protectedBy": ["flow_run_id", "node_run_id"]
+    },
+    {
+      "table": "node_runs",
+      "column": "error_payload",
+      "purpose": "node error truth",
+      "payloadKind": "raw",
+      "readContract": "detail_or_run_scope",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "node status and trace metadata are the list summary; raw error stays in detail",
+      "protectedBy": ["flow_run_id", "node_run_id"]
+    },
+    {
+      "table": "node_runs",
+      "column": "metrics_payload",
+      "purpose": "node metrics summary payload",
+      "payloadKind": "summary",
+      "readContract": "summary_or_detail",
+      "listPolicy": "allowed_summary",
+      "summaryOrPreview": "metrics_payload contains bounded token/duration counters used by trace summaries",
+      "protectedBy": ["flow_run_id", "node_run_id"]
+    },
+    {
+      "table": "node_runs",
+      "column": "debug_payload",
+      "purpose": "node debug truth and provider/tool trace evidence",
+      "payloadKind": "raw",
+      "readContract": "detail_or_run_scope",
+      "listPolicy": "forbidden_raw",
+      "summaryOrPreview": "debug artifact refs and trace node summaries carry preview metadata",
+      "protectedBy": ["flow_run_id", "node_run_id"]
+    },
+    {
+      "table": "flow_run_events",
+      "column": "payload",
+      "purpose": "flow run event payload truth",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "event_type, sequence, and created_at are the bounded event summary fields",
+      "protectedBy": ["flow_run_id", "sequence"]
+    },
+    {
+      "table": "runtime_events",
+      "column": "payload",
+      "purpose": "runtime event fact payload",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "event type, layer, source, trust level, sequence, and visibility are summary fields",
+      "protectedBy": ["flow_run_id", "sequence"]
+    },
+    {
+      "table": "flow_run_checkpoints",
+      "column": "locator_payload",
+      "purpose": "checkpoint locator state",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "checkpoint status, reason, and created_at are the list summary fields",
+      "protectedBy": ["flow_run_id", "checkpoint_id"]
+    },
+    {
+      "table": "flow_run_checkpoints",
+      "column": "variable_snapshot",
+      "purpose": "checkpoint variable snapshot",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "checkpoint status, reason, and created_at are the list summary fields",
+      "protectedBy": ["flow_run_id", "checkpoint_id"]
+    },
+    {
+      "table": "flow_run_checkpoints",
+      "column": "external_ref_payload",
+      "purpose": "checkpoint external continuation reference",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "checkpoint status, reason, and created_at are the list summary fields",
+      "protectedBy": ["flow_run_id", "checkpoint_id"]
+    },
+    {
+      "table": "flow_run_callback_tasks",
+      "column": "request_payload",
+      "purpose": "callback task request payload truth",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "callback_kind, status, and created_at are bounded summary fields",
+      "protectedBy": ["flow_run_id", "callback_task_id"]
+    },
+    {
+      "table": "flow_run_callback_tasks",
+      "column": "response_payload",
+      "purpose": "callback task response payload truth",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "callback_kind, status, and created_at are bounded summary fields",
+      "protectedBy": ["flow_run_id", "callback_task_id"]
+    },
+    {
+      "table": "flow_run_callback_tasks",
+      "column": "external_ref_payload",
+      "purpose": "callback task external reference payload",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "callback_kind, status, and created_at are bounded summary fields",
+      "protectedBy": ["flow_run_id", "callback_task_id"]
+    },
+    {
+      "table": "runtime_spans",
+      "column": "error_payload",
+      "purpose": "runtime span error truth",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "span kind, status, name, and timestamps are bounded summary fields",
+      "protectedBy": ["flow_run_id", "span_id"]
+    },
+    {
+      "table": "runtime_spans",
+      "column": "metadata",
+      "purpose": "runtime span metadata",
+      "payloadKind": "summary",
+      "readContract": "run_scope",
+      "listPolicy": "allowed_summary",
+      "summaryOrPreview": "metadata is bounded span context rather than provider raw response",
+      "protectedBy": ["flow_run_id", "span_id"]
+    },
+    {
+      "table": "runtime_usage_ledger",
+      "column": "price_snapshot",
+      "purpose": "usage price snapshot used to reproduce billing facts",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "token counters and usage_status are summary fields",
+      "protectedBy": ["flow_run_id", "usage_ledger_id"]
+    },
+    {
+      "table": "runtime_usage_ledger",
+      "column": "cost_snapshot",
+      "purpose": "usage cost snapshot used to reproduce billing facts",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "token counters and usage_status are summary fields",
+      "protectedBy": ["flow_run_id", "usage_ledger_id"]
+    },
+    {
+      "table": "runtime_usage_ledger",
+      "column": "raw_usage",
+      "purpose": "provider raw usage payload",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "normalized token counters are summary fields",
+      "protectedBy": ["flow_run_id", "usage_ledger_id"]
+    },
+    {
+      "table": "runtime_usage_ledger",
+      "column": "normalized_usage",
+      "purpose": "normalized usage payload for billing replay",
+      "payloadKind": "summary",
+      "readContract": "run_scope",
+      "listPolicy": "allowed_summary",
+      "summaryOrPreview": "normalized usage is the bounded billing interpretation of raw_usage",
+      "protectedBy": ["flow_run_id", "usage_ledger_id"]
+    },
+    {
+      "table": "capability_invocations",
+      "column": "normalized_result",
+      "purpose": "capability invocation normalized result",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "capability id, authorization status, and refs are the summary fields",
+      "protectedBy": ["flow_run_id", "capability_invocation_id"]
+    },
+    {
+      "table": "capability_invocations",
+      "column": "error_payload",
+      "purpose": "capability invocation error truth",
+      "payloadKind": "raw",
+      "readContract": "run_scope",
+      "listPolicy": "run_scope_only",
+      "summaryOrPreview": "authorization status and error refs are summary fields",
+      "protectedBy": ["flow_run_id", "capability_invocation_id"]
+    }
+  ]
+}

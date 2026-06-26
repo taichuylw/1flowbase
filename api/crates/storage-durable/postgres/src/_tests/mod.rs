@@ -6,6 +6,7 @@ mod flow_repository_tests;
 mod frontend_block_catalog_repository_tests;
 mod host_infrastructure_config_repository_tests;
 mod identity;
+mod mcp_management_repository_tests;
 mod migration_smoke;
 mod model_definition_repository_tests;
 mod model_mapper_tests;

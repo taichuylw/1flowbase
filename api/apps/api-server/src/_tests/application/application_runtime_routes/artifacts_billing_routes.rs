@@ -1,5 +1,38 @@
 use super::*;
 
+#[tokio::test]
+async fn resolve_runtime_debug_artifacts_rejects_unbounded_ref_batches() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+    let artifact_refs = (0..51)
+        .map(|_| Uuid::now_v7().to_string())
+        .collect::<Vec<_>>();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "artifact_refs": artifact_refs }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
 fn build_answer_only_document(flow_id: &str, answer_text: &str) -> Value {
     json!({
         "schemaVersion": "1flowbase.flow/v2",
@@ -390,6 +423,165 @@ async fn application_runtime_routes_runtime_debug_artifact_full_load_returns_ori
 }
 
 #[tokio::test]
+async fn application_runtime_routes_batch_resolves_runtime_debug_artifacts() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let answer_text = format!("answer:{}", "A".repeat(3_000));
+    let application_id = seed_answer_only_application(&app, &cookie, &csrf, &answer_text).await;
+    let debug_session_id = "runtime-debug-artifact-batch-session";
+    let large_query = "退款政策".repeat(900);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "debug_session_id": debug_session_id,
+                        "input_payload": {
+                            "node-start": { "query": large_query }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let run_id = payload["data"]["flow_run"]["id"].as_str().unwrap();
+
+    let detail = wait_for_run_detail_matching(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        &["succeeded", "failed", "cancelled"],
+        |detail| {
+            detail["flow_run"]["input_payload"]["__runtime_debug_artifact"] == true
+                && detail["flow_run"]["output_payload"]["answer"]["__runtime_debug_artifact"]
+                    == true
+        },
+        "flow input and output artifact previews",
+    )
+    .await;
+    let input_artifact_ref = detail["flow_run"]["input_payload"]["artifact_ref"]
+        .as_str()
+        .expect("flow input artifact ref should exist");
+    let answer_artifact_ref = detail["flow_run"]["output_payload"]["answer"]["artifact_ref"]
+        .as_str()
+        .expect("answer artifact ref should exist");
+
+    let unauthorized_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({ "artifact_refs": [input_artifact_ref, answer_artifact_ref] })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized_response.status(), StatusCode::UNAUTHORIZED);
+
+    let batch_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "artifact_refs": [
+                            input_artifact_ref,
+                            answer_artifact_ref,
+                            input_artifact_ref
+                        ]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(batch_response.status(), StatusCode::OK);
+    let batch_body = to_bytes(batch_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let batch_payload: Value = serde_json::from_slice(&batch_body).unwrap();
+    let artifacts = batch_payload["data"]["artifacts"]
+        .as_array()
+        .expect("batch response should include artifacts");
+
+    assert_eq!(artifacts.len(), 2);
+    let input_artifact = artifacts
+        .iter()
+        .find(|artifact| artifact["artifact_ref"] == json!(input_artifact_ref))
+        .expect("input artifact should be returned once");
+    let answer_artifact = artifacts
+        .iter()
+        .find(|artifact| artifact["artifact_ref"] == json!(answer_artifact_ref))
+        .expect("answer artifact should be returned once");
+    assert_eq!(input_artifact["content_type"], json!("application/json"));
+    assert_eq!(input_artifact["value"]["node-start"]["query"], large_query);
+    assert_eq!(answer_artifact["value"], answer_text);
+
+    let missing_artifact_ref = Uuid::new_v4().to_string();
+    let missing_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/debug-artifacts/resolve"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "artifact_refs": [
+                            input_artifact_ref,
+                            missing_artifact_ref
+                        ]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing_response.status(), StatusCode::NOT_FOUND);
+    let missing_body = to_bytes(missing_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let missing_payload: Value = serde_json::from_slice(&missing_body).unwrap();
+    assert!(missing_payload["code"].is_string());
+    assert!(missing_payload["message"].is_string());
+}
+
+#[tokio::test]
 async fn application_runtime_routes_flow_output_offloads_answer_field_without_compressing_sys_env()
 {
     let app = test_app().await;
@@ -434,19 +626,18 @@ async fn application_runtime_routes_flow_output_offloads_answer_field_without_co
         run_id,
         &["succeeded", "failed", "cancelled"],
         |detail| {
-            let answer_node_output = detail["node_runs"]
+            let has_answer_node = detail["nodes"]
                 .as_array()
                 .and_then(|node_runs| {
                     node_runs
                         .iter()
                         .find(|node_run| node_run["node_id"] == json!("node-answer"))
                 })
-                .and_then(|node_run| node_run.get("output_payload"));
+                .is_some();
             detail["flow_run"]["output_payload"]["answer"]["__runtime_debug_artifact"] == true
-                && answer_node_output
-                    .is_some_and(|output| output["answer"]["__runtime_debug_artifact"] == true)
+                && has_answer_node
         },
-        "flow and answer node output artifact previews",
+        "flow output artifact preview and answer trace node",
     )
     .await;
 
@@ -490,14 +681,26 @@ async fn application_runtime_routes_flow_output_offloads_answer_field_without_co
     assert_eq!(flow_output["sys"]["workflow_run_id"], json!(run_id));
     assert_eq!(flow_output["env"], json!({}));
 
-    let answer_node_output = detail["node_runs"]
+    let answer_trace_node_id = detail["nodes"]
         .as_array()
-        .expect("node runs should be an array")
+        .expect("trace nodes should be an array")
         .iter()
         .find(|node_run| node_run["node_id"] == json!("node-answer"))
-        .expect("answer node should be present")
-        .get("output_payload")
-        .expect("answer node should have output payload");
+        .expect("answer node should be present")["trace_node_id"]
+        .as_str()
+        .expect("answer trace node id should exist");
+    let answer_node_detail_payload = load_trace_node_detail_payload_for_kind(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        answer_trace_node_id,
+        "node_run",
+    )
+    .await
+    .expect("answer trace node should advertise a node_run detail ref");
+    let answer_node_output =
+        &answer_node_detail_payload["data"]["payload"]["node_run"]["output_payload"];
     assert_eq!(
         answer_node_output["answer"]["__runtime_debug_artifact"],
         true
@@ -555,15 +758,26 @@ async fn application_runtime_routes_waiting_run_detail_reads_persisted_llm_round
     let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
     wait_for_flow_run_status_in_database(&pool, flow_run_id, "waiting_human").await;
 
-    let detail =
-        wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
-    let llm_node_run = detail["node_runs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|node_run| node_run["node_id"].as_str() == Some("node-llm"))
-        .expect("waiting run detail should include the LLM node run");
-    let llm_rounds = &llm_node_run["debug_payload"]["llm_rounds"];
+    wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
+    let llm_last_run = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/nodes/node-llm"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(llm_last_run.status(), StatusCode::OK);
+    let llm_last_run_body = to_bytes(llm_last_run.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let llm_last_run_payload: Value = serde_json::from_slice(&llm_last_run_body).unwrap();
+    let llm_rounds = &llm_last_run_payload["data"]["node_run"]["debug_payload"]["llm_rounds"];
     assert_eq!(llm_rounds["__runtime_debug_artifact"], Value::Null);
 
     let llm_rounds = llm_rounds.as_array().unwrap();
@@ -572,4 +786,28 @@ async fn application_runtime_routes_waiting_run_detail_reads_persisted_llm_round
         .as_str()
         .unwrap()
         .contains("请总结退款政策"));
+
+    let detail =
+        wait_for_run_detail(&app, &cookie, &application_id, run_id, &["waiting_human"]).await;
+    let llm_trace_node_id = detail["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node_run| node_run["node_id"].as_str() == Some("node-llm"))
+        .expect("waiting run detail should include the LLM trace node")["trace_node_id"]
+        .as_str()
+        .expect("LLM trace node id should exist");
+    let llm_detail_payload = load_trace_node_detail_payload_for_kind(
+        &app,
+        &cookie,
+        &application_id,
+        run_id,
+        llm_trace_node_id,
+        "node_run",
+    )
+    .await
+    .expect("LLM trace node should advertise a node_run detail ref");
+    let llm_rounds =
+        &llm_detail_payload["data"]["payload"]["node_run"]["debug_payload"]["llm_rounds"];
+    assert_eq!(llm_rounds, &Value::Null);
 }

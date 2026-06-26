@@ -2,7 +2,7 @@
 
 ## Purpose
 
-质量门禁先按场景分 lane，再选择证据。三条 lane 的目标、资源预算和停止条件不同，不要把开发后轻量验收、PR 合并门禁和项目全量体检混成一套脚本清单。Project Health Gate 先由质量维度矩阵定义体检范围，脚本失败、artifact 和日志只作为被归类的证据。
+质量门禁先按场景分 lane，再选择证据。三条 lane 的目标、资源预算和停止条件不同，不要把开发后轻量验收、PR 合并门禁和项目全量体检混成一套脚本清单。当前本地开发分支默认只做结果验证和直接风险验证；仓库级、线上级、重型质量门禁默认交给 beta / CI / 专门质量工作区。Project Health Gate 先由质量维度矩阵定义体检范围，脚本失败、artifact 和日志只作为被归类的证据。
 
 ## Lane Matrix
 
@@ -16,14 +16,16 @@
 
 - 目标是加快开发反馈，不用仓库级门禁惩罚局部开发。
 - 优先复用 `test-driven-development` 的红绿结果；只补当前改动直接相关证据。
+- 默认最多选择一个主验证命令和必要 smoke；同一 contract 已被 targeted test 覆盖时，不再为同一结论叠加运行态取证。
+- 验证重点是当前任务结果、直接相关 API / 状态 / UI contract 和主路径；重型质量门禁判断标准见 `repo-quality-gates.md#heavy-gate-criteria`，默认留给 PR / Project Health lane。
 - 样式、文案、布局微调默认不跑完整前端门禁；优先 `git diff --check`、截图、局部 page-debug 或定向 smoke。
 - 共享组件、公共 API、状态入口、契约、migration、权限或高 blast radius 才升级门禁。
-- 超过预算时停止，写 `未验证，不下确定结论`，不要继续叠重脚本。
+- 需要启动服务、运行 `api-debug`、跑 workspace 级 cargo / pnpm build，或累计超过 3 条重验证命令时，收益和成本应在对齐 / L3 issue / handoff 阶段前置说明。实现期发现未预期重验证需求时，默认不打断开发，写 `未验证，不下确定结论` 并交给 beta / CI；只有缺少该证据会影响继续实现安全性或当前任务完成判断时才暂停。
 
 ## PR Merge Gate
 
 - 目标是给贡献者和合并人合并信心，不做完整项目体检。
-- 优先使用 GitHub Actions 和 artifact；无权限时只能报告本地替代结果。
+- 优先使用 GitHub Actions、artifact 和 beta / 专门质量工作区结果；无权限时只能报告本地替代结果。
 - 按 gate DAG 解读：脚本 / tooling 失败时，先归因基础层，不继续把下游失败解释成业务失败。
 - 报告必须区分 `blocker`、`warning`、`advisory`，并列出 run URL 或本地命令、commit、耗时、失败 job、warningFiles 和关键 artifact。
 - flaky、资源耗尽或 artifact 缺失要单独标记，不和确定失败混在一起。
@@ -50,5 +52,6 @@
 
 - 没有直接证据，不要用“应该会过”替代门禁结果。
 - 没有用户明确授权，不要从 `Dev Acceptance Gate` 升级到 `PR Merge Gate` 或 `Project Health Gate`。
+- 不要因为本地开发分支还有全局门禁未跑，就自动把 beta / CI 应承接的重门禁搬回当前任务。
 - `Project Health Gate` 的本地结论不能冒充远端 GitHub 门禁通过；必须有 workflow conclusion 和 artifact 证据。
 - `Project Health Gate` 没有维度矩阵和证据归类时，不要输出全量体检 findings。

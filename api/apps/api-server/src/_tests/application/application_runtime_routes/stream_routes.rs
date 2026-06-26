@@ -1,4 +1,6 @@
 use super::*;
+use control_plane::ports::{AppendRuntimeEventInput, OrchestrationRuntimeRepository};
+use storage_durable::MainDurableStore;
 
 #[tokio::test]
 async fn get_runtime_debug_stream_returns_trusted_parts() {
@@ -61,6 +63,158 @@ async fn get_runtime_debug_stream_returns_trusted_parts() {
         .unwrap()
         .iter()
         .any(|part| part["trust_level"] == "host_fact"));
+}
+
+#[tokio::test]
+async fn get_runtime_debug_stream_uses_sequence_cursor_and_limit() {
+    let (state, database_url) = test_api_state_with_database_url().await;
+    let app = crate::app_with_state_and_config(state.clone(), &test_config());
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+    let provider_instance_id = create_ready_provider_instance(&app, &cookie, &csrf).await;
+    let application_id =
+        seed_agent_flow_application(&app, &cookie, &csrf, &provider_instance_id).await;
+
+    let preview = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/orchestration/nodes/node-llm/debug-runs"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "input_payload": {
+                            "node-start": { "query": "总结退款政策" }
+                        },
+                        "debug_session_id": DEBUG_SESSION_ID
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::CREATED);
+    let preview_body = to_bytes(preview.into_body(), usize::MAX).await.unwrap();
+    let preview_payload: Value = serde_json::from_slice(&preview_body).unwrap();
+    let run_id =
+        Uuid::parse_str(preview_payload["data"]["flow_run"]["id"].as_str().unwrap()).unwrap();
+    wait_for_run_detail(
+        &app,
+        &cookie,
+        &application_id,
+        &run_id.to_string(),
+        &["succeeded", "failed", "cancelled"],
+    )
+    .await;
+
+    let store = storage_durable::build_main_durable_postgres(&database_url)
+        .await
+        .unwrap()
+        .store;
+    let appended = <MainDurableStore as OrchestrationRuntimeRepository>::append_runtime_events(
+        &store,
+        &[
+            AppendRuntimeEventInput {
+                flow_run_id: run_id,
+                node_run_id: None,
+                span_id: None,
+                parent_span_id: None,
+                event_type: "handoff".into(),
+                layer: domain::RuntimeEventLayer::AgentTransition,
+                source: domain::RuntimeEventSource::Host,
+                trust_level: domain::RuntimeTrustLevel::HostFact,
+                item_id: None,
+                ledger_ref: None,
+                payload: json!({ "label": "first bounded event" }),
+                visibility: domain::RuntimeEventVisibility::Workspace,
+                durability: domain::RuntimeEventDurability::Durable,
+            },
+            AppendRuntimeEventInput {
+                flow_run_id: run_id,
+                node_run_id: None,
+                span_id: None,
+                parent_span_id: None,
+                event_type: "handoff".into(),
+                layer: domain::RuntimeEventLayer::AgentTransition,
+                source: domain::RuntimeEventSource::Host,
+                trust_level: domain::RuntimeTrustLevel::HostFact,
+                item_id: None,
+                ledger_ref: None,
+                payload: json!({ "label": "second bounded event" }),
+                visibility: domain::RuntimeEventVisibility::Workspace,
+                durability: domain::RuntimeEventDurability::Durable,
+            },
+        ],
+    )
+    .await
+    .unwrap();
+    let from_sequence = appended[0].sequence - 1;
+
+    let first_page = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/debug-stream?from_sequence={from_sequence}&limit=1"
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(first_page.status(), StatusCode::OK);
+    let first_payload: Value =
+        serde_json::from_slice(&to_bytes(first_page.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(first_payload["data"]["page_size"].as_i64(), Some(1));
+    assert_eq!(first_payload["data"]["has_more"].as_bool(), Some(true));
+    assert_eq!(
+        first_payload["data"]["next_sequence"].as_i64(),
+        Some(appended[0].sequence)
+    );
+    assert_eq!(first_payload["data"]["parts"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        first_payload["data"]["parts"][0]["payload"]["payload"]["label"].as_str(),
+        Some("first bounded event")
+    );
+
+    let second_page = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/debug-stream?from_sequence={}&limit=1",
+                    appended[0].sequence
+                ))
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(second_page.status(), StatusCode::OK);
+    let second_payload: Value =
+        serde_json::from_slice(&to_bytes(second_page.into_body(), usize::MAX).await.unwrap())
+            .unwrap();
+    assert_eq!(second_payload["data"]["has_more"].as_bool(), Some(false));
+    assert_eq!(
+        second_payload["data"]["next_sequence"].as_i64(),
+        Some(appended[1].sequence)
+    );
+    assert_eq!(
+        second_payload["data"]["parts"][0]["payload"]["payload"]["label"].as_str(),
+        Some("second bounded event")
+    );
 }
 
 #[tokio::test]

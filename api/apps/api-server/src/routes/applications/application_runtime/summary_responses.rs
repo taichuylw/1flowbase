@@ -125,6 +125,23 @@ fn callback_task_tool_callback_count(task: &domain::CallbackTaskRecord) -> i64 {
         .unwrap_or(0)
 }
 
+fn application_run_tool_callback_count(detail: &domain::ApplicationRunDetail) -> i64 {
+    let debug_payloads = detail
+        .node_runs
+        .iter()
+        .map(|node_run| node_run.debug_payload.clone())
+        .collect::<Vec<_>>();
+    let indexed_count =
+        count_llm_tool_callback_trace_items(&debug_payloads, &detail.callback_tasks) as i64;
+    let task_count = detail
+        .callback_tasks
+        .iter()
+        .map(callback_task_tool_callback_count)
+        .sum();
+
+    indexed_count.max(task_count)
+}
+
 fn application_run_statistics(
     detail: &domain::ApplicationRunDetail,
 ) -> application_logs::ApplicationRunStatisticsResponse {
@@ -161,20 +178,15 @@ fn application_run_statistics(
         output_tokens,
         input_cache_hit_tokens,
         unique_node_count: unique_node_ids.len() as i64,
-        tool_callback_count: detail
-            .callback_tasks
-            .iter()
-            .map(callback_task_tool_callback_count)
-            .sum(),
+        tool_callback_count: application_run_tool_callback_count(detail),
     }
 }
 
 fn application_runs_created_after(query: &ApplicationRunsQuery) -> Option<OffsetDateTime> {
-    let days = query.time_range_days?;
-
-    if days <= 0 {
-        return None;
-    }
+    let days = query
+        .time_range_days
+        .filter(|days| *days > 0)
+        .unwrap_or(APPLICATION_RUN_LOG_DEFAULT_TIME_RANGE_DAYS);
 
     Some(OffsetDateTime::now_utc() - Duration::days(days))
 }

@@ -221,7 +221,7 @@ pub async fn create_frontstage_group(
     Json(body): Json<CreateFrontstageGroupBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<FrontstagePageResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
     let parent_id = parse_optional_uuid(body.parent_id.as_deref(), "parent_id")?;
 
@@ -262,7 +262,7 @@ pub async fn create_frontstage_page(
     Json(body): Json<CreateFrontstagePageBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<FrontstagePageResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
     let parent_id = parse_optional_uuid(body.parent_id.as_deref(), "parent_id")?;
 
@@ -342,7 +342,7 @@ pub async fn update_frontstage_page_title(
     Json(body): Json<UpdateFrontstagePageMetadataBody>,
 ) -> Result<Json<ApiSuccess<FrontstagePageResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
     let page_id = parse_uuid(&page_id, "page_id")?;
 
@@ -384,7 +384,7 @@ pub async fn move_frontstage_page(
     Json(body): Json<MoveFrontstagePageBody>,
 ) -> Result<Json<ApiSuccess<FrontstagePageResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
     let page_id = parse_uuid(&page_id, "page_id")?;
     let parent_id = parse_optional_uuid(body.parent_id.as_deref(), "parent_id")?;
@@ -423,7 +423,7 @@ pub async fn delete_frontstage_page(
     Path((workspace_id, page_id)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
     let page_id = parse_uuid(&page_id, "page_id")?;
 
@@ -461,7 +461,7 @@ pub async fn save_frontstage_page_content(
     Json(body): Json<SaveFrontstagePageContentBody>,
 ) -> Result<Json<ApiSuccess<FrontstagePageDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
     let page_id = parse_uuid(&page_id, "page_id")?;
 
@@ -539,7 +539,7 @@ pub async fn save_frontstage_block_code(
     Json(body): Json<SaveFrontstageBlockCodeBody>,
 ) -> Result<Json<ApiSuccess<FrontstageBlockCodeResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let workspace_id = parse_uuid(&workspace_id, "workspace_id")?;
     let page_id = parse_uuid(&page_id, "page_id")?;
 

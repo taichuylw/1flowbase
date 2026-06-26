@@ -40,7 +40,9 @@ vi.mock('@tanstack/react-router', async () => {
     useRouterState: ({
       select
     }: {
-      select: (state: { location: { search: Record<string, string> } }) => unknown;
+      select: (state: {
+        location: { search: Record<string, string> };
+      }) => unknown;
     }) => {
       const search = React.useSyncExternalStore(
         (onStoreChange) => {
@@ -60,11 +62,9 @@ vi.mock('@tanstack/react-router', async () => {
   };
 });
 vi.mock('@scalar/api-reference-react', () => ({
-  ApiReferenceReact: ({
-    configuration
-  }: {
-    configuration: unknown;
-  }) => <div data-testid="scalar-viewer">{JSON.stringify(configuration)}</div>
+  ApiReferenceReact: ({ configuration }: { configuration: unknown }) => (
+    <div data-testid="scalar-viewer">{JSON.stringify(configuration)}</div>
+  )
 }));
 
 import { AppProviders } from '../../../app/AppProviders';
@@ -159,13 +159,13 @@ const operationSpecById = {
     openapi: '3.1.0',
     info: { title: '1flowbase API', version: '0.1.0' },
     servers: [{ url: '/' }],
-    security: [{ sessionCookie: [], csrfHeader: [] }],
+    security: [{ sessionCookie: [], csrfHeader: [] }, { patBearer: [] }],
     paths: {
       '/api/console/me': {
         patch: {
           operationId: 'patch_me',
           summary: 'Update current profile',
-          security: [{ sessionCookie: [], csrfHeader: [] }],
+          security: [{ sessionCookie: [], csrfHeader: [] }, { patBearer: [] }],
           responses: {
             '200': { description: 'ok' }
           }
@@ -183,6 +183,11 @@ const operationSpecById = {
           type: 'apiKey',
           in: 'header',
           name: 'x-csrf-token'
+        },
+        patBearer: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'pat_'
         }
       }
     }
@@ -191,13 +196,13 @@ const operationSpecById = {
     openapi: '3.1.0',
     info: { title: '1flowbase API', version: '0.1.0' },
     servers: [{ url: '/' }],
-    security: [{ sessionCookie: [] }],
+    security: [{ sessionCookie: [] }, { patBearer: [] }],
     paths: {
       '/api/console/members': {
         get: {
           operationId: 'list_members',
           summary: 'List members',
-          security: [{ sessionCookie: [] }],
+          security: [{ sessionCookie: [] }, { patBearer: [] }],
           responses: {
             '200': { description: 'ok' }
           }
@@ -215,6 +220,11 @@ const operationSpecById = {
           type: 'apiKey',
           in: 'header',
           name: 'x-csrf-token'
+        },
+        patBearer: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'pat_'
         }
       }
     }
@@ -222,18 +232,28 @@ const operationSpecById = {
   list_runtime_jobs: {
     openapi: '3.1.0',
     info: { title: '1flowbase API', version: '0.1.0' },
+    security: [{ patBearer: [] }],
     paths: {
       '/api/runtime/jobs': {
         get: {
           operationId: 'list_runtime_jobs',
           summary: 'Enumerate runtime jobs',
+          security: [{ patBearer: [] }],
           responses: {
             '200': { description: 'ok' }
           }
         }
       }
     },
-    components: {}
+    components: {
+      securitySchemes: {
+        patBearer: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'pat_'
+        }
+      }
+    }
   },
   health: {
     openapi: '3.1.0',
@@ -285,13 +305,19 @@ async function selectCategory(label: string) {
 describe('ApiDocsPanel', () => {
   beforeEach(() => {
     docsApi.fetchSettingsApiDocsCatalog.mockResolvedValue(catalogPayload);
-    docsApi.fetchSettingsApiDocsCategoryOperations.mockImplementation((categoryId: string) =>
-      Promise.resolve(
-        categoryOperationsById[categoryId as keyof typeof categoryOperationsById]
-      )
+    docsApi.fetchSettingsApiDocsCategoryOperations.mockImplementation(
+      (categoryId: string) =>
+        Promise.resolve(
+          categoryOperationsById[
+            categoryId as keyof typeof categoryOperationsById
+          ]
+        )
     );
-    docsApi.fetchSettingsApiDocsOperationSpec.mockImplementation((operationId: string) =>
-      Promise.resolve(operationSpecById[operationId as keyof typeof operationSpecById])
+    docsApi.fetchSettingsApiDocsOperationSpec.mockImplementation(
+      (operationId: string) =>
+        Promise.resolve(
+          operationSpecById[operationId as keyof typeof operationSpecById]
+        )
     );
     authApi.fetchCurrentSession.mockResolvedValue({
       actor: {
@@ -314,10 +340,14 @@ describe('ApiDocsPanel', () => {
   test('renders a header category selector and keeps the detail empty until an operation is chosen', async () => {
     renderApp('/settings/docs');
 
-    expect(await screen.findByRole('combobox', { name: '接口分类' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('combobox', { name: '接口分类' })
+    ).toBeInTheDocument();
     expect(screen.getByText('选择一个分类后查看接口列表')).toBeInTheDocument();
     expect(screen.getByText('选择接口后查看详情')).toBeInTheDocument();
-    expect(docsApi.fetchSettingsApiDocsCategoryOperations).not.toHaveBeenCalled();
+    expect(
+      docsApi.fetchSettingsApiDocsCategoryOperations
+    ).not.toHaveBeenCalled();
     expect(docsApi.fetchSettingsApiDocsOperationSpec).not.toHaveBeenCalled();
   });
 
@@ -330,8 +360,12 @@ describe('ApiDocsPanel', () => {
       expect(window.location.search).toBe('?category=console');
     });
 
-    expect(await screen.findByRole('button', { name: /patch \/api\/console\/me/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /get \/api\/console\/members/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /patch \/api\/console\/me/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /get \/api\/console\/members/i })
+    ).toBeInTheDocument();
     expect(screen.getByText('选择接口后查看详情')).toBeInTheDocument();
     expect(docsApi.fetchSettingsApiDocsCategoryOperations).toHaveBeenCalledWith(
       'console',
@@ -343,39 +377,75 @@ describe('ApiDocsPanel', () => {
   test('loads a single operation detail after choosing an operation and keeps scalar features enabled', async () => {
     renderApp('/settings/docs?category=console');
 
-    fireEvent.click(await screen.findByRole('button', { name: /get \/api\/console\/members/i }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /get \/api\/console\/members/i
+      })
+    );
 
     await waitFor(() => {
-      expect(window.location.search).toBe('?category=console&operation=list_members');
+      expect(window.location.search).toBe(
+        '?category=console&operation=list_members'
+      );
     });
 
-    expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent('/api/console/members');
-    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent('"operationId":"patch_me"');
-    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"baseServerURL":"http://127.0.0.1:3100"');
-    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"preferredSecurityScheme":["sessionCookie"]');
-    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"value":"session-123"');
-    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"value":"csrf-123"');
+    expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
+      '/api/console/members'
+    );
+    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
+      '"operationId":"patch_me"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"baseServerURL":"http://127.0.0.1:3100"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"preferredSecurityScheme":["sessionCookie"]'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"value":"session-123"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"value":"csrf-123"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"patBearer"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"bearerFormat":"pat_"'
+    );
     expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
       '"hideTestRequestButton":true'
     );
-    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent('"hiddenClients":true');
+    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
+      '"hiddenClients":true'
+    );
     expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
       '"documentDownloadType":"none"'
     );
-    expect(docsApi.fetchSettingsApiDocsOperationSpec).toHaveBeenCalledWith('list_members');
+    expect(docsApi.fetchSettingsApiDocsOperationSpec).toHaveBeenCalledWith(
+      'list_members'
+    );
     expect(authApi.fetchCurrentSession).toHaveBeenCalled();
     expect(authApi.getScalarApiBaseUrl).toHaveBeenCalled();
   });
 
   test('uses the dedicated Scalar base URL override when provided', async () => {
-    authApi.getScalarApiBaseUrl.mockReturnValueOnce('https://docs.flowbase.test');
+    authApi.getScalarApiBaseUrl.mockReturnValueOnce(
+      'https://docs.flowbase.test'
+    );
 
     renderApp('/settings/docs?category=console');
 
-    fireEvent.click(await screen.findByRole('button', { name: /get \/api\/console\/members/i }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /get \/api\/console\/members/i
+      })
+    );
 
     await waitFor(() => {
-      expect(window.location.search).toBe('?category=console&operation=list_members');
+      expect(window.location.search).toBe(
+        '?category=console&operation=list_members'
+      );
     });
 
     expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
@@ -386,10 +456,14 @@ describe('ApiDocsPanel', () => {
   test('uses cookie plus csrf authentication defaults for mutating console operations', async () => {
     renderApp('/settings/docs?category=console');
 
-    fireEvent.click(await screen.findByRole('button', { name: /patch \/api\/console\/me/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /patch \/api\/console\/me/i })
+    );
 
     await waitFor(() => {
-      expect(window.location.search).toBe('?category=console&operation=patch_me');
+      expect(window.location.search).toBe(
+        '?category=console&operation=patch_me'
+      );
     });
 
     expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
@@ -398,23 +472,64 @@ describe('ApiDocsPanel', () => {
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
       '"name":"flowbase_console_session"'
     );
-    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"name":"x-csrf-token"');
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"name":"x-csrf-token"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"patBearer"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"scheme":"bearer"'
+    );
+  });
+
+  test('uses PAT bearer as the default only for PAT-only operations', async () => {
+    renderApp('/settings/docs');
+
+    await selectCategory('runtime');
+    fireEvent.click(
+      await screen.findByRole('button', { name: /get \/api\/runtime\/jobs/i })
+    );
+
+    await waitFor(() => {
+      expect(window.location.search).toBe(
+        '?category=runtime&operation=list_runtime_jobs'
+      );
+    });
+
+    expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
+      '"preferredSecurityScheme":["patBearer"]'
+    );
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent(
+      '"bearerFormat":"pat_"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
+      '"sessionCookie"'
+    );
+    expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent(
+      '"csrfHeader"'
+    );
   });
 
   test('loads the deep-linked category and operation into the list-detail flow', async () => {
     renderApp('/settings/docs?category=single%3Ahealth&operation=health');
 
-    expect(await screen.findByRole('combobox', { name: '接口分类' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /get \/health/i })).toHaveAttribute(
-      'aria-pressed',
-      'true'
+    expect(
+      await screen.findByRole('combobox', { name: '接口分类' })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /get \/health/i })
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
+      '/health'
     );
-    expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent('/health');
     expect(docsApi.fetchSettingsApiDocsCategoryOperations).toHaveBeenCalledWith(
       'single:health',
       { offset: 0, limit: 20, q: null }
     );
-    expect(docsApi.fetchSettingsApiDocsOperationSpec).toHaveBeenCalledWith('health');
+    expect(docsApi.fetchSettingsApiDocsOperationSpec).toHaveBeenCalledWith(
+      'health'
+    );
   });
 
   test('imports Scalar stylesheet for the detail renderer', async () => {
@@ -423,17 +538,24 @@ describe('ApiDocsPanel', () => {
       'utf8'
     );
 
-    expect(componentSource).toContain("import '@scalar/api-reference-react/style.css';");
+    expect(componentSource).toContain(
+      "import '@scalar/api-reference-react/style.css';"
+    );
   });
 
   test('removes the old fixed-height and clipped detail wrapper styles', async () => {
     const cssSource = await readFile(
-      path.resolve(process.cwd(), 'src/shared/ui/api-docs/api-docs-explorer.css'),
+      path.resolve(
+        process.cwd(),
+        'src/shared/ui/api-docs/api-docs-explorer.css'
+      ),
       'utf8'
     );
 
     expect(cssSource).not.toContain('min-height: 720px');
-    expect(cssSource).not.toContain('.api-docs-panel__detail-viewer {\n  overflow: hidden;');
+    expect(cssSource).not.toContain(
+      '.api-docs-panel__detail-viewer {\n  overflow: hidden;'
+    );
     expect(cssSource).toMatch(
       /\.api-docs-panel__detail-viewer\s*\{[^}]*min-width:\s*0;[^}]*height:\s*100%;[^}]*\}/s
     );
@@ -441,12 +563,13 @@ describe('ApiDocsPanel', () => {
 
   test('keeps the docs workspace fixed while each side owns its own scroll', async () => {
     const cssSource = await readFile(
-      path.resolve(process.cwd(), 'src/shared/ui/api-docs/api-docs-explorer.css'),
+      path.resolve(
+        process.cwd(),
+        'src/shared/ui/api-docs/api-docs-explorer.css'
+      ),
       'utf8'
     );
-    const rootBlock = cssSource.match(
-      /\.api-docs-panel\s*\{[\s\S]*?\n\}/
-    )?.[0];
+    const rootBlock = cssSource.match(/\.api-docs-panel\s*\{[\s\S]*?\n\}/)?.[0];
     const workspaceBlock = cssSource.match(
       /\.api-docs-panel__workspace\s*\{[\s\S]*?\n\}/
     )?.[0];

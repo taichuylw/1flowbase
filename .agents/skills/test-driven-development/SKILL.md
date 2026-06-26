@@ -37,7 +37,8 @@ description: Use when implementing 1flowbase features, bug fixes, refactors, bac
 2. 运行定向测试，确认失败原因符合预期。
 3. 写最小实现让测试通过。
 4. 绿灯后再重构，重构后保持绿灯。
-5. 按变更风险补必要回归：定向测试优先，必要时再跑类型、lint、build 或 smoke。
+5. 按变更风险补必要回归：定向测试优先，只补当前任务结果和直接风险所需的类型、lint、build 或 smoke。
+6. workspace 级 cargo / pnpm build、clippy、full test、服务重启、`api-debug`，或超过 3 条重验证命令的收益和成本，必须在 `problem-framing` / L3 issue / handoff 阶段前置说明。实现期发现未预期重验证需求时，默认不打断开发，交付说明标为 beta / CI / 全局门禁未验证；只有缺少该证据会让继续实现不安全或无法判断当前任务是否完成时，才暂停并说明原因。
 
 ## Backend API Red Test
 
@@ -49,7 +50,7 @@ description: Use when implementing 1flowbase features, bug fixes, refactors, bac
 - 测试命名和断言写清 method / path、请求 payload、预期 status、响应字段、错误 shape、scope、状态副作用、过期 / 禁用 / 缺失状态或审计结果。
 - 字段断言使用后端 DTO / 领域语义原名；不要为了前端展示别名写测试。
 - 红灯失败原因必须是当前缺失行为或 contract 不匹配；如果失败来自 fixture、认证或环境不稳定，先修测试入口再实现。
-- `api-debug` 只作为运行态取证工具，不替代红灯测试；需要自动化验证时仍写 route / service integration test。
+- `api-debug` 只作为运行态取证工具，不替代红灯测试；同一 contract 已由 route / service integration test 覆盖时，不默认重复跑 `api-debug`，除非怀疑真实运行态、认证链、环境配置或线上 / 本地行为不一致。
 
 ## Evidence
 
@@ -57,7 +58,7 @@ description: Use when implementing 1flowbase features, bug fixes, refactors, bac
 
 - 新增或调整的测试
 - 红灯确认方式
-- 通过的验证命令
+- 通过的验证命令，以及哪些属于本地结果验证、哪些延后到 beta / CI / 专门质量工作区
 - 后端 API 任务的预期 response / 状态结果如何被测试断言覆盖
 - 未验证范围、原因和替代验证
 
@@ -71,4 +72,5 @@ warning 与 coverage 产物统一落到 `tmp/test-governance/`。
 - 只测 mock 调用次数，不测真实行为。
 - 后端接口只测 service 内部逻辑，没有覆盖 route 认证、DTO、status / error shape 或状态副作用。
 - 为了通过测试扩大实现范围。
+- 把全局质量门禁当成本地 TDD 收尾默认步骤，导致长任务验证成本失控。
 - 跳过 TDD 但没有说明原因和替代验证。

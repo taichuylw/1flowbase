@@ -1,12 +1,16 @@
-use std::{fs, path::Path, sync::Arc};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use control_plane::{
     host_extension::HOST_EXTENSION_CONTRACT_VERSION,
     ports::{AuthRepository, PluginRepository, UpsertPluginInstallationInput},
 };
 use domain::{
-    PluginArtifactStatus, PluginAvailabilityStatus, PluginDesiredState, PluginRuntimeStatus,
-    PluginVerificationStatus,
+    PluginArtifactInstanceStatus, PluginArtifactStatus, PluginAvailabilityStatus,
+    PluginDesiredState, PluginRuntimeStatus, PluginVerificationStatus,
 };
 use plugin_framework::compute_manifest_fingerprint;
 use serde_json::json;
@@ -80,6 +84,37 @@ migrations: []
     );
 }
 
+async fn write_host_extension_artifact_marker(root: &Path, version: &str) {
+    let manifest_fingerprint = compute_manifest_fingerprint(&root.join("manifest.yaml"))
+        .await
+        .unwrap();
+    fs::write(
+        root.join(".1flowbase-artifact.json"),
+        serde_json::to_vec_pretty(&json!({
+            "plugin_id": format!("fixture_host_extension@{version}"),
+            "version": version,
+            "checksum": null,
+            "manifest_fingerprint": manifest_fingerprint,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+async fn create_current_node_host_extension_fixture(
+    state: &ApiState,
+    version: &str,
+    source_kind: &str,
+) -> PathBuf {
+    let root = PathBuf::from(&state.provider_install_root)
+        .join("installed")
+        .join("fixture_host_extension")
+        .join(version);
+    create_host_extension_installation_fixture(&root, version, source_kind);
+    write_host_extension_artifact_marker(&root, version).await;
+    root
+}
+
 async fn seed_pending_restart_host_extension(
     state: &ApiState,
     installed_root: &Path,
@@ -133,13 +168,12 @@ async fn startup_loader_scans_dropins_and_pending_restart_rows_before_serving() 
     let dropin_root =
         std::env::temp_dir().join(format!("host-extension-dropins-{}", Uuid::now_v7()));
     let pending_root =
-        std::env::temp_dir().join(format!("host-extension-installed-{}", Uuid::now_v7()));
+        create_current_node_host_extension_fixture(&base_state, "0.1.0", "uploaded").await;
     create_host_extension_installation_fixture(
         &dropin_root.join("fixture_dropin"),
         "0.1.0",
         "filesystem_dropin",
     );
-    create_host_extension_installation_fixture(&pending_root, "0.1.0", "uploaded");
     let installation_id =
         seed_pending_restart_host_extension(&base_state, &pending_root, "0.1.0").await;
     let state = Arc::new(ApiState {
@@ -162,10 +196,20 @@ async fn startup_loader_scans_dropins_and_pending_restart_rows_before_serving() 
         installation.desired_state,
         PluginDesiredState::ActiveRequested
     );
-    assert_eq!(installation.runtime_status, PluginRuntimeStatus::Active);
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::Inactive);
     assert_eq!(
         installation.availability_status,
         PluginAvailabilityStatus::Available
+    );
+    let artifact =
+        PluginRepository::get_artifact_instance(&state.store, &state.api_node_id, installation_id)
+            .await
+            .unwrap()
+            .expect("current node artifact should be recorded");
+    assert_eq!(artifact.runtime_status, PluginRuntimeStatus::Active);
+    assert_eq!(
+        artifact.artifact_status,
+        PluginArtifactInstanceStatus::Ready
     );
 
     let _ = fs::remove_dir_all(dropin_root);
@@ -173,13 +217,52 @@ async fn startup_loader_scans_dropins_and_pending_restart_rows_before_serving() 
 }
 
 #[tokio::test]
+async fn startup_loader_does_not_use_another_node_host_extension_path_when_current_artifact_is_missing(
+) {
+    let (base_state, _database_url) = test_api_state_with_database_url().await;
+    let other_node_root =
+        std::env::temp_dir().join(format!("host-extension-other-node-{}", Uuid::now_v7()));
+    create_host_extension_installation_fixture(&other_node_root, "0.1.0", "uploaded");
+    let installation_id =
+        seed_pending_restart_host_extension(&base_state, &other_node_root, "0.1.0").await;
+
+    let summary = load_host_extensions_at_startup(&base_state).await.unwrap();
+    let installation = PluginRepository::get_installation(&base_state.store, installation_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let artifact = PluginRepository::get_artifact_instance(
+        &base_state.store,
+        &base_state.api_node_id,
+        installation_id,
+    )
+    .await
+    .unwrap()
+    .expect("current node missing artifact snapshot should be recorded");
+
+    assert_eq!(summary.pending_restart_count, 1);
+    assert_eq!(summary.loaded_count, 0);
+    assert_eq!(summary.failed_count, 0);
+    assert_eq!(summary.skipped_count, 1);
+    assert_eq!(
+        installation.desired_state,
+        PluginDesiredState::PendingRestart
+    );
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::Inactive);
+    assert_eq!(
+        artifact.artifact_status,
+        PluginArtifactInstanceStatus::Missing
+    );
+    assert_eq!(artifact.runtime_status, PluginRuntimeStatus::Inactive);
+
+    let _ = fs::remove_dir_all(other_node_root);
+}
+
+#[tokio::test]
 async fn installed_host_extension_without_host_extension_yaml_becomes_load_failed() {
     let (base_state, _database_url) = test_api_state_with_database_url().await;
-    let pending_root = std::env::temp_dir().join(format!(
-        "host-extension-missing-contribution-{}",
-        Uuid::now_v7()
-    ));
-    create_host_extension_installation_fixture(&pending_root, "0.1.0", "uploaded");
+    let pending_root =
+        create_current_node_host_extension_fixture(&base_state, "0.1.0", "uploaded").await;
     fs::remove_file(pending_root.join("host-extension.yaml")).unwrap();
     let installation_id =
         seed_pending_restart_host_extension(&base_state, &pending_root, "0.1.0").await;
@@ -195,15 +278,28 @@ async fn installed_host_extension_without_host_extension_yaml_becomes_load_faile
     assert_eq!(summary.failed_count, 1);
     assert_eq!(
         installation.desired_state,
-        PluginDesiredState::ActiveRequested
+        PluginDesiredState::PendingRestart
     );
-    assert_eq!(installation.runtime_status, PluginRuntimeStatus::LoadFailed);
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::Inactive);
     assert_eq!(
         installation.availability_status,
-        PluginAvailabilityStatus::LoadFailed
+        PluginAvailabilityStatus::PendingRestart
     );
-    assert!(installation
-        .last_load_error
+    let artifact = PluginRepository::get_artifact_instance(
+        &base_state.store,
+        &base_state.api_node_id,
+        installation_id,
+    )
+    .await
+    .unwrap()
+    .expect("current node artifact should be recorded");
+    assert_eq!(artifact.runtime_status, PluginRuntimeStatus::LoadFailed);
+    assert_eq!(
+        artifact.artifact_status,
+        PluginArtifactInstanceStatus::LoadFailed
+    );
+    assert!(artifact
+        .last_error
         .as_deref()
         .unwrap_or_default()
         .contains("host-extension.yaml"));
@@ -215,8 +311,7 @@ async fn installed_host_extension_without_host_extension_yaml_becomes_load_faile
 async fn invalid_host_extension_yaml_becomes_load_failed_with_last_error() {
     let (base_state, _database_url) = test_api_state_with_database_url().await;
     let pending_root =
-        std::env::temp_dir().join(format!("host-extension-invalid-yaml-{}", Uuid::now_v7()));
-    create_host_extension_installation_fixture(&pending_root, "0.1.0", "uploaded");
+        create_current_node_host_extension_fixture(&base_state, "0.1.0", "uploaded").await;
     fs::write(
         pending_root.join("host-extension.yaml"),
         r#"schema_version: wrong/v1
@@ -248,9 +343,18 @@ migrations: []
     assert_eq!(summary.pending_restart_count, 1);
     assert_eq!(summary.loaded_count, 0);
     assert_eq!(summary.failed_count, 1);
-    assert_eq!(installation.runtime_status, PluginRuntimeStatus::LoadFailed);
-    assert!(installation
-        .last_load_error
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::Inactive);
+    let artifact = PluginRepository::get_artifact_instance(
+        &base_state.store,
+        &base_state.api_node_id,
+        installation_id,
+    )
+    .await
+    .unwrap()
+    .expect("current node artifact should be recorded");
+    assert_eq!(artifact.runtime_status, PluginRuntimeStatus::LoadFailed);
+    assert!(artifact
+        .last_error
         .as_deref()
         .unwrap_or_default()
         .contains("schema_version"));
@@ -262,8 +366,7 @@ migrations: []
 async fn entry_file_existence_alone_is_insufficient() {
     let (base_state, _database_url) = test_api_state_with_database_url().await;
     let pending_root =
-        std::env::temp_dir().join(format!("host-extension-missing-native-{}", Uuid::now_v7()));
-    create_host_extension_installation_fixture(&pending_root, "0.1.0", "uploaded");
+        create_current_node_host_extension_fixture(&base_state, "0.1.0", "uploaded").await;
     fs::remove_file(pending_root.join("lib/fixture_host_extension")).unwrap();
     let installation_id =
         seed_pending_restart_host_extension(&base_state, &pending_root, "0.1.0").await;
@@ -277,9 +380,18 @@ async fn entry_file_existence_alone_is_insufficient() {
     assert_eq!(summary.pending_restart_count, 1);
     assert_eq!(summary.loaded_count, 0);
     assert_eq!(summary.failed_count, 1);
-    assert_eq!(installation.runtime_status, PluginRuntimeStatus::LoadFailed);
-    assert!(installation
-        .last_load_error
+    assert_eq!(installation.runtime_status, PluginRuntimeStatus::Inactive);
+    let artifact = PluginRepository::get_artifact_instance(
+        &base_state.store,
+        &base_state.api_node_id,
+        installation_id,
+    )
+    .await
+    .unwrap()
+    .expect("current node artifact should be recorded");
+    assert_eq!(artifact.runtime_status, PluginRuntimeStatus::LoadFailed);
+    assert!(artifact
+        .last_error
         .as_deref()
         .unwrap_or_default()
         .contains("native library"));

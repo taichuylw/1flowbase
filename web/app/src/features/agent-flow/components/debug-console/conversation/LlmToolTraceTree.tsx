@@ -10,10 +10,11 @@ import {
 } from 'react';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
+import { NodeRunPayloadSections } from '../../detail/last-run/NodeRunPayloadSections';
 import {
-  NodeRunPayloadSections,
-  RuntimeDebugPayloadBlock
-} from '../../detail/last-run/NodeRunIOCard';
+  RuntimeDebugPayloadBlock,
+  type RuntimeDebugArtifactBatchLoader
+} from '../../detail/last-run/runtime-debug-payload';
 import { AnswerSnapshotTrace } from './AnswerSnapshotTrace';
 import { DebugWorkflowNodeItem } from './DebugWorkflowNodeRow';
 import {
@@ -55,6 +56,8 @@ function executionStatusLabel(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
       return i18nText('agentFlow', 'auto.executed_successfully');
+    case 'intercepted':
+      return i18nText('agentFlow', 'auto.execution_intercepted');
     case 'failed':
       return i18nText('agentFlow', 'auto.execution_failed');
     case 'timed_out':
@@ -70,6 +73,8 @@ function executionStatusColor(status: LlmToolCallback['executionStatus']) {
   switch (status) {
     case 'succeeded':
       return 'success';
+    case 'intercepted':
+      return 'warning';
     case 'failed':
     case 'timed_out':
       return 'error';
@@ -135,86 +140,10 @@ function LlmToolInlineMetrics({ callback }: { callback: LlmToolCallback }) {
   );
 }
 
-function routeNodeStatus(callback: LlmToolCallback) {
-  const traceStatus = callback.routeTrace?.status;
-
-  if (traceStatus) {
-    switch (traceStatus) {
-      case 'succeeded':
-      case 'returned_to_main':
-      case 'route_completed':
-        return 'succeeded';
-      case 'failed':
-        return 'failed';
-      case 'cancelled':
-      case 'canceled':
-        return 'cancelled';
-      case 'waiting_callback':
-        return 'waiting_callback';
-      default:
-        return traceStatus;
-    }
-  }
-
-  switch (callback.executionStatus) {
-    case 'succeeded':
-      return 'succeeded';
-    case 'failed':
-    case 'timed_out':
-      return 'failed';
-    case 'cancelled':
-      return 'cancelled';
-    default:
-      return callback.callbackStatus === 'returned'
-        ? 'succeeded'
-        : 'waiting_callback';
-  }
-}
-
-function routeNodeAlias(routeTrace: LlmToolRouteTraceSummary) {
-  return routeTrace.routeNodeAlias ?? 'LLM';
-}
-
 function routeTraceLabel(routeTrace: LlmToolRouteTraceSummary) {
   return routeTrace.routeKind === 'fusion'
-    ? 'fusion'
-    : i18nText('agentFlow', 'auto.route_trace');
-}
-
-function routeNodeOutputPayload(callback: LlmToolCallback) {
-  if (callback.call_usage) {
-    return {
-      usage: callback.call_usage
-    };
-  }
-
-  return {};
-}
-
-function buildRouteTraceItem(callback: LlmToolCallback): AgentFlowTraceItem {
-  const routeTrace = callback.routeTrace;
-
-  return {
-    nodeId:
-      routeTrace?.routeNodeId ??
-      routeTrace?.targetNodeId ??
-      `${callback.id}:route`,
-    nodeRunId: routeTrace?.detailArtifactRef ?? `${callback.id}:route`,
-    nodeAlias: routeTrace ? routeNodeAlias(routeTrace) : 'LLM',
-    nodeType: 'llm',
-    status: routeNodeStatus(callback),
-    startedAt: '',
-    finishedAt: callback.callbackStatus === 'returned' ? '' : null,
-    durationMs: callback.duration_ms,
-    inputPayload: {},
-    outputPayload: routeNodeOutputPayload(callback),
-    errorPayload:
-      callback.executionStatus === 'failed'
-        ? (callback.parsedResult ?? {})
-        : null,
-    metricsPayload: {},
-    debugPayload: routeTrace?.rawPayload ?? {}
-  };
+    ? i18nText('agentFlow', 'auto.tool_mode_fusion')
+    : i18nText('agentFlow', 'auto.tool_mode_agent');
 }
 
 function branchNodeStatus(branch: LlmToolRouteBranchSummary) {
@@ -286,65 +215,46 @@ function routeBranchNodeKey(
   );
 }
 
-function runtimeDetailPayloadHasValue(value: unknown): boolean {
-  if (value === null || value === undefined) {
-    return false;
-  }
-
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-
-  if (typeof value === 'object') {
-    return Object.keys(value).length > 0;
-  }
-
-  return true;
-}
-
 export function DebugWorkflowNodeDetailContent({
   item,
-  onLoadArtifact
+  beforePayloadContent,
+  defaultToolsExpanded = false,
+  onLoadArtifact,
+  onLoadArtifacts,
+  onLoadToolCallbackDetail
 }: {
   item: AgentFlowTraceItem;
+  beforePayloadContent?: ReactNode;
+  defaultToolsExpanded?: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
+  onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const debugPayload = stripLlmRoundsFromDebugPayload(item.debugPayload ?? {});
-  const hasNodeDetail =
-    runtimeDetailPayloadHasValue(item.inputPayload) ||
-    runtimeDetailPayloadHasValue(debugPayload) ||
-    runtimeDetailPayloadHasValue(item.outputPayload) ||
-    Boolean(item.answerSnapshot) ||
-    collectLlmToolCallbacksFromDebugPayloads([item.debugPayload]).length > 0;
-
-  if (!hasNodeDetail) {
-    return (
-      <Typography.Text
-        className="agent-flow-editor__debug-workflow-node-missing-detail"
-        type="secondary"
-      >
-        {i18nText('agentFlow', 'auto.node_detail_summary_only')}
-      </Typography.Text>
-    );
-  }
 
   return (
     <>
       <LlmToolTraceTree
         debugPayload={item.debugPayload}
+        defaultToolsExpanded={defaultToolsExpanded}
         onLoadArtifact={onLoadArtifact}
+        onLoadArtifacts={onLoadArtifacts}
+        onLoadToolCallbackDetail={onLoadToolCallbackDetail}
       />
       {item.answerSnapshot ? (
         <AnswerSnapshotTrace
           snapshot={item.answerSnapshot}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
         />
       ) : null}
+      {beforePayloadContent}
       <NodeRunPayloadSections
         debugPayload={debugPayload}
         inputPayload={item.inputPayload}
         outputPayload={item.outputPayload}
         onLoadArtifact={onLoadArtifact}
+        onLoadArtifacts={onLoadArtifacts}
       />
     </>
   );
@@ -353,13 +263,17 @@ export function DebugWorkflowNodeDetailContent({
 function LlmToolRouteBranchNode({
   branch,
   callback,
+  defaultToolsExpanded,
   index,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadArtifacts
 }: {
   branch: LlmToolRouteBranchSummary | LlmToolRouteBranchTrace;
   callback: LlmToolCallback;
+  defaultToolsExpanded: boolean;
   index: number;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
 }) {
   const [expanded, setExpanded] = useState(false);
   const branchTraceItem = buildRouteBranchTraceItem(callback, branch, index);
@@ -376,8 +290,10 @@ function LlmToolRouteBranchNode({
       >
         <div className="agent-flow-editor__debug-workflow-node-detail agent-flow-editor__debug-llm-route-branch-detail">
           <DebugWorkflowNodeDetailContent
+            defaultToolsExpanded={defaultToolsExpanded}
             item={branchTraceItem}
             onLoadArtifact={onLoadArtifact}
+            onLoadArtifacts={onLoadArtifacts}
           />
         </div>
       </DebugWorkflowNodeItem>
@@ -385,20 +301,17 @@ function LlmToolRouteBranchNode({
   );
 }
 
-function routeTraceStatusText(callback: LlmToolCallback) {
-  return executionStatusLabel(
-    routeNodeStatus(callback) === 'failed' ? 'failed' : 'succeeded'
-  );
-}
-
 function LlmToolRouteNode({
   callback,
-  onLoadArtifact
+  defaultToolsExpanded,
+  onLoadArtifact,
+  onLoadArtifacts
 }: {
   callback: LlmToolCallback;
+  defaultToolsExpanded: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
 }) {
-  const [expanded, setExpanded] = useState(true);
   const [routeTraceLoadState, dispatchRouteTraceLoad] = useReducer(
     routeTraceLoadReducer,
     INITIAL_ROUTE_TRACE_LOAD_STATE
@@ -415,7 +328,6 @@ function LlmToolRouteNode({
 
   useEffect(() => {
     if (
-      !expanded ||
       routeKind !== 'fusion' ||
       !detailArtifactRef ||
       !hasArtifactLoader ||
@@ -455,7 +367,6 @@ function LlmToolRouteNode({
     };
   }, [
     detailArtifactRef,
-    expanded,
     hasArtifactLoader,
     routeKind,
     routeTraceLoadState.loadFailed,
@@ -472,115 +383,72 @@ function LlmToolRouteNode({
     branchTraces.length > 0 ? branchTraces : routeTrace.branchSummaries;
   const routeTraceTitle = routeTraceLabel(routeTrace);
 
-  if (routeTrace.routeKind === 'fusion') {
-    return (
-      <div
-        className="agent-flow-editor__debug-llm-route-node"
-        data-testid="debug-llm-route-node"
-      >
-        <button
-          aria-expanded={expanded}
-          className="agent-flow-editor__debug-llm-route-group-trigger"
-          onClick={() => setExpanded((current) => !current)}
-          type="button"
-        >
-          <span className="agent-flow-editor__debug-llm-route-group-main">
-            <Typography.Text strong>{routeTraceTitle}</Typography.Text>
-            <Typography.Text type="secondary">
-              {routeTraceStatusText(callback)}
-            </Typography.Text>
-          </span>
-          <Tag className="agent-flow-editor__debug-llm-tool-route-tag">
-            {routeTraceTitle}
-          </Tag>
-          {expanded ? (
-            <DownOutlined className="agent-flow-editor__debug-workflow-collapse" />
-          ) : (
-            <RightOutlined className="agent-flow-editor__debug-workflow-collapse" />
-          )}
-        </button>
-        {expanded ? (
-          <div className="agent-flow-editor__debug-llm-route-node-detail">
-            {routeTraceLoadState.loading ? (
-              <Tag color="processing">
-                {i18nText('agentFlow', 'auto.loading')}
-              </Tag>
-            ) : null}
-            {routeTraceLoadState.loadFailed ? (
-              <Tag color="error">
-                {i18nText('agentFlow', 'auto.loading_failed')}
-              </Tag>
-            ) : null}
-            {branchNodes.length > 0 ? (
-              <div className="agent-flow-editor__debug-llm-route-branch-list">
-                {branchNodes.map((branch, index) => (
-                  <LlmToolRouteBranchNode
-                    key={routeBranchNodeKey(callback, branch)}
-                    branch={branch}
-                    callback={callback}
-                    index={index}
-                    onLoadArtifact={onLoadArtifact}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
+  const routeContent = (
+    <>
+      {routeTraceLoadState.loading ? (
+        <Tag color="processing">{i18nText('agentFlow', 'auto.loading')}</Tag>
+      ) : null}
+      {routeTraceLoadState.loadFailed ? (
+        <Tag color="error">{i18nText('agentFlow', 'auto.loading_failed')}</Tag>
+      ) : null}
+      {branchNodes.length > 0 ? (
+        <div className="agent-flow-editor__debug-llm-route-branch-list">
+          {branchNodes.map((branch, index) => (
+            <LlmToolRouteBranchNode
+              key={routeBranchNodeKey(callback, branch)}
+              branch={branch}
+              callback={callback}
+              defaultToolsExpanded={defaultToolsExpanded}
+              index={index}
+              onLoadArtifact={onLoadArtifact}
+              onLoadArtifacts={onLoadArtifacts}
+            />
+          ))}
+        </div>
+      ) : null}
+      {routeTrace.routeKind === 'fusion' ? null : (
+        <RuntimeDebugPayloadBlock
+          height="11rem"
+          payload={sourceRouteTrace.rawPayload}
+          title={routeTraceTitle}
+          onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
+        />
+      )}
+    </>
+  );
 
-  const routeTraceItem = buildRouteTraceItem(callback);
+  if (!defaultToolsExpanded) {
+    return routeContent;
+  }
 
   return (
     <div
       className="agent-flow-editor__debug-llm-route-node"
       data-testid="debug-llm-route-node"
     >
-      <DebugWorkflowNodeItem
-        expanded={expanded}
-        item={routeTraceItem}
-        onToggle={() => setExpanded((current) => !current)}
-      >
-        <div className="agent-flow-editor__debug-workflow-node-detail agent-flow-editor__debug-llm-route-node-detail">
-          {branchNodes.length > 0 ? (
-            <div className="agent-flow-editor__debug-llm-route-branch-list">
-              {branchNodes.map((branch, index) => (
-                <LlmToolRouteBranchNode
-                  key={routeBranchNodeKey(callback, branch)}
-                  branch={branch}
-                  callback={callback}
-                  index={index}
-                  onLoadArtifact={onLoadArtifact}
-                />
-              ))}
-            </div>
-          ) : null}
-          <RuntimeDebugPayloadBlock
-            height="11rem"
-            payload={sourceRouteTrace.rawPayload}
-            title={routeTraceTitle}
-            onLoadArtifact={onLoadArtifact}
-          />
-        </div>
-      </DebugWorkflowNodeItem>
+      {routeContent}
     </div>
   );
 }
 
 function LlmToolCallbackItem({
   callback,
+  defaultToolsExpanded,
   expanded,
   loadFailed,
   loading,
   onLoadArtifact,
+  onLoadArtifacts,
   onToggle
 }: {
   callback: LlmToolCallback;
+  defaultToolsExpanded: boolean;
   expanded: boolean;
   loadFailed: boolean;
   loading: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onToggle: () => void;
 }) {
   return (
@@ -635,13 +503,16 @@ function LlmToolCallbackItem({
               <LlmToolRouteNode
                 key={routeTraceNodeKey(callback)}
                 callback={callback}
+                defaultToolsExpanded={defaultToolsExpanded}
                 onLoadArtifact={onLoadArtifact}
+                onLoadArtifacts={onLoadArtifacts}
               />
               <RuntimeDebugPayloadBlock
                 height="11rem"
                 payload={callback.requestPayload}
                 title={i18nText('agentFlow', 'auto.tool_call')}
                 onLoadArtifact={onLoadArtifact}
+                onLoadArtifacts={onLoadArtifacts}
               />
               {callback.parsedResult ? (
                 <RuntimeDebugPayloadBlock
@@ -649,6 +520,7 @@ function LlmToolCallbackItem({
                   payload={callback.parsedResult}
                   title={i18nText('agentFlow', 'auto.parse_results')}
                   onLoadArtifact={onLoadArtifact}
+                  onLoadArtifacts={onLoadArtifacts}
                 />
               ) : null}
               {callback.callbackPayload ? (
@@ -657,6 +529,7 @@ function LlmToolCallbackItem({
                   payload={callback.callbackPayload}
                   title={i18nText('agentFlow', 'auto.full_callback')}
                   onLoadArtifact={onLoadArtifact}
+                  onLoadArtifacts={onLoadArtifacts}
                 />
               ) : (
                 <Typography.Text type="secondary">
@@ -741,6 +614,15 @@ const INITIAL_LLM_TOOL_TRACE_TREE_STATE: LlmToolTraceTreeState = {
   loadingToolKey: null,
   failedToolKeys: new Set()
 };
+
+function createInitialLlmToolTraceTreeState(
+  defaultToolsExpanded: boolean
+): LlmToolTraceTreeState {
+  return {
+    ...INITIAL_LLM_TOOL_TRACE_TREE_STATE,
+    toolsExpanded: defaultToolsExpanded
+  };
+}
 
 type LlmToolTraceTreeAction =
   | { type: 'toggle-tools' }
@@ -838,25 +720,40 @@ function llmToolTraceTreeResetKey({
 export function LlmToolTraceTree(props: {
   debugPayload: unknown;
   debugPayloads?: unknown[];
+  defaultToolsExpanded?: boolean;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
+  onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const resetKey = llmToolTraceTreeResetKey(props);
 
-  return <LlmToolTraceTreeContent key={resetKey} {...props} />;
+  return (
+    <LlmToolTraceTreeContent
+      key={`${resetKey}:${props.defaultToolsExpanded ? 'open' : 'closed'}`}
+      {...props}
+    />
+  );
 }
 
 function LlmToolTraceTreeContent({
+  defaultToolsExpanded = false,
   debugPayload,
   debugPayloads,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadArtifacts,
+  onLoadToolCallbackDetail
 }: {
+  defaultToolsExpanded?: boolean;
   debugPayload: unknown;
   debugPayloads?: unknown[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
+  onLoadToolCallbackDetail?: (detailRef: string) => Promise<unknown>;
 }) {
   const [traceTreeState, dispatchTraceTree] = useReducer(
     llmToolTraceTreeReducer,
-    INITIAL_LLM_TOOL_TRACE_TREE_STATE
+    defaultToolsExpanded,
+    createInitialLlmToolTraceTreeState
   );
   const mountedRef = useRef(true);
   const debugPayloadList = useMemo(
@@ -887,6 +784,7 @@ function LlmToolTraceTreeContent({
           duration_ms: loadedCallback.duration_ms ?? callback.duration_ms,
           detailArtifactRef:
             callback.detailArtifactRef ?? loadedCallback.detailArtifactRef,
+          detailRef: callback.detailRef ?? loadedCallback.detailRef,
           routeTrace: loadedCallback.routeTrace ?? callback.routeTrace
         };
       }),
@@ -901,7 +799,15 @@ function LlmToolTraceTreeContent({
   }, []);
 
   const loadToolCallbackDetail = (callback: LlmToolCallback) => {
-    if (!callback.detailArtifactRef || !onLoadArtifact) {
+    const loadDetail = callback.detailArtifactRef
+      ? onLoadArtifact
+        ? () => onLoadArtifact(callback.detailArtifactRef as string)
+        : null
+      : callback.detailRef && onLoadToolCallbackDetail
+        ? () => onLoadToolCallbackDetail(callback.detailRef as string)
+        : null;
+
+    if (!loadDetail) {
       return;
     }
     if (
@@ -913,7 +819,7 @@ function LlmToolTraceTreeContent({
 
     dispatchTraceTree({ type: 'load-start', toolKey: callback.key });
 
-    void onLoadArtifact(callback.detailArtifactRef)
+    void loadDetail()
       .then((payload) => {
         if (!mountedRef.current) {
           return;
@@ -967,6 +873,7 @@ function LlmToolTraceTreeContent({
       className="agent-flow-editor__debug-llm-tools"
     >
       <button
+        aria-label={`${i18nText('agentFlow', 'auto.tools')} ${summaryText}`}
         aria-expanded={traceTreeState.toolsExpanded}
         className="agent-flow-editor__debug-llm-tools-trigger"
         onClick={handleToggleTools}
@@ -1001,12 +908,14 @@ function LlmToolTraceTreeContent({
                     <LlmToolCallbackItem
                       key={callback.key}
                       callback={callback}
+                      defaultToolsExpanded={defaultToolsExpanded}
                       expanded={expanded}
                       loadFailed={traceTreeState.failedToolKeys.has(
                         callback.key
                       )}
                       loading={traceTreeState.loadingToolKey === callback.key}
                       onLoadArtifact={onLoadArtifact}
+                      onLoadArtifacts={onLoadArtifacts}
                       onToggle={() => {
                         const nextExpanded = !expanded;
                         dispatchTraceTree({

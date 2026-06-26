@@ -9,6 +9,7 @@ import type {
 } from '../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../hooks/runtime/useAgentFlowDebugSession';
 import { AgentFlowDockPanel } from '../editor/AgentFlowDockPanel';
+import type { RuntimeDebugArtifactBatchLoader } from '../detail/last-run/runtime-debug-payload';
 import { ConversationLogPanel } from './ConversationLogPanel';
 import { DebugConversationPane } from './conversation/DebugConversationPane';
 import { i18nText } from '../../../../shared/i18n/text';
@@ -17,6 +18,7 @@ export function AgentFlowDebugConsole({
   ariaLabel,
   closeLabel,
   composerUiOnly = false,
+  logActionRunId,
   messages,
   runContext,
   showClearAction = true,
@@ -29,6 +31,7 @@ export function AgentFlowDebugConsole({
   onClearSession,
   onClose,
   onLoadArtifact,
+  onLoadArtifacts,
   onOpenMessageLog,
   onOpenResumeTimeline,
   onReachConversationTop,
@@ -38,6 +41,7 @@ export function AgentFlowDebugConsole({
   ariaLabel?: string;
   closeLabel?: string;
   composerUiOnly?: boolean;
+  logActionRunId?: string | null;
   messages: AgentFlowDebugMessage[];
   runContext: AgentFlowRunContext;
   showClearAction?: boolean;
@@ -54,6 +58,7 @@ export function AgentFlowDebugConsole({
   onClearSession: () => void;
   onClose: () => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   onReachConversationTop?: () => void;
@@ -77,6 +82,7 @@ export function AgentFlowDebugConsole({
           message={openLogMessage}
           onClose={() => setOpenLogMessageId(null)}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
         />
       ) : null}
       <AgentFlowDockPanel
@@ -107,11 +113,13 @@ export function AgentFlowDebugConsole({
       >
         <DebugConversationPane
           composerUiOnly={composerUiOnly}
+          logActionRunId={logActionRunId}
           messages={messages}
           runContext={runContext}
           status={status}
           stopping={stopping}
           onLoadArtifact={onLoadArtifact}
+          onLoadArtifacts={onLoadArtifacts}
           onOpenResumeTimeline={onOpenResumeTimeline}
           onReachTop={onReachConversationTop}
           onOpenMessageLog={(message) => {

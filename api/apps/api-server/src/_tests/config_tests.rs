@@ -142,6 +142,45 @@ fn api_config_defaults_provider_install_root_to_api_workspace_plugins_directory(
 }
 
 #[test]
+fn api_config_derives_stable_default_api_node_id_from_provider_install_root() {
+    let env = [
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_PROVIDER_INSTALL_ROOT", "/tmp/1flowbase-provider-a"),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ];
+    let first = ApiConfig::from_env_map(&env).unwrap();
+    let second = ApiConfig::from_env_map(&env).unwrap();
+
+    assert_eq!(first.api_node_id, second.api_node_id);
+    assert!(first.api_node_id.starts_with("api-node-"));
+}
+
+#[test]
+fn api_config_uses_explicit_api_node_id() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_PROVIDER_INSTALL_ROOT", "/tmp/1flowbase-provider-a"),
+        ("API_NODE_ID", "docker-api-1"),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .unwrap();
+
+    assert_eq!(config.api_node_id, "docker-api-1");
+}
+
+#[test]
 fn api_config_uses_api_storage_as_default_business_file_root() {
     let config = ApiConfig::from_env_map(&[
         (
@@ -260,6 +299,30 @@ fn api_config_marks_session_cookie_secure_in_production() {
     .unwrap();
 
     assert!(config.cookie_secure);
+}
+
+#[test]
+fn api_config_allows_disabling_secure_session_cookie_for_plain_http_deployments() {
+    let config = ApiConfig::from_env_map(&[
+        (
+            "API_DATABASE_URL",
+            "postgres://postgres:1flowbase@127.0.0.1:35432/1flowbase",
+        ),
+        ("API_ENV", "production"),
+        ("API_ALLOWED_ORIGINS", "http://192.168.31.25:3200"),
+        ("API_COOKIE_SECURE", "false"),
+        (
+            "API_PROVIDER_SECRET_MASTER_KEY",
+            "strong-provider-secret-master-key",
+        ),
+        ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
+        ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
+        ("BOOTSTRAP_ROOT_PASSWORD", "secret"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1flowbase"),
+    ])
+    .unwrap();
+
+    assert!(!config.cookie_secure);
 }
 
 #[test]

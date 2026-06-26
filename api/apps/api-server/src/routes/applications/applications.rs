@@ -450,7 +450,7 @@ pub async fn create_application(
     Json(body): Json<CreateApplicationBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ApplicationDetailResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let created = ApplicationService::new(state.store.clone())
         .create_application(CreateApplicationCommand {
@@ -487,7 +487,7 @@ pub async fn create_application_tag(
     Json(body): Json<CreateApplicationTagBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ApplicationTagCatalogResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let created = ApplicationService::new(state.store.clone())
         .create_application_tag(CreateApplicationTagCommand {
@@ -581,7 +581,7 @@ pub async fn replace_application_environment_variables(
     Json(body): Json<ReplaceApplicationEnvironmentVariablesBody>,
 ) -> Result<Json<ApiSuccess<Vec<ApplicationEnvironmentVariableResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let variables = body
         .variables
@@ -662,7 +662,7 @@ pub async fn replace_application_js_dependency_selection(
     Json(body): Json<ReplaceApplicationJsDependencySelectionBody>,
 ) -> Result<Json<ApiSuccess<ApplicationJsDependencySelectionResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let installation_id = body
         .installation_id
         .parse::<Uuid>()
@@ -707,7 +707,7 @@ pub async fn patch_application(
     Json(body): Json<PatchApplicationBody>,
 ) -> Result<Json<ApiSuccess<ApplicationDetailResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let tag_ids = body
         .tag_ids
@@ -751,7 +751,7 @@ pub async fn delete_application(
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     ApplicationService::new(state.store.clone())
         .delete_application(DeleteApplicationCommand {

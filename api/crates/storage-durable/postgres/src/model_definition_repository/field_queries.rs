@@ -36,10 +36,11 @@ pub(super) async fn insert_model_field(
             relation_options,
             sort_order,
             availability_status,
+            scope_id,
             created_by,
             updated_by
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $19)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, (select scope_id from model_definitions where id = $2), $19, $19)
         "#,
     )
     .bind(field.id)
@@ -239,10 +240,11 @@ pub(super) async fn insert_model_field_after_failure(
             relation_options,
             sort_order,
             availability_status,
+            scope_id,
             created_by,
             updated_by
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $19)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, (select scope_id from model_definitions where id = $2), $19, $19)
         on conflict (id) do update
         set availability_status = excluded.availability_status,
             updated_by = excluded.updated_by,

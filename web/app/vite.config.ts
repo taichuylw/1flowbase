@@ -40,6 +40,28 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    optimizeDeps: {
+      include: [
+        '@lexical/react/LexicalComposer',
+        '@lexical/react/LexicalComposerContext',
+        '@lexical/react/LexicalContentEditable',
+        '@lexical/react/LexicalErrorBoundary',
+        '@lexical/react/LexicalHistoryPlugin',
+        '@lexical/react/LexicalOnChangePlugin',
+        '@lexical/react/LexicalRichTextPlugin',
+        '@lexical/react/useLexicalNodeSelection',
+        '@lexical/utils',
+        '@monaco-editor/react',
+        '@scalar/api-reference-react',
+        '@xyflow/react',
+        'copy-to-clipboard',
+        'echarts',
+        'lexical',
+        'react-markdown',
+        'remark-breaks',
+        'remark-gfm'
+      ]
+    },
     build: {
       chunkSizeWarningLimit: 3500,
       rollupOptions: {
@@ -113,6 +135,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       globals: true,
+      testTimeout: 15_000,
       setupFiles: './src/test/setup.ts',
       coverage: {
         provider: 'v8',

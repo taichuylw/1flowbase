@@ -65,7 +65,30 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 2px;
   margin-left: auto;
+}
+
+.application-logs-page__archive-import-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--ant-color-text-secondary);
+}
+
+.application-logs-page__archive-import-status-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-logs-page__archive-import-progress {
+  flex: 1 1 180px;
+  min-width: 120px;
+  max-width: 320px;
 }
 
 .application-logs-page__list {

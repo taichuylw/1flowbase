@@ -61,13 +61,14 @@ impl HostExtensionMigrationRepository {
             r#"
             insert into host_extension_migrations (
                 id,
+                scope_id,
                 extension_id,
                 plugin_version,
                 migration_id,
                 checksum,
                 package_fingerprint
             ) values (
-                $1, $2, $3, $4, $5, $6
+                $1, $2, $3, $4, $5, $6, $7
             )
             returning
                 id,
@@ -80,6 +81,7 @@ impl HostExtensionMigrationRepository {
             "#,
         )
         .bind(Uuid::now_v7())
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(&input.extension_id)
         .bind(&input.plugin_version)
         .bind(&input.migration_id)

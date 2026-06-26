@@ -6,6 +6,7 @@ import type {
   AgentFlowRunContext
 } from '../../../api/runtime';
 import type { AgentFlowDebugSessionStatus } from '../../../hooks/runtime/useAgentFlowDebugSession';
+import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/runtime-debug-payload';
 import { DebugAssistantMessage } from './DebugAssistantMessage';
 import { DebugComposer } from './DebugComposer';
 import { DebugMarkdownContent } from './DebugMarkdownContent';
@@ -38,12 +39,14 @@ function debugMessageLabel(role: AgentFlowDebugMessage['role']) {
 
 export function DebugConversationPane({
   composerUiOnly = false,
+  logActionRunId,
   status,
   stopping,
   runContext,
   messages,
   onChangeQuery,
   onLoadArtifact,
+  onLoadArtifacts,
   onOpenMessageLog,
   onOpenResumeTimeline,
   onReachTop,
@@ -57,12 +60,14 @@ export function DebugConversationPane({
   messages: AgentFlowDebugMessage[];
   onChangeQuery: (value: string) => void;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
   onOpenMessageLog?: (message: AgentFlowDebugMessage) => void;
   onOpenResumeTimeline?: (message: AgentFlowDebugMessage) => void;
   onReachTop?: () => void;
   onStopRun: () => void;
   onSubmitPrompt: (prompt: string) => void;
   composerUiOnly?: boolean;
+  logActionRunId?: string | null;
   showComposer?: boolean;
 }) {
   const [uiOnlyComposerValue, setUiOnlyComposerValue] = useState('');
@@ -222,6 +227,14 @@ export function DebugConversationPane({
     }
   }
 
+  function messageMatchesLogActionRun(message: AgentFlowDebugMessage) {
+    if (!logActionRunId) {
+      return true;
+    }
+
+    return (message.detailRunId ?? message.runId) === logActionRunId;
+  }
+
   return (
     <div className="agent-flow-editor__debug-console-pane agent-flow-editor__debug-conversation-pane">
       <div
@@ -252,7 +265,12 @@ export function DebugConversationPane({
                   key={message.id}
                   message={message}
                   onLoadArtifact={onLoadArtifact}
-                  onOpenLog={onOpenMessageLog}
+                  onLoadArtifacts={onLoadArtifacts}
+                  onOpenLog={
+                    messageMatchesLogActionRun(message)
+                      ? onOpenMessageLog
+                      : undefined
+                  }
                   onOpenResumeTimeline={onOpenResumeTimeline}
                 />
               ) : (

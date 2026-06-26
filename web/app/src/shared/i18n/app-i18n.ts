@@ -29,6 +29,8 @@ import meZhHans from '../../features/me/i18n/zh_Hans.json';
 import meEnUS from '../../features/me/i18n/en_US.json';
 import schemaUiZhHans from '../../shared/schema-ui/i18n/zh_Hans.json';
 import schemaUiEnUS from '../../shared/schema-ui/i18n/en_US.json';
+import settingsMcpManagementZhHans from '../../features/settings/components/mcp-management/i18n/zh_Hans.json';
+import settingsMcpManagementEnUS from '../../features/settings/components/mcp-management/i18n/en_US.json';
 import settingsZhHans from '../../features/settings/i18n/zh_Hans.json';
 import settingsEnUS from '../../features/settings/i18n/en_US.json';
 import sharedZhHans from './resources/zh_Hans.json';
@@ -49,6 +51,7 @@ const appTranslationResources = {
     frontstage: frontstageZhHans,
     me: meZhHans,
     schemaUi: schemaUiZhHans,
+    settingsMcpManagement: settingsMcpManagementZhHans,
     settings: settingsZhHans,
     shared: sharedZhHans,
     sharedUi: sharedUiZhHans,
@@ -64,6 +67,7 @@ const appTranslationResources = {
     frontstage: frontstageEnUS,
     me: meEnUS,
     schemaUi: schemaUiEnUS,
+    settingsMcpManagement: settingsMcpManagementEnUS,
     settings: settingsEnUS,
     shared: sharedEnUS,
     sharedUi: sharedUiEnUS,

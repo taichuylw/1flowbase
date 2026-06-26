@@ -380,6 +380,10 @@ fn service(state: &ApiState) -> ModelProviderService<MainDurableStore, ApiProvid
         ApiProviderRuntime::new(state.provider_runtime.clone()),
         state.provider_secret_master_key.clone(),
     )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
+    )
 }
 
 fn format_time(value: time::OffsetDateTime) -> String {
@@ -829,7 +833,7 @@ pub async fn create_instance(
     Json(body): Json<CreateModelProviderBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ModelProviderInstanceResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let created = service(&state)
         .create_instance(CreateModelProviderInstanceCommand {
             actor_user_id: context.user.id,
@@ -875,7 +879,7 @@ pub async fn update_instance(
     Json(body): Json<UpdateModelProviderBody>,
 ) -> Result<Json<ApiSuccess<ModelProviderInstanceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let updated = service(&state)
         .update_instance(UpdateModelProviderInstanceCommand {
             actor_user_id: context.user.id,
@@ -916,7 +920,7 @@ pub async fn validate_instance(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<ValidateModelProviderResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = service(&state)
         .validate_instance(context.user.id, parse_uuid(&id, "id")?)
         .await?;
@@ -982,7 +986,7 @@ pub async fn update_main_instance(
     Json(body): Json<UpdateModelProviderMainInstanceBody>,
 ) -> Result<Json<ApiSuccess<ModelProviderMainInstanceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let view = service(&state)
         .update_main_instance(UpdateModelProviderMainInstanceCommand {
             actor_user_id: context.user.id,
@@ -1007,7 +1011,7 @@ pub async fn preview_models(
     Json(body): Json<PreviewModelProviderModelsBody>,
 ) -> Result<Json<ApiSuccess<PreviewModelProviderModelsResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let preview = service(&state)
         .preview_models(PreviewModelProviderModelsCommand {
             actor_user_id: context.user.id,
@@ -1049,7 +1053,7 @@ pub async fn reveal_secret(
     Json(body): Json<RevealModelProviderSecretBody>,
 ) -> Result<Json<ApiSuccess<RevealModelProviderSecretResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let value = service(&state)
         .reveal_secret(context.user.id, parse_uuid(&id, "id")?, &body.key)
         .await?;
@@ -1089,7 +1093,7 @@ pub async fn refresh_models(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<ModelProviderModelCatalogResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let catalog = service(&state)
         .refresh_models(context.user.id, parse_uuid(&id, "id")?)
         .await?;
@@ -1108,7 +1112,7 @@ pub async fn delete_instance(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<DeletedResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     service(&state)
         .delete_instance(DeleteModelProviderInstanceCommand {
             actor_user_id: context.user.id,

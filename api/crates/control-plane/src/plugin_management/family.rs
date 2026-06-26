@@ -71,6 +71,9 @@ where
         if is_host_extension_installation(&installation) {
             return Err(ControlPlaneError::Conflict("plugin_installation_requires_restart").into());
         }
+        let local_installation = self
+            .ready_current_node_installation(command.installation_id)
+            .await?;
 
         let task_id = Uuid::now_v7();
         let task = self
@@ -104,39 +107,55 @@ where
                     desired_state: domain::PluginDesiredState::ActiveRequested,
                     availability_status: derive_availability_status(
                         domain::PluginDesiredState::ActiveRequested,
-                        installation.artifact_status,
-                        installation.runtime_status,
+                        domain::PluginArtifactStatus::Ready,
+                        local_installation.runtime_status,
                     ),
                 })
                 .await?;
-            let loaded = match self.runtime.ensure_loaded(&updated).await {
+            let mut runtime_installation = updated;
+            runtime_installation.installed_path = local_installation.installed_path.clone();
+            let loaded = match self.runtime.ensure_loaded(&runtime_installation).await {
                 Ok(()) => {
-                    self.repository
+                    let loaded = self
+                        .repository
                         .update_runtime_snapshot(&UpdatePluginRuntimeSnapshotInput {
-                            installation_id: updated.id,
+                            installation_id: runtime_installation.id,
                             runtime_status: domain::PluginRuntimeStatus::Active,
                             availability_status: derive_availability_status(
-                                updated.desired_state,
-                                updated.artifact_status,
+                                runtime_installation.desired_state,
+                                domain::PluginArtifactStatus::Ready,
                                 domain::PluginRuntimeStatus::Active,
                             ),
                             last_load_error: None,
                         })
-                        .await?
+                        .await?;
+                    self.mark_current_node_runtime_status(
+                        &runtime_installation,
+                        domain::PluginRuntimeStatus::Active,
+                        None,
+                    )
+                    .await?;
+                    loaded
                 }
                 Err(error) => {
                     self.repository
                         .update_runtime_snapshot(&UpdatePluginRuntimeSnapshotInput {
-                            installation_id: updated.id,
+                            installation_id: runtime_installation.id,
                             runtime_status: domain::PluginRuntimeStatus::LoadFailed,
                             availability_status: derive_availability_status(
-                                updated.desired_state,
-                                updated.artifact_status,
+                                runtime_installation.desired_state,
+                                domain::PluginArtifactStatus::Ready,
                                 domain::PluginRuntimeStatus::LoadFailed,
                             ),
                             last_load_error: Some(error.to_string()),
                         })
                         .await?;
+                    self.mark_current_node_runtime_status(
+                        &runtime_installation,
+                        domain::PluginRuntimeStatus::LoadFailed,
+                        Some(error.to_string()),
+                    )
+                    .await?;
                     return Err(error);
                 }
             };
@@ -318,6 +337,7 @@ where
             &current,
             &target,
             command.actor_user_id,
+            None,
         )
         .await
     }
@@ -515,6 +535,7 @@ where
         current: &domain::PluginInstallationRecord,
         target: &domain::PluginInstallationRecord,
         actor_user_id: Uuid,
+        compatibility_override: Option<&serde_json::Value>,
     ) -> Result<domain::PluginTaskRecord> {
         if matches!(target.desired_state, domain::PluginDesiredState::Disabled) {
             self.enable_plugin(EnablePluginCommand {
@@ -539,31 +560,37 @@ where
                 actor_user_id: Some(actor_user_id),
             })
             .await?;
+        let mut running_detail_json = json!({
+            "provider_code": provider_code,
+            "previous_installation_id": current.id,
+            "previous_version": current.plugin_version,
+            "target_installation_id": target.id,
+            "target_version": target.plugin_version,
+        });
+        if let Some(compatibility_override) = compatibility_override.cloned() {
+            running_detail_json["compatibility_override"] = compatibility_override;
+        }
         let running_task = self
             .transition_task(
                 &task,
                 domain::PluginTaskStatus::Running,
                 Some("running".into()),
-                json!({
-                    "provider_code": provider_code,
-                    "previous_installation_id": current.id,
-                    "previous_version": current.plugin_version,
-                    "target_installation_id": target.id,
-                    "target_version": target.plugin_version,
-                }),
+                running_detail_json,
             )
             .await?;
 
         let switch_result = async {
-            let package = load_provider_package(&target.installed_path)?;
-            refresh_provider_package_catalog_projection(&self.repository, target, &package).await?;
+            let local_target = self.ready_current_node_installation(target.id).await?;
+            let package = load_provider_package(&local_target.installed_path)?;
+            refresh_provider_package_catalog_projection(&self.repository, &local_target, &package)
+                .await?;
             let migrated_instances = self
                 .repository
                 .reassign_instances_to_installation(&ReassignModelProviderInstancesInput {
                     workspace_id: actor.current_workspace_id,
                     provider_code: provider_code.to_string(),
-                    target_installation_id: target.id,
-                    target_protocol: target.protocol.clone(),
+                    target_installation_id: local_target.id,
+                    target_protocol: local_target.protocol.clone(),
                     updated_by: actor_user_id,
                 })
                 .await?;
@@ -585,12 +612,22 @@ where
             }
             self.repository
                 .create_assignment(&CreatePluginAssignmentInput {
-                    installation_id: target.id,
+                    installation_id: local_target.id,
                     workspace_id: actor.current_workspace_id,
                     provider_code: provider_code.to_string(),
                     actor_user_id,
                 })
                 .await?;
+            let mut switch_audit_detail = json!({
+                "provider_code": provider_code,
+                "previous_installation_id": current.id,
+                "previous_version": current.plugin_version,
+                "target_installation_id": local_target.id,
+                "target_version": local_target.plugin_version,
+            });
+            if let Some(compatibility_override) = compatibility_override.cloned() {
+                switch_audit_detail["compatibility_override"] = compatibility_override;
+            }
             self.repository
                 .append_audit_log(&audit_log(
                     Some(actor.current_workspace_id),
@@ -598,13 +635,7 @@ where
                     "plugin_assignment",
                     Some(target.id),
                     "plugin.version_switched",
-                    json!({
-                        "provider_code": provider_code,
-                        "previous_installation_id": current.id,
-                        "previous_version": current.plugin_version,
-                        "target_installation_id": target.id,
-                        "target_version": target.plugin_version,
-                    }),
+                    switch_audit_detail,
                 ))
                 .await?;
             self.repository
@@ -626,18 +657,22 @@ where
 
         match switch_result {
             Ok(migrated_instance_count) => {
+                let mut success_detail_json = json!({
+                    "provider_code": provider_code,
+                    "previous_installation_id": current.id,
+                    "previous_version": current.plugin_version,
+                    "target_installation_id": target.id,
+                    "target_version": target.plugin_version,
+                    "migrated_instance_count": migrated_instance_count,
+                });
+                if let Some(compatibility_override) = compatibility_override.cloned() {
+                    success_detail_json["compatibility_override"] = compatibility_override;
+                }
                 self.transition_task(
                     &running_task,
                     domain::PluginTaskStatus::Succeeded,
                     Some("switched".into()),
-                    json!({
-                        "provider_code": provider_code,
-                        "previous_installation_id": current.id,
-                        "previous_version": current.plugin_version,
-                        "target_installation_id": target.id,
-                        "target_version": target.plugin_version,
-                        "migrated_instance_count": migrated_instance_count,
-                    }),
+                    success_detail_json,
                 )
                 .await
             }

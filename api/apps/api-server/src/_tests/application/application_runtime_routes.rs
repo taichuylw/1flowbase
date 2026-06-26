@@ -613,7 +613,7 @@ async fn wait_for_run_detail(
             .oneshot(
                 Request::builder()
                     .uri(format!(
-                        "/api/console/applications/{application_id}/logs/runs/{run_id}"
+                        "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree"
                     ))
                     .header("cookie", cookie)
                     .body(Body::empty())
@@ -638,6 +638,94 @@ async fn wait_for_run_detail(
     panic!(
         "timed out waiting for run status: {expected_statuses:?}, last status: {last_status}, last error: {last_error}"
     );
+}
+
+async fn load_trace_node_content_payload(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    run_id: &str,
+    trace_node_id: &str,
+) -> Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/content"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+
+    serde_json::from_slice(&body).unwrap()
+}
+
+async fn load_trace_node_detail_payload(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    run_id: &str,
+    trace_node_id: &str,
+    detail_ref_id: &str,
+) -> Value {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/api/console/applications/{application_id}/logs/runs/{run_id}/trace-tree/nodes/{trace_node_id}/details/{detail_ref_id}"
+                ))
+                .header("cookie", cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+
+    serde_json::from_slice(&body).unwrap()
+}
+
+async fn load_trace_node_detail_payload_for_kind(
+    app: &axum::Router,
+    cookie: &str,
+    application_id: &str,
+    run_id: &str,
+    trace_node_id: &str,
+    detail_kind: &str,
+) -> Option<Value> {
+    let content_payload =
+        load_trace_node_content_payload(app, cookie, application_id, run_id, trace_node_id).await;
+    let detail_ref_id = content_payload["data"]["detail_refs"]
+        .as_array()
+        .and_then(|detail_refs| {
+            detail_refs
+                .iter()
+                .find(|detail_ref| detail_ref["detail_kind"].as_str() == Some(detail_kind))
+        })
+        .and_then(|detail_ref| detail_ref["detail_ref_id"].as_str())?
+        .to_string();
+
+    Some(
+        load_trace_node_detail_payload(
+            app,
+            cookie,
+            application_id,
+            run_id,
+            trace_node_id,
+            &detail_ref_id,
+        )
+        .await,
+    )
 }
 
 async fn resolve_runtime_debug_artifact_value(
@@ -754,6 +842,7 @@ fn sse_data_payload(frame: &str) -> Value {
 }
 
 mod artifacts_billing_routes;
+mod lazy_tree_contract_routes;
 mod logs_routes;
 mod read_side_effect_routes;
 mod resume_cancel_routes;

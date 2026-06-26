@@ -9,7 +9,7 @@ description: Evidence-driven QA evaluation for 1flowbase dev acceptance, PR merg
 
 `qa-evaluation` 不是另一个开发 Skill，而是 1flowbase 的质量评估器。开发阶段默认不自动注入完整测试门禁；进入自检、验收、回归或交付阶段后，再由这个 Skill 负责选择脚本、收集证据并输出 QA 结论。它默认只产出问题报告与修正方向，不直接改代码。
 
-质量门禁先分 lane 再选证据：开发后验收优先快，PR 门禁优先合并信心，项目体检优先完整健康快照和维护者感知。不要把三种资源预算混成一套重门禁。
+质量门禁先分 lane 再选证据：开发后验收优先快，PR 门禁优先合并信心，项目体检优先完整健康快照和维护者感知。当前本地开发分支专注结果验证和尽早发现直接问题；仓库级、线上级、重型质量门禁默认交给 beta / CI / 专门质量工作区。不要把三种资源预算混成一套重门禁。
 
 Project Health Gate 的顺序固定为：先确认 lane 和范围，再建立质量维度矩阵，再把脚本、artifact、日志、截图、代码证据归类到矩阵，最后输出 findings。当前失败脚本或错误报告只是证据来源，不得成为项目体检的完整范围或主线。
 
@@ -50,8 +50,9 @@ Dev Acceptance Gate 和 Project Health Gate 都必须把代码体检问题绑定
 - 先按 `references/gate-lanes.md` 选择门禁 lane：`Dev Acceptance Gate`、`PR Merge Gate`、`Project Health Gate`
 - 默认 `Dev Acceptance Gate / task mode`；用户明确要求 PR 校验、全量门禁、项目体检或完整 QA 审计时，才升级到对应 lane
 - `Dev Acceptance Gate` 追求快速反馈：复用 TDD 红绿结果，按风险向量选择最小证据链，证据足够或预算耗尽就停，不用仓库级门禁惩罚局部开发
-- `PR Merge Gate` 追求合并信心：优先 GitHub Actions / artifact，报告 blocker、warning、advisory、资源耗时和合并风险
-- `Project Health Gate` 追求维护者感知：先按 `references/project-evaluation-checklist.md` 建质量维度矩阵，再读取远端完整门禁、artifact、warningFiles 和本地证据，输出全局快照、风险热力图、趋势、轮转深挖和维护建议
+- 本地开发分支只证明当前任务结果、直接相关 contract 和主路径风险；workspace 级 cargo / pnpm build / clippy / full test、coverage、verify-repo、repo hygiene、i18n hygiene 等重门禁默认延后到 beta / CI / 专门质量工作区
+- `PR Merge Gate` 追求合并信心：优先 GitHub Actions / artifact / beta 质量门禁结果，报告 blocker、warning、advisory、资源耗时和合并风险
+- `Project Health Gate` 追求维护者感知：先按 `references/project-evaluation-checklist.md` 建质量维度矩阵，再读取远端完整门禁、artifact、warningFiles、beta 质量工作区产物和必要本地证据，输出全局快照、风险热力图、趋势、轮转深挖和维护建议
 - `Project Health Gate` 不得只围绕当前失败脚本或错误报告展开；脚本失败必须先归入对应质量维度、硬性门禁失败、warning 或未覆盖项，再进入 findings
 - 评估前先读 `.memory/AGENTS.md`、`.memory/user-memory.md`、项目记忆、反馈记忆和相关 spec
 - 仓库质量门禁“怎么选、怎么组合、各自覆盖什么”看 `references/repo-quality-gates.md`
@@ -100,6 +101,7 @@ Dev Acceptance Gate 和 Project Health Gate 都必须把代码体检问题绑定
 - Frontend quality gates: `references/frontend-quality-gates.md`
 - Route-scoped runtime evidence: `node scripts/node/page-debug.js snapshot|open ...`
 - Backend regression and API evidence steps: `references/backend-regression-steps.md`
+- Scope_id routing semantics: `references/scope-id-routing.md`
 - Authenticated backend API evidence: `node scripts/node/tooling.js api-debug [METHOD] <api-path-or-url> ...`
 - Rust backend quality checks: `references/rust-backend-quality-gates.md`
 - Report output: `references/report-template.md`
@@ -114,6 +116,7 @@ Dev Acceptance Gate 和 Project Health Gate 都必须把代码体检问题绑定
 - 没有证据就下结论
 - 把代码审查写成 QA 报告
 - 小任务也直接上全量审计
+- 把 beta / CI / 专门质量工作区应承接的全局门禁拉回当前本地开发分支
 - 只挑视觉问题，不看契约和状态
 - 只看当前改动点，不看被影响的其他消费者
 - 后端接口验收只报告 cargo / clippy 通过，没有对照预期 response、认证态、状态副作用或错误 shape 的证据

@@ -1,6 +1,6 @@
 # Backend Regression Steps
 
-只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须按以下顺序做后端回归；不要跳过前置验证直接下 QA 结论。
+只要评估范围涉及后端 API、状态入口、插件边界、runtime、`Resource Action Kernel`、HostExtension registry 或 `route / service / repository / domain / mapper` 分层，就必须按以下顺序做后端回归；Dev Acceptance Gate 按最小证据链裁剪，PR / Project Health Gate 再扩大覆盖。不要跳过前置验证直接下 QA 结论，也不要把运行态取证当成默认步骤。
 
 ## Contents
 
@@ -51,10 +51,10 @@
 
 ## Step 2: Run Backend Verification
 
-优先运行仓库约定的后端验证脚本；如果脚本尚未落地，至少执行最小后端验证命令。
+优先运行与当前风险直接对应的后端验证脚本；Dev Acceptance Gate 默认复用 TDD 红绿结果，只补一个主验证命令和必要 smoke。PR / Project Health Gate 才默认考虑仓库级后端验证。
 同一工作区内的 `cargo` 验证命令默认串行执行，不要并发启动多条 `cargo test / check / clippy`，否则容易卡在 `package cache` 或 `artifact directory` 锁上，拿不到稳定 QA 证据。
 
-优先：
+PR / Project Health Gate 优先：
 
 ```bash
 node scripts/node/verify-backend.js
@@ -66,7 +66,7 @@ node scripts/node/verify-backend.js
 node scripts/node/tooling.js check-rust-backend
 ```
 
-最小验证：
+仓库级最小验证：
 
 ```bash
 cargo fmt --all --check
@@ -75,7 +75,7 @@ cargo test --workspace
 cargo check --workspace
 ```
 
-如果只改单一 crate，至少补：
+如果只改单一 crate，Dev Acceptance Gate 至少补：
 
 ```bash
 cargo test -p <crate-name>
@@ -91,7 +91,7 @@ cargo test -p <crate-name>
 
 - 预期来源：method / path / plane、认证方式、CSRF 要求、请求 DTO、预期 status、response DTO / error shape、状态副作用、审计或事件
 - 认证态：in-process route integration 优先复用项目测试 support 的登录 / session / CSRF helper；运行态请求先调用 `/api/public/auth/providers/password-local/sign-in` 获取 session cookie 和 `data.csrf_token`，mutating console request 带 `cookie` 与 `x-csrf-token`
-- 运行态取证：优先使用 `node scripts/node/tooling.js api-debug [METHOD] <api-path-or-url> --expect-status <code>`；该工具从 api-server `.env` 读取 root 账号密码，自动登录并为任意 API 请求带认证态
+- 运行态取证：仅当需要真实服务、认证链、环境配置、线上 / 本地差异或手工复现证据时，使用 `node scripts/node/tooling.js api-debug [METHOD] <api-path-or-url> --expect-status <code>`；同一 route contract 已被 integration test 覆盖时，不默认重复运行。该工具从 api-server `.env` 读取 root 账号密码，自动登录并为任意 API 请求带认证态
 - evidence 记录：保留请求摘要、status、脱敏 headers、response body 关键字段、执行命令或测试名；原始 artifact 放 `tmp/test-governance/`，不得记录 cookie、token、secret 或密码
 - 路径是否仍放在正确平面
 - 是否保持 `ApiSuccess` / `204 No Content` / 统一错误结构

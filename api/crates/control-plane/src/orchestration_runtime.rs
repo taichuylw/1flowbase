@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -19,6 +22,7 @@ use crate::{
     flow::FlowService,
     model_provider::failover_queue::{freeze_queue_items, FailoverQueueSnapshotItem},
     plugin_lifecycle::reconcile_installation_snapshot,
+    plugin_management::ready_current_node_plugin_installation,
     ports::{
         AppendRunEventInput, ApplicationJsDependencySelectionRepository, ApplicationRepository,
         CompleteCallbackTaskInput, FlowRepository, ModelDefinitionRepository,
@@ -45,6 +49,7 @@ mod persistence;
 mod provider_invoker;
 mod runtime_event_persister;
 pub mod scheduler_admission;
+pub mod trace_projection;
 
 #[cfg(test)]
 pub(crate) use provider_invoker::test_support;
@@ -256,6 +261,8 @@ struct RuntimeProviderInvoker<R, H> {
     flow_run_id: Option<Uuid>,
     active_node_id: Option<String>,
     active_node_run_id: Option<Uuid>,
+    api_node_id: Option<String>,
+    provider_install_root: Option<PathBuf>,
     answer_presentation:
         Option<Arc<tokio::sync::Mutex<answer_presentation::AnswerPresentationCursor>>>,
 }
@@ -267,6 +274,8 @@ pub struct OrchestrationRuntimeService<R, H> {
     file_storage_registry: Option<Arc<storage_object::FileStorageDriverRegistry>>,
     provider_secret_master_key: String,
     runtime_event_stream: Option<Arc<dyn RuntimeEventStream>>,
+    api_node_id: Option<String>,
+    provider_install_root: Option<PathBuf>,
 }
 
 impl<R, H> OrchestrationRuntimeService<R, H>
@@ -297,7 +306,19 @@ where
             file_storage_registry: None,
             provider_secret_master_key: provider_secret_master_key.into(),
             runtime_event_stream: None,
+            api_node_id: None,
+            provider_install_root: None,
         }
+    }
+
+    pub fn with_node_artifact_context(
+        mut self,
+        node_id: impl Into<String>,
+        install_root: impl Into<PathBuf>,
+    ) -> Self {
+        self.api_node_id = Some(node_id.into());
+        self.provider_install_root = Some(install_root.into());
+        self
     }
 
     pub fn with_file_storage_registry(
@@ -325,6 +346,8 @@ where
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: None,
         }
     }
@@ -345,6 +368,8 @@ where
             flow_run_id: None,
             active_node_id: None,
             active_node_run_id: None,
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: None,
         }
     }

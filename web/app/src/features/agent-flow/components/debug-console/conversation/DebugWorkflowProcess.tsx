@@ -3,6 +3,7 @@ import { DownOutlined, RightOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 
 import type { AgentFlowTraceItem } from '../../../api/runtime';
+import type { RuntimeDebugArtifactBatchLoader } from '../../detail/last-run/runtime-debug-payload';
 import { DebugWorkflowNodeItem, StatusIcon } from './DebugWorkflowNodeRow';
 import { DebugWorkflowNodeDetailContent } from './LlmToolTraceTree';
 import { groupTraceItemsForDisplay } from './debug-workflow-trace-utils';
@@ -34,10 +35,12 @@ function workflowStatus(items: AgentFlowTraceItem[]) {
 
 export function DebugWorkflowProcess({
   items,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadArtifacts
 }: {
   items: AgentFlowTraceItem[];
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [expandedNodeKeys, setExpandedNodeKeys] = useState<Set<string>>(
@@ -103,6 +106,7 @@ export function DebugWorkflowProcess({
                   <DebugWorkflowNodeDetailContent
                     item={item}
                     onLoadArtifact={onLoadArtifact}
+                    onLoadArtifacts={onLoadArtifacts}
                   />
                 </div>
               </DebugWorkflowNodeItem>

@@ -7,7 +7,10 @@ import { Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import type { AgentFlowAnswerSnapshot } from '../../../api/runtime';
-import { RuntimeDebugPayloadBlock } from '../../detail/last-run/NodeRunIOCard';
+import {
+  RuntimeDebugPayloadBlock,
+  type RuntimeDebugArtifactBatchLoader
+} from '../../detail/last-run/runtime-debug-payload';
 
 function snapshotPayload(snapshot: AgentFlowAnswerSnapshot) {
   return Object.keys(snapshot.outputPayload).length > 0
@@ -21,10 +24,12 @@ function snapshotStatus(snapshot: AgentFlowAnswerSnapshot) {
 
 export function AnswerSnapshotTrace({
   snapshot,
-  onLoadArtifact
+  onLoadArtifact,
+  onLoadArtifacts
 }: {
   snapshot: AgentFlowAnswerSnapshot;
   onLoadArtifact?: (artifactRef: string) => Promise<unknown>;
+  onLoadArtifacts?: RuntimeDebugArtifactBatchLoader;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -59,6 +64,7 @@ export function AnswerSnapshotTrace({
             payload={snapshotPayload(snapshot)}
             title="answer快照"
             onLoadArtifact={onLoadArtifact}
+            onLoadArtifacts={onLoadArtifacts}
           />
         </div>
       ) : null}

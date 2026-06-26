@@ -1,9 +1,10 @@
-use super::install::{load_actor_context_for_user, load_provider_package};
+use super::install::load_actor_context_for_user;
 use super::*;
 
 #[derive(Debug, Clone)]
 pub struct PluginCatalogEntry {
     pub installation: domain::PluginInstallationRecord,
+    pub local_artifact: domain::PluginArtifactInstanceRecord,
     pub plugin_type: String,
     pub namespace: String,
     pub label_key: String,
@@ -109,6 +110,10 @@ pub struct OfficialPluginCatalogEntry {
     pub description: Option<String>,
     pub protocol: String,
     pub latest_version: String,
+    pub minimum_host_version: String,
+    pub current_host_version: String,
+    pub compatibility_status: String,
+    pub compatibility_warning_reason: Option<String>,
     pub icon: Option<String>,
     pub selected_artifact: OfficialPluginArtifact,
     pub help_url: Option<String>,
@@ -139,6 +144,7 @@ pub struct PluginInstalledVersionView {
     pub trust_level: String,
     pub desired_state: String,
     pub availability_status: String,
+    pub local_artifact: domain::PluginArtifactInstanceRecord,
     pub created_at: OffsetDateTime,
     pub is_current: bool,
 }
@@ -158,9 +164,30 @@ pub struct PluginFamilyView {
     pub model_discovery_mode: String,
     pub current_installation_id: Uuid,
     pub current_version: String,
+    pub current_local_artifact: domain::PluginArtifactInstanceRecord,
     pub latest_version: Option<String>,
     pub has_update: bool,
     pub installed_versions: Vec<PluginInstalledVersionView>,
+}
+
+fn local_artifact_snapshot(
+    snapshots: &HashMap<Uuid, domain::PluginArtifactInstanceRecord>,
+    node_id: &str,
+    installation: &domain::PluginInstallationRecord,
+) -> domain::PluginArtifactInstanceRecord {
+    snapshots.get(&installation.id).cloned().unwrap_or_else(|| {
+        domain::PluginArtifactInstanceRecord {
+            node_id: node_id.to_string(),
+            installation_id: installation.id,
+            local_version: None,
+            local_checksum: None,
+            installed_path: None,
+            artifact_status: domain::PluginArtifactInstanceStatus::Missing,
+            runtime_status: domain::PluginRuntimeStatus::Inactive,
+            checked_at: installation.updated_at,
+            last_error: Some("artifact_snapshot_missing".to_string()),
+        }
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -318,43 +345,6 @@ fn paginate_official_entries(
     (page_entries, next_cursor)
 }
 
-fn provider_help_url(
-    installation: &domain::PluginInstallationRecord,
-    package: Option<&ProviderPackage>,
-) -> Option<String> {
-    package
-        .and_then(|package| package.provider.help_url.clone())
-        .or_else(|| metadata_string(&installation.metadata_json, "help_url"))
-}
-
-fn provider_default_base_url(
-    installation: &domain::PluginInstallationRecord,
-    package: Option<&ProviderPackage>,
-) -> Option<String> {
-    package
-        .and_then(|package| package.provider.default_base_url.clone())
-        .or_else(|| metadata_string(&installation.metadata_json, "default_base_url"))
-}
-
-fn provider_model_discovery_mode(
-    installation: &domain::PluginInstallationRecord,
-    package: Option<&ProviderPackage>,
-) -> String {
-    package
-        .map(|package| format!("{:?}", package.provider.model_discovery_mode).to_ascii_lowercase())
-        .or_else(|| metadata_string(&installation.metadata_json, "model_discovery_mode"))
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-fn provider_icon(
-    installation: &domain::PluginInstallationRecord,
-    package: Option<&ProviderPackage>,
-) -> Option<String> {
-    package
-        .and_then(|package| package.manifest.icon.clone())
-        .or_else(|| metadata_string(&installation.metadata_json, "icon"))
-}
-
 fn metadata_string(metadata: &serde_json::Value, key: &str) -> Option<String> {
     metadata.get(key)?.as_str().map(str::to_string)
 }
@@ -386,6 +376,13 @@ where
             .map(|assignment| assignment.installation_id)
             .collect::<HashSet<_>>();
         let installations = self.repository.list_installations().await?;
+        let artifact_snapshots = self
+            .repository
+            .list_artifact_instances(&self.node_id)
+            .await?
+            .into_iter()
+            .map(|snapshot| (snapshot.installation_id, snapshot))
+            .collect::<HashMap<_, _>>();
         let projections = self
             .repository
             .list_plugin_package_catalog_projections()
@@ -421,6 +418,11 @@ where
                 catalog_refresh_status: projection.catalog_refresh_status,
                 catalog_last_error_message: projection.catalog_last_error_message,
                 catalog_refreshed_at: projection.catalog_refreshed_at,
+                local_artifact: local_artifact_snapshot(
+                    &artifact_snapshots,
+                    &self.node_id,
+                    &installation,
+                ),
                 installation,
             });
         }
@@ -486,6 +488,11 @@ where
                     "plugin.description",
                 );
 
+                let compatibility = official_plugin_host_compatibility(
+                    &entry.minimum_host_version,
+                    &self.host_version,
+                );
+
                 OfficialPluginCatalogEntry {
                     plugin_id: entry.plugin_id,
                     plugin_type: entry.plugin_type,
@@ -494,6 +501,10 @@ where
                     description,
                     protocol: entry.protocol,
                     latest_version: entry.latest_version,
+                    minimum_host_version: compatibility.minimum_host_version,
+                    current_host_version: compatibility.current_host_version,
+                    compatibility_status: compatibility.status,
+                    compatibility_warning_reason: compatibility.warning_reason,
                     icon: entry.icon,
                     selected_artifact: entry.selected_artifact,
                     help_url: entry.help_url,
@@ -532,12 +543,24 @@ where
             .list_assignments(actor.current_workspace_id)
             .await?;
         let installations = self.repository.list_installations().await?;
+        let artifact_snapshots = self
+            .repository
+            .list_artifact_instances(&self.node_id)
+            .await?
+            .into_iter()
+            .map(|snapshot| (snapshot.installation_id, snapshot))
+            .collect::<HashMap<_, _>>();
+        let projections = self
+            .repository
+            .list_plugin_package_catalog_projections()
+            .await?
+            .into_iter()
+            .map(|projection| (projection.installation_id, projection))
+            .collect::<HashMap<_, _>>();
         let mut installation_map = HashMap::new();
         let mut installations_by_provider =
             HashMap::<String, Vec<domain::PluginInstallationRecord>>::new();
         for installation in installations {
-            let installation =
-                reconcile_installation_snapshot(&self.repository, installation.id).await?;
             installation_map.insert(installation.id, installation.clone());
             installations_by_provider
                 .entry(installation.provider_code.clone())
@@ -572,13 +595,13 @@ where
                 continue;
             }
             let namespace = plugin_namespace(&current.provider_code);
-            let package = load_provider_package(&current.installed_path).ok();
-            if let Some(package) = package.as_ref() {
-                merge_i18n_catalog(
-                    &mut i18n_catalog,
-                    trim_provider_bundles(&namespace, &package.i18n, &locales),
-                );
-            }
+            let current_local_artifact =
+                local_artifact_snapshot(&artifact_snapshots, &self.node_id, &current);
+            let projection = plugin_catalog_projection_view(projections.get(&current.id));
+            merge_i18n_catalog(
+                &mut i18n_catalog,
+                trim_json_bundles(&namespace, &projection.i18n_bundles, &locales),
+            );
             let latest_version = official_by_provider
                 .get(&assignment.provider_code)
                 .map(|entry| entry.latest_version.clone());
@@ -593,6 +616,11 @@ where
                     trust_level: installation.trust_level.clone(),
                     desired_state: installation.desired_state.as_str().to_string(),
                     availability_status: installation.availability_status.as_str().to_string(),
+                    local_artifact: local_artifact_snapshot(
+                        &artifact_snapshots,
+                        &self.node_id,
+                        installation,
+                    ),
                     created_at: installation.created_at,
                     is_current: installation.id == current.id,
                 })
@@ -606,12 +634,24 @@ where
                 description_key: Some("plugin.description".to_string()),
                 provider_label_key: "provider.label".to_string(),
                 protocol: current.protocol.clone(),
-                help_url: provider_help_url(&current, package.as_ref()),
-                default_base_url: provider_default_base_url(&current, package.as_ref()),
-                model_discovery_mode: provider_model_discovery_mode(&current, package.as_ref()),
-                icon: provider_icon(&current, package.as_ref()),
+                help_url: projection
+                    .help_url
+                    .clone()
+                    .or_else(|| metadata_string(&current.metadata_json, "help_url")),
+                default_base_url: projection
+                    .default_base_url
+                    .clone()
+                    .or_else(|| metadata_string(&current.metadata_json, "default_base_url")),
+                model_discovery_mode: if projection.model_discovery_mode == "unknown" {
+                    metadata_string(&current.metadata_json, "model_discovery_mode")
+                        .unwrap_or(projection.model_discovery_mode)
+                } else {
+                    projection.model_discovery_mode
+                },
+                icon: metadata_string(&current.metadata_json, "icon"),
                 current_installation_id: current.id,
                 current_version: current.plugin_version.clone(),
+                current_local_artifact,
                 latest_version: latest_version.clone(),
                 has_update: latest_version
                     .as_deref()

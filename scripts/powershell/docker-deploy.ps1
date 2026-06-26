@@ -4,6 +4,14 @@ param(
   [string]$RootPassword = $env:FLOWBASE_ROOT_PASSWORD,
   [string]$ProviderSecret = $env:FLOWBASE_PROVIDER_SECRET,
   [string]$WebPort = $env:FLOWBASE_WEB_PORT,
+  [string]$CookieSecure = $env:FLOWBASE_COOKIE_SECURE,
+  [string]$DatabaseMode = $env:FLOWBASE_DATABASE_MODE,
+  [string]$ExternalPostgresHost = $env:FLOWBASE_EXTERNAL_POSTGRES_HOST,
+  [string]$ExternalPostgresPort = $env:FLOWBASE_EXTERNAL_POSTGRES_PORT,
+  [string]$ExternalPostgresDb = $env:FLOWBASE_EXTERNAL_POSTGRES_DB,
+  [string]$ExternalPostgresUser = $env:FLOWBASE_EXTERNAL_POSTGRES_USER,
+  [string]$ExternalPostgresPassword = $env:FLOWBASE_EXTERNAL_POSTGRES_PASSWORD,
+  [string]$ExternalPostgresSslmode = $env:FLOWBASE_EXTERNAL_POSTGRES_SSLMODE,
   [string]$PluginGithubProxyUrl = $env:FLOWBASE_OFFICIAL_PLUGIN_GITHUB_PROXY_URL,
   [string]$OfficialPluginSignatureRequired = $env:FLOWBASE_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED,
   [switch]$Pull,
@@ -47,6 +55,9 @@ if (-not $PluginGithubProxyUrl -and $env:API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL) {
 }
 if (-not $OfficialPluginSignatureRequired -and $env:API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED) {
   $OfficialPluginSignatureRequired = $env:API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED
+}
+if (-not $CookieSecure -and $env:API_COOKIE_SECURE) {
+  $CookieSecure = $env:API_COOKIE_SECURE
 }
 
 function Fail([string]$Message) {
@@ -132,6 +143,103 @@ function Ensure-OfficialPluginSignatureRequired() {
   }
 }
 
+function Ensure-CookieSecureDefault() {
+  $CurrentValue = Read-EnvValue "API_COOKIE_SECURE" ".\docker\.env"
+  if (-not $CurrentValue) {
+    Set-EnvValue "API_COOKIE_SECURE" "true" ".\docker\.env"
+    Write-Host "Added API_COOKIE_SECURE=true to docker/.env."
+  }
+}
+
+function Convert-ToDatabaseMode([string]$Name, [string]$Value) {
+  switch ($Value) {
+    { -not $_ } { return "internal" }
+    "1" { return "internal" }
+    "internal" { return "internal" }
+    "Internal" { return "internal" }
+    "INTERNAL" { return "internal" }
+    "2" { return "external" }
+    "external" { return "external" }
+    "External" { return "external" }
+    "EXTERNAL" { return "external" }
+    default { Fail "Invalid value for ${Name}: $Value. Use internal or external." }
+  }
+}
+
+function Convert-ToPostgresSslmode([string]$Name, [string]$Value) {
+  if (-not $Value) {
+    $Value = "prefer"
+  }
+
+  $NormalizedValue = $Value.ToLowerInvariant()
+  if ($NormalizedValue -in @("disable", "allow", "prefer", "require", "verify-ca", "verify-full")) {
+    return $NormalizedValue
+  }
+
+  Fail "Invalid value for ${Name}: $Value. Use disable, allow, prefer, require, verify-ca, or verify-full."
+}
+
+function Convert-ToDatabaseUrlValue([string]$Value) {
+  return [System.Uri]::EscapeDataString($Value)
+}
+
+function Ensure-DatabaseModeDefault([string]$Path) {
+  $CurrentValue = Read-EnvValue "DATABASE_MODE" $Path
+  if (-not $CurrentValue) {
+    Set-EnvValue "DATABASE_MODE" "internal" $Path
+    Write-Host "Added DATABASE_MODE=internal to docker/.env."
+  }
+}
+
+function Ensure-ExternalPostgresDefaults([string]$Path) {
+  if (-not (Read-EnvValue "EXTERNAL_POSTGRES_PORT" $Path)) {
+    Set-EnvValue "EXTERNAL_POSTGRES_PORT" "5432" $Path
+  }
+  if (-not (Read-EnvValue "EXTERNAL_POSTGRES_DB" $Path)) {
+    Set-EnvValue "EXTERNAL_POSTGRES_DB" "1flowbase" $Path
+  }
+  if (-not (Read-EnvValue "EXTERNAL_POSTGRES_USER" $Path)) {
+    Set-EnvValue "EXTERNAL_POSTGRES_USER" "postgres" $Path
+  }
+  if (-not (Read-EnvValue "EXTERNAL_POSTGRES_SSLMODE" $Path)) {
+    Set-EnvValue "EXTERNAL_POSTGRES_SSLMODE" "prefer" $Path
+  }
+}
+
+function Sync-ExternalDatabaseUrl([string]$Path) {
+  Ensure-ExternalPostgresDefaults $Path
+
+  $HostName = Read-EnvValue "EXTERNAL_POSTGRES_HOST" $Path
+  $Port = Read-EnvValue "EXTERNAL_POSTGRES_PORT" $Path
+  $DatabaseName = Read-EnvValue "EXTERNAL_POSTGRES_DB" $Path
+  $User = Read-EnvValue "EXTERNAL_POSTGRES_USER" $Path
+  $Password = Read-EnvValue "EXTERNAL_POSTGRES_PASSWORD" $Path
+  $Sslmode = Convert-ToPostgresSslmode "EXTERNAL_POSTGRES_SSLMODE" (Read-EnvValue "EXTERNAL_POSTGRES_SSLMODE" $Path)
+
+  if (-not $HostName) { Fail "EXTERNAL_POSTGRES_HOST is required when DATABASE_MODE=external." }
+  if (-not $Port -or $Port -notmatch "^[0-9]+$") { Fail "EXTERNAL_POSTGRES_PORT must be a number." }
+  if (-not $DatabaseName) { Fail "EXTERNAL_POSTGRES_DB is required when DATABASE_MODE=external." }
+  if (-not $User) { Fail "EXTERNAL_POSTGRES_USER is required when DATABASE_MODE=external." }
+  if (-not $Password) { Fail "EXTERNAL_POSTGRES_PASSWORD is required when DATABASE_MODE=external." }
+
+  Set-EnvValue "EXTERNAL_POSTGRES_SSLMODE" $Sslmode $Path
+  $EncodedUser = Convert-ToDatabaseUrlValue $User
+  $EncodedPassword = Convert-ToDatabaseUrlValue $Password
+  $EncodedDatabaseName = Convert-ToDatabaseUrlValue $DatabaseName
+  Set-EnvValue "API_DATABASE_URL" "postgres://${EncodedUser}:${EncodedPassword}@${HostName}:${Port}/${EncodedDatabaseName}?sslmode=${Sslmode}" $Path
+}
+
+function Sync-DatabaseConfiguration([string]$Path) {
+  $Mode = Convert-ToDatabaseMode "DATABASE_MODE" (Read-EnvValue "DATABASE_MODE" $Path)
+  Set-EnvValue "DATABASE_MODE" $Mode $Path
+
+  if ($Mode -eq "external") {
+    Sync-ExternalDatabaseUrl $Path
+  } else {
+    Set-EnvValue "API_DATABASE_URL" "" $Path
+  }
+}
+
 function Format-EnvDisplayValue([string]$Key, [string]$Value) {
   if (-not $Value) {
     return "<empty>"
@@ -139,6 +247,8 @@ function Format-EnvDisplayValue([string]$Key, [string]$Value) {
 
   switch ($Key) {
     "POSTGRES_PASSWORD" { return "<set>" }
+    "EXTERNAL_POSTGRES_PASSWORD" { return "<set>" }
+    "API_DATABASE_URL" { return "<set>" }
     "BOOTSTRAP_ROOT_PASSWORD" { return "<set>" }
     "API_PROVIDER_SECRET_MASTER_KEY" { return "<set>" }
     default { return $Value }
@@ -152,12 +262,20 @@ function Show-EnvSummary([string]$Path) {
       "FLOWBASE_API_SERVER_VERSION",
       "FLOWBASE_PLUGIN_RUNNER_VERSION",
       "WEB_PORT",
+      "DATABASE_MODE",
       "POSTGRES_DB",
       "POSTGRES_USER",
       "POSTGRES_PASSWORD",
+      "EXTERNAL_POSTGRES_HOST",
+      "EXTERNAL_POSTGRES_PORT",
+      "EXTERNAL_POSTGRES_DB",
+      "EXTERNAL_POSTGRES_USER",
+      "EXTERNAL_POSTGRES_PASSWORD",
+      "EXTERNAL_POSTGRES_SSLMODE",
       "BOOTSTRAP_ROOT_ACCOUNT",
       "BOOTSTRAP_ROOT_PASSWORD",
       "API_PROVIDER_SECRET_MASTER_KEY",
+      "API_COOKIE_SECURE",
       "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL",
       "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED"
     )) {
@@ -180,6 +298,26 @@ function Prompt-EnvValue([string]$Key, [string]$Label) {
   } else {
     if ($CurrentValue) {
       Write-Host "Keeping ${Key}: $CurrentValue"
+    } else {
+      Write-Host "Keeping ${Key}: empty"
+    }
+  }
+}
+
+function Prompt-SecretEnvValue([string]$Key, [string]$Label) {
+  $CurrentValue = Read-EnvValue $Key ".\docker\.env"
+  if ($CurrentValue) {
+    $InputValue = Read-Host "$Label [<set>]"
+  } else {
+    $InputValue = Read-Host "$Label"
+  }
+
+  if ($InputValue) {
+    Set-EnvValue $Key $InputValue ".\docker\.env"
+    Write-Host "Updated $Key in docker/.env."
+  } else {
+    if ($CurrentValue) {
+      Write-Host "Keeping ${Key}: <set>"
     } else {
       Write-Host "Keeping ${Key}: empty"
     }
@@ -221,6 +359,33 @@ function Prompt-YesNo([string]$Question, [bool]$Default) {
     return $Default
   }
   return Convert-ToYesNo $InputValue
+}
+
+function Prompt-DatabaseConfiguration() {
+  $CurrentMode = Convert-ToDatabaseMode "DATABASE_MODE" (Read-EnvValue "DATABASE_MODE" ".\docker\.env")
+  $DefaultChoice = if ($CurrentMode -eq "external") { "2" } else { "1" }
+  $InputValue = Read-Host "Database mode (1=internal PostgreSQL, 2=external PostgreSQL) [$DefaultChoice]"
+  if (-not $InputValue) {
+    $InputValue = $CurrentMode
+  }
+
+  $Mode = Convert-ToDatabaseMode "DATABASE_MODE" $InputValue
+  Set-EnvValue "DATABASE_MODE" $Mode ".\docker\.env"
+  Write-Host "Updated DATABASE_MODE=$Mode in docker/.env."
+
+  if ($Mode -eq "external") {
+    Ensure-ExternalPostgresDefaults ".\docker\.env"
+    Prompt-EnvValue "EXTERNAL_POSTGRES_HOST" "External PostgreSQL host/IP"
+    Prompt-EnvValue "EXTERNAL_POSTGRES_PORT" "External PostgreSQL port"
+    Prompt-EnvValue "EXTERNAL_POSTGRES_DB" "External PostgreSQL database"
+    Prompt-EnvValue "EXTERNAL_POSTGRES_USER" "External PostgreSQL user"
+    Prompt-SecretEnvValue "EXTERNAL_POSTGRES_PASSWORD" "External PostgreSQL password"
+    Prompt-EnvValue "EXTERNAL_POSTGRES_SSLMODE" "External PostgreSQL sslmode"
+    Sync-ExternalDatabaseUrl ".\docker\.env"
+  } else {
+    Set-EnvValue "API_DATABASE_URL" "" ".\docker\.env"
+    Prompt-EnvValue "POSTGRES_PASSWORD" "Database password"
+  }
 }
 
 function Prompt-OfficialPluginGithubProxyUrl() {
@@ -496,11 +661,15 @@ if (Test-Path ".\docker\.env") {
 if (-not (Test-Path ".\docker\.env")) {
   Copy-Item ".\docker\.env.example" ".\docker\.env"
   Write-Host "Created docker/.env from docker/.env.example."
+  Ensure-DatabaseModeDefault ".\docker\.env"
   Ensure-OfficialPluginSignatureRequired
+  Ensure-CookieSecureDefault
   $PromptConfigValues = $true
 } else {
   Write-Host "Using existing docker/.env."
+  Ensure-DatabaseModeDefault ".\docker\.env"
   Ensure-OfficialPluginSignatureRequired
+  Ensure-CookieSecureDefault
   if ($ShouldPrompt) {
     Show-EnvSummary ".\docker\.env"
     $UpdateEnv = Prompt-YesNo "Update current docker/.env configuration?" $false
@@ -532,6 +701,41 @@ if ($WebPort) {
   Set-EnvValue "WEB_PORT" $WebPort ".\docker\.env"
   Write-Host "Updated WEB_PORT in docker/.env."
 }
+if ($CookieSecure) {
+  $CookieSecure = Convert-ToTrueFalseEnvValue "API_COOKIE_SECURE" $CookieSecure
+  Set-EnvValue "API_COOKIE_SECURE" $CookieSecure ".\docker\.env"
+  Write-Host "Updated API_COOKIE_SECURE in docker/.env."
+}
+if ($DatabaseMode) {
+  $DatabaseMode = Convert-ToDatabaseMode "DATABASE_MODE" $DatabaseMode
+  Set-EnvValue "DATABASE_MODE" $DatabaseMode ".\docker\.env"
+  Write-Host "Updated DATABASE_MODE in docker/.env."
+}
+if ($ExternalPostgresHost) {
+  Set-EnvValue "EXTERNAL_POSTGRES_HOST" $ExternalPostgresHost ".\docker\.env"
+  Write-Host "Updated EXTERNAL_POSTGRES_HOST in docker/.env."
+}
+if ($ExternalPostgresPort) {
+  Set-EnvValue "EXTERNAL_POSTGRES_PORT" $ExternalPostgresPort ".\docker\.env"
+  Write-Host "Updated EXTERNAL_POSTGRES_PORT in docker/.env."
+}
+if ($ExternalPostgresDb) {
+  Set-EnvValue "EXTERNAL_POSTGRES_DB" $ExternalPostgresDb ".\docker\.env"
+  Write-Host "Updated EXTERNAL_POSTGRES_DB in docker/.env."
+}
+if ($ExternalPostgresUser) {
+  Set-EnvValue "EXTERNAL_POSTGRES_USER" $ExternalPostgresUser ".\docker\.env"
+  Write-Host "Updated EXTERNAL_POSTGRES_USER in docker/.env."
+}
+if ($ExternalPostgresPassword) {
+  Set-EnvValue "EXTERNAL_POSTGRES_PASSWORD" $ExternalPostgresPassword ".\docker\.env"
+  Write-Host "Updated EXTERNAL_POSTGRES_PASSWORD in docker/.env."
+}
+if ($ExternalPostgresSslmode) {
+  $ExternalPostgresSslmode = Convert-ToPostgresSslmode "EXTERNAL_POSTGRES_SSLMODE" $ExternalPostgresSslmode
+  Set-EnvValue "EXTERNAL_POSTGRES_SSLMODE" $ExternalPostgresSslmode ".\docker\.env"
+  Write-Host "Updated EXTERNAL_POSTGRES_SSLMODE in docker/.env."
+}
 if ($PluginGithubProxyUrl) {
   Set-EnvValue "API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL" $PluginGithubProxyUrl ".\docker\.env"
   Write-Host "Updated API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL in docker/.env."
@@ -544,24 +748,27 @@ if ($OfficialPluginSignatureRequired) {
 
 if ($ShouldPrompt -and $PromptConfigValues) {
   Write-Host "Configure docker/.env. Press Enter to keep the value shown in brackets."
-  Prompt-EnvValue "POSTGRES_PASSWORD" "Database password"
+  Prompt-DatabaseConfiguration
   Prompt-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" "Root account"
   Prompt-EnvValue "BOOTSTRAP_ROOT_PASSWORD" "Root password"
   Prompt-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" "API provider secret master key"
   Prompt-EnvValue "WEB_PORT" "Web port"
+  Prompt-TrueFalseEnvValue "API_COOKIE_SECURE" "Use secure session cookies (true/false)"
   Prompt-OfficialPluginGithubProxyUrl
   Prompt-TrueFalseEnvValue "API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED" "Require official plugin signatures (true/false)"
 }
 
 Ensure-ProviderSecretMasterKey
+Sync-DatabaseConfiguration ".\docker\.env"
 
 $NewPostgresPassword = Read-EnvValue "POSTGRES_PASSWORD" ".\docker\.env"
 $NewBootstrapRootAccount = Read-EnvValue "BOOTSTRAP_ROOT_ACCOUNT" ".\docker\.env"
 $NewBootstrapRootPassword = Read-EnvValue "BOOTSTRAP_ROOT_PASSWORD" ".\docker\.env"
 $NewProviderSecret = Read-EnvValue "API_PROVIDER_SECRET_MASTER_KEY" ".\docker\.env"
+$NewDatabaseMode = Read-EnvValue "DATABASE_MODE" ".\docker\.env"
 $PostgresPasswordSyncRequired = $false
 
-if (Test-PostgresDataExists) {
+if ($NewDatabaseMode -eq "internal" -and (Test-PostgresDataExists)) {
   if ($NewPostgresPassword -and $OldPostgresPassword -ne $NewPostgresPassword) {
     $PostgresPasswordSyncRequired = $true
   }
@@ -610,7 +817,11 @@ if ($null -eq $StartContainers) {
 if (-not $PostgresPasswordSyncRequired -and -not $PullImages -and -not $StartContainers) {
   Write-Host "Docker files are ready in ./docker."
   Write-Host "No images were pulled and no containers were started."
-  Write-Host "To start later, run: cd docker && docker compose pull && docker compose up -d"
+  if ($NewDatabaseMode -eq "external") {
+    Write-Host "To start later, run: cd docker && docker compose -f docker-compose.external-db.yaml pull && docker compose -f docker-compose.external-db.yaml up -d"
+  } else {
+    Write-Host "To start later, run: cd docker && docker compose pull && docker compose up -d"
+  }
   exit 0
 }
 
@@ -629,16 +840,28 @@ if ($PullImages -or $StartContainers) {
 }
 
 if ($PullImages) {
-  Invoke-ComposeCommand @("pull")
+  if ($NewDatabaseMode -eq "external") {
+    Invoke-ComposeCommand @("-f", "docker-compose.external-db.yaml", "pull")
+  } else {
+    Invoke-ComposeCommand @("pull")
+  }
 } else {
   Write-Host "Skipping image pull."
 }
 
 if ($StartContainers) {
-  Invoke-ComposeCommand @("up", "-d")
+  if ($NewDatabaseMode -eq "external") {
+    Invoke-ComposeCommand @("-f", "docker-compose.external-db.yaml", "up", "-d")
+  } else {
+    Invoke-ComposeCommand @("up", "-d")
+  }
 } else {
   Write-Host "Skipping container startup."
-  Write-Host "To start later, run: cd docker && docker compose up -d"
+  if ($NewDatabaseMode -eq "external") {
+    Write-Host "To start later, run: cd docker && docker compose -f docker-compose.external-db.yaml up -d"
+  } else {
+    Write-Host "To start later, run: cd docker && docker compose up -d"
+  }
   exit 0
 }
 

@@ -163,7 +163,9 @@ impl FlowRepository for PgControlPlaneStore {
             update flow_versions
             set summary = coalesce($3, summary),
                 summary_is_custom = coalesce($4, summary_is_custom),
-                is_protected = coalesce($5, is_protected)
+                is_protected = coalesce($5, is_protected),
+                updated_by = $6,
+                updated_at = now()
             where flow_id = $1 and id = $2
             returning id
             "#,
@@ -173,6 +175,7 @@ impl FlowRepository for PgControlPlaneStore {
         .bind(summary)
         .bind(summary_is_custom)
         .bind(is_protected)
+        .bind(actor_user_id)
         .fetch_optional(&mut *tx)
         .await?;
 
@@ -304,8 +307,8 @@ async fn insert_flow(
 ) -> Result<domain::FlowRecord> {
     let row = sqlx::query(
         r#"
-        insert into flows (id, application_id, created_by, updated_by)
-        values ($1, $2, $3, $3)
+        insert into flows (id, application_id, scope_id, created_by, updated_by)
+        values ($1, $2, (select scope_id from applications where id = $2), $3, $3)
         returning id, application_id, created_by, updated_at
         "#,
     )
@@ -344,8 +347,10 @@ async fn insert_draft(
 ) -> Result<domain::FlowDraftRecord> {
     let row = sqlx::query(
         r#"
-        insert into flow_drafts (id, flow_id, schema_version, document, updated_by)
-        values ($1, $2, $3, $4, $5)
+        insert into flow_drafts (id, flow_id, scope_id, schema_version, document, created_by, updated_by)
+        select $1, flows.id, flows.scope_id, $3, $4, $5, $5
+        from flows
+        where flows.id = $2
         returning id, flow_id, schema_version, document, updated_at
         "#,
     )
@@ -432,6 +437,7 @@ async fn insert_version(
         insert into flow_versions (
             id,
             flow_id,
+            scope_id,
             sequence,
             trigger,
             change_kind,
@@ -439,8 +445,9 @@ async fn insert_version(
             summary_is_custom,
             is_protected,
             document,
-            created_by
-        ) values ($1, $2, $3, $4, 'logical', $5, false, false, $6, $7)
+            created_by,
+            updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), $3, $4, 'logical', $5, false, false, $6, $7, $7)
         "#,
     )
     .bind(Uuid::now_v7())

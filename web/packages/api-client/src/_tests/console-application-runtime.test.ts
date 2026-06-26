@@ -1,16 +1,33 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
+  getConsoleApplicationRunDebugSnapshot,
+  completeConsoleRunArchiveUploadSession,
+  createConsoleApplicationRunsArchive,
+  createConsoleRunArchiveUploadSession,
+  getConsoleApplicationConversationMessages,
+  getConsoleApplicationRunArchive,
   getConsoleApplicationRunConversationMessages,
-  getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRunNodeLastRun,
+  getConsoleApplicationRunResumeTimeline,
   getConsoleApplicationRuns,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceNodeDetail,
+  getConsoleApplicationRunTraceToolCallbackContent,
+  getConsoleApplicationRunTraceTree,
+  exportConsoleApplicationRunTraceDump,
+  exportConsoleApplicationRunsTraceDumpZip,
   getConsoleDebugVariableSnapshot,
+  getConsoleRuntimeDebugStream,
   getConsoleRuntimeDebugArtifact,
+  getConsoleRunArchiveImportJob,
+  resolveConsoleRuntimeDebugArtifacts,
   startConsoleFlowDebugRunStream,
-  subscribeConsoleFlowDebugRunStream
+  subscribeConsoleFlowDebugRunStream,
+  uploadConsoleRunArchiveChunk
 } from '../console/application-runtime';
 
 function sseResponse(frame: string) {
@@ -144,6 +161,504 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
   });
 
+  test('loads runtime debug stream with sequence cursor and limit', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            parts: [],
+            page_size: 25,
+            next_sequence: 42,
+            has_more: true
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      getConsoleRuntimeDebugStream('app-1', 'run-1', 'http://127.0.0.1:7800', {
+        from_sequence: 12,
+        limit: 25
+      })
+    ).resolves.toEqual({
+      parts: [],
+      page_size: 25,
+      next_sequence: 42,
+      has_more: true
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/debug-stream?from_sequence=12&limit=25',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('exports a single run trace dump as a blob response with filename metadata', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        new Blob(['{"run_id":"run-1"}'], { type: 'application/json' }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-disposition':
+              'attachment; filename="application-run-run-1-trace.json"'
+          }
+        }
+      )
+    );
+
+    const response = await exportConsoleApplicationRunTraceDump(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+
+    await expect(response.blob.text()).resolves.toBe('{"run_id":"run-1"}');
+    expect(response.filename).toBe('application-run-run-1-trace.json');
+    expect(response.contentType).toBe('application/json');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/export',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('exports selected run trace dumps as a csrf-protected zip blob response', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(new Blob(['zip-bytes'], { type: 'application/zip' }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/zip',
+          'content-disposition':
+            "attachment; filename*=UTF-8''selected-traces.zip"
+        }
+      })
+    );
+
+    const response = await exportConsoleApplicationRunsTraceDumpZip(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+
+    await expect(response.blob.text()).resolves.toBe('zip-bytes');
+    expect(response.filename).toBe('selected-traces.zip');
+    expect(response.contentType).toBe('application/zip');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/export',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          run_ids: ['run-1', 'run-2']
+        }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+  });
+
+  test('loads run archive JSON with explicit archive version', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          archive_version: 1,
+          exported_at: '2026-06-24T00:00:00Z',
+          manifest: {
+            archive_version: 1,
+            archive_semantics: 'application_run_archive_v1',
+            exported_at: '2026-06-24T00:00:00Z',
+            source_workspace_id: 'workspace-1',
+            source_application_id: 'app-1',
+            run_count: 1,
+            selected_run_ids: ['run-1'],
+            entries: [],
+            content_sha256: 'sha256:archive',
+            checksum: 'sha256:archive'
+          },
+          source: {
+            source_kind: 'application_run',
+            application_id: 'app-1',
+            application_type: 'agent_flow',
+            application_name: 'Agent',
+            workspace_id: 'workspace-1',
+            exported_by_user_id: 'user-1',
+            exported_at: '2026-06-24T00:00:00Z',
+            archive_builder: 'application_run_archive_v1'
+          },
+          entries: [],
+          content_digest: 'sha256:archive'
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunArchive(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800',
+        { archive_version: 1 }
+      )
+    ).resolves.toEqual(
+      expect.objectContaining({
+        archive_version: 1,
+        content_digest: 'sha256:archive'
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/archive?archive_version=1',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('creates selected runs archive as csrf-protected JSON', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          archive_version: 1,
+          exported_at: '2026-06-24T00:00:00Z',
+          manifest: {
+            archive_version: 1,
+            archive_semantics: 'application_run_archive_v1',
+            exported_at: '2026-06-24T00:00:00Z',
+            source_workspace_id: 'workspace-1',
+            source_application_id: 'app-1',
+            run_count: 2,
+            selected_run_ids: ['run-1', 'run-2'],
+            entries: [],
+            content_sha256: 'sha256:archive',
+            checksum: 'sha256:archive'
+          },
+          source: {
+            source_kind: 'application_run',
+            application_id: 'app-1',
+            application_type: 'agent_flow',
+            application_name: 'Agent',
+            workspace_id: 'workspace-1',
+            exported_by_user_id: 'user-1',
+            exported_at: '2026-06-24T00:00:00Z',
+            archive_builder: 'application_run_archive_v1'
+          },
+          entries: [],
+          content_digest: 'sha256:archive'
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      createConsoleApplicationRunsArchive(
+        'app-1',
+        ['run-1', 'run-2'],
+        'csrf-123',
+        'http://127.0.0.1:7800',
+        { archive_version: 1 }
+      )
+    ).resolves.toEqual(
+      expect.objectContaining({
+        archive_version: 1,
+        content_digest: 'sha256:archive'
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          archive_version: 1,
+          run_ids: ['run-1', 'run-2']
+        }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+  });
+
+  test('creates archive upload sessions with csrf protected metadata', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            session_id: 'session-1',
+            application_id: 'app-1',
+            status: 'uploading',
+            filename: 'archive.json',
+            total_size_bytes: 42,
+            received_bytes: 0,
+            expected_sha256: 'sha256:archive',
+            created_at: '2026-06-24T00:00:00Z',
+            updated_at: '2026-06-24T00:00:00Z'
+          },
+          meta: null
+        }),
+        {
+          status: 201,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      createConsoleRunArchiveUploadSession(
+        'app-1',
+        {
+          filename: 'archive.json',
+          total_size_bytes: 42,
+          expected_sha256: 'sha256:archive',
+          chunk_size_bytes: 1024
+        },
+        'csrf-123',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      session_id: 'session-1',
+      status: 'uploading'
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-sessions',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          filename: 'archive.json',
+          total_size_bytes: 42,
+          expected_sha256: 'sha256:archive',
+          chunk_size_bytes: 1024
+        }),
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+  });
+
+  test('uploads archive chunks as raw octets with chunk checksum', async () => {
+    const chunk = new Blob(['part-1']);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            session_id: 'session-1',
+            chunk_index: 0,
+            chunk_size_bytes: 6,
+            chunk_sha256: 'sha256:chunk',
+            received_bytes: 6,
+            status: 'uploading'
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      uploadConsoleRunArchiveChunk(
+        'app-1',
+        'session-1',
+        0,
+        chunk,
+        'sha256:chunk',
+        'csrf-123',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      chunk_index: 0,
+      received_bytes: 6
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-sessions/session-1/chunks/0',
+      expect.objectContaining({
+        method: 'PUT',
+        body: chunk,
+        headers: expect.objectContaining({
+          'content-type': 'application/octet-stream',
+          'x-chunk-sha256': 'sha256:chunk',
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+  });
+
+  test('completes archive upload sessions and polls import jobs', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              job_id: 'job-1',
+              application_id: 'app-1',
+              upload_session_id: 'session-1',
+              status: 'queued',
+              archive_version: 1,
+              archive_sha256: 'sha256:archive',
+              run_count: 1,
+              imported_run_count: 0,
+              source_to_target_run_ids: [],
+              error_payload: null,
+              result_payload: {},
+              created_at: '2026-06-24T00:00:00Z',
+              updated_at: '2026-06-24T00:00:00Z',
+              started_at: null,
+              finished_at: null
+            },
+            meta: null
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              job_id: 'job-1',
+              application_id: 'app-1',
+              upload_session_id: 'session-1',
+              status: 'succeeded',
+              archive_version: 1,
+              archive_sha256: 'sha256:archive',
+              run_count: 1,
+              imported_run_count: 1,
+              source_to_target_run_ids: [
+                { source_run_id: 'run-source', target_run_id: 'run-target' }
+              ],
+              error_payload: null,
+              result_payload: {},
+              created_at: '2026-06-24T00:00:00Z',
+              updated_at: '2026-06-24T00:00:01Z',
+              started_at: '2026-06-24T00:00:00Z',
+              finished_at: '2026-06-24T00:00:01Z'
+            },
+            meta: null
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+      );
+
+    await expect(
+      completeConsoleRunArchiveUploadSession(
+        'app-1',
+        'session-1',
+        'csrf-123',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      job_id: 'job-1',
+      status: 'queued'
+    });
+    await expect(
+      getConsoleRunArchiveImportJob(
+        'app-1',
+        'job-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toMatchObject({
+      job_id: 'job-1',
+      status: 'succeeded',
+      imported_run_count: 1
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-sessions/session-1/complete',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'x-csrf-token': 'csrf-123'
+        })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/archive/import-jobs/job-1',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('resolves runtime debug artifacts in one request', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            artifacts: [
+              {
+                artifact_ref: 'artifact-1',
+                content_type: 'application/json',
+                value: { hello: 'world' }
+              }
+            ]
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      )
+    );
+
+    await expect(
+      resolveConsoleRuntimeDebugArtifacts(
+        'app-1',
+        ['artifact-1', 'artifact-2'],
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      artifacts: [
+        {
+          artifact_ref: 'artifact-1',
+          content_type: 'application/json',
+          value: { hello: 'world' }
+        }
+      ]
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/debug-artifacts/resolve',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          artifact_refs: ['artifact-1', 'artifact-2']
+        })
+      })
+    );
+  });
+
   test('loads debug variable snapshot without query parameters', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('{"data":{"variable_cache":{}}}', {
@@ -187,6 +702,250 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
     );
   });
 
+  test('loads a debug session snapshot from the orchestration plane', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { flow_run: { id: 'run-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationRunDebugSnapshot(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ flow_run: { id: 'run-1' } });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/runs/run-1/debug-snapshot',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches lazy run trace tree resources', async () => {
+    const traceNodeId = '11111111-1111-4111-8111-111111111111';
+    const projectionStatus = {
+      projection_status: 'succeeded',
+      projection_version: 1,
+      source_watermark: 'run-1:1',
+      attempt_count: 1,
+      last_attempt_at: '2026-05-08T00:00:00Z',
+      last_success_at: '2026-05-08T00:00:01Z',
+      last_error_code: null,
+      last_error_stage: null,
+      last_error_source_kind: null,
+      last_error_source_locator: null,
+      last_error_ref: null,
+      retriable: false
+    };
+    const traceResponses = [
+      { projection_status: projectionStatus, nodes: [] },
+      {
+        projection_status: projectionStatus,
+        items: [],
+        page_info: {
+          has_more: true,
+          next_cursor: 'cursor-page-2',
+          page_size: 20
+        }
+      },
+      {
+        trace_node_id: traceNodeId,
+        node_kind: 'node_run',
+        projection_status: projectionStatus,
+        content_kind: 'node_run',
+        source_refs: [],
+        detail_refs: [],
+        payload: {}
+      },
+      {
+        trace_node_id: traceNodeId,
+        projection_status: projectionStatus,
+        tool_call_id: 'call/weather',
+        payload: {
+          ok: true
+        }
+      },
+      {
+        trace_node_id: traceNodeId,
+        node_kind: 'node_run',
+        projection_status: projectionStatus,
+        detail_ref_id: 'node_run',
+        detail_kind: 'node_run',
+        source_refs: [],
+        payload: {
+          node_run: {
+            id: 'node-run-1'
+          }
+        }
+      },
+      { nodes: [] }
+    ];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: traceResponses.shift() }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      )
+    );
+
+    await expect(
+      getConsoleApplicationRunTraceTree(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      projection_status: projectionStatus,
+      nodes: []
+    });
+    await expect(
+      getConsoleApplicationRunTraceNodeChildren(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'http://127.0.0.1:7800',
+        {
+          cursor: 'cursor-page-1',
+          page_size: 20
+        }
+      )
+    ).resolves.toEqual({
+      projection_status: projectionStatus,
+      items: [],
+      page_info: {
+        has_more: true,
+        next_cursor: 'cursor-page-2',
+        page_size: 20
+      }
+    });
+    await expect(
+      getConsoleApplicationRunTraceNodeContent(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'http://127.0.0.1:7800',
+        {
+          artifact_preview: 'auto'
+        }
+      )
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      node_kind: 'node_run',
+      projection_status: projectionStatus,
+      content_kind: 'node_run',
+      source_refs: [],
+      detail_refs: [],
+      payload: {}
+    });
+    await expect(
+      getConsoleApplicationRunTraceToolCallbackContent(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'call/weather',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      tool_call_id: 'call/weather',
+      projection_status: projectionStatus,
+      payload: {
+        ok: true
+      }
+    });
+    await expect(
+      getConsoleApplicationRunTraceNodeDetail(
+        'app-1',
+        'run-1',
+        traceNodeId,
+        'node_run',
+        'http://127.0.0.1:7800',
+        {
+          artifact_preview: 'auto',
+          artifact_preview_field: [
+            'node_run.debug_payload.llm_rounds',
+            'node_run.output_payload'
+          ]
+        }
+      )
+    ).resolves.toEqual({
+      trace_node_id: traceNodeId,
+      node_kind: 'node_run',
+      projection_status: projectionStatus,
+      detail_ref_id: 'node_run',
+      detail_kind: 'node_run',
+      source_refs: [],
+      payload: {
+        node_run: {
+          id: 'node-run-1'
+        }
+      }
+    });
+    await expect(
+      getConsoleApplicationRunResumeTimeline(
+        'app-1',
+        'run-1',
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ nodes: [] });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes?parent_trace_node_id=${traceNodeId}&cursor=cursor-page-1&page_size=20`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/content?artifact_preview=auto`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/tool-callbacks/call%2Fweather/content`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      `http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/trace-tree/nodes/${traceNodeId}/details/node_run?artifact_preview=auto&artifact_preview_field=node_run.debug_payload.llm_rounds&artifact_preview_field=node_run.output_payload`,
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/resume-timeline',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
   test('fetches conversation messages around an explicit flow run', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ data: { items: [], page: {} } }), {
@@ -206,6 +965,32 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs/run-1/conversation/messages?limit=5',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include'
+      })
+    );
+  });
+
+  test('fetches external conversation messages around an explicit flow run', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { items: [], page: {} } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await expect(
+      getConsoleApplicationConversationMessages(
+        'app-1',
+        'conversation 1',
+        { around_run_id: 'run-2', limit: 5 },
+        'http://127.0.0.1:7800'
+      )
+    ).resolves.toEqual({ items: [], page: {} });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:7800/api/console/applications/app-1/logs/conversations/conversation%201/messages?around_run_id=run-2&limit=5',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'
@@ -531,68 +1316,5 @@ data: {"event_id":"run-1:2","run_id":"run-1","node_run_id":"node-run-1","event_t
       'http://127.0.0.1:7800/api/console/applications/app-1/logs/runs?page=1&page_size=20&cache_mode=refresh',
       expect.objectContaining({ method: 'GET' })
     );
-  });
-
-  test('keeps typed application run detail beside legacy flow fields', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            run: {
-              id: 'run-1',
-              application_id: 'app-1',
-              application_type: 'agent_flow',
-              run_object_kind: 'application_run',
-              run_kind: 'debug_flow_run',
-              status: 'succeeded',
-              title: '退款总结',
-              source: 'console',
-              subject: { kind: 'agent_flow', id: 'flow-1' },
-              actor: { kind: 'user', id: 'user-1' },
-              correlation: {},
-              started_at: '2026-05-08T00:00:00Z',
-              finished_at: null,
-              created_at: '2026-05-08T00:00:00Z',
-              updated_at: '2026-05-08T00:00:00Z'
-            },
-            statistics: {
-              total_tokens: null,
-              unique_node_count: 0,
-              tool_callback_count: 0
-            },
-            detail: {
-              kind: 'agent_flow',
-              flow_run: { id: 'run-1' },
-              node_runs: [],
-              checkpoints: [],
-              callback_tasks: [],
-              events: []
-            },
-            flow_run: { id: 'run-1' },
-            node_runs: [],
-            checkpoints: [],
-            callback_tasks: [],
-            events: []
-          }
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      )
-    );
-
-    await expect(
-      getConsoleApplicationRunDetail('app-1', 'run-1', 'http://127.0.0.1:7800')
-    ).resolves.toMatchObject({
-      run: {
-        application_type: 'agent_flow',
-        run_object_kind: 'application_run'
-      },
-      statistics: {
-        total_tokens: null,
-        unique_node_count: 0,
-        tool_callback_count: 0
-      },
-      detail: { kind: 'agent_flow' },
-      flow_run: { id: 'run-1' }
-    });
   });
 });

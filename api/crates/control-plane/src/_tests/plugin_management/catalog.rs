@@ -5,9 +5,11 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::{
+    errors::ControlPlaneError,
     i18n::RequestedLocales,
     plugin_management::{
         OfficialPluginCatalogFilter, PluginCatalogFilter, PluginManagementService,
+        RefreshCurrentNodePluginArtifactCommand, RefreshPluginPackageCatalogProjectionCommand,
     },
     ports::{
         CreatePluginAssignmentInput, DownloadedOfficialPluginPackage,
@@ -44,6 +46,7 @@ async fn plugin_management_service_lists_provider_families_with_current_and_late
                     namespace: "plugin.openai_compatible".into(),
                     protocol: "openai_compatible".into(),
                     latest_version: "0.2.0".into(),
+                    minimum_host_version: "0.1.0".into(),
                     icon: None,
                     selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
                     i18n_summary: sample_i18n_summary(),
@@ -221,6 +224,108 @@ async fn plugin_management_service_list_catalog_returns_missing_projection_witho
 }
 
 #[tokio::test]
+async fn plugin_management_service_refresh_catalog_projection_uses_current_node_artifact() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let root_a = std::env::temp_dir().join(format!("plugin-projection-node-a-{}", Uuid::now_v7()));
+    let root_b = std::env::temp_dir().join(format!("plugin-projection-node-b-{}", Uuid::now_v7()));
+    let service_b = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &root_b,
+    )
+    .with_node_id("node-b");
+    let installation_id = seed_test_installation(
+        &repository,
+        &root_a,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+
+    let error = service_b
+        .refresh_catalog_projection(RefreshPluginPackageCatalogProjectionCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict("plugin_artifact_missing"))
+    ));
+}
+
+#[tokio::test]
+async fn plugin_management_service_list_families_reads_projection_instead_of_local_package() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryPluginManagementRepository::new(actor_with_permissions(
+        workspace_id,
+        &["plugin_config.view.all", "plugin_config.configure.all"],
+    ));
+    let install_root =
+        std::env::temp_dir().join(format!("plugin-family-projection-{}", Uuid::now_v7()));
+    let service = PluginManagementService::new(
+        repository.clone(),
+        MemoryProviderRuntime::default(),
+        Arc::new(MemoryOfficialPluginSource::default()),
+        &install_root,
+    );
+    let installation_id = seed_test_installation(
+        &repository,
+        &install_root,
+        "fixture_provider",
+        "0.1.0",
+        PluginDesiredState::ActiveRequested,
+    )
+    .await;
+    repository
+        .create_assignment(&CreatePluginAssignmentInput {
+            installation_id,
+            workspace_id: repository.actor.current_workspace_id,
+            provider_code: "fixture_provider".into(),
+            actor_user_id: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+    service
+        .refresh_current_node_artifact(RefreshCurrentNodePluginArtifactCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+        })
+        .await
+        .unwrap();
+    let installation = repository
+        .get_installation(installation_id)
+        .await
+        .unwrap()
+        .expect("installation should exist");
+    fs::remove_dir_all(&installation.installed_path).unwrap();
+
+    let families = service
+        .list_families(
+            repository.actor.user_id,
+            PluginCatalogFilter::default(),
+            requested_locales(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(families.entries.len(), 1);
+    assert!(families.i18n_catalog["plugin.fixture_provider"].contains_key("en_US"));
+    assert_eq!(
+        families.entries[0].default_base_url.as_deref(),
+        Some("https://api.example.com")
+    );
+}
+
+#[tokio::test]
 async fn plugin_management_service_reconcile_all_installations_backfills_missing_catalog_projection(
 ) {
     let workspace_id = Uuid::now_v7();
@@ -297,6 +402,7 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
                         namespace: "plugin.openai_compatible".into(),
                         protocol: "openai_compatible".into(),
                         latest_version: "0.2.0".into(),
+                        minimum_host_version: "0.1.0".into(),
                         icon: None,
                         selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
                         i18n_summary: sample_i18n_summary(),
@@ -312,6 +418,7 @@ async fn plugin_management_service_keeps_only_latest_official_entry_per_provider
                         namespace: "plugin.openai_compatible".into(),
                         protocol: "openai_compatible".into(),
                         latest_version: "0.1.0".into(),
+                        minimum_host_version: "0.1.0".into(),
                         icon: None,
                         selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
                         i18n_summary: sample_i18n_summary(),
@@ -505,6 +612,7 @@ async fn list_official_catalog_filters_by_plugin_type_and_returns_localized_item
         namespace: "plugin.openai_compatible".into(),
         protocol: "openai_compatible".into(),
         latest_version: "0.2.1".into(),
+        minimum_host_version: "0.1.0".into(),
         icon: None,
         selected_artifact: sample_artifact("linux", "amd64", Some("musl")),
         i18n_summary: sample_i18n_summary(),

@@ -166,6 +166,7 @@ pub(super) fn build_provider_invocation(
         mcp_bindings: Vec::new(),
         response_format: build_response_format(&node.config),
         model_parameters: build_model_parameters(node, runtime, variable_pool),
+        client_protocol_envelope: runtime_context.client_protocol_envelope.clone(),
         trace_context,
         run_context,
     };

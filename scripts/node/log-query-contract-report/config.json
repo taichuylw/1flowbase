@@ -1,0 +1,512 @@
+{
+  "version": 1,
+  "defaultPolicy": {
+    "scope": "required",
+    "time": "required_or_exempted",
+    "cursor": "required_or_exempted",
+    "limit": "required_or_exempted"
+  },
+  "endpoints": [
+    {
+      "id": "application_run_logs_page",
+      "category": "log_list",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/logs/runs",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/log_handlers.rs",
+        "functionName": "list_application_runs"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/application_run_log_methods.rs",
+        "functionName": "list_application_run_logs_page"
+      },
+      "extraSources": [
+        {
+          "file": "api/apps/api-server/src/routes/applications/application_runtime/summary_responses.rs",
+          "functionName": "application_runs_created_after"
+        }
+      ],
+      "contract": {
+        "scope": {
+          "description": "Application route scope and repository application_id filter.",
+          "patterns": [
+            "Path\\(id\\): Path<Uuid>",
+            "ensure_application_visible\\(&state, context\\.user\\.id, id\\)",
+            "where application_id = \\$1"
+          ]
+        },
+        "time": {
+          "description": "Created-at day window defaults to seven days when omitted.",
+          "patterns": [
+            "APPLICATION_RUN_LOG_DEFAULT_TIME_RANGE_DAYS",
+            "let created_after = application_runs_created_after\\(&query\\)",
+            "\\(\\$2::timestamptz is null or created_at >= \\$2\\)"
+          ]
+        },
+        "cursor": {
+          "description": "Offset pagination remains for existing callers; stable order adds id as tie-breaker.",
+          "patterns": ["page = query\\.page\\.unwrap_or\\(1\\)\\.max\\(1\\)", "order by \\{order_by\\}"],
+          "exemption": {
+            "reason": "Existing logs route contract exposes page/page_size. The query is bounded by application scope, default time window, max page_size, and stable order; cursor migration can be scheduled without keeping an unbounded query.",
+            "removeBy": "2026-09-30"
+          }
+        },
+        "limit": {
+          "description": "page_size is clamped to 100 and pushed into SQL limit.",
+          "patterns": ["page_size = query\\.page_size\\.unwrap_or\\(20\\)\\.clamp\\(1, 100\\)", "limit \\$3 offset \\$4"]
+        }
+      }
+    },
+    {
+      "id": "application_run_monitoring_report",
+      "category": "log_aggregation",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/monitoring/run-metrics",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/application_monitoring.rs",
+        "functionName": "get_application_run_monitoring_report"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/application_run_monitoring_methods.rs",
+        "functionName": "get_application_run_monitoring_report"
+      },
+      "extraSources": [
+        {
+          "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/application_run_monitoring_methods.rs",
+          "functionName": "application_run_monitoring_logs_query"
+        },
+        {
+          "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/application_run_monitoring_methods.rs",
+          "functionName": "application_run_monitoring_ranked_runs"
+        }
+      ],
+      "contract": {
+        "scope": {
+          "description": "Application route scope and repository application_id filter.",
+          "patterns": [
+            "Path\\(id\\): Path<Uuid>",
+            "ApplicationService::new\\(state\\.store\\.clone\\(\\)\\)",
+            "get_application\\(context\\.user\\.id, id\\)",
+            "where application_id = \\$1"
+          ]
+        },
+        "time": {
+          "description": "started_at window defaults to seven days and non-positive values cannot bypass the window.",
+          "patterns": [
+            "default_started_from\\(&query\\)",
+            "monitoring_time_range_days",
+            "filter\\(\\|days\\| \\*days > 0\\)",
+            "started_at >= \\$2"
+          ]
+        },
+        "cursor": {
+          "description": "Monitoring is an aggregate report, not a list page.",
+          "patterns": ["with monitoring_logs as"],
+          "exemption": {
+            "reason": "The report aggregates one application inside a required time window. It does not expose a cross-run row list; ranked sublists are bounded by SQL top-N clauses.",
+            "removeBy": "not_required"
+          }
+        },
+        "limit": {
+          "description": "Aggregate ranked lists are bounded.",
+          "patterns": ["limit 10"],
+          "exemption": {
+            "reason": "The endpoint returns aggregate metrics plus bounded top-N lists instead of an unbounded item list.",
+            "removeBy": "not_required"
+          }
+        }
+      }
+    },
+    {
+      "id": "application_conversation_messages_page",
+      "category": "log_list",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/logs/conversations/{conversation_id}/messages",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/log_handlers.rs",
+        "functionName": "list_application_conversation_messages"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/read_methods.rs",
+        "functionName": "list_application_conversation_runs_page"
+      },
+      "contract": {
+        "scope": {
+          "description": "Application scope plus external conversation id.",
+          "patterns": [
+            "Path\\(\\(id, conversation_id\\)\\): Path<\\(Uuid, String\\)>",
+            "ensure_application_visible\\(&state, context\\.user\\.id, id\\)",
+            "where messages\\.application_id = \\$1",
+            "conversations\\.external_conversation_id = \\$2"
+          ]
+        },
+        "time": {
+          "description": "Conversation-scoped page is anchored by run cursor rather than wall-clock time.",
+          "patterns": ["row_number\\(\\) over \\(order by order_sequence asc, id asc\\)"],
+          "exemption": {
+            "reason": "This endpoint pages a single conversation around/before/after a run id. The conversation id and cursor bound the query; adding a wall-clock window would hide older conversation context.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "around/before/after run-id cursors define the page window.",
+          "patterns": ["around_run_id", "before_run_id", "after_run_id", "rn between \\$3 and \\$4"]
+        },
+        "limit": {
+          "description": "limit is clamped to 50 before the rn window is computed.",
+          "patterns": ["let limit = input\\.limit\\.clamp\\(1, 50\\)"]
+        }
+      }
+    },
+    {
+      "id": "application_run_trace_roots",
+      "category": "trace_list",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/log_handlers.rs",
+        "functionName": "get_application_run_trace_tree"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/application_run_trace_projection_methods.rs",
+        "functionName": "list_application_run_trace_roots"
+      },
+      "contract": {
+        "scope": {
+          "description": "Application access is checked and repository filters by flow_run_id.",
+          "patterns": [
+            "Path\\(\\(id, run_id\\)\\): Path<\\(Uuid, Uuid\\)>",
+            "ensure_application_visible\\(&state, context\\.user\\.id, id\\)",
+            "where flow_run_id = \\$1 and parent_trace_node_id is null"
+          ]
+        },
+        "time": {
+          "description": "Trace roots are a single-run projection list.",
+          "patterns": ["where flow_run_id = \\$1"],
+          "exemption": {
+            "reason": "Single run trace projection reads are run-scoped; wall-clock filtering is owned by the parent run list.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "Root list is intentionally unpaged; child expansion uses cursor pagination.",
+          "patterns": ["parent_trace_node_id is null order by order_key asc, trace_node_id asc"],
+          "exemption": {
+            "reason": "Only root trace nodes for one flow run are returned. High fan-out expansion is handled by /trace-tree/nodes with cursor and page_size.",
+            "removeBy": "not_required"
+          }
+        },
+        "limit": {
+          "description": "Root list is intentionally unpaged for one run.",
+          "patterns": ["parent_trace_node_id is null"],
+          "exemption": {
+            "reason": "Root nodes are a bounded projection entrypoint; child nodes carry the high-growth pagination contract.",
+            "removeBy": "not_required"
+          }
+        }
+      }
+    },
+    {
+      "id": "application_run_trace_children_page",
+      "category": "trace_list",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/logs/runs/{run_id}/trace-tree/nodes",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/log_handlers.rs",
+        "functionName": "get_application_run_trace_node_children"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/application_run_trace_projection_methods.rs",
+        "functionName": "list_application_run_trace_children_page"
+      },
+      "extraSources": [
+        {
+          "file": "api/apps/api-server/src/routes/applications/application_runtime/log_handlers/trace_projection_payloads.rs",
+          "functionName": "application_run_trace_children_page_size"
+        }
+      ],
+      "contract": {
+        "scope": {
+          "description": "Application access, flow_run_id and parent_trace_node_id scope.",
+          "patterns": [
+            "Path\\(\\(id, run_id\\)\\): Path<\\(Uuid, Uuid\\)>",
+            "parent_trace_node_id",
+            "where flow_run_id = \\$1",
+            "parent_trace_node_id = \\$2"
+          ]
+        },
+        "time": {
+          "description": "Children are scoped to one run and one parent trace node.",
+          "patterns": ["where flow_run_id = \\$1"],
+          "exemption": {
+            "reason": "Single run trace children are navigated by cursor. A wall-clock window would split one trace tree incorrectly.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "Opaque cursor contains parent_trace_node_id, order_key and trace_node_id.",
+          "patterns": [
+            "parse_application_run_trace_children_cursor",
+            "order_key > \\$3",
+            "order_key = \\$3 and trace_node_id > \\$4",
+            "next_cursor"
+          ]
+        },
+        "limit": {
+          "description": "page_size defaults to 20, maxes at 100, and SQL fetches page_size + 1.",
+          "patterns": [
+            "APPLICATION_RUN_TRACE_CHILDREN_DEFAULT_PAGE_SIZE",
+            "APPLICATION_RUN_TRACE_CHILDREN_MAX_PAGE_SIZE",
+            "limit \\$5"
+          ]
+        }
+      }
+    },
+    {
+      "id": "runtime_debug_stream_json_page",
+      "category": "runtime_event_list",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/logs/runs/{run_id}/debug-stream",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/log_handlers.rs",
+        "functionName": "get_runtime_debug_stream"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/read_methods.rs",
+        "functionName": "list_runtime_event_backfill_page"
+      },
+      "extraSources": [
+        {
+          "file": "api/apps/api-server/src/routes/applications/application_runtime/debug_handlers.rs",
+          "functionName": "debug_run_stream_from_sequence"
+        }
+      ],
+      "contract": {
+        "scope": {
+          "description": "Application access, flow_run ownership, and run-scoped runtime event page.",
+          "patterns": [
+            "Path\\(\\(id, run_id\\)\\): Path<\\(Uuid, Uuid\\)>",
+            "ensure_application_visible\\(&state, context\\.user\\.id, id\\)",
+            "get_flow_run\\(&state\\.store, id, run_id\\)",
+            "where flow_run_id = \\$1"
+          ]
+        },
+        "time": {
+          "description": "Runtime debug stream is scoped to one run and paged by stream sequence.",
+          "patterns": ["flow_run_id = \\$1"],
+          "exemption": {
+            "reason": "The JSON debug stream reads one run from a sequence cursor. Time windows are owned by the parent run list.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "from_sequence is an exclusive stream cursor and response carries next_sequence.",
+          "patterns": [
+            "from_sequence = query\\.from_sequence\\.unwrap_or\\(0\\)\\.max\\(0\\)",
+            "list_runtime_event_backfill_page",
+            "next_sequence",
+            "> \\$2"
+          ]
+        },
+        "limit": {
+          "description": "limit defaults to 500, maxes at 1000, and SQL fetches one extra row for has_more.",
+          "patterns": [
+            "RUNTIME_DEBUG_STREAM_DEFAULT_PAGE_SIZE",
+            "RUNTIME_DEBUG_STREAM_MAX_PAGE_SIZE",
+            "page_size \\+ 1",
+            "limit \\$3"
+          ]
+        }
+      }
+    },
+    {
+      "id": "runtime_debug_stream_events",
+      "category": "runtime_event_list",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/orchestration/runs/{run_id}/debug-stream",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/debug_handlers.rs",
+        "functionName": "subscribe_flow_debug_run_stream"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/read_methods.rs",
+        "functionName": "list_runtime_event_backfill_page"
+      },
+      "extraSources": [
+        {
+          "file": "api/apps/api-server/src/routes/applications/application_runtime/debug_handlers.rs",
+          "functionName": "debug_run_stream_from_sequence"
+        }
+      ],
+      "contract": {
+        "scope": {
+          "description": "Application access, flow_run ownership, and run-scoped runtime event backfill.",
+          "patterns": [
+            "Path\\(\\(id, run_id\\)\\): Path<\\(Uuid, Uuid\\)>",
+            "get_flow_run\\(id, run_id\\)",
+            "where flow_run_id = \\$1"
+          ]
+        },
+        "time": {
+          "description": "Runtime debug stream is a run-scoped ordered event stream.",
+          "patterns": ["flow_run_id = \\$1"],
+          "exemption": {
+            "reason": "The debug stream replays one run from a sequence cursor. Time windows are not used inside a run event stream.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "from_sequence / Last-Event-ID cursor drives event replay.",
+          "patterns": [
+            "from_sequence",
+            "last-event-id",
+            "after_stream_sequence",
+            "> \\$2"
+          ]
+        },
+        "limit": {
+          "description": "Backfill pages are capped by caller limit.",
+          "patterns": ["limit = i64::try_from\\(limit\\.max\\(1\\)\\)", "limit \\$3"]
+        }
+      }
+    },
+    {
+      "id": "runtime_usage_ledger_run_scope",
+      "category": "ledger_list",
+      "method": "internal",
+      "path": "OrchestrationRuntimeRepository::list_usage_ledger",
+      "api": {
+        "file": "api/crates/control-plane/src/ports/runtime/mod.rs",
+        "functionName": "list_usage_ledger"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/read_methods.rs",
+        "functionName": "list_usage_ledger"
+      },
+      "contract": {
+        "scope": {
+          "description": "Internal ledger list is scoped to one flow_run_id.",
+          "patterns": ["list_usage_ledger\\(&self, flow_run_id: Uuid\\)", "where flow_run_id = \\$1"]
+        },
+        "time": {
+          "description": "Ledger reads are part of run detail aggregation.",
+          "patterns": ["where flow_run_id = \\$1"],
+          "exemption": {
+            "reason": "Usage ledger is only exposed through single-run detail/summary aggregation, not as a cross-run ledger list.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "Run detail ledger is not a public page.",
+          "patterns": ["order by created_at asc, id asc"],
+          "exemption": {
+            "reason": "This is a single-run internal detail list. Public ledger pagination must use a separate endpoint before cross-run listing is exposed.",
+            "removeBy": "not_required"
+          }
+        },
+        "limit": {
+          "description": "Run detail ledger is bounded by one run.",
+          "patterns": ["where flow_run_id = \\$1"],
+          "exemption": {
+            "reason": "No cross-run ledger list exists; single-run detail reads are accepted as run-scope.",
+            "removeBy": "not_required"
+          }
+        }
+      }
+    },
+    {
+      "id": "runtime_debug_artifact_resolve_batch",
+      "category": "artifact_detail_batch",
+      "method": "POST",
+      "path": "/api/console/applications/{id}/orchestration/debug-artifacts/resolve",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/debug_handlers.rs",
+        "functionName": "resolve_runtime_debug_artifacts"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/artifact_methods.rs",
+        "functionName": "get_runtime_debug_artifact"
+      },
+      "contract": {
+        "scope": {
+          "description": "Batch artifact detail reads are scoped by workspace, application and artifact id.",
+          "patterns": [
+            "ensure_application_visible\\(&state, context\\.user\\.id, id\\)",
+            "context\\.actor\\.current_workspace_id",
+            "artifact_id",
+            "where id = \\$1",
+            "workspace_id = \\$2",
+            "application_id = \\$3"
+          ]
+        },
+        "time": {
+          "description": "Artifact resolve is a bounded batch of primary-key lookups.",
+          "patterns": ["where id = \\$1"],
+          "exemption": {
+            "reason": "Artifact resolve does not list artifacts; it resolves a capped request batch of primary-key detail lookups.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "Artifact resolve is not a list page.",
+          "patterns": ["where id = \\$1"],
+          "exemption": {
+            "reason": "The endpoint resolves caller-provided artifact ids and rejects batches over the hard cap.",
+            "removeBy": "not_required"
+          }
+        },
+        "limit": {
+          "description": "Request fan-out is capped before artifact lookups start.",
+          "patterns": [
+            "RUNTIME_DEBUG_ARTIFACT_RESOLVE_MAX_REFS",
+            "body\\.artifact_refs\\.len\\(\\) >"
+          ]
+        }
+      }
+    },
+    {
+      "id": "runtime_debug_artifact_detail",
+      "category": "artifact_detail",
+      "method": "GET",
+      "path": "/api/console/applications/{id}/orchestration/debug-artifacts/{artifact_id}",
+      "api": {
+        "file": "api/apps/api-server/src/routes/applications/application_runtime/debug_handlers.rs",
+        "functionName": "get_runtime_debug_artifact"
+      },
+      "repository": {
+        "file": "api/crates/storage-durable/postgres/src/orchestration_runtime_repository/artifact_methods.rs",
+        "functionName": "get_runtime_debug_artifact"
+      },
+      "contract": {
+        "scope": {
+          "description": "Artifact detail is scoped by workspace, application and artifact id.",
+          "patterns": ["artifact_id", "workspace_id", "application_id", "where id = \\$1", "workspace_id = \\$2", "application_id = \\$3"]
+        },
+        "time": {
+          "description": "Artifact detail is a primary-key lookup.",
+          "patterns": ["where id = \\$1"],
+          "exemption": {
+            "reason": "Artifact reads are primary-key detail lookups, not artifact list queries.",
+            "removeBy": "not_required"
+          }
+        },
+        "cursor": {
+          "description": "Artifact detail is not a list.",
+          "patterns": ["where id = \\$1"],
+          "exemption": {
+            "reason": "No artifact list endpoint is exposed here; cursor contract applies only if an artifact list is added.",
+            "removeBy": "not_required"
+          }
+        },
+        "limit": {
+          "description": "Artifact detail is not a list.",
+          "patterns": ["where id = \\$1"],
+          "exemption": {
+            "reason": "Primary-key detail lookup does not require a limit.",
+            "removeBy": "not_required"
+          }
+        }
+      }
+    }
+  ]
+}

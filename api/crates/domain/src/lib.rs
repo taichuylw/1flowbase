@@ -11,6 +11,7 @@ pub mod frontend_block_catalog;
 pub mod frontstage;
 pub mod host_extension;
 pub mod js_dependency;
+pub mod mcp_management;
 pub mod model_provider;
 pub mod modeling;
 pub mod node_contribution;
@@ -58,6 +59,12 @@ pub use host_extension::{
 pub use js_dependency::{
     ApplicationJsDependencySelection, JsDependencyPermissions, JsDependencyRegistryEntry,
 };
+pub use mcp_management::{
+    McpCatalogSnapshot, McpDescriptionCheckResult, McpExportPackage, McpGroupRecord,
+    McpInstanceDirectoryExportPackage, McpInstanceRecord, McpInstanceStatus,
+    McpInterfaceCatalogEntry, McpListItemKind, McpListItemSummary, McpMetaToolConfigRecord,
+    McpRiskLevel, McpToolBindingRecord, McpToolRecord, McpToolStatus,
+};
 pub use model_provider::{
     ModelCatalogSyncRunRecord, ModelFailoverQueueItemRecord, ModelFailoverQueueSnapshotRecord,
     ModelFailoverQueueTemplateRecord, ModelProviderCatalogCacheRecord,
@@ -65,10 +72,11 @@ pub use model_provider::{
     ModelProviderCatalogSourceRecord, ModelProviderConfiguredModel, ModelProviderDiscoveryMode,
     ModelProviderInstanceRecord, ModelProviderInstanceStatus, ModelProviderMainInstanceRecord,
     ModelProviderPreviewSessionRecord, ModelProviderSecretRecord, ModelProviderValidationStatus,
-    PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState,
-    PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
-    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord,
-    PluginTaskStatus, PluginVerificationStatus,
+    PluginArtifactInstanceRecord, PluginArtifactInstanceStatus, PluginArtifactStatus,
+    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginPackageCatalogProjectionRecord, PluginPackageCatalogProjectionStatus,
+    PluginRuntimeStatus, PluginTaskKind, PluginTaskRecord, PluginTaskStatus,
+    PluginVerificationStatus,
 };
 pub use modeling::{
     ApiExposureReadiness, ApiExposureStatus, DataModelAdvisorFinding, DataModelAdvisorSeverity,
@@ -79,12 +87,15 @@ pub use modeling::{
 };
 pub use node_contribution::{NodeContributionDependencyStatus, NodeContributionRegistryEntry};
 pub use orchestration::{
-    ApplicationRunDetail, ApplicationRunLogSummary, ApplicationRunStitchedTrace,
-    ApplicationRunSummary, CallbackTaskRecord, CallbackTaskStatus, CheckpointRecord,
-    CompiledPlanRecord, DataModelSideEffectReceiptRecord, FlowRunCallbackResumeAttemptRecord,
-    FlowRunCallbackResumeAttemptStatus, FlowRunMode, FlowRunRecord, FlowRunStatus,
-    NodeDebugPreviewResult, NodeLastRun, NodeRunRecord, NodeRunStatus, RunEventRecord,
-    RuntimeDebugArtifactRecord,
+    ApplicationConversationRunSummary, ApplicationRunConversationMessageItem, ApplicationRunDetail,
+    ApplicationRunLogSummary, ApplicationRunStitchedTrace, ApplicationRunSubagentTrace,
+    ApplicationRunSummary, ApplicationRunTraceNodeContentRecord, ApplicationRunTraceNodeRecord,
+    ApplicationRunTraceProjectionDiagnostic, ApplicationRunTraceProjectionStatus,
+    ApplicationRunTraceProjectionStatusRecord, CallbackTaskRecord, CallbackTaskStatus,
+    CheckpointRecord, CompiledPlanRecord, DataModelSideEffectReceiptRecord,
+    FlowRunCallbackResumeAttemptRecord, FlowRunCallbackResumeAttemptStatus, FlowRunMode,
+    FlowRunRecord, FlowRunStatus, NodeDebugPreviewResult, NodeLastRun, NodeRunRecord,
+    NodeRunStatus, RunEventRecord, RuntimeDebugArtifactRecord,
 };
 pub use plugin_worker::{PluginWorkerLeaseRecord, PluginWorkerStatus};
 pub use resource::runtime_model_resource_code;

@@ -1,12 +1,27 @@
 import {
   completeConsoleCallbackTask,
-  getConsoleApplicationRunDetail,
+  completeConsoleRunArchiveUploadSession,
+  getConsoleApplicationConversationMessages,
   getConsoleApplicationRunConversationMessages,
   getConsoleApplicationRunMonitoringReport,
   getConsoleApplicationRuntimeActivity,
+  getConsoleApplicationRunResumeTimeline,
+  getConsoleApplicationRunOverview,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceNodeDetail,
+  getConsoleApplicationRunTraceToolCallbackContent,
+  getConsoleApplicationRunTraceTree,
+  createConsoleRunArchiveUploadSession,
+  exportConsoleApplicationRunTraceDump,
+  exportConsoleApplicationRunsTraceDumpZip,
   fetchConsoleRuntimeModelRecords,
   getConsoleRuntimeDebugArtifact,
+  getConsoleRunArchiveImportJob,
+  resolveConsoleRuntimeDebugArtifacts,
   getConsoleRuntimeDebugStream,
+  uploadConsoleRunArchiveChunk,
+  type ApiBlobResponse,
   type ConsoleApplicationConversationMessage,
   type ConsoleApplicationConversationMessagesPage,
   type ConsoleApplicationRunMonitoringApiKeyUsage,
@@ -16,12 +31,20 @@ import {
   type ConsoleApplicationRunMonitoringExternalUserUsage,
   type ConsoleApplicationRunMonitoringProtocolBreakdown,
   type ConsoleApplicationRunMonitoringReport,
+  type ConsoleApplicationRunOverview,
   type ConsoleApplicationRuntimeActivity,
   type ConsoleApplicationRunMonitoringRunRank,
   type ConsoleApplicationRunMonitoringSourceBreakdown,
   resumeConsoleFlowRun,
-  type ConsoleApplicationRunDetail,
   type ConsoleApplicationRunSummary,
+  type ConsoleApplicationRunResumeTimeline,
+  type ConsoleApplicationRunTraceNodeChildren,
+  type ConsoleApplicationRunTraceNodeContent,
+  type ConsoleApplicationRunTraceNodeDetail,
+  type ConsoleApplicationRunTraceTree,
+  type ConsoleRunArchiveImportJob,
+  type ConsoleRunArchiveUploadSession,
+  type ConsoleRunArchiveChunkUpload,
   type ConsoleCallbackTask,
   type ConsoleNodeRunDetail,
   type ConsoleRunCheckpoint,
@@ -66,7 +89,13 @@ export interface ApplicationRunsPage {
   page: number;
   page_size: number;
 }
-export type ApplicationRunDetail = ConsoleApplicationRunDetail;
+export type ApplicationRunTraceTree = ConsoleApplicationRunTraceTree;
+export type ApplicationRunOverview = ConsoleApplicationRunOverview;
+export type ApplicationRunResumeTimeline = ConsoleApplicationRunResumeTimeline;
+export type ApplicationRunTraceNodeChildren =
+  ConsoleApplicationRunTraceNodeChildren;
+export type ApplicationRunTraceNodeContent =
+  ConsoleApplicationRunTraceNodeContent;
 export type ApplicationRunMonitoringBucket =
   ConsoleApplicationRunMonitoringBucket;
 export type ApplicationRunMonitoringReport =
@@ -152,6 +181,10 @@ export interface ApplicationRunCallbackTasksPage {
 }
 export type ApplicationRuntimeDebugStreamPart = RuntimeDebugStreamPart;
 export type { RuntimeDebugStreamPart };
+export type ApplicationRunExportDownload = ApiBlobResponse;
+export type ApplicationRunArchiveUploadSession = ConsoleRunArchiveUploadSession;
+export type ApplicationRunArchiveChunkUpload = ConsoleRunArchiveChunkUpload;
+export type ApplicationRunArchiveImportJob = ConsoleRunArchiveImportJob;
 export type ApplicationRunSortField =
   | 'created_at'
   | 'started_at'
@@ -159,6 +192,10 @@ export type ApplicationRunSortField =
   | 'updated_at';
 export type ApplicationRunSortOrder = 'asc' | 'desc';
 export type ApplicationRunCacheMode = 'default' | 'refresh';
+
+const TRACE_NODE_ARTIFACT_PREVIEW_AUTO_QUERY = {
+  artifact_preview: 'auto'
+} as const;
 
 export interface FetchApplicationRunMonitoringReportInput {
   timeRangeDays?: number | null;
@@ -206,10 +243,76 @@ export const applicationConversationsQueryKey = (
     input.externalConversationId ?? ''
   ] as const;
 
-export const applicationRunDetailQueryKey = (
+export const applicationRunTraceTreeQueryKey = (
   applicationId: string,
   runId: string
-) => ['applications', applicationId, 'runtime', 'runs', runId] as const;
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'trace-tree'
+  ] as const;
+
+export const applicationRunOverviewQueryKey = (
+  applicationId: string,
+  runId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'overview'
+  ] as const;
+
+export const applicationRunTraceNodeChildrenQueryKey = (
+  applicationId: string,
+  runId: string,
+  traceNodeId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'trace-tree',
+    traceNodeId,
+    'children'
+  ] as const;
+
+export const applicationRunTraceNodeContentQueryKey = (
+  applicationId: string,
+  runId: string,
+  traceNodeId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'trace-tree',
+    traceNodeId,
+    'content'
+  ] as const;
+
+export const applicationRunResumeTimelineQueryKey = (
+  applicationId: string,
+  runId: string
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'runs',
+    runId,
+    'resume-timeline'
+  ] as const;
 
 export const applicationConversationMessagesQueryKey = (
   applicationId: string,
@@ -247,6 +350,29 @@ export const applicationRunConversationMessagesQueryKey = (
     'runs',
     runId,
     'conversation-messages',
+    input.before ?? '',
+    input.after ?? '',
+    input.limit ?? 5
+  ] as const;
+
+export const applicationLogConversationMessagesQueryKey = (
+  applicationId: string,
+  externalConversationId: string,
+  input: {
+    aroundRunId?: string | null;
+    before?: string | null;
+    after?: string | null;
+    limit?: number;
+  } = {}
+) =>
+  [
+    'applications',
+    applicationId,
+    'runtime',
+    'logs',
+    'conversations',
+    externalConversationId,
+    input.aroundRunId ?? '',
     input.before ?? '',
     input.after ?? '',
     input.limit ?? 5
@@ -349,11 +475,180 @@ export function fetchApplicationRuntimeActivity(applicationId: string) {
   );
 }
 
-export function fetchApplicationRunDetail(
+export function fetchApplicationRunTraceTree(
   applicationId: string,
   runId: string
 ) {
-  return getConsoleApplicationRunDetail(
+  return getConsoleApplicationRunTraceTree(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunOverview(
+  applicationId: string,
+  runId: string
+) {
+  return getConsoleApplicationRunOverview(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function exportApplicationRunTraceDump(
+  applicationId: string,
+  runId: string
+) {
+  return exportConsoleApplicationRunTraceDump(
+    applicationId,
+    runId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function exportSelectedApplicationRunsTraceDumpZip(
+  applicationId: string,
+  runIds: string[],
+  csrfToken: string
+) {
+  return exportConsoleApplicationRunsTraceDumpZip(
+    applicationId,
+    runIds,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function createApplicationRunArchiveUploadSession(
+  applicationId: string,
+  input: {
+    filename?: string | null;
+    total_size_bytes: number;
+    expected_sha256: string;
+    chunk_size_bytes: number;
+  },
+  csrfToken: string
+) {
+  return createConsoleRunArchiveUploadSession(
+    applicationId,
+    input,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function uploadApplicationRunArchiveChunk(
+  applicationId: string,
+  sessionId: string,
+  chunkIndex: number,
+  chunk: BodyInit,
+  chunkSha256: string,
+  csrfToken: string
+) {
+  return uploadConsoleRunArchiveChunk(
+    applicationId,
+    sessionId,
+    chunkIndex,
+    chunk,
+    chunkSha256,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function completeApplicationRunArchiveUploadSession(
+  applicationId: string,
+  sessionId: string,
+  csrfToken: string
+) {
+  return completeConsoleRunArchiveUploadSession(
+    applicationId,
+    sessionId,
+    csrfToken,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunArchiveImportJob(
+  applicationId: string,
+  jobId: string
+) {
+  return getConsoleRunArchiveImportJob(
+    applicationId,
+    jobId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationRunTraceNodeChildren(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  cursor?: string
+) {
+  return getConsoleApplicationRunTraceNodeChildren(
+    applicationId,
+    runId,
+    traceNodeId,
+    getApplicationsApiBaseUrl(),
+    cursor ? { cursor } : undefined
+  );
+}
+
+export function fetchApplicationRunTraceNodeContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string
+) {
+  return getConsoleApplicationRunTraceNodeContent(
+    applicationId,
+    runId,
+    traceNodeId,
+    getApplicationsApiBaseUrl(),
+    TRACE_NODE_ARTIFACT_PREVIEW_AUTO_QUERY
+  );
+}
+
+export function fetchApplicationRunTraceNodeDetail(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  detailRefId: string
+): Promise<ConsoleApplicationRunTraceNodeDetail> {
+  return getConsoleApplicationRunTraceNodeDetail(
+    applicationId,
+    runId,
+    traceNodeId,
+    detailRefId,
+    getApplicationsApiBaseUrl(),
+    TRACE_NODE_ARTIFACT_PREVIEW_AUTO_QUERY
+  );
+}
+
+export async function fetchApplicationRunTraceToolCallbackContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  toolCallId: string
+) {
+  const response = await getConsoleApplicationRunTraceToolCallbackContent(
+    applicationId,
+    runId,
+    traceNodeId,
+    toolCallId,
+    getApplicationsApiBaseUrl()
+  );
+
+  return response.payload;
+}
+
+export function fetchApplicationRunResumeTimeline(
+  applicationId: string,
+  runId: string
+) {
+  return getConsoleApplicationRunResumeTimeline(
     applicationId,
     runId,
     getApplicationsApiBaseUrl()
@@ -436,6 +731,29 @@ export function fetchApplicationRunConversationMessages(
     applicationId,
     runId,
     {
+      before: input.before ?? undefined,
+      after: input.after ?? undefined,
+      limit: input.limit
+    },
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchApplicationLogConversationMessages(
+  applicationId: string,
+  externalConversationId: string,
+  input: {
+    aroundRunId?: string | null;
+    before?: string | null;
+    after?: string | null;
+    limit?: number;
+  } = {}
+) {
+  return getConsoleApplicationConversationMessages(
+    applicationId,
+    externalConversationId,
+    {
+      around_run_id: input.aroundRunId ?? undefined,
       before: input.before ?? undefined,
       after: input.after ?? undefined,
       limit: input.limit
@@ -533,6 +851,17 @@ export function fetchRuntimeDebugArtifact(
   return getConsoleRuntimeDebugArtifact(
     applicationId,
     artifactId,
+    getApplicationsApiBaseUrl()
+  );
+}
+
+export function fetchRuntimeDebugArtifacts(
+  applicationId: string,
+  artifactRefs: string[]
+) {
+  return resolveConsoleRuntimeDebugArtifacts(
+    applicationId,
+    artifactRefs,
     getApplicationsApiBaseUrl()
   );
 }
@@ -636,10 +965,7 @@ function applicationConversationMessageFilter(
   return filter;
 }
 
-function stringField(
-  record: Record<string, unknown>,
-  field: string
-): string {
+function stringField(record: Record<string, unknown>, field: string): string {
   const value = record[field];
 
   if (typeof value !== 'string') {
@@ -666,10 +992,7 @@ function optionalStringField(
   return value;
 }
 
-function numberField(
-  record: Record<string, unknown>,
-  field: string
-): number {
+function numberField(record: Record<string, unknown>, field: string): number {
   const value = record[field];
 
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -735,7 +1058,10 @@ function toApplicationRunSummary(
     id,
     application_id: stringField(record, 'application_id'),
     scope_id: stringField(record, 'scope_id'),
-    run_mode: stringField(record, 'run_mode') as ApplicationRunSummary['run_mode'],
+    run_mode: stringField(
+      record,
+      'run_mode'
+    ) as ApplicationRunSummary['run_mode'],
     status: stringField(record, 'status'),
     target_node_id: optionalStringField(record, 'target_node_id'),
     title: stringField(record, 'title'),
@@ -744,7 +1070,10 @@ function toApplicationRunSummary(
     authorized_account: optionalStringField(record, 'authorized_account'),
     api_key_id: optionalStringField(record, 'api_key_id'),
     api_key_name_snapshot: optionalStringField(record, 'api_key_name_snapshot'),
-    publication_version_id: optionalStringField(record, 'publication_version_id'),
+    publication_version_id: optionalStringField(
+      record,
+      'publication_version_id'
+    ),
     external_conversation_id: optionalStringField(
       record,
       'external_conversation_id'
@@ -755,7 +1084,10 @@ function toApplicationRunSummary(
     total_tokens: optionalNumberField(record, 'total_tokens'),
     input_tokens: optionalNumberField(record, 'input_tokens'),
     output_tokens: optionalNumberField(record, 'output_tokens'),
-    input_cache_hit_tokens: optionalNumberField(record, 'input_cache_hit_tokens'),
+    input_cache_hit_tokens: optionalNumberField(
+      record,
+      'input_cache_hit_tokens'
+    ),
     unique_node_count: numberField(record, 'unique_node_count'),
     tool_callback_count: numberField(record, 'tool_callback_count'),
     started_at: stringField(record, 'started_at'),
@@ -822,7 +1154,8 @@ function toApplicationRunNodeRun(
     node_alias: stringField(record, 'node_alias'),
     status: stringField(record, 'status'),
     input_payload: recordPayload(record, 'input_payload'),
-    input_payload_view: optionalRecordPayload(record, 'input_payload_view') ?? undefined,
+    input_payload_view:
+      optionalRecordPayload(record, 'input_payload_view') ?? undefined,
     output_payload: recordPayload(record, 'output_payload'),
     error_payload: optionalRecordPayload(record, 'error_payload'),
     metrics_payload: recordPayload(record, 'metrics_payload'),
@@ -832,7 +1165,9 @@ function toApplicationRunNodeRun(
   };
 }
 
-function toApplicationRunEvent(record: Record<string, unknown>): ConsoleRunEvent {
+function toApplicationRunEvent(
+  record: Record<string, unknown>
+): ConsoleRunEvent {
   return {
     id: stringField(record, 'id'),
     flow_run_id: stringField(record, 'flow_run_id'),

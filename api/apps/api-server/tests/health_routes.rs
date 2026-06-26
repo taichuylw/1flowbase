@@ -204,6 +204,7 @@ async fn test_app_with_config(mut config: ApiConfig) -> Router {
             official_agent_flow_template_source: std::sync::Arc::new(
                 NoopOfficialAgentFlowTemplateSource,
             ),
+            api_node_id: config.api_node_id.clone(),
             provider_install_root: config.provider_install_root.clone(),
             provider_secret_master_key: config.provider_secret_master_key.clone(),
             host_extension_dropin_root: config.host_extension_dropin_root.clone(),

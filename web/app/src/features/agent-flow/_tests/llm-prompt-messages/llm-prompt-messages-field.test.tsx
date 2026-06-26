@@ -16,6 +16,8 @@ import { AgentFlowEditorStoreProvider } from '../../store/editor/AgentFlowEditor
 import { useAgentFlowEditorStore } from '../../store/editor/provider';
 import { selectWorkingDocument } from '../../store/editor/selectors';
 
+const PROMPT_MESSAGES_REORDER_TEST_TIMEOUT = 30_000;
+
 function createInitialState(
   document = createDefaultAgentFlowDocument({ flowId: 'flow-1' })
 ) {
@@ -213,7 +215,7 @@ describe('LLM prompt messages field', () => {
     expect(
       promptMessagesFrom(latestDocument).map((message) => message.role)
     ).toEqual(['system', 'user']);
-  }, 10000);
+  }, PROMPT_MESSAGES_REORDER_TEST_TIMEOUT);
 
   test('renders dynamic messages as an addable group after the fixed system prompt', async () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });

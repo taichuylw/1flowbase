@@ -401,11 +401,17 @@ async fn seed_runtime_data_source_instance_with_options(
     sqlx::query(
         r#"
         insert into data_source_secrets (
-            data_source_instance_id, encrypted_secret_json, secret_version
-        ) values ($1, '{"client_secret":"route-runtime-secret"}', 1)
+            id, scope_id, data_source_instance_id, encrypted_secret_json,
+            secret_version, created_by, updated_by
+        ) values (
+            $1, (select scope_id from data_source_instances where id = $2),
+            $2, '{"client_secret":"route-runtime-secret"}', 1, $3, $3
+        )
         "#,
     )
+    .bind(uuid::Uuid::now_v7())
     .bind(data_source_instance_id)
+    .bind(actor_user_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -458,6 +464,33 @@ async fn create_api_key(
                     json!({
                         "name": name,
                         "permissions": permissions
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let payload: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    payload["data"]["token"].as_str().unwrap().to_string()
+}
+
+async fn create_user_api_key(app: &axum::Router, cookie: &str, csrf: &str, name: &str) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/user-api-keys")
+                .header("cookie", cookie)
+                .header("x-csrf-token", csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": name,
+                        "expiration_policy": "never"
                     })
                     .to_string(),
                 ))

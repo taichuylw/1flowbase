@@ -1,10 +1,13 @@
+use std::collections::BTreeMap;
+
 use plugin_framework::{
     installation::PluginTaskStatus,
     provider_contract::{
-        ModelDiscoveryMode, ProviderBalanceInfo, ProviderBalanceResult, ProviderInvocationInput,
-        ProviderInvocationResult, ProviderMessage, ProviderMessageRole, ProviderRuntimeError,
-        ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod, ProviderStdioRequest,
-        ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall, ProviderUsage,
+        ClientProtocolEnvelope, ModelDiscoveryMode, ProviderBalanceInfo, ProviderBalanceResult,
+        ProviderInvocationInput, ProviderInvocationResult, ProviderMessage, ProviderMessageRole,
+        ProviderRuntimeError, ProviderRuntimeErrorKind, ProviderRuntimeLine, ProviderStdioMethod,
+        ProviderStdioRequest, ProviderStdioResponse, ProviderStreamEvent, ProviderToolCall,
+        ProviderUsage,
     },
 };
 use serde_json::json;
@@ -191,6 +194,43 @@ fn provider_invocation_input_preserves_tool_message_metadata() {
 }
 
 #[test]
+fn provider_invocation_input_serializes_client_protocol_envelope() {
+    let input = ProviderInvocationInput {
+        client_protocol_envelope: Some(ClientProtocolEnvelope {
+            source_protocol: "anthropic_messages".to_string(),
+            policy: "anthropic_messages_v1".to_string(),
+            headers: BTreeMap::from([
+                ("anthropic-version".to_string(), "2023-06-01".to_string()),
+                ("anthropic-beta".to_string(), "prompt-caching".to_string()),
+            ]),
+        }),
+        ..ProviderInvocationInput::default()
+    };
+
+    let payload = serde_json::to_value(input).unwrap();
+    let decoded: ProviderInvocationInput = serde_json::from_value(payload.clone()).unwrap();
+
+    assert_eq!(
+        payload["client_protocol_envelope"]["source_protocol"],
+        "anthropic_messages"
+    );
+    assert_eq!(
+        payload["client_protocol_envelope"]["headers"]["anthropic-version"],
+        "2023-06-01"
+    );
+    assert_eq!(
+        decoded
+            .client_protocol_envelope
+            .as_ref()
+            .unwrap()
+            .headers
+            .get("anthropic-beta")
+            .map(String::as_str),
+        Some("prompt-caching")
+    );
+}
+
+#[test]
 fn provider_invocation_result_exposes_native_response_cursor() {
     let result = ProviderInvocationResult {
         final_content: Some("hello".to_string()),
@@ -252,6 +292,44 @@ fn provider_runtime_line_text_maps_to_stream_event() {
             delta: "hello".into()
         })
     );
+}
+
+#[test]
+fn provider_runtime_line_error_preserves_upstream_details() {
+    let line = ProviderRuntimeLine::Error {
+        error: ProviderRuntimeError::new(
+            ProviderRuntimeErrorKind::ProviderUpstreamError,
+            "400 Bad Request: upstream rejected request",
+        )
+        .with_provider_summary("x-request-id=req_123")
+        .with_provider_details(json!({
+            "status": 400,
+            "content_type": "application/json",
+            "headers": {
+                "x-request-id": "req_123"
+            },
+            "raw_body": "{\"error\":{\"message\":\"missing instructions\"}}\n"
+        })),
+    };
+
+    let encoded = serde_json::to_value(&line).unwrap();
+    assert_eq!(encoded["error"]["kind"], "provider_upstream_error");
+    assert_eq!(
+        encoded["error"]["provider_details"]["raw_body"],
+        "{\"error\":{\"message\":\"missing instructions\"}}\n"
+    );
+
+    let decoded: ProviderRuntimeLine = serde_json::from_value(encoded).unwrap();
+    match decoded.into_stream_event() {
+        Some(ProviderStreamEvent::Error { error }) => {
+            assert_eq!(error.kind, ProviderRuntimeErrorKind::ProviderUpstreamError);
+            assert_eq!(
+                error.provider_details.unwrap()["headers"]["x-request-id"],
+                "req_123"
+            );
+        }
+        other => panic!("expected upstream error stream event, got {other:?}"),
+    }
 }
 
 #[test]

@@ -22,6 +22,7 @@ function statusTone(status: string) {
       return 'success';
     case 'failed':
       return 'error';
+    case 'intercepted':
     case 'waiting_human':
     case 'waiting_callback':
       return 'warning';
@@ -56,6 +57,36 @@ function readTotalTokens(payload: unknown) {
 
   const totalTokens = usage.total_tokens;
   return typeof totalTokens === 'number' ? totalTokens : null;
+}
+
+function readToolMode(item: AgentFlowTraceItem) {
+  if (item.nodeType !== 'tool') {
+    return null;
+  }
+
+  const debugPayload = readRecord(item.debugPayload);
+  if (!debugPayload) {
+    return null;
+  }
+
+  const toolMode = debugPayload.tool_mode;
+  if (toolMode === 'fusion') {
+    return i18nText('agentFlow', 'auto.tool_mode_fusion');
+  }
+  if (toolMode === 'route') {
+    return i18nText('agentFlow', 'auto.tool_mode_agent');
+  }
+
+  const routeTrace = readRecord(debugPayload.route_trace);
+  const routeKind = routeTrace?.route_kind;
+  if (routeKind === 'fusion') {
+    return i18nText('agentFlow', 'auto.tool_mode_fusion');
+  }
+  if (routeKind === 'route') {
+    return i18nText('agentFlow', 'auto.tool_mode_agent');
+  }
+
+  return null;
 }
 
 function metricText(item: AgentFlowTraceItem) {
@@ -101,6 +132,9 @@ function metricText(item: AgentFlowTraceItem) {
     }
     if (statusTone(item.status) === 'error') {
       return i18nText('agentFlow', 'auto.execution_failed');
+    }
+    if (item.status === 'intercepted') {
+      return i18nText('agentFlow', 'auto.execution_intercepted');
     }
     return i18nText('agentFlow', 'auto.in_progress');
   }
@@ -157,7 +191,6 @@ export function NodeTypeIcon({ nodeType }: { nodeType: string }) {
         value1: nodeType
       })}
       className="agent-flow-editor__debug-workflow-node-icon"
-      role="img"
     >
       {getAgentFlowNodeTypeIcon(nodeType)}
     </span>
@@ -165,6 +198,8 @@ export function NodeTypeIcon({ nodeType }: { nodeType: string }) {
 }
 
 export function DebugWorkflowNodeRow({ item }: { item: AgentFlowTraceItem }) {
+  const toolMode = readToolMode(item);
+
   return (
     <span
       className="agent-flow-editor__debug-workflow-row"
@@ -172,7 +207,17 @@ export function DebugWorkflowNodeRow({ item }: { item: AgentFlowTraceItem }) {
     >
       <NodeTypeIcon nodeType={item.nodeType} />
       <span className="agent-flow-editor__debug-workflow-node-main">
-        <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
+        <span className="agent-flow-editor__debug-workflow-node-title">
+          <Typography.Text strong>{nodeDisplayName(item)}</Typography.Text>
+          {toolMode ? (
+            <span
+              className="agent-flow-editor__debug-workflow-node-mode"
+              data-testid="debug-workflow-node-mode"
+            >
+              {toolMode}
+            </span>
+          ) : null}
+        </span>
         <Typography.Text
           className="agent-flow-editor__debug-workflow-metric"
           type="secondary"
@@ -206,6 +251,7 @@ export function DebugWorkflowNodeItem({
       className="agent-flow-editor__debug-workflow-node-item"
       data-expanded={expanded ? 'true' : 'false'}
       data-selected={selected ? 'true' : 'false'}
+      data-node-type={item.nodeType}
       data-testid="debug-workflow-node-item"
     >
       <button

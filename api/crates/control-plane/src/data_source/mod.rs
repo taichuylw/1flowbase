@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
 use plugin_framework::data_source_contract::{
@@ -14,6 +14,9 @@ use uuid::Uuid;
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
+    plugin_management::{
+        mark_current_node_plugin_runtime_status, ready_current_node_plugin_installation,
+    },
     ports::{
         AddModelFieldInput, AuthRepository, CreateDataSourceInstanceInput,
         CreateDataSourcePreviewSessionInput, CreateModelDefinitionInput,
@@ -116,6 +119,8 @@ pub struct MapDataSourceResourceToModelResult {
 pub struct DataSourceService<R, H> {
     repository: R,
     runtime: H,
+    node_id: Option<String>,
+    install_root: Option<PathBuf>,
 }
 
 impl<R, H> DataSourceService<R, H>
@@ -127,6 +132,40 @@ where
         Self {
             repository,
             runtime,
+            node_id: None,
+            install_root: None,
+        }
+    }
+
+    pub fn with_node_artifact_context(
+        mut self,
+        node_id: impl Into<String>,
+        install_root: impl Into<PathBuf>,
+    ) -> Self {
+        self.node_id = Some(node_id.into());
+        self.install_root = Some(install_root.into());
+        self
+    }
+
+    async fn ready_installation(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<domain::PluginInstallationRecord> {
+        match (self.node_id.as_deref(), self.install_root.as_deref()) {
+            (Some(node_id), Some(install_root)) => {
+                ready_current_node_plugin_installation(
+                    &self.repository,
+                    node_id,
+                    install_root,
+                    installation_id,
+                )
+                .await
+            }
+            _ => self
+                .repository
+                .get_installation(installation_id)
+                .await?
+                .ok_or(ControlPlaneError::NotFound("plugin_installation").into()),
         }
     }
 
@@ -196,11 +235,7 @@ where
         ensure_workspace_matches(&actor, command.workspace_id)?;
         ensure_external_data_source_permission(&actor, "configure")?;
 
-        let installation = self
-            .repository
-            .get_installation(command.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let installation = self.ready_installation(command.installation_id).await?;
         ensure_installation_assigned(
             &self.repository,
             command.workspace_id,
@@ -285,11 +320,7 @@ where
             .get_instance(command.workspace_id, command.instance_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
-        let installation = self
-            .repository
-            .get_installation(existing.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let installation = self.ready_installation(existing.installation_id).await?;
         ensure_installation_assigned(
             &self.repository,
             command.workspace_id,
@@ -303,7 +334,7 @@ where
             .await?
             .unwrap_or_else(|| json!({}));
 
-        self.runtime.ensure_loaded(&installation).await?;
+        self.ensure_runtime_loaded(&installation).await?;
         let secret_values = collect_secret_strings(&secret_json);
         let output = self
             .runtime
@@ -524,11 +555,7 @@ where
             .get_instance(command.workspace_id, command.instance_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
-        let installation = self
-            .repository
-            .get_installation(instance.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let installation = self.ready_installation(instance.installation_id).await?;
         ensure_installation_assigned(
             &self.repository,
             command.workspace_id,
@@ -543,7 +570,7 @@ where
             .await?
             .unwrap_or_else(|| json!({}));
         let secret_values = collect_secret_strings(&secret_json);
-        self.runtime.ensure_loaded(&installation).await?;
+        self.ensure_runtime_loaded(&installation).await?;
         let descriptor = self
             .runtime
             .describe_resource(
@@ -673,11 +700,7 @@ where
             .get_instance(command.workspace_id, command.instance_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("data_source_instance"))?;
-        let installation = self
-            .repository
-            .get_installation(instance.installation_id)
-            .await?
-            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
+        let installation = self.ready_installation(instance.installation_id).await?;
         ensure_installation_assigned(
             &self.repository,
             command.workspace_id,
@@ -701,6 +724,7 @@ where
             cursor: command.cursor,
             options_json: command.options_json,
         };
+        self.ensure_runtime_loaded(&installation).await?;
         let output = self
             .runtime
             .preview_read(&installation, preview_input.clone())
@@ -739,6 +763,56 @@ where
             preview_session,
             output,
         })
+    }
+
+    async fn ensure_runtime_loaded(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+    ) -> Result<()> {
+        match self.runtime.ensure_loaded(installation).await {
+            Ok(()) => {
+                self.mark_current_node_runtime_status(
+                    installation,
+                    domain::PluginRuntimeStatus::Active,
+                    None,
+                )
+                .await?;
+                Ok(())
+            }
+            Err(error) => {
+                let _ = self
+                    .mark_current_node_runtime_status(
+                        installation,
+                        domain::PluginRuntimeStatus::LoadFailed,
+                        Some(error.to_string()),
+                    )
+                    .await;
+                Err(error)
+            }
+        }
+    }
+
+    async fn mark_current_node_runtime_status(
+        &self,
+        installation: &domain::PluginInstallationRecord,
+        runtime_status: domain::PluginRuntimeStatus,
+        last_error: Option<String>,
+    ) -> Result<()> {
+        let Some(node_id) = self.node_id.as_deref() else {
+            return Ok(());
+        };
+        if self.install_root.is_none() {
+            return Ok(());
+        }
+        mark_current_node_plugin_runtime_status(
+            &self.repository,
+            node_id,
+            installation,
+            runtime_status,
+            last_error,
+        )
+        .await?;
+        Ok(())
     }
 }
 

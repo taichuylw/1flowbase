@@ -490,6 +490,10 @@ pub(crate) async fn execute_blocking_native_run(
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
     )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
+    )
     .with_file_storage_registry(state.file_storage_registry.clone());
     let execution_result = scope_application_activity(
         run.application_id,
@@ -619,6 +623,10 @@ async fn start_native_run_stream(
             api_provider_runtime(&background_state),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
+        )
+        .with_node_artifact_context(
+            background_state.api_node_id.clone(),
+            background_state.provider_install_root.clone(),
         )
         .with_file_storage_registry(background_state.file_storage_registry.clone())
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
@@ -754,6 +762,10 @@ pub async fn resume_native_run(
         api_provider_runtime(&state),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
+    )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
     )
     .with_file_storage_registry(state.file_storage_registry.clone())
     .with_runtime_event_stream(state.runtime_event_stream.clone());

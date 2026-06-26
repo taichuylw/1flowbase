@@ -17,6 +17,7 @@ decision_policy: verify_before_decision
 - `api/apps/plugin-runner/Cargo.toml` 的 `version` 变化只发布 `ghcr.io/taichuy/1flowbase-plugin-runner:vX.Y.Z`。
 - 组件发布时同时更新该镜像的 `latest` tag。
 - `docker/docker-compose.yaml` 必须支持无本地 env 文件的一条命令启动；`docker/.env.example` 只是统一覆盖模板。
+- 2026-06-20 起，Docker 一键部署支持数据库模式选择：默认 `DATABASE_MODE=internal` 使用内置 PostgreSQL；用户选择 `external` 时由部署脚本收集外部 PostgreSQL host、port、database、user、password、sslmode 并生成 `API_DATABASE_URL`。外部模式必须使用不包含内置 `db` 服务的 `docker/docker-compose.external-db.yaml`，避免企业已有数据库场景被迫启动本地 PostgreSQL。
 - 默认使用 `latest`，并通过 `FLOWBASE_WEB_VERSION`、`FLOWBASE_API_SERVER_VERSION`、`FLOWBASE_PLUGIN_RUNNER_VERSION` 支持按组件 pin 具体版本。
 - 不再要求用户复制 `api/api.env`、`plugin-runner/plugin-runner.env` 或 `postgres/postgres.env`；配置入口收敛到 `docker/.env`。
 - 发布前用 `scripts/node/cli/verify-container-version.js` 校验镜像 tag 与组件 manifest 版本一致。

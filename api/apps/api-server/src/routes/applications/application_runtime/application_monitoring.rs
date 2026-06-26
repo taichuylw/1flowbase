@@ -297,9 +297,9 @@ fn parse_optional_time(
 }
 
 fn default_started_from(query: &ApplicationRunMonitoringQuery) -> Option<OffsetDateTime> {
-    let days = query.time_range_days.unwrap_or(DEFAULT_TIME_RANGE_DAYS);
+    let days = monitoring_time_range_days(query.time_range_days);
 
-    (days > 0).then(|| OffsetDateTime::now_utc() - Duration::days(days))
+    Some(OffsetDateTime::now_utc() - Duration::days(days))
 }
 
 fn normalize_monitoring_bucket(input: Option<&str>, time_range_days: Option<i64>) -> &'static str {
@@ -308,13 +308,19 @@ fn normalize_monitoring_bucket(input: Option<&str>, time_range_days: Option<i64>
         Some("week") => "week",
         Some("month") => "month",
         Some("day") => "day",
-        _ => match time_range_days.unwrap_or(DEFAULT_TIME_RANGE_DAYS) {
+        _ => match monitoring_time_range_days(time_range_days) {
             days if days <= 1 => "hour",
             days if days >= 180 => "month",
             days if days >= 60 => "week",
             _ => "day",
         },
     }
+}
+
+fn monitoring_time_range_days(time_range_days: Option<i64>) -> i64 {
+    time_range_days
+        .filter(|days| *days > 0)
+        .unwrap_or(DEFAULT_TIME_RANGE_DAYS)
 }
 
 fn to_report_response(

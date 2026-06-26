@@ -22,18 +22,18 @@ use crate::{
         UpdatePluginArtifactSnapshotInput, UpdatePluginDesiredStateInput,
         UpdatePluginRuntimeSnapshotInput, UpdatePluginTaskStatusInput, UpdateProfileInput,
         UpsertModelProviderCatalogCacheInput, UpsertModelProviderMainInstanceInput,
-        UpsertModelProviderSecretInput, UpsertPluginInstallationInput,
-        UpsertPluginPackageCatalogProjectionInput,
+        UpsertModelProviderSecretInput, UpsertPluginArtifactInstanceInput,
+        UpsertPluginInstallationInput, UpsertPluginPackageCatalogProjectionInput,
     },
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, ModelProviderCatalogCacheRecord,
     ModelProviderCatalogRefreshStatus, ModelProviderInstanceRecord, ModelProviderInstanceStatus,
     ModelProviderMainInstanceRecord, ModelProviderPreviewSessionRecord, ModelProviderSecretRecord,
-    PermissionDefinition, PluginArtifactStatus, PluginAssignmentRecord, PluginAvailabilityStatus,
-    PluginDesiredState, PluginInstallationRecord, PluginPackageCatalogProjectionRecord,
-    PluginPackageCatalogProjectionStatus, PluginRuntimeStatus, PluginTaskRecord,
-    PluginVerificationStatus, ScopeContext, UserRecord,
+    PermissionDefinition, PluginArtifactInstanceRecord, PluginArtifactStatus,
+    PluginAssignmentRecord, PluginAvailabilityStatus, PluginDesiredState, PluginInstallationRecord,
+    PluginPackageCatalogProjectionRecord, PluginPackageCatalogProjectionStatus,
+    PluginRuntimeStatus, PluginTaskRecord, PluginVerificationStatus, ScopeContext, UserRecord,
 };
 use plugin_framework::provider_contract::{
     ProviderInvocationInput, ProviderInvocationResult, ProviderModelDescriptor, ProviderModelSource,
@@ -46,6 +46,7 @@ use super::plugin_management::support::{actor_with_permissions, create_provider_
 struct MemoryModelProviderRepository {
     actor: ActorContext,
     installations: Arc<RwLock<HashMap<Uuid, PluginInstallationRecord>>>,
+    artifact_instances: Arc<RwLock<HashMap<(String, Uuid), PluginArtifactInstanceRecord>>>,
     catalog_projections: Arc<RwLock<HashMap<Uuid, PluginPackageCatalogProjectionRecord>>>,
     assignments: Arc<RwLock<Vec<PluginAssignmentRecord>>>,
     tasks: Arc<RwLock<HashMap<Uuid, PluginTaskRecord>>>,
@@ -68,6 +69,7 @@ impl MemoryModelProviderRepository {
         Self {
             actor,
             installations: Arc::new(RwLock::new(HashMap::new())),
+            artifact_instances: Arc::new(RwLock::new(HashMap::new())),
             catalog_projections: Arc::new(RwLock::new(HashMap::new())),
             assignments: Arc::new(RwLock::new(Vec::new())),
             tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -522,6 +524,55 @@ impl PluginRepository for MemoryModelProviderRepository {
         installation.availability_status = input.availability_status;
         installation.last_load_error = input.last_load_error.clone();
         Ok(installation.clone())
+    }
+
+    async fn upsert_artifact_instance(
+        &self,
+        input: &UpsertPluginArtifactInstanceInput,
+    ) -> Result<PluginArtifactInstanceRecord> {
+        let record = PluginArtifactInstanceRecord {
+            node_id: input.node_id.clone(),
+            installation_id: input.installation_id,
+            local_version: input.local_version.clone(),
+            local_checksum: input.local_checksum.clone(),
+            installed_path: input.installed_path.clone(),
+            artifact_status: input.artifact_status,
+            runtime_status: input.runtime_status,
+            checked_at: input.checked_at,
+            last_error: input.last_error.clone(),
+        };
+        self.artifact_instances.write().await.insert(
+            (record.node_id.clone(), record.installation_id),
+            record.clone(),
+        );
+        Ok(record)
+    }
+
+    async fn get_artifact_instance(
+        &self,
+        node_id: &str,
+        installation_id: Uuid,
+    ) -> Result<Option<PluginArtifactInstanceRecord>> {
+        Ok(self
+            .artifact_instances
+            .read()
+            .await
+            .get(&(node_id.to_string(), installation_id))
+            .cloned())
+    }
+
+    async fn list_artifact_instances(
+        &self,
+        node_id: &str,
+    ) -> Result<Vec<PluginArtifactInstanceRecord>> {
+        Ok(self
+            .artifact_instances
+            .read()
+            .await
+            .values()
+            .filter(|record| record.node_id == node_id)
+            .cloned()
+            .collect())
     }
 
     async fn create_assignment(

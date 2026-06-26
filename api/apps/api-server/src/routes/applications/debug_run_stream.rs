@@ -124,7 +124,7 @@ fn payload_string(payload: &serde_json::Value, key: &str) -> Option<String> {
         .map(ToString::to_string)
 }
 
-fn durable_event_stream_sequence(event: &domain::RuntimeEventRecord) -> i64 {
+pub(crate) fn durable_event_stream_sequence(event: &domain::RuntimeEventRecord) -> i64 {
     payload_i64(&event.payload, "sequence_end")
         .or_else(|| payload_i64(&event.payload, "stream_sequence"))
         .unwrap_or(event.sequence)

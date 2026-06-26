@@ -46,12 +46,15 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   start: createElement(PlaySquareOutlined),
   answer: createElement(MessageOutlined),
   llm: createElement(ThunderboltOutlined),
+  agents: createElement(ThunderboltOutlined),
+  agent: createElement(ThunderboltOutlined),
   code: codeNodeIcon(),
   template_transform: createElement(FileTextOutlined),
   knowledge_retrieval: createElement(SearchOutlined),
   question_classifier: createElement(QuestionCircleOutlined),
   if_else: createElement(SwapOutlined),
   http_request: createElement(ApiOutlined),
+  tools: createElement(ToolOutlined),
   tool: createElement(ToolOutlined),
   tool_result: createElement(MessageOutlined),
   data_model_list: createElement(DatabaseOutlined),
@@ -63,7 +66,10 @@ const NODE_TYPE_ICONS: Record<string, ReactNode> = {
   iteration: createElement(SyncOutlined),
   loop: createElement(ReloadOutlined),
   plugin_node: createElement(BlockOutlined),
-  unresolved_node: createElement(WarningOutlined)
+  unresolved_node: createElement(WarningOutlined),
+  fusion: createElement(ThunderboltOutlined),
+  route: createElement(ThunderboltOutlined),
+  branch: createElement(ThunderboltOutlined)
 };
 
 export function getAgentFlowNodeTypeIcon(nodeType: string) {

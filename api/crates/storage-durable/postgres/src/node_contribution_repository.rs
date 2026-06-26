@@ -68,6 +68,7 @@ impl NodeContributionRepository for PgControlPlaneStore {
                 r#"
                 insert into node_contribution_registry (
                     id,
+                    scope_id,
                     installation_id,
                     provider_code,
                     plugin_unique_identifier,
@@ -95,11 +96,12 @@ impl NodeContributionRepository for PgControlPlaneStore {
                     dependency_plugin_version_range
                 ) values (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                    $18, $19, $20, $21, $22, $23, $24, $25, $26
+                    $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
                 )
                 "#,
             )
             .bind(Uuid::now_v7())
+            .bind(domain::SYSTEM_SCOPE_ID)
             .bind(input.installation_id)
             .bind(&input.provider_code)
             .bind(&entry.plugin_unique_identifier)

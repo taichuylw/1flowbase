@@ -13,6 +13,7 @@ const DEFAULT_SESSION_COOKIE_NAME: &str = "flowbase_console_session";
 const SESSION_COOKIE_SECURITY_SCHEME: &str = "sessionCookie";
 const CSRF_HEADER_SECURITY_SCHEME: &str = "csrfHeader";
 const CSRF_HEADER_NAME: &str = "x-csrf-token";
+const PAT_BEARER_SECURITY_SCHEME: &str = "patBearer";
 pub const DOCS_OPERATIONS_PAGE_SIZE: usize = 20;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -437,6 +438,16 @@ fn ensure_security_schemes(
                 "description": "CSRF token header required by mutating console operations."
             })
         });
+    security_schemes
+        .entry(PAT_BEARER_SECURITY_SCHEME.to_string())
+        .or_insert_with(|| {
+            json!({
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "pat_ user API key",
+                "description": "Use Authorization: Bearer pat_... for user API key requests. PAT requests use the bound user's role permissions and do not require CSRF."
+            })
+        });
 
     Ok(())
 }
@@ -548,7 +559,7 @@ fn annotate_console_operation_security(canonical_map: &mut Map<String, Value>) -
 
             operation_map
                 .entry("security".to_string())
-                .or_insert_with(|| Value::Array(vec![derive_console_security_requirement(method)]));
+                .or_insert_with(|| derive_console_security_requirement(method));
         }
     }
 
@@ -557,14 +568,24 @@ fn annotate_console_operation_security(canonical_map: &mut Map<String, Value>) -
 
 fn derive_console_security_requirement(method: &str) -> Value {
     if requires_csrf(method) {
-        json!({
-            SESSION_COOKIE_SECURITY_SCHEME: [],
-            CSRF_HEADER_SECURITY_SCHEME: []
-        })
+        json!([
+            {
+                SESSION_COOKIE_SECURITY_SCHEME: [],
+                CSRF_HEADER_SECURITY_SCHEME: []
+            },
+            {
+                PAT_BEARER_SECURITY_SCHEME: []
+            }
+        ])
     } else {
-        json!({
-            SESSION_COOKIE_SECURITY_SCHEME: []
-        })
+        json!([
+            {
+                SESSION_COOKIE_SECURITY_SCHEME: []
+            },
+            {
+                PAT_BEARER_SECURITY_SCHEME: []
+            }
+        ])
     }
 }
 

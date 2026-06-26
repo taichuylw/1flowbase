@@ -120,6 +120,56 @@ fn ensure_field_mutable(
     Ok(())
 }
 
+fn is_registered_system_table(model: &domain::ModelDefinitionRecord) -> bool {
+    model.scope_kind == DataModelScopeKind::System
+        && model.scope_id == domain::SYSTEM_SCOPE_ID
+        && model.source_kind == domain::DataModelSourceKind::MainSource
+        && model.protection.owner_kind == domain::DataModelOwnerKind::Core
+        && model.protection.is_protected
+}
+
+fn ensure_not_registered_system_table_physical_field_mutation(
+    model: &domain::ModelDefinitionRecord,
+) -> Result<(), ControlPlaneError> {
+    if is_registered_system_table(model) {
+        return Err(ControlPlaneError::InvalidInput(
+            "registered_system_table_physical_fields_readonly",
+        ));
+    }
+
+    Ok(())
+}
+
+fn ensure_field_update_allowed(
+    model: &domain::ModelDefinitionRecord,
+    command: &UpdateModelFieldCommand,
+) -> Result<(), ControlPlaneError> {
+    let field = model
+        .fields
+        .iter()
+        .find(|field| field.id == command.field_id)
+        .ok_or(ControlPlaneError::NotFound("model_field"))?;
+
+    if is_registered_system_table(model) {
+        if field.is_required != command.is_required
+            || field.is_unique != command.is_unique
+            || field.default_value != command.default_value
+        {
+            return Err(ControlPlaneError::InvalidInput(
+                "registered_system_table_physical_fields_readonly",
+            ));
+        }
+
+        return Ok(());
+    }
+
+    if field.is_system || !field.is_writable {
+        return Err(ControlPlaneError::InvalidInput("model_field"));
+    }
+
+    Ok(())
+}
+
 impl<R> ModelDefinitionService<R>
 where
     R: ModelDefinitionRepository,
@@ -475,6 +525,7 @@ where
             .get_model_definition(actor.current_workspace_id, command.model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_not_registered_system_table_physical_field_mutation(&model)?;
         let external_field_key =
             normalize_external_field_key(model.source_kind, command.external_field_key.as_deref())?;
 
@@ -528,8 +579,11 @@ where
             .get_model_definition(actor.current_workspace_id, command.model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
-        ensure_protected_model_override_authorized(&actor, &model)?;
-        ensure_field_mutable(&model, command.field_id)?;
+        let is_registered_system_table = is_registered_system_table(&model);
+        ensure_field_update_allowed(&model, &command)?;
+        if !is_registered_system_table {
+            ensure_protected_model_override_authorized(&actor, &model)?;
+        }
 
         let field = self
             .repository
@@ -666,6 +720,7 @@ where
             .get_model_definition(actor.current_workspace_id, command.model_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("model_definition"))?;
+        ensure_not_registered_system_table_physical_field_mutation(&model)?;
         ensure_protected_model_override_authorized(&actor, &model)?;
         ensure_field_mutable(&model, command.field_id)?;
 

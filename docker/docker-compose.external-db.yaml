@@ -1,0 +1,66 @@
+name: 1flowbase
+
+services:
+  plugin-runner:
+    image: ghcr.io/taichuy/1flowbase-plugin-runner:${FLOWBASE_PLUGIN_RUNNER_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      RUST_LOG: ${PLUGIN_RUNNER_RUST_LOG:-info}
+      PLUGIN_RUNNER_ADDR: 0.0.0.0:7801
+    expose:
+      - "7801"
+
+  api:
+    image: ghcr.io/taichuy/1flowbase-api-server:${FLOWBASE_API_SERVER_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      plugin-runner:
+        condition: service_started
+    environment:
+      RUST_LOG: ${API_RUST_LOG:-info}
+      API_ENV: ${API_ENV:-production}
+      API_DATABASE_URL: ${API_DATABASE_URL:?API_DATABASE_URL is required for external database compose}
+      API_SERVER_ADDR: 0.0.0.0:7800
+      API_PLUGIN_RUNNER_INTERNAL_BASE_URL: http://plugin-runner:7801
+      API_ALLOWED_ORIGINS: ${API_ALLOWED_ORIGINS:-http://localhost:3100,http://127.0.0.1:3100}
+      API_COOKIE_NAME: ${API_COOKIE_NAME:-flowbase_console_session}
+      API_COOKIE_SECURE: ${API_COOKIE_SECURE:-true}
+      API_SESSION_TTL_DAYS: ${API_SESSION_TTL_DAYS:-7}
+      API_DATABASE_POOL_MAX_CONNECTIONS: ${API_DATABASE_POOL_MAX_CONNECTIONS:-5}
+      API_PROVIDER_INSTALL_ROOT: /app/api/plugins
+      API_HOST_EXTENSION_DROPIN_ROOT: /app/api/plugins/host-extension/dropins
+      API_PROVIDER_SECRET_MASTER_KEY: ${API_PROVIDER_SECRET_MASTER_KEY:?API_PROVIDER_SECRET_MASTER_KEY is required for production compose}
+      API_OFFICIAL_PLUGIN_REPOSITORY: ${API_OFFICIAL_PLUGIN_REPOSITORY:-taichuy/1flowbase-official-plugins}
+      API_OFFICIAL_PLUGIN_REGISTRY_URL: ${API_OFFICIAL_PLUGIN_REGISTRY_URL:-https://raw.githubusercontent.com/taichuy/1flowbase-official-plugins/main/official-registry.json}
+      API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL: ${API_OFFICIAL_PLUGIN_GITHUB_PROXY_URL:-}
+      API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED: ${API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED:-true}
+      API_PLUGIN_SET: ${API_PLUGIN_SET:-default}
+      API_SECRET_RESOLVER: ${API_SECRET_RESOLVER:-env}
+      API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS: ${API_PLUGIN_ALLOW_UNVERIFIED_FILESYSTEM_DROPINS:-false}
+      API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS: ${API_PLUGIN_ALLOW_UPLOADED_HOST_EXTENSIONS:-false}
+      API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON: >-
+        ${API_OFFICIAL_PLUGIN_TRUSTED_PUBLIC_KEYS_JSON:-[{"key_id":"official-key-2026-04","algorithm":"ed25519","public_key_pem":"-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAuk3oonNd85FNP8CBRKj8RVvpdbhreoJiCguEJXPSgwg=\n-----END PUBLIC KEY-----"}]}
+      BOOTSTRAP_WORKSPACE_NAME: ${BOOTSTRAP_WORKSPACE_NAME:-1flowbase}
+      BOOTSTRAP_ROOT_ACCOUNT: ${BOOTSTRAP_ROOT_ACCOUNT:-root}
+      BOOTSTRAP_ROOT_EMAIL: ${BOOTSTRAP_ROOT_EMAIL:-root@example.com}
+      BOOTSTRAP_ROOT_PASSWORD: ${BOOTSTRAP_ROOT_PASSWORD:?BOOTSTRAP_ROOT_PASSWORD is required for production compose}
+      BOOTSTRAP_ROOT_NAME: ${BOOTSTRAP_ROOT_NAME:-Root}
+      BOOTSTRAP_ROOT_NICKNAME: ${BOOTSTRAP_ROOT_NICKNAME:-Root}
+    expose:
+      - "7800"
+    volumes:
+      - ./api/storage:/app/api/storage
+      - ./api/plugins/packages:/app/api/plugins/packages
+      - ./api/plugins/installed:/app/api/plugins/installed
+      - ./api/plugins/host-extension/dropins:/app/api/plugins/host-extension/dropins
+
+  web:
+    image: ghcr.io/taichuy/1flowbase-web:${FLOWBASE_WEB_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "${WEB_PORT:-3100}:80"
+    volumes:
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro

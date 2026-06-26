@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use uuid::Uuid;
 
 use crate::repositories::PgControlPlaneStore;
@@ -51,6 +51,15 @@ pub(super) async fn fetch_flow_run_for_application(
         from flow_runs
         where application_id = $1
           and id = $2
+          and (
+              flow_runs.import_job_id is null
+              or exists (
+                  select 1
+                  from run_archive_import_jobs import_jobs
+                  where import_jobs.id = flow_runs.import_job_id
+                    and import_jobs.status = 'succeeded'
+              )
+          )
         "#,
     )
     .bind(application_id)
@@ -300,6 +309,15 @@ pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
           and prior.api_key_id is not distinct from $6
           and prior.compatibility_mode is not distinct from $7
           and prior.status in ('cancelled', 'waiting_callback')
+          and (
+              prior.import_job_id is null
+              or exists (
+                  select 1
+                  from run_archive_import_jobs prior_import_jobs
+                  where prior_import_jobs.id = prior.import_job_id
+                    and prior_import_jobs.status = 'succeeded'
+              )
+          )
           and not exists (
               select 1
               from flow_runs boundary
@@ -312,6 +330,15 @@ pub(super) async fn list_stitched_trace_source_runs_for_flow_run(
                 and boundary.started_at > prior.started_at
                 and boundary.started_at < $4
                 and boundary.status in ('succeeded', 'failed')
+                and (
+                    boundary.import_job_id is null
+                    or exists (
+                        select 1
+                        from run_archive_import_jobs boundary_import_jobs
+                        where boundary_import_jobs.id = boundary.import_job_id
+                          and boundary_import_jobs.status = 'succeeded'
+                    )
+                )
           )
         order by prior.started_at asc, prior.id asc
         limit 12
@@ -383,6 +410,200 @@ pub(super) async fn list_stitched_trace_for_flow_run(
     }
 
     Ok(stitched_trace)
+}
+
+pub(super) async fn list_subagent_traces_for_flow_run(
+    store: &PgControlPlaneStore,
+    current_run: &domain::FlowRunRecord,
+    callback_tasks: &[domain::CallbackTaskRecord],
+) -> Result<Vec<domain::ApplicationRunSubagentTrace>> {
+    if current_run.compatibility_mode.as_deref() != Some("anthropic-messages-v1") {
+        return Ok(Vec::new());
+    }
+    let Some(external_conversation_id) = current_run
+        .external_conversation_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(Vec::new());
+    };
+
+    let mut subagent_traces = Vec::new();
+    for task in callback_tasks
+        .iter()
+        .filter(|task| task.callback_kind == "llm_tool_calls")
+    {
+        for tool_call in agent_tool_calls_from_callback_task(task) {
+            let Some(tool_call_id) = tool_call
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+            else {
+                continue;
+            };
+            let Some(prompt) = tool_call
+                .get("arguments")
+                .and_then(|arguments| arguments.get("prompt"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            else {
+                continue;
+            };
+
+            let candidates = find_subagent_flow_run_candidates(
+                store,
+                current_run,
+                external_conversation_id,
+                task,
+                prompt,
+            )
+            .await?;
+            if candidates.len() != 1 {
+                continue;
+            }
+            let source_flow_run = candidates
+                .into_iter()
+                .next()
+                .ok_or_else(|| anyhow!("subagent candidate count should be checked"))?;
+            let source_flow_run_id = source_flow_run.id;
+            subagent_traces.push(domain::ApplicationRunSubagentTrace {
+                parent_tool_call_id: tool_call_id,
+                parent_callback_task_id: task.id,
+                node_runs: list_node_runs_for_flow_run(store, source_flow_run_id).await?,
+                callback_tasks: list_callback_tasks_for_flow_run(store, source_flow_run_id).await?,
+                events: list_events_for_flow_run(store, source_flow_run_id).await?,
+                runtime_events: list_runtime_events_for_flow_run(store, source_flow_run_id).await?,
+                source_flow_run,
+            });
+        }
+    }
+
+    Ok(subagent_traces)
+}
+
+fn agent_tool_calls_from_callback_task(
+    task: &domain::CallbackTaskRecord,
+) -> Vec<serde_json::Value> {
+    task.request_payload
+        .get("tool_calls")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|tool_call| {
+            tool_call.get("name").and_then(serde_json::Value::as_str) == Some("Agent")
+        })
+        .cloned()
+        .collect()
+}
+
+async fn find_subagent_flow_run_candidates(
+    store: &PgControlPlaneStore,
+    current_run: &domain::FlowRunRecord,
+    external_conversation_id: &str,
+    task: &domain::CallbackTaskRecord,
+    prompt: &str,
+) -> Result<Vec<domain::FlowRunRecord>> {
+    let rows = sqlx::query(
+        r#"
+        select
+            candidate.id,
+            candidate.application_id,
+            candidate.flow_id,
+            candidate.flow_draft_id,
+            candidate.compiled_plan_id,
+            candidate.debug_session_id,
+            candidate.flow_schema_version,
+            candidate.document_hash,
+            candidate.run_mode,
+            candidate.target_node_id,
+            candidate.title,
+            candidate.status,
+            candidate.input_payload,
+            candidate.output_payload,
+            candidate.error_payload,
+            candidate.created_by,
+            (
+                select users.account
+                from users
+                where users.id = candidate.created_by
+            ) as authorized_account,
+            candidate.api_key_id,
+            candidate.publication_version_id,
+            candidate.external_user,
+            candidate.external_conversation_id,
+            candidate.external_trace_id,
+            candidate.compatibility_mode,
+            candidate.idempotency_key,
+            candidate.started_at,
+            candidate.finished_at,
+            candidate.created_at,
+            candidate.updated_at
+        from flow_runs candidate
+        where candidate.application_id = $1
+          and candidate.id <> $2
+          and candidate.external_conversation_id = $3
+          and candidate.external_user is not distinct from $4
+          and candidate.api_key_id is not distinct from $5
+          and candidate.compatibility_mode is not distinct from $6
+          and candidate.compatibility_mode = 'anthropic-messages-v1'
+          and candidate.started_at >= $7
+          and ($8::timestamptz is null or candidate.started_at <= $8)
+          and coalesce(
+              candidate.input_payload #>> '{node-start,query}',
+              candidate.input_payload #>> '{start,query}',
+              candidate.input_payload #>> '{query}',
+              ''
+          ) = $9
+          and (
+              position('cc_is_subagent=true' in coalesce(
+                  candidate.input_payload #>> '{node-start,system}',
+                  candidate.input_payload #>> '{start,system}',
+                  candidate.input_payload #>> '{system}',
+                  ''
+              )) > 0
+              or (
+                  position('Agent threads always have their cwd reset between bash calls' in coalesce(
+                      candidate.input_payload #>> '{node-start,system}',
+                      candidate.input_payload #>> '{start,system}',
+                      candidate.input_payload #>> '{system}',
+                      ''
+                  )) > 0
+                  and position('the parent agent reads your text output' in coalesce(
+                      candidate.input_payload #>> '{node-start,system}',
+                      candidate.input_payload #>> '{start,system}',
+                      candidate.input_payload #>> '{system}',
+                      ''
+                  )) > 0
+              )
+          )
+          and (
+              candidate.import_job_id is null
+              or exists (
+                  select 1
+                  from run_archive_import_jobs import_jobs
+                  where import_jobs.id = candidate.import_job_id
+                    and import_jobs.status = 'succeeded'
+              )
+          )
+        order by candidate.started_at asc, candidate.id asc
+        limit 2
+        "#,
+    )
+    .bind(current_run.application_id)
+    .bind(current_run.id)
+    .bind(external_conversation_id)
+    .bind(current_run.external_user.as_deref())
+    .bind(current_run.api_key_id)
+    .bind(current_run.compatibility_mode.as_deref())
+    .bind(task.created_at)
+    .bind(task.completed_at)
+    .bind(prompt)
+    .fetch_all(store.pool())
+    .await?;
+
+    rows.into_iter().map(map_flow_run_record).collect()
 }
 
 pub(super) async fn list_events_for_node_context(

@@ -164,6 +164,10 @@ fn service(state: &ApiState) -> DataSourceService<MainDurableStore, ApiProviderR
         state.store.clone(),
         ApiProviderRuntime::new(state.provider_runtime.clone()),
     )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
+    )
 }
 
 fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiError> {
@@ -365,7 +369,7 @@ pub async fn create_instance(
     Json(body): Json<CreateDataSourceInstanceBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<DataSourceInstanceResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let created = service(&state)
         .create_instance(CreateDataSourceInstanceCommand {
             actor_user_id: context.user.id,
@@ -397,7 +401,7 @@ pub async fn update_defaults(
     Json(body): Json<UpdateDataSourceDefaultsBody>,
 ) -> Result<Json<ApiSuccess<DataSourceInstanceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let defaults = domain::DataSourceDefaults {
         data_model_status: parse_model_status(&body.default_data_model_status)?,
         api_exposure_status: parse_api_exposure_status(&body.default_api_exposure_status)?,
@@ -442,7 +446,7 @@ pub async fn validate_instance(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<ValidateDataSourceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = service(&state)
         .validate_instance(ValidateDataSourceInstanceCommand {
             actor_user_id: context.user.id,
@@ -467,7 +471,7 @@ pub async fn rotate_secret(
     Json(body): Json<RotateDataSourceSecretBody>,
 ) -> Result<Json<ApiSuccess<DataSourceInstanceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = service(&state)
         .rotate_secret(RotateDataSourceSecretCommand {
             actor_user_id: context.user.id,
@@ -493,7 +497,7 @@ pub async fn preview_read(
     Json(body): Json<PreviewDataSourceReadBody>,
 ) -> Result<Json<ApiSuccess<PreviewDataSourceReadResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = service(&state)
         .preview_read(PreviewDataSourceReadCommand {
             actor_user_id: context.user.id,
@@ -522,7 +526,7 @@ pub async fn map_resource_to_model(
     Json(body): Json<MapDataSourceResourceToModelBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<ModelDefinitionResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
     let result = service(&state)
         .map_resource_to_model(MapDataSourceResourceToModelCommand {
             actor_user_id: context.user.id,

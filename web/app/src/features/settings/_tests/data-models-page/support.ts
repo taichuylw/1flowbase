@@ -23,6 +23,8 @@ const membersApi = vi.hoisted(() => ({
   fetchSettingsMembers: vi.fn(),
   createSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  enableSettingsMember: vi.fn(),
+  deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   replaceSettingsMemberRoles: vi.fn()
 }));
@@ -98,6 +100,8 @@ const pluginsApi = vi.hoisted(() => ({
   uploadSettingsPluginPackage: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 

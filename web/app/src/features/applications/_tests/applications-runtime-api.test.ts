@@ -1,11 +1,73 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+const traceProjectionStatus = vi.hoisted(() => ({
+  projection_status: 'succeeded',
+  projection_version: 1,
+  source_watermark: 'run-1:1',
+  attempt_count: 1,
+  last_attempt_at: '2026-05-08T00:00:00Z',
+  last_success_at: '2026-05-08T00:00:01Z',
+  last_error_code: null,
+  last_error_stage: null,
+  last_error_source_kind: null,
+  last_error_source_locator: null,
+  last_error_ref: null,
+  retriable: false
+}));
+
 vi.mock('@1flowbase/api-client', () => ({
   completeConsoleCallbackTask: vi.fn().mockResolvedValue(undefined),
-  getConsoleApplicationRunDetail: vi.fn().mockResolvedValue({
+  completeConsoleRunArchiveUploadSession: vi.fn().mockResolvedValue({
+    job_id: 'job-1',
+    status: 'queued'
+  }),
+  createConsoleRunArchiveUploadSession: vi.fn().mockResolvedValue({
+    session_id: 'session-1',
+    status: 'uploading'
+  }),
+  getConsoleApplicationRunTraceTree: vi.fn().mockResolvedValue({
+    projection_status: traceProjectionStatus,
+    nodes: []
+  }),
+  getConsoleApplicationRunTraceNodeChildren: vi.fn().mockResolvedValue({
+    projection_status: traceProjectionStatus,
+    items: [],
+    page_info: {
+      has_more: false,
+      next_cursor: null,
+      page_size: 20
+    }
+  }),
+  getConsoleApplicationRunTraceNodeContent: vi.fn().mockResolvedValue({
+    trace_node_id: '11111111-1111-4111-8111-111111111111',
+    node_kind: 'node_run',
+    projection_status: traceProjectionStatus,
+    content_kind: 'node_run',
+    source_refs: [],
+    detail_refs: [],
+    payload: {}
+  }),
+  getConsoleApplicationRunTraceNodeDetail: vi.fn().mockResolvedValue({
+    trace_node_id: '11111111-1111-4111-8111-111111111111',
+    node_kind: 'node_run',
+    projection_status: traceProjectionStatus,
+    detail_ref_id: 'node_run',
+    detail_kind: 'node_run',
+    source_refs: [],
+    payload: {}
+  }),
+  exportConsoleApplicationRunTraceDump: vi.fn().mockResolvedValue({
+    blob: new Blob(['{}'], { type: 'application/json' }),
+    filename: 'run-1.json',
+    contentType: 'application/json'
+  }),
+  exportConsoleApplicationRunsTraceDumpZip: vi.fn().mockResolvedValue({
+    blob: new Blob(['zip'], { type: 'application/zip' }),
+    filename: 'selected-runs.zip',
+    contentType: 'application/zip'
+  }),
+  getConsoleApplicationRunResumeTimeline: vi.fn().mockResolvedValue({
     flow_run: { id: 'run-1' },
-    node_runs: [],
-    checkpoints: [],
     callback_tasks: [],
     events: []
   }),
@@ -174,36 +236,73 @@ vi.mock('@1flowbase/api-client', () => ({
     items: [],
     total: 0
   }),
-  getConsoleRuntimeDebugStream: vi.fn().mockResolvedValue({ parts: [] }),
+  getConsoleRuntimeDebugStream: vi.fn().mockResolvedValue({
+    parts: [],
+    page_size: 500,
+    next_sequence: null,
+    has_more: false
+  }),
+  getConsoleRunArchiveImportJob: vi.fn().mockResolvedValue({
+    job_id: 'job-1',
+    status: 'succeeded',
+    imported_run_count: 1
+  }),
   resumeConsoleFlowRun: vi.fn().mockResolvedValue(undefined),
+  uploadConsoleRunArchiveChunk: vi.fn().mockResolvedValue({
+    session_id: 'session-1',
+    chunk_index: 0
+  }),
   getDefaultApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800')
 }));
 
 import {
   completeConsoleCallbackTask,
+  completeConsoleRunArchiveUploadSession,
+  createConsoleRunArchiveUploadSession,
   fetchConsoleRuntimeModelRecords,
-  getConsoleApplicationRunDetail,
   getConsoleApplicationRunMonitoringReport,
+  getConsoleApplicationRunResumeTimeline,
+  getConsoleApplicationRunTraceNodeChildren,
+  getConsoleApplicationRunTraceNodeContent,
+  getConsoleApplicationRunTraceNodeDetail,
+  getConsoleApplicationRunTraceTree,
   getConsoleApplicationRuntimeActivity,
   getConsoleApplicationRuns,
   getConsoleRuntimeDebugStream,
-  resumeConsoleFlowRun
+  getConsoleRunArchiveImportJob,
+  exportConsoleApplicationRunTraceDump,
+  exportConsoleApplicationRunsTraceDumpZip,
+  resumeConsoleFlowRun,
+  uploadConsoleRunArchiveChunk
 } from '@1flowbase/api-client';
 
 import {
-  applicationRunDetailQueryKey,
   applicationRunMonitoringReportQueryKey,
+  applicationRunResumeTimelineQueryKey,
+  applicationRunTraceNodeChildrenQueryKey,
+  applicationRunTraceNodeContentQueryKey,
+  applicationRunTraceTreeQueryKey,
   applicationRuntimeActivityQueryKey,
   applicationRunsQueryKey,
   applicationRuntimeDebugStreamQueryKey,
   completeCallbackTask,
+  completeApplicationRunArchiveUploadSession,
+  createApplicationRunArchiveUploadSession,
   fetchApplicationConversationMessages,
-  fetchApplicationRunDetail,
+  fetchApplicationRunArchiveImportJob,
   fetchApplicationRunMonitoringReport,
+  fetchApplicationRunResumeTimeline,
+  fetchApplicationRunTraceNodeChildren,
+  fetchApplicationRunTraceNodeContent,
+  fetchApplicationRunTraceNodeDetail,
+  fetchApplicationRunTraceTree,
   fetchApplicationRuntimeActivity,
   fetchApplicationRuns,
+  exportApplicationRunTraceDump,
+  exportSelectedApplicationRunsTraceDumpZip,
   fetchRuntimeDebugStream,
-  resumeFlowRun
+  resumeFlowRun,
+  uploadApplicationRunArchiveChunk
 } from '../api/runtime';
 
 afterEach(() => {
@@ -212,6 +311,8 @@ afterEach(() => {
 
 describe('applications runtime api', () => {
   test('builds stable runtime query keys', () => {
+    const traceNodeId = '11111111-1111-4111-8111-111111111111';
+
     expect(applicationRunsQueryKey('app-1')).toEqual([
       'applications',
       'app-1',
@@ -224,26 +325,59 @@ describe('applications runtime api', () => {
       'desc',
       ''
     ]);
+    expect(applicationRunsQueryKey('app-1', { titleIncludes: '退款' })).toEqual(
+      [
+        'applications',
+        'app-1',
+        'runtime',
+        'runs',
+        1,
+        20,
+        'all',
+        'started_at',
+        'desc',
+        '退款'
+      ]
+    );
+    expect(applicationRunTraceTreeQueryKey('app-1', 'run-1')).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'trace-tree'
+    ]);
     expect(
-      applicationRunsQueryKey('app-1', { titleIncludes: '退款' })
+      applicationRunTraceNodeChildrenQueryKey('app-1', 'run-1', traceNodeId)
     ).toEqual([
       'applications',
       'app-1',
       'runtime',
       'runs',
-      1,
-      20,
-      'all',
-      'started_at',
-      'desc',
-      '退款'
+      'run-1',
+      'trace-tree',
+      traceNodeId,
+      'children'
     ]);
-    expect(applicationRunDetailQueryKey('app-1', 'run-1')).toEqual([
+    expect(
+      applicationRunTraceNodeContentQueryKey('app-1', 'run-1', traceNodeId)
+    ).toEqual([
       'applications',
       'app-1',
       'runtime',
       'runs',
-      'run-1'
+      'run-1',
+      'trace-tree',
+      traceNodeId,
+      'content'
+    ]);
+    expect(applicationRunResumeTimelineQueryKey('app-1', 'run-1')).toEqual([
+      'applications',
+      'app-1',
+      'runtime',
+      'runs',
+      'run-1',
+      'resume-timeline'
     ]);
     expect(applicationRuntimeDebugStreamQueryKey('app-1', 'run-1')).toEqual([
       'applications',
@@ -272,14 +406,56 @@ describe('applications runtime api', () => {
   });
 
   test('passes the resolved base url to runtime read requests', async () => {
+    const traceNodeId = '11111111-1111-4111-8111-111111111111';
+
     await fetchApplicationRuns('app-1', { cacheMode: 'refresh' });
-    await fetchApplicationRunDetail('app-1', 'run-1');
+    await fetchApplicationRunTraceTree('app-1', 'run-1');
+    await fetchApplicationRunTraceNodeChildren('app-1', 'run-1', traceNodeId);
+    await fetchApplicationRunTraceNodeContent('app-1', 'run-1', traceNodeId);
+    await fetchApplicationRunTraceNodeDetail(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'node_run'
+    );
+    await fetchApplicationRunResumeTimeline('app-1', 'run-1');
     await fetchApplicationRunMonitoringReport('app-1', {
       timeRangeDays: 28,
       bucket: 'week'
     });
     await fetchApplicationRuntimeActivity('app-1');
     await fetchRuntimeDebugStream('app-1', 'run-1');
+    await exportApplicationRunTraceDump('app-1', 'run-1');
+    await exportSelectedApplicationRunsTraceDumpZip(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123'
+    );
+    await createApplicationRunArchiveUploadSession(
+      'app-1',
+      {
+        filename: 'archive.json',
+        total_size_bytes: 42,
+        expected_sha256: 'sha256:archive',
+        chunk_size_bytes: 1024
+      },
+      'csrf-123'
+    );
+    const chunk = new Blob(['chunk']);
+    await uploadApplicationRunArchiveChunk(
+      'app-1',
+      'session-1',
+      0,
+      chunk,
+      'sha256:chunk',
+      'csrf-123'
+    );
+    await completeApplicationRunArchiveUploadSession(
+      'app-1',
+      'session-1',
+      'csrf-123'
+    );
+    await fetchApplicationRunArchiveImportJob('app-1', 'job-1');
 
     expect(fetchConsoleRuntimeModelRecords).toHaveBeenCalledWith(
       'application_run_log_summaries',
@@ -294,7 +470,38 @@ describe('applications runtime api', () => {
       'http://127.0.0.1:7800'
     );
     expect(getConsoleApplicationRuns).not.toHaveBeenCalled();
-    expect(getConsoleApplicationRunDetail).toHaveBeenCalledWith(
+    expect(getConsoleApplicationRunTraceTree).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleApplicationRunTraceNodeChildren).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'http://127.0.0.1:7800',
+      undefined
+    );
+    expect(getConsoleApplicationRunTraceNodeContent).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'http://127.0.0.1:7800',
+      {
+        artifact_preview: 'auto'
+      }
+    );
+    expect(getConsoleApplicationRunTraceNodeDetail).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      traceNodeId,
+      'node_run',
+      'http://127.0.0.1:7800',
+      {
+        artifact_preview: 'auto'
+      }
+    );
+    expect(getConsoleApplicationRunResumeTimeline).toHaveBeenCalledWith(
       'app-1',
       'run-1',
       'http://127.0.0.1:7800'
@@ -314,6 +521,48 @@ describe('applications runtime api', () => {
     expect(getConsoleRuntimeDebugStream).toHaveBeenCalledWith(
       'app-1',
       'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(exportConsoleApplicationRunTraceDump).toHaveBeenCalledWith(
+      'app-1',
+      'run-1',
+      'http://127.0.0.1:7800'
+    );
+    expect(exportConsoleApplicationRunsTraceDumpZip).toHaveBeenCalledWith(
+      'app-1',
+      ['run-1', 'run-2'],
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(createConsoleRunArchiveUploadSession).toHaveBeenCalledWith(
+      'app-1',
+      {
+        filename: 'archive.json',
+        total_size_bytes: 42,
+        expected_sha256: 'sha256:archive',
+        chunk_size_bytes: 1024
+      },
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(uploadConsoleRunArchiveChunk).toHaveBeenCalledWith(
+      'app-1',
+      'session-1',
+      0,
+      chunk,
+      'sha256:chunk',
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(completeConsoleRunArchiveUploadSession).toHaveBeenCalledWith(
+      'app-1',
+      'session-1',
+      'csrf-123',
+      'http://127.0.0.1:7800'
+    );
+    expect(getConsoleRunArchiveImportJob).toHaveBeenCalledWith(
+      'app-1',
+      'job-1',
       'http://127.0.0.1:7800'
     );
   });

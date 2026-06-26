@@ -139,7 +139,7 @@ describe('debug console shell', () => {
       }
     });
     vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue(null);
-    vi.spyOn(runtimeApi, 'fetchApplicationRunDetail').mockResolvedValue({
+    vi.spyOn(runtimeApi, 'fetchApplicationRunDebugSnapshot').mockResolvedValue({
       flow_run: {
         id: 'flow-run-1',
         application_id: 'app-1',

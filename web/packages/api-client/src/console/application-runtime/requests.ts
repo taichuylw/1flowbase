@@ -1,20 +1,64 @@
 import type { FlowAuthoringDocument } from '@1flowbase/flow-schema';
 
 import { ApiClientError } from '../../errors';
-import { apiFetch } from '../../transport';
+import { apiFetch, apiFetchBlob } from '../../transport';
 import type {
+  ConsoleApplicationRunArchive,
+  ConsoleApplicationRunArchiveVersionInput,
   ConsoleApplicationRunDetail,
   ConsoleApplicationRunMonitoringReport,
+  ConsoleApplicationRunOverview,
   ConsoleApplicationRunsPage,
   ConsoleApplicationRuntimeActivity,
+  ConsoleApplicationRunTraceNodeChildren,
+  ConsoleApplicationRunTraceNodeContent,
+  ConsoleApplicationRunTraceNodeDetail,
+  ConsoleApplicationRunTraceToolCallbackContent,
+  ConsoleApplicationRunTraceTree,
+  ConsoleApplicationRunResumeTimeline,
+  ConsoleRunArchiveChunkUpload,
+  ConsoleRunArchiveImportJob,
+  ConsoleRunArchiveUploadSession,
+  ConsoleRunArchiveUploadSessionCreateInput,
   ConsoleDebugVariableSnapshot,
   ConsoleNodeLastRun,
+  ConsoleRuntimeDebugArtifactsResolveResponse,
   DeleteConsoleDebugVariableCacheEntriesInput,
   GetConsoleApplicationRunMonitoringReportInput,
   GetConsoleApplicationRunsInput,
+  RuntimeDebugStreamQuery,
   RuntimeDebugStreamResponse,
   UpsertConsoleDebugVariableCacheEntryInput
 } from './types';
+
+export interface ConsoleApplicationRunTraceNodeArtifactPreviewQuery {
+  artifact_preview?: 'auto';
+  artifact_preview_field?: string[];
+}
+
+function traceNodeArtifactPreviewQueryString(
+  query?: ConsoleApplicationRunTraceNodeArtifactPreviewQuery
+) {
+  const searchParams = new URLSearchParams();
+  if (query?.artifact_preview) {
+    searchParams.set('artifact_preview', query.artifact_preview);
+  }
+  for (const fieldPath of query?.artifact_preview_field ?? []) {
+    searchParams.append('artifact_preview_field', fieldPath);
+  }
+
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : '';
+}
+
+function archiveVersionQueryString(input?: ConsoleApplicationRunArchiveVersionInput) {
+  const searchParams = new URLSearchParams();
+  if (input?.archive_version !== undefined) {
+    searchParams.set('archive_version', String(input.archive_version));
+  }
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : '';
+}
 
 export function startConsoleNodeDebugPreview(
   applicationId: string,
@@ -51,6 +95,17 @@ export function startConsoleFlowDebugRun(
     method: 'POST',
     body: input,
     csrfToken,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunDebugSnapshot(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunDetail>({
+    path: `/api/console/applications/${applicationId}/orchestration/runs/${runId}/debug-snapshot`,
     baseUrl
   });
 }
@@ -171,13 +226,245 @@ export function getConsoleApplicationRuntimeActivity(
   });
 }
 
-export function getConsoleApplicationRunDetail(
+export function getConsoleApplicationRunTraceTree(
   applicationId: string,
   runId: string,
   baseUrl?: string
 ) {
-  return apiFetch<ConsoleApplicationRunDetail>({
-    path: `/api/console/applications/${applicationId}/logs/runs/${runId}`,
+  return apiFetch<ConsoleApplicationRunTraceTree>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree`,
+    baseUrl
+  });
+}
+
+export function exportConsoleApplicationRunTraceDump(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetchBlob({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/export`,
+    method: 'GET',
+    baseUrl
+  });
+}
+
+export function exportConsoleApplicationRunsTraceDumpZip(
+  applicationId: string,
+  runIds: string[],
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetchBlob({
+    path: `/api/console/applications/${applicationId}/logs/runs/export`,
+    method: 'POST',
+    body: {
+      run_ids: runIds
+    },
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunArchive(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string,
+  input?: ConsoleApplicationRunArchiveVersionInput
+) {
+  return apiFetch<ConsoleApplicationRunArchive>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}/archive` +
+      archiveVersionQueryString(input),
+    method: 'GET',
+    baseUrl,
+    unwrapSuccess: false
+  });
+}
+
+export function createConsoleApplicationRunsArchive(
+  applicationId: string,
+  runIds: string[],
+  csrfToken: string,
+  baseUrl?: string,
+  input: ConsoleApplicationRunArchiveVersionInput = {}
+) {
+  return apiFetch<ConsoleApplicationRunArchive>({
+    path: `/api/console/applications/${applicationId}/logs/runs/archive`,
+    method: 'POST',
+    body: {
+      ...input,
+      run_ids: runIds
+    },
+    csrfToken,
+    baseUrl,
+    unwrapSuccess: false
+  });
+}
+
+export function createConsoleRunArchiveUploadSession(
+  applicationId: string,
+  input: ConsoleRunArchiveUploadSessionCreateInput,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveUploadSession>({
+    path: `/api/console/applications/${applicationId}/logs/runs/archive/import-sessions`,
+    method: 'POST',
+    body: input,
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function uploadConsoleRunArchiveChunk(
+  applicationId: string,
+  sessionId: string,
+  chunkIndex: number,
+  chunk: BodyInit,
+  chunkSha256: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveChunkUpload>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/archive/import-sessions/` +
+      `${sessionId}/chunks/${chunkIndex}`,
+    method: 'PUT',
+    rawBody: chunk,
+    contentType: 'application/octet-stream',
+    headers: {
+      'x-chunk-sha256': chunkSha256
+    },
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function completeConsoleRunArchiveUploadSession(
+  applicationId: string,
+  sessionId: string,
+  csrfToken: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveImportJob>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/archive/import-sessions/` +
+      `${sessionId}/complete`,
+    method: 'POST',
+    csrfToken,
+    baseUrl
+  });
+}
+
+export function getConsoleRunArchiveImportJob(
+  applicationId: string,
+  jobId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRunArchiveImportJob>({
+    path: `/api/console/applications/${applicationId}/logs/runs/archive/import-jobs/${jobId}`,
+    method: 'GET',
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunOverview(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunOverview>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/overview`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceNodeChildren(
+  applicationId: string,
+  runId: string,
+  parentTraceNodeId: string,
+  baseUrl?: string,
+  query?: {
+    cursor?: string;
+    page_size?: number;
+  }
+) {
+  const searchParams = new URLSearchParams({
+    parent_trace_node_id: parentTraceNodeId
+  });
+  if (query?.cursor) {
+    searchParams.set('cursor', query.cursor);
+  }
+  if (query?.page_size) {
+    searchParams.set('page_size', String(query.page_size));
+  }
+
+  return apiFetch<ConsoleApplicationRunTraceNodeChildren>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}/trace-tree/nodes?` +
+      searchParams.toString(),
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceNodeContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  baseUrl?: string,
+  query?: ConsoleApplicationRunTraceNodeArtifactPreviewQuery
+) {
+  return apiFetch<ConsoleApplicationRunTraceNodeContent>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}` +
+      `/trace-tree/nodes/${encodeURIComponent(traceNodeId)}/content` +
+      traceNodeArtifactPreviewQueryString(query),
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceNodeDetail(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  detailRefId: string,
+  baseUrl?: string,
+  query?: ConsoleApplicationRunTraceNodeArtifactPreviewQuery
+) {
+  return apiFetch<ConsoleApplicationRunTraceNodeDetail>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}` +
+      `/trace-tree/nodes/${encodeURIComponent(traceNodeId)}` +
+      `/details/${encodeURIComponent(detailRefId)}` +
+      traceNodeArtifactPreviewQueryString(query),
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunTraceToolCallbackContent(
+  applicationId: string,
+  runId: string,
+  traceNodeId: string,
+  toolCallId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunTraceToolCallbackContent>({
+    path:
+      `/api/console/applications/${applicationId}/logs/runs/${runId}` +
+      `/trace-tree/nodes/${encodeURIComponent(traceNodeId)}` +
+      `/tool-callbacks/${encodeURIComponent(toolCallId)}/content`,
+    baseUrl
+  });
+}
+
+export function getConsoleApplicationRunResumeTimeline(
+  applicationId: string,
+  runId: string,
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleApplicationRunResumeTimeline>({
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/resume-timeline`,
     baseUrl
   });
 }
@@ -197,10 +484,20 @@ export function getConsoleApplicationRunNodeLastRun(
 export function getConsoleRuntimeDebugStream(
   applicationId: string,
   runId: string,
-  baseUrl?: string
+  baseUrl?: string,
+  query: RuntimeDebugStreamQuery = {}
 ) {
+  const searchParams = new URLSearchParams();
+  if (query.from_sequence !== undefined) {
+    searchParams.set('from_sequence', String(query.from_sequence));
+  }
+  if (query.limit !== undefined) {
+    searchParams.set('limit', String(query.limit));
+  }
+  const queryString = searchParams.toString();
+
   return apiFetch<RuntimeDebugStreamResponse>({
-    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/debug-stream`,
+    path: `/api/console/applications/${applicationId}/logs/runs/${runId}/debug-stream${queryString ? `?${queryString}` : ''}`,
     baseUrl
   });
 }
@@ -271,6 +568,19 @@ export async function getConsoleRuntimeDebugArtifact(
   }
 
   return response.text();
+}
+
+export function resolveConsoleRuntimeDebugArtifacts(
+  applicationId: string,
+  artifactRefs: string[],
+  baseUrl?: string
+) {
+  return apiFetch<ConsoleRuntimeDebugArtifactsResolveResponse>({
+    path: `/api/console/applications/${applicationId}/orchestration/debug-artifacts/resolve`,
+    method: 'POST',
+    body: { artifact_refs: artifactRefs },
+    baseUrl
+  });
 }
 
 export function getConsoleNodeLastRun(

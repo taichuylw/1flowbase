@@ -7,14 +7,42 @@ import {
   getConsoleHostInfrastructureMemoryOverview,
   getConsoleHostInfrastructureMemoryStatsOverview,
   getConsoleHostInfrastructureMemoryStats,
+  installConsolePluginCurrentNodeArtifact,
   getConsoleHostInfrastructureCacheOverview,
   listConsoleHostInfrastructureCacheEntries,
   listConsoleHostInfrastructureMemoryEntries,
   listConsoleHostInfrastructureMemoryTree,
+  refreshConsolePluginCurrentNodeArtifact,
   searchConsoleHostInfrastructureMemoryEntries,
   revealConsoleHostInfrastructureMemoryEntry,
   revealConsoleHostInfrastructureCacheEntry
 } from '../console-plugins';
+
+describe('console-plugins current node artifact client', () => {
+  vi.spyOn(transport, 'apiFetch').mockImplementation(
+    async (input) => input as never
+  );
+
+  test('refreshes current node artifact with csrf', async () => {
+    await expect(
+      refreshConsolePluginCurrentNodeArtifact('installation-1', 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/console/plugins/installation-1/artifact/refresh',
+      method: 'POST',
+      csrfToken: 'csrf-123'
+    });
+  });
+
+  test('installs current node artifact with csrf', async () => {
+    await expect(
+      installConsolePluginCurrentNodeArtifact('installation-1', 'csrf-123')
+    ).resolves.toMatchObject({
+      path: '/api/console/plugins/installation-1/artifact/install-current-node',
+      method: 'POST',
+      csrfToken: 'csrf-123'
+    });
+  });
+});
 
 describe('console-plugins host infrastructure cache client', () => {
   vi.spyOn(transport, 'apiFetch').mockImplementation(

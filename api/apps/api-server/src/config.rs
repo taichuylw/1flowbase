@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use axum::http::HeaderValue;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -38,6 +39,7 @@ pub struct ApiConfig {
     pub cookie_secure: bool,
     pub session_ttl_days: i64,
     pub cors_allowed_origins: Option<Vec<HeaderValue>>,
+    pub api_node_id: String,
     pub provider_install_root: String,
     pub provider_secret_master_key: String,
     pub host_extension_dropin_root: String,
@@ -111,6 +113,11 @@ impl ApiConfig {
             .get("API_PROVIDER_INSTALL_ROOT")
             .cloned()
             .unwrap_or_else(default_provider_install_root);
+        let api_node_id = map
+            .get("API_NODE_ID")
+            .cloned()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| default_api_node_id(&provider_install_root));
         let provider_secret_master_key = map
             .get("API_PROVIDER_SECRET_MASTER_KEY")
             .cloned()
@@ -215,12 +222,17 @@ impl ApiConfig {
                 .get("API_COOKIE_NAME")
                 .cloned()
                 .unwrap_or_else(|| "flowbase_console_session".to_string()),
-            cookie_secure: env == ApiEnvironment::Production,
+            cookie_secure: parse_bool_flag(
+                "API_COOKIE_SECURE",
+                map.get("API_COOKIE_SECURE"),
+                env == ApiEnvironment::Production,
+            )?,
             session_ttl_days: map
                 .get("API_SESSION_TTL_DAYS")
                 .and_then(|value| value.parse::<i64>().ok())
                 .unwrap_or(7),
             cors_allowed_origins,
+            api_node_id,
             provider_install_root,
             provider_secret_master_key,
             host_extension_dropin_root,
@@ -321,6 +333,11 @@ impl ApiConfig {
         })
         .collect()
     }
+}
+
+fn default_api_node_id(provider_install_root: &str) -> String {
+    let digest = format!("{:x}", Sha256::digest(provider_install_root.as_bytes()));
+    format!("api-node-{}", &digest[..12])
 }
 
 fn provider_secret_master_key_is_placeholder(value: &str) -> bool {

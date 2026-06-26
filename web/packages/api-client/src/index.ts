@@ -3,7 +3,9 @@ export * from './console/applications';
 export * from './console/api-docs';
 export * from './console/application-orchestration';
 export * from './console/application-runtime';
+export * from './console/personal-access-tokens';
 export {
+  getConsoleApplicationConversationMessages,
   getConsoleApplicationRunConversationMessages
 } from './console/application-run-conversation';
 export * from './console-data-models';
@@ -11,6 +13,7 @@ export * from './console-file-management';
 export * from './console/frontend-blocks';
 export * from './console/frontstage';
 export * from './console-model-providers';
+export * from './console-mcp-management';
 export * from './console-node-contributions';
 export * from './console-me';
 export * from './console-members';

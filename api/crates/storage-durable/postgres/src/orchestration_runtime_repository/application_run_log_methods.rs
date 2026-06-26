@@ -7,6 +7,13 @@ impl PgControlPlaneStore {
         let mut tx = self.pool().begin().await?;
 
         Self::upsert_visible_application_run_log_summary_projection(&mut tx, flow_run).await?;
+        if is_terminal {
+            Self::ensure_application_run_conversation_message_items_projection(&mut tx, flow_run)
+                .await?;
+        } else {
+            Self::delete_application_run_conversation_message_items_projection(&mut tx, flow_run.id)
+                .await?;
+        }
         tx.commit().await?;
 
         if is_terminal {
@@ -90,20 +97,29 @@ impl PgControlPlaneStore {
                 $11, $12, $13, $14, $15,
                 coalesce(
                     (
-                        select sum(runtime_usage_ledger.total_tokens)::bigint
+                        select sum(
+                            coalesce(
+                                runtime_usage_ledger.total_tokens,
+                                coalesce(runtime_usage_ledger.input_tokens, 0)
+                                + coalesce(runtime_usage_ledger.output_tokens, 0)
+                                + coalesce(runtime_usage_ledger.reasoning_output_tokens, 0)
+                            )
+                        )::bigint
                         from runtime_usage_ledger
                         where runtime_usage_ledger.flow_run_id = $1
                     ),
                     (
                         select sum(
-                            case
-                                when node_runs.metrics_payload #>> '{usage,total_tokens}' ~ '^-?[0-9]+$'
-                                then (node_runs.metrics_payload #>> '{usage,total_tokens}')::bigint
-                                when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
-                                  or node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
-                                  or node_runs.metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
-                                then
-                                    coalesce(
+                            coalesce(
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,total_tokens}' ~ '^-?[0-9]+$'
+                                    then (node_runs.metrics_payload #>> '{usage,total_tokens}')::bigint
+                                end,
+                                case
+                                    when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
+                                      or node_runs.metrics_payload #>> '{usage,output_tokens}' ~ '^-?[0-9]+$'
+                                      or node_runs.metrics_payload #>> '{usage,reasoning_tokens}' ~ '^-?[0-9]+$'
+                                    then coalesce(
                                         case
                                             when node_runs.metrics_payload #>> '{usage,input_tokens}' ~ '^-?[0-9]+$'
                                             then (node_runs.metrics_payload #>> '{usage,input_tokens}')::bigint
@@ -124,7 +140,9 @@ impl PgControlPlaneStore {
                                         end,
                                         0
                                     )
-                            end
+                                end,
+                                0
+                            )
                         )::bigint
                         from node_runs
                         where node_runs.flow_run_id = $1
@@ -473,42 +491,13 @@ impl PgControlPlaneStore {
 
         let rows = sqlx::query(&format!(
             r#"
-            with selected_logs as (
-                select
-                    flow_run_id as id,
-                    run_mode,
-                    status,
-                    target_node_id,
-                    title,
-                    input_payload,
-                    external_user,
-                    authorized_account,
-                    api_key_id,
-                    publication_version_id,
-                    external_conversation_id,
-                    external_trace_id,
-                    compatibility_mode,
-                    idempotency_key,
-                    total_tokens,
-                    input_tokens, output_tokens, input_cache_hit_tokens,
-                    unique_node_count,
-                    tool_callback_count,
-                    started_at,
-                    finished_at,
-                    created_at,
-                    updated_at
-                from application_run_log_summaries
-                where application_id = $1
-                  and ($2::timestamptz is null or created_at >= $2)
-                  and {visible_filter}
-            )
             select
-                id,
+                flow_run_id as id,
                 run_mode,
                 status,
                 target_node_id,
                 title,
-                input_payload,
+                '{{}}'::jsonb as input_payload,
                 external_user,
                 authorized_account,
                 api_key_id,
@@ -525,11 +514,14 @@ impl PgControlPlaneStore {
                 finished_at,
                 created_at,
                 updated_at
-            from selected_logs
-            order by {}
+            from application_run_log_summaries
+            where application_id = $1
+              and ($2::timestamptz is null or created_at >= $2)
+              and {visible_filter}
+            order by {order_by}
             limit $3 offset $4
             "#,
-            order_by,
+            order_by = order_by,
             visible_filter = visible_filter
         ))
         .bind(application_id)
@@ -561,6 +553,13 @@ fn visible_application_run_log_summary_filter_sql(summary_table: &str) -> String
             from flow_runs runs
             where runs.id = {summary_table}.flow_run_id
               and ({hidden_internal_run_filter})
+        )
+        and exists (
+            select 1
+            from flow_runs runs
+            left join run_archive_import_jobs import_jobs on import_jobs.id = runs.import_job_id
+            where runs.id = {summary_table}.flow_run_id
+              and (runs.import_job_id is null or import_jobs.status = 'succeeded')
         )
         "#,
         hidden_internal_run_filter = hidden_internal_run_filter

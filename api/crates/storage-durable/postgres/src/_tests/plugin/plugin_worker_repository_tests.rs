@@ -119,4 +119,11 @@ async fn plugin_worker_repository_tracks_process_per_call_worker_lifecycle() {
     assert_eq!(lease.worker_key, "capability:openai_prompt");
     assert_eq!(lease.status, PluginWorkerStatus::Starting);
     assert_eq!(lease.runtime_scope, json!({}));
+    let lease_scope: Uuid =
+        sqlx::query_scalar("select scope_id from plugin_worker_leases where id = $1")
+            .bind(lease.id)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(lease_scope, domain::SYSTEM_SCOPE_ID);
 }

@@ -4,13 +4,17 @@ use time::Duration;
 use tracing::warn;
 use uuid::Uuid;
 
-use super::{ApplicationRunsQuery, FlowRunSummaryPageResponse};
+use super::{
+    ApplicationRunsQuery, FlowRunSummaryPageResponse, APPLICATION_RUN_LOG_DEFAULT_TIME_RANGE_DAYS,
+};
 
 fn time_range_segment(query: &ApplicationRunsQuery) -> String {
-    match query.time_range_days.filter(|days| *days > 0) {
-        Some(days) => format!("days-{days}"),
-        None => "all".to_string(),
-    }
+    let days = query
+        .time_range_days
+        .filter(|days| *days > 0)
+        .unwrap_or(APPLICATION_RUN_LOG_DEFAULT_TIME_RANGE_DAYS);
+
+    format!("days-{days}")
 }
 
 pub(super) fn summary_page_cache_key(

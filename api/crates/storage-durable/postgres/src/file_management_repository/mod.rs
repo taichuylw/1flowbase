@@ -100,6 +100,7 @@ impl FileManagementRepository for PgControlPlaneStore {
             r#"
             insert into file_storages (
                 id,
+                scope_id,
                 code,
                 title,
                 driver_type,
@@ -111,7 +112,7 @@ impl FileManagementRepository for PgControlPlaneStore {
                 created_by,
                 updated_by
             ) values (
-                $1, $2, $3, $4, $5, $6, $7, $8, 'unknown', $9, $9
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, 'unknown', $10, $10
             )
             returning
                 id,
@@ -131,6 +132,7 @@ impl FileManagementRepository for PgControlPlaneStore {
             "#,
         )
         .bind(input.storage_id)
+        .bind(domain::SYSTEM_SCOPE_ID)
         .bind(&input.code)
         .bind(&input.title)
         .bind(&input.driver_type)

@@ -75,7 +75,13 @@ Rust 后端开发完成前，必须逐项回答：
 
 ## Minimum Gate Expectations
 
-后端 Rust 改动至少考虑：
+后端 Rust 改动先按当前任务选择最小结果验证：
+
+- Dev Acceptance 默认优先运行相关 crate / module 的 targeted test，以及能证明 API / 状态 / repository 行为的最小 integration test。
+- workspace 级 `fmt` / `clippy` / `test` / `deny` 属于 PR / beta / Project Health 级质量门禁，不是当前本地开发分支默认收尾动作。
+- 如果本地确实需要提前运行 workspace 级门禁，必须在对齐 / L3 issue / handoff 阶段说明证据收益、成本和不可延后的原因；实现期临时发现时默认标为未验证并交给 beta / CI，除非缺少该证据会影响继续实现安全性或当前任务完成判断。
+
+PR / beta / Project Health 级后端 Rust 门禁至少考虑：
 
 ```bash
 cargo fmt --all --check

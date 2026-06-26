@@ -1,4 +1,5 @@
 use control_plane::ports::{AuthRepository, WorkspaceRepository};
+use domain::SYSTEM_SCOPE_ID;
 use sqlx::PgPool;
 use storage_postgres::{connect, run_migrations, PgControlPlaneStore};
 use uuid::Uuid;
@@ -80,9 +81,9 @@ async fn insert_workspace_role(
     sqlx::query(
         r#"
         insert into roles (
-            id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
+            id, scope_id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
         )
-        values ($1, 'workspace', $2, $3, $4, '', false, true)
+        values ($1, $2, 'workspace', $2, $3, $4, '', false, true)
         "#,
     )
     .bind(role_id)
@@ -101,12 +102,13 @@ async fn insert_root_role(store: &PgControlPlaneStore) -> Uuid {
     sqlx::query(
         r#"
         insert into roles (
-            id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
+            id, scope_id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
         )
-        values ($1, 'system', null, 'root', 'Root', '', true, false)
+        values ($1, $2, 'system', null, 'root', 'Root', '', true, false)
         "#,
     )
     .bind(role_id)
+    .bind(SYSTEM_SCOPE_ID)
     .execute(store.pool())
     .await
     .unwrap();
@@ -127,13 +129,20 @@ async fn insert_membership(store: &PgControlPlaneStore, workspace_id: Uuid, user
 }
 
 async fn bind_role(store: &PgControlPlaneStore, user_id: Uuid, role_id: Uuid) {
-    sqlx::query("insert into user_role_bindings (id, user_id, role_id) values ($1, $2, $3)")
-        .bind(Uuid::now_v7())
-        .bind(user_id)
-        .bind(role_id)
-        .execute(store.pool())
-        .await
-        .unwrap();
+    sqlx::query(
+        r#"
+        insert into user_role_bindings (id, user_id, role_id, scope_id)
+        select $1, $2, roles.id, roles.scope_id
+        from roles
+        where roles.id = $3
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(user_id)
+    .bind(role_id)
+    .execute(store.pool())
+    .await
+    .unwrap();
 }
 
 #[tokio::test]

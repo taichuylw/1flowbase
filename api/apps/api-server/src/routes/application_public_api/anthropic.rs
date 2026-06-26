@@ -13,6 +13,7 @@ use control_plane::application_public_api::{
         ApplicationPublishedCallbackResumeService, PublishedCallbackResumeSource,
         PublishedCallbackResumeTarget, ResumePublishedCallbackCommand,
     },
+    client_protocol_envelope::{capture_client_protocol_envelope, ClientProtocolIngressPolicy},
     compat::anthropic::{
         anthropic_content_is_tool_result_only, map_messages_request,
         sanitize_anthropic_compat_assistant_text, AnthropicCompatError,
@@ -26,10 +27,13 @@ use control_plane::application_public_api::{
     },
 };
 use control_plane::orchestration_runtime::OrchestrationRuntimeService;
+use plugin_framework::provider_contract::ClientProtocolEnvelope;
 use serde::Serialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+mod token_count;
 
 use crate::{
     app_state::ApiState,
@@ -43,6 +47,9 @@ use crate::{
         },
     },
 };
+#[cfg(test)]
+use token_count::anthropic_count_input_tokens;
+use token_count::{anthropic_usage, to_anthropic_count_tokens_response};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AnthropicErrorBody {
@@ -268,7 +275,8 @@ pub async fn create_message(
         }
         return Ok(Json(to_anthropic_response(run, model)).into_response());
     }
-    let request = map_messages_request(value)?;
+    let mut request = map_messages_request(value)?;
+    request.client_protocol_envelope = anthropic_client_protocol_envelope_from_headers(&headers);
     let response_mode = request.response_mode.clone();
     let run = create_native_run(state.clone(), bearer_token.clone(), request).await?;
 
@@ -357,6 +365,17 @@ fn merge_claude_code_session_header(value: &mut Value, headers: &HeaderMap) {
         .or_insert_with(|| Value::String(session_id.to_string()));
 }
 
+fn anthropic_client_protocol_envelope_from_headers(
+    headers: &HeaderMap,
+) -> Option<ClientProtocolEnvelope> {
+    capture_client_protocol_envelope(
+        ClientProtocolIngressPolicy::AnthropicMessages,
+        headers
+            .iter()
+            .filter_map(|(name, value)| value.to_str().ok().map(|value| (name.as_str(), value))),
+    )
+}
+
 async fn authenticate_anthropic_token(
     state: &ApiState,
     bearer_token: &str,
@@ -396,6 +415,10 @@ async fn resume_anthropic_tool_call(
         ApiProviderRuntime::new(state.provider_runtime.clone()),
         state.runtime_engine.clone(),
         state.provider_secret_master_key.clone(),
+    )
+    .with_node_artifact_context(
+        state.api_node_id.clone(),
+        state.provider_install_root.clone(),
     )
     .with_file_storage_registry(state.file_storage_registry.clone())
     .with_runtime_event_stream(state.runtime_event_stream.clone());
@@ -682,9 +705,9 @@ async fn resolve_plain_anthropic_tool_resume(
         .authenticate_bearer_token(bearer_token)
         .await
         .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let waiting_runs = state
+    let waiting_run_ids = state
         .store
-        .list_waiting_callback_published_flow_runs_for_conversation(
+        .list_waiting_callback_published_flow_run_ids_for_conversation(
             &ListWaitingCallbackPublishedRunsInput {
                 application_id: actor.application_id,
                 api_key_id: actor.api_key_id,
@@ -696,10 +719,10 @@ async fn resolve_plain_anthropic_tool_resume(
         .await
         .map_err(native::service_error)?;
 
-    for waiting_run in waiting_runs.iter().rev() {
+    for waiting_run_id in waiting_run_ids.iter().rev() {
         let Some(detail) = state
             .store
-            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .get_published_run_detail(actor.application_id, *waiting_run_id)
             .await
             .map_err(native::service_error)?
         else {
@@ -739,9 +762,9 @@ async fn resolve_embedded_anthropic_encoded_tool_resume(
         .authenticate_bearer_token(bearer_token)
         .await
         .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let waiting_runs = state
+    let waiting_run_ids = state
         .store
-        .list_waiting_callback_published_flow_runs_for_conversation(
+        .list_waiting_callback_published_flow_run_ids_for_conversation(
             &ListWaitingCallbackPublishedRunsInput {
                 application_id: actor.application_id,
                 api_key_id: actor.api_key_id,
@@ -753,10 +776,10 @@ async fn resolve_embedded_anthropic_encoded_tool_resume(
         .await
         .map_err(native::service_error)?;
 
-    for waiting_run in waiting_runs.iter().rev() {
+    for waiting_run_id in waiting_run_ids.iter().rev() {
         let Some(detail) = state
             .store
-            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .get_published_run_detail(actor.application_id, *waiting_run_id)
             .await
             .map_err(native::service_error)?
         else {
@@ -878,9 +901,9 @@ async fn anthropic_plain_stdout_resume_request_for_route(
         .authenticate_bearer_token(bearer_token)
         .await
         .map_err(|_| native::native_error(NativeRunValidationError::NotAuthenticated))?;
-    let waiting_runs = state
+    let waiting_run_ids = state
         .store
-        .list_waiting_callback_published_flow_runs_for_conversation(
+        .list_waiting_callback_published_flow_run_ids_for_conversation(
             &ListWaitingCallbackPublishedRunsInput {
                 application_id: actor.application_id,
                 api_key_id: actor.api_key_id,
@@ -892,10 +915,10 @@ async fn anthropic_plain_stdout_resume_request_for_route(
         .await
         .map_err(native::service_error)?;
 
-    for waiting_run in waiting_runs.iter().rev() {
+    for waiting_run_id in waiting_run_ids.iter().rev() {
         let Some(detail) = state
             .store
-            .get_published_run_detail(actor.application_id, waiting_run.id)
+            .get_published_run_detail(actor.application_id, *waiting_run_id)
             .await
             .map_err(native::service_error)?
         else {
@@ -1168,74 +1191,6 @@ fn anthropic_required_action_is_supported(run: &NativeRunResult) -> bool {
                 .as_ref()
                 .is_some_and(|value| value.as_array().is_some_and(|calls| !calls.is_empty()))
     })
-}
-
-fn anthropic_usage(
-    usage: Option<control_plane::application_public_api::native::NativeUsage>,
-) -> AnthropicUsage {
-    let Some(usage) = usage else {
-        return AnthropicUsage::default();
-    };
-    AnthropicUsage {
-        input_tokens: usage.prompt_tokens.unwrap_or_default(),
-        cache_creation_input_tokens: usage.cache_write_tokens.unwrap_or_default(),
-        cache_read_input_tokens: usage
-            .cache_read_tokens
-            .or(usage.input_cache_hit_tokens)
-            .unwrap_or_default(),
-        output_tokens: usage.completion_tokens.unwrap_or_default(),
-    }
-}
-
-fn to_anthropic_count_tokens_response(request: &Value) -> AnthropicCountTokensResponse {
-    AnthropicCountTokensResponse {
-        input_tokens: anthropic_count_input_tokens(request),
-    }
-}
-
-fn anthropic_count_input_tokens(request: &Value) -> u64 {
-    let mut tokens = 0_u64;
-    for key in [
-        "system",
-        "messages",
-        "tools",
-        "tool_choice",
-        "thinking",
-        "container",
-        "context_management",
-    ] {
-        tokens = tokens.saturating_add(anthropic_value_token_estimate(request.get(key)));
-    }
-    if request
-        .get("tools")
-        .and_then(Value::as_array)
-        .is_some_and(|tools| !tools.is_empty())
-    {
-        tokens = tokens.saturating_add(500);
-    }
-    tokens.max(1)
-}
-
-fn anthropic_value_token_estimate(value: Option<&Value>) -> u64 {
-    let Some(value) = value else {
-        return 0;
-    };
-    let chars = anthropic_value_char_count(value) as u64;
-    ((chars.saturating_add(3)) / 4).max(1)
-}
-
-fn anthropic_value_char_count(value: &Value) -> usize {
-    match value {
-        Value::Null => 0,
-        Value::Bool(value) => value.to_string().chars().count(),
-        Value::Number(value) => value.to_string().chars().count(),
-        Value::String(value) => value.chars().count(),
-        Value::Array(values) => values.iter().map(anthropic_value_char_count).sum(),
-        Value::Object(map) => map
-            .iter()
-            .map(|(key, value)| key.chars().count() + anthropic_value_char_count(value))
-            .sum(),
-    }
 }
 
 #[cfg(test)]

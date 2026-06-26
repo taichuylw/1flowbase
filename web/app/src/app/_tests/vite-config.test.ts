@@ -20,12 +20,12 @@ describe('vite config', () => {
       'utf8'
     );
 
-  expect(source).toMatch(
-    /lazy\(\(\) =>\s+import\('\.\.\/features\/applications\/pages\/ApplicationDetailPage'\)/
-  );
-  expect(source).toMatch(
-    /lazy\(\(\) =>\s+import\('\.\.\/features\/settings\/pages\/SettingsPage'\)/
-  );
+    expect(source).toMatch(
+      /lazy\(\(\) =>\s+import\('\.\.\/features\/applications\/pages\/ApplicationDetailPage'\)/
+    );
+    expect(source).toMatch(
+      /lazy\(\(\) =>\s+import\('\.\.\/features\/settings\/pages\/SettingsPage'\)/
+    );
     expect(source).not.toContain(
       "import { ApplicationDetailPage } from '../features/applications/pages/ApplicationDetailPage'"
     );
@@ -41,5 +41,34 @@ describe('vite config', () => {
     expect(source).toContain('flow-vendor');
     expect(source).toContain('monaco-vendor');
     expect(source).toContain('chunkSizeWarningLimit: 3500');
+  });
+
+  test('pre-optimizes dependencies used by lazy application pages', async () => {
+    const source = await readFile(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+    const lazyOnlyDeps = [
+      '@lexical/react/LexicalComposer',
+      '@lexical/react/LexicalComposerContext',
+      '@lexical/react/LexicalContentEditable',
+      '@lexical/react/LexicalErrorBoundary',
+      '@lexical/react/LexicalHistoryPlugin',
+      '@lexical/react/LexicalOnChangePlugin',
+      '@lexical/react/LexicalRichTextPlugin',
+      '@lexical/react/useLexicalNodeSelection',
+      '@lexical/utils',
+      '@monaco-editor/react',
+      '@scalar/api-reference-react',
+      '@xyflow/react',
+      'copy-to-clipboard',
+      'echarts',
+      'lexical',
+      'react-markdown',
+      'remark-breaks',
+      'remark-gfm'
+    ];
+
+    expect(source).toContain('optimizeDeps');
+    for (const dependency of lazyOnlyDeps) {
+      expect(source).toContain(`'${dependency}'`);
+    }
   });
 });

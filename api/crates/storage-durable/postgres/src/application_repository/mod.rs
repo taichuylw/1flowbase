@@ -228,12 +228,16 @@ impl ApplicationRepository for PgControlPlaneStore {
             sqlx::query(
                 r#"
                 insert into application_tag_bindings (
+                    id,
+                    scope_id,
                     application_id,
                     tag_id,
-                    created_by
-                ) values ($1, $2, $3)
+                    created_by,
+                    updated_by
+                ) values ($1, (select scope_id from applications where id = $2), $2, $3, $4, $4)
                 "#,
             )
+            .bind(Uuid::now_v7())
             .bind(input.application_id)
             .bind(tag_id)
             .bind(input.actor_user_id)
@@ -559,6 +563,8 @@ impl ApplicationRepository for PgControlPlaneStore {
             sqlx::query(
                 r#"
                 insert into application_environment_variables (
+                    id,
+                    scope_id,
                     application_id,
                     name,
                     value_type,
@@ -566,9 +572,10 @@ impl ApplicationRepository for PgControlPlaneStore {
                     description,
                     created_by,
                     updated_by
-                ) values ($1, $2, $3, $4, $5, $6, $6)
+                ) values ($1, (select scope_id from applications where id = $2), $2, $3, $4, $5, $6, $7, $7)
                 "#,
             )
+            .bind(Uuid::now_v7())
             .bind(input.application_id)
             .bind(&variable.name)
             .bind(&variable.value_type)

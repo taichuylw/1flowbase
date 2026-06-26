@@ -34,6 +34,30 @@ export function SettingsPage({
   const canManageDataModels = canManageModelProviders;
   const canManageHostInfrastructure =
     isRoot || permissionSet.has('plugin_config.configure.all');
+  const canManageMcpManagement =
+    isRoot || permissionSet.has('mcp_management.manage.all');
+  const sectionAccess = useMemo(
+    () => ({
+      isRoot,
+      permissions,
+      canManageMembers,
+      canManageRoles,
+      canManageDataModels,
+      canManageModelProviders,
+      canManageHostInfrastructure,
+      canManageMcpManagement
+    }),
+    [
+      canManageDataModels,
+      canManageHostInfrastructure,
+      canManageMcpManagement,
+      canManageMembers,
+      canManageModelProviders,
+      canManageRoles,
+      isRoot,
+      permissions
+    ]
+  );
   const { activeSection, redirectSection, visibleSections } =
     useSettingsSections({
       requestedSectionKey,
@@ -53,13 +77,7 @@ export function SettingsPage({
       {activeSection ? (
         <SettingsSectionBody
           sectionKey={activeSection.key}
-          isRoot={isRoot}
-          permissions={permissions}
-          canManageMembers={canManageMembers}
-          canManageRoles={canManageRoles}
-          canManageDataModels={canManageDataModels}
-          canManageModelProviders={canManageModelProviders}
-          canManageHostInfrastructure={canManageHostInfrastructure}
+          access={sectionAccess}
         />
       ) : null}
     </SettingsRouteShell>

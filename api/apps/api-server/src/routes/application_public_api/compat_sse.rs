@@ -283,6 +283,10 @@ where
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
         )
+        .with_node_artifact_context(
+            background_state.api_node_id.clone(),
+            background_state.provider_install_root.clone(),
+        )
         .with_file_storage_registry(background_state.file_storage_registry.clone())
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());
         if let Err(runtime_error) = runtime_service
@@ -386,6 +390,10 @@ where
             ApiProviderRuntime::new(background_state.provider_runtime.clone()),
             background_state.runtime_engine.clone(),
             background_state.provider_secret_master_key.clone(),
+        )
+        .with_node_artifact_context(
+            background_state.api_node_id.clone(),
+            background_state.provider_install_root.clone(),
         )
         .with_file_storage_registry(background_state.file_storage_registry.clone())
         .with_runtime_event_stream(background_state.runtime_event_stream.clone());

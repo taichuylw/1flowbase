@@ -1,15 +1,18 @@
 import {
   deleteConsolePluginFamily,
   getConsolePluginTask,
+  installConsolePluginCurrentNodeArtifact,
   installConsoleOfficialPlugin,
   listConsolePluginFamilies,
   listConsoleOfficialPluginCatalog,
+  refreshConsolePluginCurrentNodeArtifact,
   uploadConsolePluginPackage,
   type ConsolePluginFamilyCatalogResponse,
   type ConsoleOfficialPluginCatalogResponse,
   switchConsolePluginFamilyVersion,
   upgradeConsolePluginFamilyLatest,
   type ConsolePluginFamilyEntry,
+  type ConsolePluginCompatibilityOverride,
   type ConsoleOfficialPluginCatalogEntry,
   type ConsolePluginInstallation,
   type InstallConsolePluginResult,
@@ -22,6 +25,8 @@ export type SettingsPluginFamilyEntry = ConsolePluginFamilyEntry & {
 };
 export type SettingsOfficialPluginCatalogEntry =
   ConsoleOfficialPluginCatalogEntry;
+export type SettingsPluginCompatibilityOverride =
+  ConsolePluginCompatibilityOverride;
 export type SettingsOfficialPluginCatalogResponse =
   ConsoleOfficialPluginCatalogResponse;
 export type SettingsPluginInstallation = ConsolePluginInstallation;
@@ -230,19 +235,49 @@ export function fetchSettingsOfficialPluginCatalog({
 
 export function installSettingsOfficialPlugin(
   plugin_id: string,
-  csrfToken: string
+  csrfToken: string,
+  compatibilityOverride?: SettingsPluginCompatibilityOverride
 ) {
-  return installConsoleOfficialPlugin({ plugin_id }, csrfToken);
+  return installConsoleOfficialPlugin(
+    {
+      plugin_id,
+      ...(compatibilityOverride
+        ? { compatibility_override: compatibilityOverride }
+        : {})
+    },
+    csrfToken
+  );
 }
 
 export function uploadSettingsPluginPackage(file: File, csrfToken: string) {
   return uploadConsolePluginPackage(file, csrfToken);
 }
 
-export function upgradeSettingsPluginFamilyLatest(
-  providerCode: string,
+export function refreshSettingsPluginCurrentNodeArtifact(
+  installationId: string,
   csrfToken: string
 ) {
+  return refreshConsolePluginCurrentNodeArtifact(installationId, csrfToken);
+}
+
+export function installSettingsPluginCurrentNodeArtifact(
+  installationId: string,
+  csrfToken: string
+) {
+  return installConsolePluginCurrentNodeArtifact(installationId, csrfToken);
+}
+
+export function upgradeSettingsPluginFamilyLatest(
+  providerCode: string,
+  csrfToken: string,
+  compatibilityOverride?: SettingsPluginCompatibilityOverride
+) {
+  if (compatibilityOverride) {
+    return upgradeConsolePluginFamilyLatest(providerCode, csrfToken, {
+      compatibility_override: compatibilityOverride
+    });
+  }
+
   return upgradeConsolePluginFamilyLatest(providerCode, csrfToken);
 }
 

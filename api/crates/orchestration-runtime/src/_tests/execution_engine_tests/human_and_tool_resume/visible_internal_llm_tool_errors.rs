@@ -22,6 +22,7 @@ async fn visible_internal_llm_tool_provider_error_returns_error_tool_result_to_m
                     kind: ProviderRuntimeErrorKind::RateLimited,
                     message: provider_error_message.to_string(),
                     provider_summary: None,
+                    provider_details: None,
                 },
             }],
             result: ProviderInvocationResult {

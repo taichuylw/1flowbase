@@ -295,6 +295,206 @@ async fn model_provider_service_list_instances_returns_included_in_main_without_
 }
 
 #[tokio::test]
+async fn model_provider_service_list_instances_does_not_read_global_install_path_when_current_node_artifact_missing(
+) {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let install_root =
+        std::env::temp_dir().join(format!("provider-model-node-missing-{}", Uuid::now_v7()));
+    let installation_id = repository
+        .seed_installation(
+            "/path/from/another/api/node",
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    let instance = repository
+        .create_instance(&CreateModelProviderInstanceInput {
+            instance_id: Uuid::now_v7(),
+            workspace_id: repository.actor.current_workspace_id,
+            installation_id,
+            provider_code: "fixture_provider".to_string(),
+            protocol: "openai_compatible".to_string(),
+            display_name: "Fixture Missing Local Artifact".to_string(),
+            status: ModelProviderInstanceStatus::Ready,
+            config_json: json!({
+                "base_url": "https://api.example.com"
+            }),
+            configured_models: Vec::new(),
+            enabled_model_ids: Vec::new(),
+            included_in_main: Some(true),
+            created_by: repository.actor.user_id,
+        })
+        .await
+        .unwrap();
+    let service = ModelProviderService::new(repository.clone(), runtime, "test-master-key")
+        .with_node_artifact_context("test-node", install_root);
+
+    let instances = service
+        .list_instances(repository.actor.user_id)
+        .await
+        .unwrap();
+
+    assert_eq!(instances.len(), 1);
+    assert_eq!(instances[0].instance.id, instance.id);
+    assert_eq!(
+        instances[0].instance.config_json["base_url"],
+        "https://api.example.com"
+    );
+}
+
+#[tokio::test]
+async fn model_provider_service_update_instance_blocks_when_current_node_artifact_missing() {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let package_root = std::env::temp_dir().join(format!("provider-model-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    let bootstrap_service = ModelProviderService::new(
+        repository.clone(),
+        runtime.clone(),
+        "provider-secret-master-key",
+    );
+    let created = bootstrap_service
+        .create_instance(CreateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+            display_name: "Fixture Prod".to_string(),
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+            configured_models: Vec::new(),
+            enabled_model_ids: vec!["fixture_chat".to_string()],
+            included_in_main: None,
+            preview_token: None,
+        })
+        .await
+        .unwrap();
+    let current_node_root =
+        std::env::temp_dir().join(format!("provider-node-missing-{}", Uuid::now_v7()));
+    let service =
+        ModelProviderService::new(repository.clone(), runtime, "provider-secret-master-key")
+            .with_node_artifact_context("node-without-artifact", current_node_root);
+
+    let error = service
+        .update_instance(UpdateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            instance_id: created.instance.id,
+            display_name: "Fixture Prod".to_string(),
+            config_json: json!({}),
+            configured_models: created.instance.configured_models.clone(),
+            enabled_model_ids: created.instance.enabled_model_ids.clone(),
+            included_in_main: created.instance.included_in_main,
+            preview_token: None,
+        })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict("plugin_artifact_missing"))
+    ));
+}
+
+#[tokio::test]
+async fn model_provider_service_blocks_previously_failed_current_node_runtime_without_refreshing_it(
+) {
+    let workspace_id = Uuid::now_v7();
+    let repository = MemoryModelProviderRepository::new(actor_with_permissions(
+        workspace_id,
+        &["state_model.view.all", "state_model.manage.all"],
+    ));
+    let runtime = MemoryProviderRuntime::default();
+    let package_root = std::env::temp_dir().join(format!("provider-model-{}", Uuid::now_v7()));
+    create_provider_fixture(&package_root);
+    let installation_id = repository
+        .seed_installation(
+            &package_root.display().to_string(),
+            PluginDesiredState::ActiveRequested,
+            true,
+        )
+        .await;
+    let bootstrap_service = ModelProviderService::new(
+        repository.clone(),
+        runtime.clone(),
+        "provider-secret-master-key",
+    );
+    let created = bootstrap_service
+        .create_instance(CreateModelProviderInstanceCommand {
+            actor_user_id: repository.actor.user_id,
+            installation_id,
+            display_name: "Fixture Prod".to_string(),
+            config_json: json!({
+                "base_url": "https://api.example.com",
+                "api_key": "super-secret"
+            }),
+            configured_models: Vec::new(),
+            enabled_model_ids: vec!["fixture_chat".to_string()],
+            included_in_main: None,
+            preview_token: None,
+        })
+        .await
+        .unwrap();
+    let current_node_root =
+        std::env::temp_dir().join(format!("provider-load-failed-{}", Uuid::now_v7()));
+    let expected_local_path = current_node_root
+        .join("installed")
+        .join("fixture_provider")
+        .join("0.1.0");
+    repository
+        .upsert_artifact_instance(&UpsertPluginArtifactInstanceInput {
+            node_id: "test-node".to_string(),
+            installation_id,
+            local_version: Some("0.1.0".to_string()),
+            local_checksum: None,
+            installed_path: Some(expected_local_path.display().to_string()),
+            artifact_status: domain::PluginArtifactInstanceStatus::LoadFailed,
+            runtime_status: PluginRuntimeStatus::LoadFailed,
+            checked_at: OffsetDateTime::now_utc(),
+            last_error: Some("runtime load failed for test".to_string()),
+        })
+        .await
+        .unwrap();
+    let service =
+        ModelProviderService::new(repository.clone(), runtime, "provider-secret-master-key")
+            .with_node_artifact_context("test-node", current_node_root);
+
+    let error = service
+        .validate_instance(repository.actor.user_id, created.instance.id)
+        .await
+        .unwrap_err();
+    let artifact = repository
+        .get_artifact_instance("test-node", installation_id)
+        .await
+        .unwrap()
+        .expect("artifact snapshot should remain");
+
+    assert!(matches!(
+        error.downcast_ref::<ControlPlaneError>(),
+        Some(ControlPlaneError::Conflict("plugin_runtime_load_failed"))
+    ));
+    assert_eq!(
+        artifact.artifact_status,
+        domain::PluginArtifactInstanceStatus::LoadFailed
+    );
+}
+
+#[tokio::test]
 async fn model_provider_service_create_and_update_allow_empty_enabled_model_ids() {
     let workspace_id = Uuid::now_v7();
     let repository = MemoryModelProviderRepository::new(actor_with_permissions(

@@ -157,6 +157,23 @@ async fn seed_store_before_main_instance_aggregation() -> (
     for migration_sql in PRE_MAIN_INSTANCE_AGGREGATION_MIGRATIONS {
         sqlx::raw_sql(migration_sql).execute(&pool).await.unwrap();
     }
+    sqlx::raw_sql(
+        r#"
+        alter table permission_definitions
+            add column if not exists scope_id uuid not null
+            default '00000000-0000-0000-0000-000000000000'::uuid;
+        alter table roles add column if not exists scope_id uuid;
+        alter table role_permissions add column if not exists scope_id uuid;
+        alter table user_role_bindings add column if not exists scope_id uuid;
+        alter table plugin_installations
+            add column if not exists scope_id uuid not null
+            default '00000000-0000-0000-0000-000000000000'::uuid;
+        alter table plugin_installations add column if not exists updated_by uuid;
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let store = PgControlPlaneStore::new(pool);
     let tenant = store.upsert_root_tenant().await.unwrap();

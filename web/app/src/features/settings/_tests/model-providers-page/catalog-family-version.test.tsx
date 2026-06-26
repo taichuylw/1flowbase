@@ -1,4 +1,3 @@
-
 import {
   fireEvent,
   render,
@@ -18,6 +17,8 @@ const membersApi = vi.hoisted(() => ({
   fetchSettingsMembers: vi.fn(),
   createSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  enableSettingsMember: vi.fn(),
+  deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   replaceSettingsMemberRoles: vi.fn()
 }));
@@ -111,6 +112,8 @@ const pluginsApi = vi.hoisted(() => ({
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
   deleteSettingsPluginFamily: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -285,6 +288,17 @@ describe('ModelProvidersPage - catalog and family version', () => {
         model_discovery_mode: 'hybrid',
         current_installation_id: 'installation-1',
         current_version: '0.1.0',
+        current_local_artifact: {
+          node_id: 'test-node',
+          installation_id: 'installation-1',
+          local_version: '0.1.0',
+          local_checksum: null,
+          installed_path: '/tmp/plugins/openai_compatible/0.1.0',
+          artifact_status: 'ready',
+          runtime_status: 'inactive',
+          checked_at: '2026-04-18T10:00:00Z',
+          last_error: null
+        },
         latest_version: '0.2.0',
         has_update: true,
         installed_versions: [
@@ -309,8 +323,8 @@ describe('ModelProvidersPage - catalog and family version', () => {
     ]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
-page: { limit: 20, next_cursor: null },
-entries: []
+      page: { limit: 20, next_cursor: null },
+      entries: []
     });
     pluginsApi.installSettingsOfficialPlugin.mockResolvedValue({
       installation: {
@@ -453,6 +467,12 @@ entries: []
     expect(
       within(catalogRow).queryByRole('button', { name: '版本管理' })
     ).not.toBeInTheDocument();
+    expect(within(catalogRow).getByText('可用')).toBeInTheDocument();
+    expect(within(catalogRow).queryByText('当前节点可用')).not.toBeInTheDocument();
+    expect(within(catalogRow).queryByText(/^期望版本：/)).not.toBeInTheDocument();
+    expect(
+      within(catalogRow).queryByText(/^当前节点版本：/)
+    ).not.toBeInTheDocument();
     fireEvent.click(
       within(catalogRow).getByRole('button', { name: /更\s*新/ })
     );
@@ -464,6 +484,69 @@ entries: []
       );
     });
   }, 20000);
+
+  test('disables creating provider instances when the current node artifact is unavailable', async () => {
+    authenticateAsModelProviderManager();
+    pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([
+      {
+        provider_code: 'openai_compatible',
+        display_name: 'OpenAI Compatible',
+        protocol: 'openai_compatible',
+        help_url: 'https://platform.openai.com/docs/api-reference',
+        default_base_url: 'https://api.openai.com/v1',
+        model_discovery_mode: 'hybrid',
+        current_installation_id: 'installation-1',
+        current_version: '0.1.0',
+        current_local_artifact: {
+          node_id: 'test-node',
+          installation_id: 'installation-1',
+          local_version: '0.0.9',
+          local_checksum: null,
+          installed_path: '/tmp/plugins/openai_compatible/0.0.9',
+          artifact_status: 'outdated',
+          runtime_status: 'inactive',
+          checked_at: '2026-04-18T10:00:00Z',
+          last_error: 'local_version_outdated'
+        },
+        latest_version: '0.1.0',
+        has_update: false,
+        installed_versions: [
+          {
+            installation_id: 'installation-1',
+            plugin_version: '0.1.0',
+            source_kind: 'official_registry',
+            trust_level: 'verified_official',
+            created_at: '2026-04-18T09:00:00Z',
+            is_current: true
+          }
+        ]
+      }
+    ]);
+
+    renderApp('/settings/model-providers');
+
+    const catalogRow = await screen.findByRole(
+      'row',
+      {
+        name: /OpenAI Compatible/
+      },
+      { timeout: 10_000 }
+    );
+
+    expect(
+      within(catalogRow).getByRole('button', { name: '新增' })
+    ).toBeDisabled();
+    expect(within(catalogRow).getByText('不可用')).toBeInTheDocument();
+    expect(within(catalogRow).queryByText('可用')).not.toBeInTheDocument();
+    expect(within(catalogRow).queryByText('当前节点缺失')).not.toBeInTheDocument();
+    expect(within(catalogRow).queryByText(/^期望版本：/)).not.toBeInTheDocument();
+    expect(
+      within(catalogRow).getByText('当前节点版本：0.0.9')
+    ).toBeInTheDocument();
+    expect(
+      within(catalogRow).getByRole('button', { name: '修复' })
+    ).toBeInTheDocument();
+  });
 
   test('switches provider family version and shows a follow-up warning in the instances modal', async () => {
     authenticateAsModelProviderManager();
@@ -477,6 +560,17 @@ entries: []
         model_discovery_mode: 'hybrid',
         current_installation_id: 'installation-2',
         current_version: '0.2.0',
+        current_local_artifact: {
+          node_id: 'test-node',
+          installation_id: 'installation-2',
+          local_version: '0.2.0',
+          local_checksum: null,
+          installed_path: '/tmp/plugins/openai_compatible/0.2.0',
+          artifact_status: 'ready',
+          runtime_status: 'inactive',
+          checked_at: '2026-04-19T10:00:00Z',
+          last_error: null
+        },
         latest_version: '0.2.0',
         has_update: false,
         installed_versions: [

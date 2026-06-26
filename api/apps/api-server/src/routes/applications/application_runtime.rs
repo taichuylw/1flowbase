@@ -1,28 +1,37 @@
-use std::{collections::HashSet, convert::Infallible, future::Future, sync::Arc};
+use std::{collections::HashSet, convert::Infallible, sync::Arc};
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query, RawQuery, State},
     http::{HeaderMap, StatusCode},
     response::sse::{Event, KeepAlive, Sse},
     routing::{get, post, put},
     Json, Router,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use control_plane::{
     application::ApplicationService,
     errors::ControlPlaneError,
     orchestration_runtime::{
         debug_stream_events, fail_runtime_event_stream_if_missing_terminal,
-        spawn_runtime_debug_event_persister, wait_for_runtime_debug_event_persister,
-        CancelFlowRunCommand, CompleteCallbackTaskCommand, ContinueFlowDebugRunCommand,
-        OrchestrationRuntimeService, PrepareFlowDebugRunCommand, ResumeFlowRunCommand,
-        StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
+        spawn_runtime_debug_event_persister,
+        trace_projection::{
+            build_application_run_trace_projection, merge_trace_node_run_detail,
+            projection_status_needs_lazy_rebuild, APPLICATION_RUN_TRACE_PROJECTION_VERSION,
+        },
+        wait_for_runtime_debug_event_persister, CancelFlowRunCommand, CompleteCallbackTaskCommand,
+        ContinueFlowDebugRunCommand, OrchestrationRuntimeService, PrepareFlowDebugRunCommand,
+        ResumeFlowRunCommand, StartFlowDebugRunCommand, StartNodeDebugPreviewCommand,
     },
     ports::{
-        ListApplicationConversationRunsPageInput, OrchestrationRuntimeRepository,
+        ApplicationRunTraceChildrenCursor, ApplicationRunTraceProjectionStatistics,
+        ListApplicationConversationRunsPageInput,
+        ListApplicationRunConversationMessageItemsPageInput,
+        ListApplicationRunTraceChildrenPageInput, OrchestrationRuntimeRepository,
         RuntimeEventStreamPolicy,
     },
 };
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use storage_durable::MainDurableStore;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use tokio::sync::mpsc;
@@ -53,11 +62,18 @@ pub use debug_variable_cache::{
 };
 pub use debug_variable_snapshot::{get_debug_variable_snapshot, DebugVariableSnapshotResponse};
 use runtime_debug_artifacts::{
-    application_run_model, application_run_query,
+    application_run_model, application_run_query, count_llm_tool_callback_trace_items,
     enrich_application_run_detail_visible_internal_llm_route_traces,
     enrich_node_last_run_visible_internal_llm_route_traces, load_runtime_debug_artifact_json_value,
     load_runtime_debug_artifact_response, offload_application_run_detail_artifacts,
+    offload_trace_node_content_artifacts, offload_trace_node_run_detail_artifacts,
+    RuntimeDebugArtifactPreviewRequest,
 };
+
+pub(super) const APPLICATION_RUN_LOG_DEFAULT_TIME_RANGE_DAYS: i64 = 7;
+pub(super) const RUNTIME_DEBUG_STREAM_DEFAULT_PAGE_SIZE: usize = 500;
+pub(super) const RUNTIME_DEBUG_STREAM_MAX_PAGE_SIZE: usize = 1_000;
+pub(super) const RUNTIME_DEBUG_ARTIFACT_RESOLVE_MAX_REFS: usize = 50;
 
 fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
     ApiProviderRuntime::new_with_activity(
@@ -68,6 +84,7 @@ fn api_provider_runtime(state: &ApiState) -> ApiProviderRuntime {
 
 include!("application_runtime/types.rs");
 
+#[allow(deprecated)]
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route(
@@ -81,6 +98,10 @@ pub fn router() -> Router<Arc<ApiState>> {
         .route(
             "/applications/:id/orchestration/runs/:run_id/debug-stream",
             get(subscribe_flow_debug_run_stream),
+        )
+        .route(
+            "/applications/:id/orchestration/runs/:run_id/debug-snapshot",
+            get(get_flow_debug_run_snapshot),
         )
         .route(
             "/applications/:id/orchestration/runs/:run_id/resume",
@@ -107,10 +128,38 @@ pub fn router() -> Router<Arc<ApiState>> {
             put(upsert_debug_variable_cache_entry).delete(delete_debug_variable_cache_entries),
         )
         .route(
+            "/applications/:id/orchestration/debug-artifacts/resolve",
+            post(resolve_runtime_debug_artifacts),
+        )
+        .route(
             "/applications/:id/orchestration/debug-artifacts/:artifact_id",
             get(get_runtime_debug_artifact),
         )
         .route("/applications/:id/logs/runs", get(list_application_runs))
+        .route(
+            "/applications/:id/logs/runs/export",
+            post(export_application_runs_zip),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive",
+            post(export_application_runs_archive),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-sessions",
+            post(create_run_archive_upload_session),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-sessions/:session_id/chunks/:chunk_index",
+            put(upload_run_archive_chunk),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-sessions/:session_id/complete",
+            post(complete_run_archive_upload_session),
+        )
+        .route(
+            "/applications/:id/logs/runs/archive/import-jobs/:job_id",
+            get(get_run_archive_import_job),
+        )
         .route(
             "/applications/:id/monitoring/run-metrics",
             get(application_monitoring::get_application_run_monitoring_report),
@@ -128,12 +177,44 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(list_application_run_conversation_messages),
         )
         .route(
-            "/applications/:id/logs/runs/:run_id/nodes/:node_id",
-            get(get_application_run_node_last_run),
+            "/applications/:id/logs/runs/:run_id/overview",
+            get(get_application_run_overview),
         )
         .route(
-            "/applications/:id/logs/runs/:run_id",
-            get(get_application_run_detail),
+            "/applications/:id/logs/runs/:run_id/trace-tree",
+            get(get_application_run_trace_tree),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/export",
+            get(export_application_run_trace_dump),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/archive",
+            get(export_application_run_archive),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes",
+            get(get_application_run_trace_node_children),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/content",
+            get(get_application_run_trace_node_content),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/details/:detail_ref_id",
+            get(get_application_run_trace_node_detail),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/trace-tree/nodes/:trace_node_id/tool-callbacks/:tool_call_id/content",
+            get(get_application_run_trace_tool_callback_content),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/resume-timeline",
+            get(get_application_run_resume_timeline),
+        )
+        .route(
+            "/applications/:id/logs/runs/:run_id/nodes/:node_id",
+            get(get_application_run_node_last_run),
         )
         .route(
             "/applications/:id/logs/runs/:run_id/debug-stream",
@@ -154,6 +235,12 @@ include!("application_runtime/detail_responses.rs");
 include!("application_runtime/debug_handlers.rs");
 
 include!("application_runtime/log_handlers.rs");
+
+include!("application_runtime/export_handlers.rs");
+
+include!("application_runtime/archive_handlers.rs");
+
+include!("application_runtime/archive_restore.rs");
 
 #[cfg(test)]
 mod tests;

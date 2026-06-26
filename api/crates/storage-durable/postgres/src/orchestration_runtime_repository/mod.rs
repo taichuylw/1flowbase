@@ -19,7 +19,8 @@ use control_plane::{
         AppendBillingSessionInput, AppendCapabilityInvocationInput, AppendContextProjectionInput,
         AppendCostLedgerInput, AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput,
         AppendRunEventInput, AppendRuntimeEventInput, AppendRuntimeItemInput,
-        AppendRuntimeSpanInput, AppendUsageLedgerInput, AttachCompiledPlanToFlowRunInput,
+        AppendRuntimeSpanInput, AppendUsageLedgerInput, ApplicationRunTraceChildrenCursor,
+        ApplicationRunTraceProjectionStatistics, AttachCompiledPlanToFlowRunInput,
         CompleteCallbackTaskInput, CompleteFlowRunInput, CompleteNodeRunInput,
         CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
@@ -27,11 +28,14 @@ use control_plane::{
         DeleteDebugVariableCacheEntriesInput, FailQueuedFlowRunShellInput,
         FinishFlowRunCallbackResumeAttemptInput, GetApplicationRunMonitoringReportInput,
         GetRuntimeDebugArtifactInput, LinkUsageLedgerToModelFailoverAttemptInput,
-        ListApplicationConversationRunsPageInput, ListApplicationRunsPageInput,
+        ListApplicationConversationRunsPageInput,
+        ListApplicationRunConversationMessageItemsPageInput, ListApplicationRunTraceChildrenPage,
+        ListApplicationRunTraceChildrenPageInput, ListApplicationRunsPageInput,
         OrchestrationRuntimeRepository, RecordFlowRunCallbackResumeAttemptInput,
-        RecordFlowRunCallbackResumeAttemptOutput, UpdateCallbackTaskPayloadsInput,
-        UpdateCheckpointPayloadsInput, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
-        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
+        RecordFlowRunCallbackResumeAttemptOutput, ReplaceApplicationRunTraceProjectionInput,
+        UpdateCallbackTaskPayloadsInput, UpdateCheckpointPayloadsInput, UpdateFlowRunInput,
+        UpdateFlowRunPayloadsInput, UpdateNodeRunInput, UpdateNodeRunPayloadsInput,
+        UpdateRunEventPayloadInput, UpsertApplicationRunTraceProjectionStatusInput,
         UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
         UpsertDebugVariableCacheEntryInput,
     },
@@ -53,6 +57,8 @@ use sequencing::*;
 include!("event_methods.rs");
 include!("artifact_methods.rs");
 include!("application_run_log_methods.rs");
+include!("application_run_logs/run_conversation_message_item_methods.rs");
+include!("application_run_trace_projection_methods.rs");
 include!("application_run_monitoring_methods.rs");
 include!("debug_variable_cache_methods.rs");
 include!("flow_run_methods.rs");
@@ -518,12 +524,161 @@ impl OrchestrationRuntimeRepository for PgControlPlaneStore {
             .await
     }
 
+    async fn list_application_run_conversation_message_items_page(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+        input: ListApplicationRunConversationMessageItemsPageInput,
+    ) -> Result<control_plane::ports::ApplicationRunConversationMessageItemsPage> {
+        PgControlPlaneStore::list_application_run_conversation_message_items_page(
+            self,
+            application_id,
+            flow_run_id,
+            input,
+        )
+        .await
+    }
+
+    async fn get_application_run_conversation_current_item(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunConversationMessageItem>> {
+        PgControlPlaneStore::get_application_run_conversation_current_item(
+            self,
+            application_id,
+            flow_run_id,
+        )
+        .await
+    }
+
     async fn get_application_run_detail(
         &self,
         application_id: Uuid,
         flow_run_id: Uuid,
     ) -> Result<Option<domain::ApplicationRunDetail>> {
         PgControlPlaneStore::get_application_run_detail(self, application_id, flow_run_id).await
+    }
+
+    async fn get_application_run_trace_projection_source(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunDetail>> {
+        PgControlPlaneStore::get_application_run_trace_projection_source(
+            self,
+            application_id,
+            flow_run_id,
+        )
+        .await
+    }
+
+    async fn get_application_run_trace_projection_source_watermark(
+        &self,
+        application_id: Uuid,
+        flow_run_id: Uuid,
+    ) -> Result<Option<String>> {
+        PgControlPlaneStore::get_application_run_trace_projection_source_watermark(
+            self,
+            application_id,
+            flow_run_id,
+        )
+        .await
+    }
+
+    async fn replace_application_run_trace_projection(
+        &self,
+        input: &ReplaceApplicationRunTraceProjectionInput,
+    ) -> Result<()> {
+        PgControlPlaneStore::replace_application_run_trace_projection(self, input).await
+    }
+
+    async fn upsert_application_run_trace_projection_status(
+        &self,
+        input: &UpsertApplicationRunTraceProjectionStatusInput,
+    ) -> Result<()> {
+        PgControlPlaneStore::upsert_application_run_trace_projection_status(self, input).await
+    }
+
+    async fn get_application_run_trace_projection_status(
+        &self,
+        flow_run_id: Uuid,
+        projection_version: i32,
+    ) -> Result<Option<domain::ApplicationRunTraceProjectionStatusRecord>> {
+        PgControlPlaneStore::get_application_run_trace_projection_status(
+            self,
+            flow_run_id,
+            projection_version,
+        )
+        .await
+    }
+
+    async fn list_application_run_trace_roots(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<Vec<domain::ApplicationRunTraceNodeRecord>> {
+        PgControlPlaneStore::list_application_run_trace_roots(self, flow_run_id).await
+    }
+
+    async fn get_application_run_trace_statistics(
+        &self,
+        flow_run_id: Uuid,
+    ) -> Result<ApplicationRunTraceProjectionStatistics> {
+        PgControlPlaneStore::get_application_run_trace_statistics(self, flow_run_id).await
+    }
+
+    async fn list_application_run_trace_children_page(
+        &self,
+        input: ListApplicationRunTraceChildrenPageInput,
+    ) -> Result<ListApplicationRunTraceChildrenPage> {
+        PgControlPlaneStore::list_application_run_trace_children_page(self, input).await
+    }
+
+    async fn get_application_run_trace_node(
+        &self,
+        flow_run_id: Uuid,
+        trace_node_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunTraceNodeRecord>> {
+        PgControlPlaneStore::get_application_run_trace_node(self, flow_run_id, trace_node_id).await
+    }
+
+    async fn get_application_run_trace_node_by_locator(
+        &self,
+        flow_run_id: Uuid,
+        stable_locator: &str,
+    ) -> Result<Option<domain::ApplicationRunTraceNodeRecord>> {
+        PgControlPlaneStore::get_application_run_trace_node_by_locator(
+            self,
+            flow_run_id,
+            stable_locator,
+        )
+        .await
+    }
+
+    async fn get_application_run_trace_node_content(
+        &self,
+        flow_run_id: Uuid,
+        trace_node_id: Uuid,
+    ) -> Result<Option<domain::ApplicationRunTraceNodeContentRecord>> {
+        PgControlPlaneStore::get_application_run_trace_node_content(
+            self,
+            flow_run_id,
+            trace_node_id,
+        )
+        .await
+    }
+
+    async fn list_application_run_trace_node_run_details(
+        &self,
+        flow_run_id: Uuid,
+        node_run_ids: Vec<Uuid>,
+    ) -> Result<Vec<domain::NodeRunRecord>> {
+        PgControlPlaneStore::list_application_run_trace_node_run_details(
+            self,
+            flow_run_id,
+            node_run_ids,
+        )
+        .await
     }
 
     async fn get_latest_node_run(
@@ -667,41 +822,13 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
         rows.into_iter().map(map_callback_task_record).collect()
     }
 
-    async fn list_waiting_callback_published_flow_runs_for_conversation(
+    async fn list_waiting_callback_published_flow_run_ids_for_conversation(
         &self,
         input: &ListWaitingCallbackPublishedRunsInput,
-    ) -> Result<Vec<domain::FlowRunRecord>> {
-        let rows = sqlx::query(
+    ) -> Result<Vec<Uuid>> {
+        let rows = sqlx::query_scalar::<_, Uuid>(
             r#"
-            select
-                id,
-                application_id,
-                flow_id,
-                flow_draft_id,
-                compiled_plan_id,
-                debug_session_id,
-                flow_schema_version,
-                document_hash,
-                run_mode,
-                target_node_id,
-                title,
-                status,
-                input_payload,
-                output_payload,
-                error_payload,
-                created_by,
-                null::text as authorized_account,
-                api_key_id,
-                publication_version_id,
-                external_user,
-                external_conversation_id,
-                external_trace_id,
-                compatibility_mode,
-                idempotency_key,
-                started_at,
-                finished_at,
-                created_at,
-                updated_at
+            select id
             from flow_runs
             where application_id = $1
               and api_key_id = $2
@@ -721,7 +848,7 @@ impl ApplicationPublishedRunControlRepository for PgControlPlaneStore {
         .fetch_all(self.pool())
         .await?;
 
-        rows.into_iter().map(map_flow_run_record).collect()
+        Ok(rows)
     }
 
     async fn get_published_callback_task(

@@ -80,6 +80,15 @@
   gap: 12px;
 }
 
+.agent-flow-editor__conversation-log-projection-status {
+  border-radius: 8px;
+}
+
+.agent-flow-editor__conversation-log-load-more {
+  align-self: flex-start;
+  padding-inline: 0;
+}
+
 .agent-flow-editor__conversation-log-metadata,
 .agent-flow-editor__conversation-log-node-detail {
   display: flex;
@@ -95,6 +104,33 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.agent-flow-editor__conversation-log-node-detail
+  > .agent-flow-editor__conversation-log-node-list {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid #e6eaf1;
+}
+
+.agent-flow-editor__conversation-log-node-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px 30px;
+}
+
+.agent-flow-editor__conversation-log-node-group
+  > .agent-flow-editor__conversation-log-node-list {
+  padding-left: 8px;
+  border-left: 1px solid #e6eaf1;
+}
+
+.agent-flow-editor__conversation-log-json-list
+  > .agent-flow-editor__conversation-log-node-list {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid #e6eaf1;
 }
 
 .agent-flow-editor__conversation-log-empty {

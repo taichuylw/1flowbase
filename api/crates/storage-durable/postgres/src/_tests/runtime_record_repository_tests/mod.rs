@@ -108,7 +108,7 @@ async fn seed_runtime_read_model_rows(store: &PgControlPlaneStore) -> RuntimeRea
     .await
     .unwrap();
     sqlx::query(
-        "insert into flows (id, application_id, created_by, updated_by) values ($1, $2, $3, $3)",
+        "insert into flows (id, application_id, scope_id, created_by, updated_by) values ($1, $2, (select scope_id from applications where id = $2), $3, $3)",
     )
     .bind(flow_id)
     .bind(application_id)
@@ -118,8 +118,9 @@ async fn seed_runtime_read_model_rows(store: &PgControlPlaneStore) -> RuntimeRea
     .unwrap();
     sqlx::query(
         r#"
-        insert into flow_drafts (id, flow_id, schema_version, document, updated_by)
-        values ($1, $2, '1flowbase.flow/v2', '{}', $3)
+        insert into flow_drafts (
+            id, flow_id, scope_id, schema_version, document, created_by, updated_by
+        ) values ($1, $2, (select scope_id from flows where id = $2), '1flowbase.flow/v2', '{}', $3, $3)
         "#,
     )
     .bind(draft_id)
@@ -132,8 +133,8 @@ async fn seed_runtime_read_model_rows(store: &PgControlPlaneStore) -> RuntimeRea
         r#"
         insert into flow_compiled_plans (
             id, flow_id, flow_draft_id, schema_version, document_hash,
-            document_updated_at, plan, created_by
-        ) values ($1, $2, $3, '1flowbase.flow/v2', 'hash', $4, '{}', $5)
+            document_updated_at, plan, scope_id, created_by, updated_by
+        ) values ($1, $2, $3, '1flowbase.flow/v2', 'hash', $4, '{}', (select scope_id from flows where id = $2), $5, $5)
         "#,
     )
     .bind(compiled_plan_id)

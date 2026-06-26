@@ -3,16 +3,17 @@ use control_plane::{
     ports::{
         AppendCreditLedgerInput, AppendModelFailoverAttemptLedgerInput, AppendRunEventInput,
         AppendRuntimeEventInput, AppendRuntimeSpanInput, AppendUsageLedgerInput,
-        ApplicationRepository, AttachCompiledPlanToFlowRunInput, CreateApplicationInput,
-        CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
+        ApplicationRepository, AttachCompiledPlanToFlowRunInput, CompleteNodeRunInput,
+        CreateApplicationInput, CreateCallbackTaskInput, CreateCheckpointInput, CreateFlowRunInput,
         CreateFlowRunShellInput, CreateNodeRunInput, CreateRuntimeDebugArtifactInput,
         FinishFlowRunCallbackResumeAttemptInput, FlowRepository,
         GetApplicationRunMonitoringReportInput, GetRuntimeDebugArtifactInput,
         LinkUsageLedgerToModelFailoverAttemptInput, ListApplicationConversationRunsPageInput,
-        ListApplicationRunsPageInput, OrchestrationRuntimeRepository,
-        RecordFlowRunCallbackResumeAttemptInput, UpdateFlowRunInput, UpdateFlowRunPayloadsInput,
-        UpdateNodeRunInput, UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput,
-        UpsertCompiledPlanInput, UpsertDataModelSideEffectReceiptInput,
+        ListApplicationRunConversationMessageItemsPageInput, ListApplicationRunsPageInput,
+        OrchestrationRuntimeRepository, RecordFlowRunCallbackResumeAttemptInput,
+        UpdateFlowRunInput, UpdateFlowRunPayloadsInput, UpdateNodeRunInput,
+        UpdateNodeRunPayloadsInput, UpdateRunEventPayloadInput, UpsertCompiledPlanInput,
+        UpsertDataModelSideEffectReceiptInput,
     },
 };
 use domain::{
@@ -367,6 +368,7 @@ async fn seed_node_run_for(
 
 mod anthropic_internal_runs;
 mod application_logs;
+mod application_trace_projection;
 mod debug_artifacts;
 mod flow_runs;
 mod public_runs;

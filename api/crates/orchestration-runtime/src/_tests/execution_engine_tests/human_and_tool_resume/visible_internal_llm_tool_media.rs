@@ -478,6 +478,160 @@ async fn client_read_image_callback_reenables_image_llm_retry_after_media_guidan
 }
 
 #[tokio::test]
+async fn client_read_image_callback_feeds_retry_media_blocks_to_agent_mounted_llm() {
+    let (waiting_invoker, _waiting_inputs) = sequential_tool_invoker(vec![
+        tool_call_response(vec![ProviderToolCall {
+            id: "call_image".to_string(),
+            name: "image_llm".to_string(),
+            arguments: json!({
+                "task": "描述这张图片",
+                "media": [
+                    {
+                        "kind": "image",
+                        "source": "workspace_path",
+                        "path": "uploads/windows-only.png"
+                    }
+                ]
+            }),
+            provider_metadata: json!({}),
+        }]),
+        tool_call_response(vec![ProviderToolCall {
+            id: "call_read".to_string(),
+            name: "Read".to_string(),
+            arguments: json!({ "file_path": "E:\\code\\project\\uploads\\windows-only.png" }),
+            provider_metadata: json!({}),
+        }]),
+    ]);
+    let mut plan = visible_internal_llm_tool_plan();
+    configure_image_llm_tool(&mut plan);
+    let main_llm = plan
+        .nodes
+        .get_mut("node-llm")
+        .expect("main llm node should exist");
+    main_llm.config["visible_internal_llm_tools"][0]["tool_mode"] = json!("agent");
+    main_llm.config["visible_internal_llm_tools"][0]["external_tool_policy"] = json!("forbidden");
+
+    let waiting = start_flow_debug_run(
+        &plan,
+        &json!({
+            "node-start": {
+                "query": "uploads\\windows-only.png 找一下这幅图相关代码",
+                "history": [],
+                "tools": [
+                    {
+                        "name": "Read",
+                        "description": "Read a file",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": { "type": "string" }
+                            },
+                            "required": ["file_path"]
+                        }
+                    }
+                ]
+            }
+        }),
+        &waiting_invoker,
+    )
+    .await
+    .unwrap();
+    let checkpoint = waiting
+        .checkpoint_snapshot
+        .clone()
+        .expect("external Read wait should checkpoint");
+
+    let (resume_invoker, resumed_inputs) = sequential_tool_invoker(vec![
+        tool_call_response(vec![ProviderToolCall {
+            id: "call_image_retry".to_string(),
+            name: "image_llm".to_string(),
+            arguments: json!({
+                "task": "根据 Read 返回的图片内容描述这张图片",
+                "media": [
+                    {
+                        "kind": "image",
+                        "source": "workspace_path",
+                        "path": "uploads/windows-only.png"
+                    }
+                ]
+            }),
+            provider_metadata: json!({}),
+        }]),
+        final_llm_response("mounted-visible "),
+        final_llm_response("main-after-image"),
+    ]);
+    resume_flow_debug_run(
+        &plan,
+        &checkpoint,
+        "node-llm",
+        &json!({
+            "tool_results": [
+                {
+                    "tool_call_id": "call_read",
+                    "name": "Read",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": "aW1hZ2U="
+                            }
+                        }
+                    ]
+                }
+            ]
+        }),
+        &resume_invoker,
+    )
+    .await
+    .unwrap();
+
+    let resumed_captured = resumed_inputs
+        .lock()
+        .expect("captured inputs mutex poisoned")
+        .clone();
+    assert_eq!(resumed_captured.len(), 3);
+    let retry_tool_names = resumed_captured[0]
+        .tools
+        .iter()
+        .filter_map(|tool| tool["function"]["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        retry_tool_names.contains(&"image_llm"),
+        "image_llm must be available for retry after client Read supplies image content blocks, got {retry_tool_names:?}"
+    );
+
+    let mounted_input = &resumed_captured[1];
+    assert!(
+        mounted_input.tools.is_empty(),
+        "agent image_llm with external_tool_policy forbidden must not inherit Read/Bash tools, got {:?}",
+        mounted_input.tools
+    );
+    let mounted_user_message = mounted_input
+        .messages
+        .iter()
+        .rev()
+        .find(|message| message.role == ProviderMessageRole::User)
+        .expect("mounted LLM should have a user prompt message");
+    let media_blocks = mounted_user_message
+        .content_blocks
+        .as_ref()
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        media_blocks.iter().any(|block| {
+            block["type"] == json!("image")
+                && block["source"]["media_type"] == json!("image/png")
+                && block["source"]["data"] == json!("aW1hZ2U=")
+        }),
+        "mounted image LLM user prompt should receive inherited Read image content blocks, got {:?}",
+        mounted_input.messages
+    );
+}
+
+#[tokio::test]
 async fn missing_workspace_image_path_reuses_inherited_image_content_blocks() {
     let (invoker, captured_inputs) = sequential_tool_invoker(vec![
         ProviderInvocationResult {

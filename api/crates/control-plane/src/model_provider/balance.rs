@@ -5,7 +5,6 @@ use crate::{
     data_source::{collect_secret_strings, redact_value},
     errors::ControlPlaneError,
     model_provider::ModelProviderBalanceResult,
-    plugin_lifecycle::reconcile_installation_snapshot,
     ports::{AuthRepository, ModelProviderRepository, PluginRepository, ProviderRuntimePort},
 };
 
@@ -13,7 +12,7 @@ use super::{
     instances::build_provider_runtime_config,
     shared::{
         empty_object, ensure_state_model_permission, load_actor_context_for_user,
-        load_provider_package,
+        load_provider_package, ready_model_provider_installation, ModelProviderNodeArtifactContext,
     },
 };
 
@@ -23,6 +22,7 @@ pub(super) async fn get_balance<R, H>(
     provider_secret_master_key: &str,
     actor_user_id: Uuid,
     instance_id: Uuid,
+    node_artifact_context: Option<ModelProviderNodeArtifactContext<'_>>,
 ) -> Result<ModelProviderBalanceResult>
 where
     R: AuthRepository + PluginRepository + ModelProviderRepository,
@@ -34,8 +34,12 @@ where
         .get_instance(actor.current_workspace_id, instance_id)
         .await?
         .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
-    let installation =
-        reconcile_installation_snapshot(repository, instance.installation_id).await?;
+    let installation = ready_model_provider_installation(
+        repository,
+        node_artifact_context,
+        instance.installation_id,
+    )
+    .await?;
     if installation.availability_status != domain::PluginAvailabilityStatus::Available {
         return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
     }

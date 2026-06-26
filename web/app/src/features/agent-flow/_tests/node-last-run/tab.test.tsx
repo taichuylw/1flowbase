@@ -366,9 +366,15 @@ describe('NodeLastRunTab', () => {
   });
 
   test('loads truncated last-run field artifact on explicit action', async () => {
-    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockResolvedValue(
-      '完整 Last Run 内容'
-    );
+    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifacts').mockResolvedValue({
+      artifacts: [
+        {
+          artifact_ref: 'artifact-1',
+          content_type: 'application/json',
+          value: '完整 Last Run 内容'
+        }
+      ]
+    });
     vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
       flow_run: {
         id: 'run-1',
@@ -427,9 +433,9 @@ describe('NodeLastRunTab', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '加载完整值' }));
 
-    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+    expect(runtimeApi.fetchRuntimeDebugArtifacts).toHaveBeenCalledWith(
       'app-1',
-      'artifact-1'
+      ['artifact-1']
     );
     expect(await screen.findByLabelText('输出 JSON')).toHaveTextContent(
       '完整 Last Run 内容'
@@ -440,19 +446,20 @@ describe('NodeLastRunTab', () => {
   });
 
   test('loads start input field artifacts back into their original fields', async () => {
-    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifact').mockImplementation(
-      async (_applicationId, artifactRef) => {
-        if (artifactRef === 'artifact-start-history') {
-          return [{ role: 'user', content: '旧问题' }];
+    vi.spyOn(runtimeApi, 'fetchRuntimeDebugArtifacts').mockResolvedValue({
+      artifacts: [
+        {
+          artifact_ref: 'artifact-start-history',
+          content_type: 'application/json',
+          value: [{ role: 'user', content: '旧问题' }]
+        },
+        {
+          artifact_ref: 'artifact-start-tools',
+          content_type: 'application/json',
+          value: [{ name: 'read_file' }]
         }
-
-        if (artifactRef === 'artifact-start-tools') {
-          return [{ name: 'read_file' }];
-        }
-
-        throw new Error(`unexpected artifact: ${artifactRef}`);
-      }
-    );
+      ]
+    });
     vi.spyOn(runtimeApi, 'fetchNodeLastRun').mockResolvedValue({
       flow_run: {
         id: 'run-1',
@@ -532,25 +539,15 @@ describe('NodeLastRunTab', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '加载完整值' }));
 
-    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
+    expect(runtimeApi.fetchRuntimeDebugArtifacts).toHaveBeenCalledWith(
       'app-1',
-      'artifact-start-history'
+      ['artifact-start-history', 'artifact-start-tools']
     );
     await waitFor(() =>
       expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('旧问题')
     );
     expect(screen.getByLabelText('输入 JSON')).toHaveTextContent(
-      'artifact-start-tools'
-    );
-
-    fireEvent.click(await screen.findByRole('button', { name: '加载完整值' }));
-
-    expect(runtimeApi.fetchRuntimeDebugArtifact).toHaveBeenCalledWith(
-      'app-1',
-      'artifact-start-tools'
-    );
-    await waitFor(() =>
-      expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('read_file')
+      'read_file'
     );
     expect(
       screen.queryByRole('button', { name: '加载完整值' })

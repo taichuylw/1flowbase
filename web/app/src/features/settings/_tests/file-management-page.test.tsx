@@ -7,6 +7,8 @@ const membersApi = vi.hoisted(() => ({
   fetchSettingsMembers: vi.fn(),
   createSettingsMember: vi.fn(),
   disableSettingsMember: vi.fn(),
+  enableSettingsMember: vi.fn(),
+  deleteSettingsMember: vi.fn(),
   resetSettingsMemberPassword: vi.fn(),
   replaceSettingsMemberRoles: vi.fn()
 }));
@@ -99,6 +101,8 @@ const pluginsApi = vi.hoisted(() => ({
   uploadSettingsPluginPackage: vi.fn(),
   upgradeSettingsPluginFamilyLatest: vi.fn(),
   switchSettingsPluginFamilyVersion: vi.fn(),
+  installSettingsPluginCurrentNodeArtifact: vi.fn(),
+  refreshSettingsPluginCurrentNodeArtifact: vi.fn(),
   fetchSettingsPluginTask: vi.fn()
 }));
 
@@ -176,11 +180,7 @@ function renderApp(pathname: string) {
 }
 
 function findFileTableTab() {
-  return screen.findByRole(
-    'tab',
-    { name: '文件表' },
-    { timeout: 10_000 }
-  );
+  return screen.findByRole('tab', { name: '文件表' }, { timeout: 10_000 });
 }
 
 describe('File management settings page', () => {
@@ -236,8 +236,8 @@ describe('File management settings page', () => {
     pluginsApi.fetchSettingsPluginFamilies.mockResolvedValue([]);
     pluginsApi.fetchSettingsOfficialPluginCatalog.mockResolvedValue({
       locale_meta: { resolved_locale: 'zh_Hans', fallback_locale: 'en_US' },
-page: { limit: 20, next_cursor: null },
-entries: []
+      page: { limit: 20, next_cursor: null },
+      entries: []
     });
     systemRuntimeApi.fetchSettingsSystemRuntimeProfile.mockResolvedValue({
       topology: { relationship: 'same_host' },
@@ -284,7 +284,9 @@ entries: []
     renderApp('/settings/files');
 
     expect(
-      await screen.findByText('暂无权限查看文件表列表，您可以创建一个新文件表。')
+      await screen.findByText(
+        '暂无权限查看文件表列表，您可以创建一个新文件表。'
+      )
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('tab', { name: '文件表' })

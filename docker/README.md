@@ -53,6 +53,42 @@ cp .env.example .env
 docker compose up -d
 ```
 
+### 使用外部 PostgreSQL
+
+一键部署脚本会先询问数据库模式：直接回车或选择 `1` 使用内置 PostgreSQL；选择 `2` 使用外部 PostgreSQL。外部模式会继续询问 PostgreSQL 的 host/IP、端口、database、账号、密码和 `sslmode`，并写入 `API_DATABASE_URL`。
+
+也可以在 `docker/.env` 中手动配置：
+
+```env
+DATABASE_MODE=external
+EXTERNAL_POSTGRES_HOST=db.internal.example
+EXTERNAL_POSTGRES_PORT=5432
+EXTERNAL_POSTGRES_DB=1flowbase
+EXTERNAL_POSTGRES_USER=flowbase
+EXTERNAL_POSTGRES_PASSWORD=change-me
+EXTERNAL_POSTGRES_SSLMODE=prefer
+API_DATABASE_URL=postgres://flowbase:change-me@db.internal.example:5432/1flowbase?sslmode=prefer
+```
+
+外部模式不启动 compose 内置的 `db` 服务：
+
+```bash
+docker compose -f docker-compose.external-db.yaml pull
+docker compose -f docker-compose.external-db.yaml up -d
+```
+
+注意：外部数据库地址必须能从 Docker 容器网络访问。`127.0.0.1` 在容器内通常指向容器自身，不是宿主机或内网数据库；如果数据库在宿主机上，按 Docker Desktop / Docker Engine 的网络规则使用可达的宿主机地址。
+
+如果通过普通 HTTP 内网地址测试登录，例如 `http://192.168.31.25:3200`，需要在 `docker/.env` 中设置：
+
+```env
+WEB_PORT=3200
+API_ALLOWED_ORIGINS=http://localhost:3200,http://127.0.0.1:3200,http://192.168.31.25:3200
+API_COOKIE_SECURE=false
+```
+
+正式生产环境使用 HTTPS 时应保持 `API_COOKIE_SECURE=true`。否则浏览器会拒绝在明文 HTTP 页面保存 `Secure` session cookie，表现为登录接口返回成功，但刷新 `/api/console/me` 时仍然是未登录。
+
 镜像版本、端口、数据库、API、插件运行器和初始化 root 账号配置都集中在 `docker/.env.example`。不再需要复制 `api/api.env`、`plugin-runner/plugin-runner.env` 或 `postgres/postgres.env`。
 
 官方插件默认要求官方签名校验，`API_OFFICIAL_PLUGIN_SIGNATURE_REQUIRED=true` 会拒绝未签名或无法用 trusted key 验证的官方 / 镜像源插件。自托管环境明确接受风险时可设为 `false`；此时仍校验 registry 中的 `sha256` checksum，未验证包会标记为 `unverified`。

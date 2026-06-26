@@ -28,8 +28,7 @@ where
         );
 
         let installation_reconcile_started = std::time::Instant::now();
-        let installation =
-            reconcile_installation_snapshot(&self.repository, instance.installation_id).await?;
+        let installation = self.ready_installation(instance.installation_id).await?;
         tracing::debug!(
             installation_reconcile_ms = installation_reconcile_started.elapsed().as_millis() as u64,
             "installation reconcile finished"
@@ -437,6 +436,33 @@ fn partial_tag_prefix_len(buffer: &str, tag: &str) -> usize {
 
 impl<R, H> RuntimeProviderInvoker<R, H>
 where
+    R: PluginRepository + Clone + Send + Sync,
+    H: ProviderRuntimePort + Clone + Send + Sync,
+{
+    async fn ready_installation(
+        &self,
+        installation_id: Uuid,
+    ) -> Result<domain::PluginInstallationRecord> {
+        match (
+            self.api_node_id.as_deref(),
+            self.provider_install_root.as_deref(),
+        ) {
+            (Some(node_id), Some(install_root)) => {
+                ready_current_node_plugin_installation(
+                    &self.repository,
+                    node_id,
+                    install_root,
+                    installation_id,
+                )
+                .await
+            }
+            _ => reconcile_installation_snapshot(&self.repository, installation_id).await,
+        }
+    }
+}
+
+impl<R, H> RuntimeProviderInvoker<R, H>
+where
     R: ModelProviderRepository + PluginRepository + Clone + Send + Sync,
     H: ProviderRuntimePort + Clone + Send + Sync,
 {
@@ -452,6 +478,8 @@ where
             flow_run_id: Some(flow_run_id),
             active_node_id: self.active_node_id.clone(),
             active_node_run_id: self.active_node_run_id,
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: self.answer_presentation.clone(),
         }
     }
@@ -471,6 +499,8 @@ where
             flow_run_id: self.flow_run_id,
             active_node_id: self.active_node_id.clone(),
             active_node_run_id: self.active_node_run_id,
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: Some(answer_presentation),
         }
     }
@@ -492,6 +522,8 @@ where
             flow_run_id: self.flow_run_id,
             active_node_id: Some(node_id),
             active_node_run_id: Some(node_run_id),
+            api_node_id: self.api_node_id.clone(),
+            provider_install_root: self.provider_install_root.clone(),
             answer_presentation: self.answer_presentation.clone(),
         }
     }
@@ -506,32 +538,36 @@ where
             .repository
             .get_instance(self.workspace_id, provider_instance_id)
             .await?
-            .ok_or(ControlPlaneError::InvalidInput("source_instance_id"))?;
-        if instance.provider_code != runtime.provider_code
-            || instance.status != domain::ModelProviderInstanceStatus::Ready
-            || !instance.included_in_main
-        {
-            return Err(ControlPlaneError::InvalidInput("source_instance_id").into());
+            .ok_or(ControlPlaneError::NotFound("model_provider_instance"))?;
+        if instance.provider_code != runtime.provider_code {
+            return Err(ControlPlaneError::InvalidInput("provider_code").into());
+        }
+        if instance.status != domain::ModelProviderInstanceStatus::Ready {
+            return Err(ControlPlaneError::Conflict("provider_instance_not_ready").into());
+        }
+        if !instance.included_in_main {
+            return Err(ControlPlaneError::Conflict("provider_instance_not_in_main").into());
         }
         let installation = self
             .repository
             .get_installation(instance.installation_id)
             .await?
-            .ok_or(ControlPlaneError::InvalidInput("source_instance_id"))?;
+            .ok_or(ControlPlaneError::NotFound("plugin_installation"))?;
         let assigned = self
             .repository
             .list_assignments(self.workspace_id)
             .await?
             .into_iter()
             .any(|assignment| assignment.installation_id == installation.id);
-        if !assigned
-            || matches!(
-                installation.desired_state,
-                domain::PluginDesiredState::Disabled
-            )
-            || installation.availability_status != domain::PluginAvailabilityStatus::Available
+        if !assigned {
+            return Err(ControlPlaneError::Conflict("plugin_assignment_required").into());
+        }
+        if matches!(
+            installation.desired_state,
+            domain::PluginDesiredState::Disabled
+        ) || installation.availability_status != domain::PluginAvailabilityStatus::Available
         {
-            return Err(ControlPlaneError::InvalidInput("source_instance_id").into());
+            return Err(ControlPlaneError::Conflict("plugin_installation_unavailable").into());
         }
         if !instance.enabled_model_ids.is_empty()
             && !instance
@@ -559,8 +595,7 @@ where
         config_payload: Value,
         input_payload: Value,
     ) -> Result<orchestration_runtime::execution_engine::CapabilityInvocationOutput> {
-        let installation =
-            reconcile_installation_snapshot(&self.repository, runtime.installation_id).await?;
+        let installation = self.ready_installation(runtime.installation_id).await?;
         let assigned = self
             .repository
             .list_assignments(self.workspace_id)

@@ -1,8 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import type { SettingsOfficialPluginCatalogEntry } from '../../../api/plugins';
 import { OfficialPluginInstallPanel } from '../OfficialPluginInstallPanel';
+
+type OfficialPluginInstallPanelProps = Parameters<
+  typeof OfficialPluginInstallPanel
+>[0];
 
 const baseEntry: SettingsOfficialPluginCatalogEntry = {
   plugin_id: '1flowbase.openai_compatible',
@@ -24,10 +28,24 @@ const baseEntry: SettingsOfficialPluginCatalogEntry = {
   },
   help_url: 'https://platform.openai.com/docs/api-reference',
   model_discovery_mode: 'hybrid',
-  install_status: 'not_installed'
+  install_status: 'not_installed',
+  minimum_host_version: '0.1.0',
+  current_host_version: '0.2.0',
+  compatibility_status: 'compatible',
+  compatibility_warning_reason: null
 };
 
-function renderPanel(entry: SettingsOfficialPluginCatalogEntry) {
+function renderPanel(
+  entry: SettingsOfficialPluginCatalogEntry,
+  handlers: Partial<
+    Pick<OfficialPluginInstallPanelProps, 'onInstall' | 'onUpgradeLatest'>
+  > = {}
+) {
+  const onInstall = handlers.onInstall ?? vi.fn<OfficialPluginInstallPanelProps['onInstall']>();
+  const onUpgradeLatest =
+    handlers.onUpgradeLatest ??
+    vi.fn<OfficialPluginInstallPanelProps['onUpgradeLatest']>();
+
   render(
     <OfficialPluginInstallPanel
       sourceMeta={null}
@@ -38,14 +56,16 @@ function renderPanel(entry: SettingsOfficialPluginCatalogEntry) {
       activePluginId={null}
       installState="idle"
       upgradingProviderCode={null}
-      onInstall={vi.fn()}
+      onInstall={onInstall}
       onOpenUpload={vi.fn()}
       onSearchQueryChange={vi.fn()}
-      onUpgradeLatest={vi.fn()}
+      onUpgradeLatest={onUpgradeLatest}
     />
   );
 
   expect(screen.getByText(entry.display_name)).toBeInTheDocument();
+
+  return { onInstall, onUpgradeLatest };
 }
 
 describe('OfficialPluginInstallPanel', () => {
@@ -68,5 +88,44 @@ describe('OfficialPluginInstallPanel', () => {
     });
 
     expect(screen.getByAltText('')).toHaveAttribute('src', '/icon.svg');
+  });
+
+  test('asks for explicit host version risk acknowledgement before installing a below-minimum plugin', async () => {
+    const onInstall = vi.fn();
+    const belowMinimumEntry: SettingsOfficialPluginCatalogEntry = {
+      ...baseEntry,
+      latest_version: '0.3.0',
+      current_host_version: '0.2.0',
+      minimum_host_version: '0.3.0',
+      compatibility_status: 'below_minimum_host_version',
+      compatibility_warning_reason: 'below_minimum_host_version'
+    };
+
+    renderPanel(belowMinimumEntry, { onInstall });
+
+    fireEvent.click(screen.getByRole('button', { name: '仍要安装' }));
+
+    expect(
+      await screen.findByText(
+        '当前 1flowbase 版本低于该插件声明的最低适配版本。'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveStyle({ width: '640px' });
+    expect(screen.getByText('当前宿主版本：0.2.0')).toBeInTheDocument();
+    expect(screen.getByText('插件最低适配版本：0.3.0')).toBeInTheDocument();
+    expect(screen.getByText('插件版本：0.3.0')).toBeInTheDocument();
+
+    const confirmButtons = screen.getAllByRole('button', {
+      name: '仍要安装'
+    });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(onInstall).toHaveBeenCalledWith(belowMinimumEntry, {
+        reason: 'below_minimum_host_version',
+        acknowledged_current_host_version: '0.2.0',
+        acknowledged_minimum_host_version: '0.3.0'
+      });
+    });
   });
 });

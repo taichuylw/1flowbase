@@ -183,7 +183,7 @@ pub async fn upload_file(
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<ApiSuccess<UploadedFileResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let mut file_table_id = None;
     let mut filename = None;

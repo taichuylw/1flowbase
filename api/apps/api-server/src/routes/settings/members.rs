@@ -7,12 +7,12 @@ use argon2::{
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post, put},
+    routing::{get, patch, post, put},
     Json, Router,
 };
 use control_plane::member::{
-    CreateMemberCommand, DisableMemberCommand, MemberService, ReplaceMemberRolesCommand,
-    ResetMemberPasswordCommand,
+    CreateMemberCommand, DeleteMemberCommand, DisableMemberCommand, EnableMemberCommand,
+    MemberService, ReplaceMemberRolesCommand, ResetMemberPasswordCommand, UpdateMemberCommand,
 };
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,15 @@ pub struct CreateMemberBody {
     pub introduction: String,
     pub email_login_enabled: bool,
     pub phone_login_enabled: bool,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateMemberBody {
+    pub email: String,
+    pub phone: Option<String>,
+    pub name: String,
+    pub nickname: String,
+    pub introduction: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -120,7 +129,9 @@ fn to_member_response(user: domain::UserRecord) -> MemberResponse {
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/members", get(list_members).post(create_member))
+        .route("/members/:id", patch(update_member).delete(delete_member))
         .route("/members/:id/actions/disable", post(disable_member))
+        .route("/members/:id/actions/enable", post(enable_member))
         .route("/members/:id/actions/reset-password", post(reset_member))
         .route("/members/:id/roles", put(replace_member_roles))
 }
@@ -159,7 +170,7 @@ pub async fn create_member(
     Json(body): Json<CreateMemberBody>,
 ) -> Result<(StatusCode, Json<ApiSuccess<MemberResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     let user = MemberService::new(state.store.clone())
         .create_member(CreateMemberCommand {
@@ -183,6 +194,37 @@ pub async fn create_member(
 }
 
 #[utoipa::path(
+    patch,
+    path = "/api/console/members/{id}",
+    request_body = UpdateMemberBody,
+    params(("id" = String, Path, description = "Member user id")),
+    responses((status = 200, body = MemberResponse), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn update_member(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(member_id): Path<String>,
+    Json(body): Json<UpdateMemberBody>,
+) -> Result<Json<ApiSuccess<MemberResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+
+    let user = MemberService::new(state.store.clone())
+        .update_member(UpdateMemberCommand {
+            actor_user_id: context.user.id,
+            target_user_id: parse_member_id(&member_id)?,
+            email: body.email,
+            phone: body.phone,
+            name: body.name,
+            nickname: body.nickname,
+            introduction: body.introduction,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_member_response(user))))
+}
+
+#[utoipa::path(
     post,
     path = "/api/console/members/{id}/actions/disable",
     params(("id" = String, Path, description = "Member user id")),
@@ -194,10 +236,58 @@ pub async fn disable_member(
     Path(member_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     MemberService::new(state.store.clone())
         .disable_member(DisableMemberCommand {
+            actor_user_id: context.user.id,
+            target_user_id: parse_member_id(&member_id)?,
+        })
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/console/members/{id}/actions/enable",
+    params(("id" = String, Path, description = "Member user id")),
+    responses((status = 204), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn enable_member(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(member_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+
+    MemberService::new(state.store.clone())
+        .enable_member(EnableMemberCommand {
+            actor_user_id: context.user.id,
+            target_user_id: parse_member_id(&member_id)?,
+        })
+        .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/console/members/{id}",
+    params(("id" = String, Path, description = "Member user id")),
+    responses((status = 204), (status = 403, body = crate::error_response::ErrorBody), (status = 409, body = crate::error_response::ErrorBody))
+)]
+pub async fn delete_member(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(member_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context)?;
+
+    MemberService::new(state.store.clone())
+        .delete_member(DeleteMemberCommand {
             actor_user_id: context.user.id,
             target_user_id: parse_member_id(&member_id)?,
         })
@@ -220,7 +310,7 @@ pub async fn reset_member(
     Json(body): Json<ResetMemberPasswordBody>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     MemberService::new(state.store.clone())
         .reset_member_password(ResetMemberPasswordCommand {
@@ -247,7 +337,7 @@ pub async fn replace_member_roles(
     Json(body): Json<ReplaceMemberRolesBody>,
 ) -> Result<StatusCode, ApiError> {
     let context = require_session(&state, &headers).await?;
-    require_csrf(&headers, &context.session)?;
+    require_csrf(&headers, &context)?;
 
     MemberService::new(state.store.clone())
         .replace_member_roles(ReplaceMemberRolesCommand {

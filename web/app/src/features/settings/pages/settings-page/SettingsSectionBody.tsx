@@ -15,9 +15,19 @@ const ApiDocsPanel = lazy(() =>
     default: module.ApiDocsPanel
   }))
 );
+const PersonalAccessTokensPanel = lazy(() =>
+  import('../../components/PersonalAccessTokensPanel').then((module) => ({
+    default: module.PersonalAccessTokensPanel
+  }))
+);
 const SettingsModelProvidersSection = lazy(() =>
   import('./SettingsModelProvidersSection').then((module) => ({
     default: module.SettingsModelProvidersSection
+  }))
+);
+const SettingsMcpManagementSection = lazy(() =>
+  import('./SettingsMcpManagementSection').then((module) => ({
+    default: module.SettingsMcpManagementSection
   }))
 );
 const HostInfrastructurePanel = lazy(() =>
@@ -43,17 +53,7 @@ function SettingsSectionBoundary({ children }: { children: ReactNode }) {
   return <Suspense fallback={<SettingsSectionFallback />}>{children}</Suspense>;
 }
 
-export function SettingsSectionBody({
-  sectionKey,
-  isRoot,
-  permissions,
-  canManageMembers,
-  canManageRoles,
-  canManageDataModels,
-  canManageModelProviders,
-  canManageHostInfrastructure
-}: {
-  sectionKey: SettingsSectionKey;
+interface SettingsSectionAccess {
   isRoot: boolean;
   permissions: string[];
   canManageMembers: boolean;
@@ -61,45 +61,83 @@ export function SettingsSectionBody({
   canManageDataModels: boolean;
   canManageModelProviders: boolean;
   canManageHostInfrastructure: boolean;
+  canManageMcpManagement: boolean;
+}
+
+export function SettingsSectionBody({
+  sectionKey,
+  access
+}: {
+  sectionKey: SettingsSectionKey;
+  access: SettingsSectionAccess;
 }) {
   switch (sectionKey) {
     case 'members':
       return (
         <MemberManagementPanel
-          canManageMembers={canManageMembers}
-          canManageRoleBindings={canManageRoles}
+          canManageMembers={access.canManageMembers}
+          canManageRoleBindings={access.canManageRoles}
         />
       );
     case 'system-runtime':
       return <SystemRuntimePanel />;
     case 'files':
-      return <SettingsFilesSection isRoot={isRoot} permissions={permissions} />;
+      return (
+        <SettingsFilesSection
+          isRoot={access.isRoot}
+          permissions={access.permissions}
+        />
+      );
     case 'model-providers':
       return (
         <SettingsSectionBoundary>
-          <SettingsModelProvidersSection canManage={canManageModelProviders} />
+          <SettingsModelProvidersSection
+            canManage={access.canManageModelProviders}
+          />
         </SettingsSectionBoundary>
       );
     case 'data-models':
-      return <SettingsDataModelsSection canManage={canManageDataModels} />;
+      return (
+        <SettingsDataModelsSection canManage={access.canManageDataModels} />
+      );
+    case 'mcp-management':
+      return (
+        <SettingsSectionBoundary>
+          <SettingsMcpManagementSection
+            canManage={access.canManageMcpManagement}
+          />
+        </SettingsSectionBoundary>
+      );
     case 'host-infrastructure':
       return (
         <SettingsSectionBoundary>
-          <HostInfrastructurePanel canManage={canManageHostInfrastructure} />
+          <HostInfrastructurePanel
+            canManage={access.canManageHostInfrastructure}
+          />
         </SettingsSectionBoundary>
       );
     case 'memory-observation':
       return (
         <SettingsSectionBoundary>
-          <SettingsSectionSurface title={i18nText("settings", "auto.memory_observation")} hideHeader heightMode="fill">
+          <SettingsSectionSurface
+            title={i18nText('settings', 'auto.memory_observation')}
+            hideHeader
+            heightMode="fill"
+          >
             <HostInfrastructureMemoryObservationPanel
-              canManage={canManageHostInfrastructure}
+              canManage={access.canManageHostInfrastructure}
             />
           </SettingsSectionSurface>
         </SettingsSectionBoundary>
       );
     case 'roles':
-      return <RolePermissionPanel canManageRoles={canManageRoles} />;
+      return <RolePermissionPanel canManageRoles={access.canManageRoles} />;
+    case 'api-key-authentication':
+      return (
+        <SettingsSectionBoundary>
+          <PersonalAccessTokensPanel />
+        </SettingsSectionBoundary>
+      );
     case 'docs':
     default:
       return (

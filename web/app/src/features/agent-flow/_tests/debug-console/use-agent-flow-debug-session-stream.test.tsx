@@ -169,9 +169,10 @@ describe('useAgentFlowDebugSession streaming', () => {
             });
           }
         );
-      vi.spyOn(runtimeApi, 'fetchApplicationRunDetail').mockResolvedValue(
-        createStreamRunDetail('run-1', '退款')
-      );
+      vi.spyOn(
+        runtimeApi,
+        'fetchApplicationRunDebugSnapshot'
+      ).mockResolvedValue(createStreamRunDetail('run-1', '退款'));
       const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
       const { result } = renderHook(
         () =>
@@ -208,9 +209,10 @@ describe('useAgentFlowDebugSession streaming', () => {
 
     try {
       const queryClient = createQueryClient();
-      vi.spyOn(runtimeApi, 'fetchApplicationRunDetail').mockResolvedValue(
-        createStreamRunDetail('run-envelope', '退款政策')
-      );
+      vi.spyOn(
+        runtimeApi,
+        'fetchApplicationRunDebugSnapshot'
+      ).mockResolvedValue(createStreamRunDetail('run-envelope', '退款政策'));
       vi.spyOn(runtimeApi, 'startFlowDebugRunStream').mockImplementation(
         async (_applicationId, _input, _csrfToken, handlers) => {
           handlers.onEvent({
@@ -802,7 +804,7 @@ describe('useAgentFlowDebugSession streaming', () => {
           });
         }
       );
-    vi.spyOn(runtimeApi, 'fetchApplicationRunDetail').mockResolvedValue(
+    vi.spyOn(runtimeApi, 'fetchApplicationRunDebugSnapshot').mockResolvedValue(
       createStreamRunDetail('flow-run-stream', '你好')
     );
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -926,8 +928,8 @@ describe('useAgentFlowDebugSession streaming', () => {
         }
       );
     const startFlowDebugRunSpy = vi.spyOn(runtimeApi, 'startFlowDebugRun');
-    const fetchApplicationRunDetailSpy = vi
-      .spyOn(runtimeApi, 'fetchApplicationRunDetail')
+    const fetchApplicationRunDebugSnapshotSpy = vi
+      .spyOn(runtimeApi, 'fetchApplicationRunDebugSnapshot')
       .mockResolvedValue(createStreamRunDetail('flow-run-stream'));
     vi.spyOn(runtimeApi, 'fetchDebugVariableSnapshot')
       .mockResolvedValueOnce({ variable_cache: {} })
@@ -981,7 +983,7 @@ describe('useAgentFlowDebugSession streaming', () => {
       })
     );
     expect(startFlowDebugRunSpy).not.toHaveBeenCalled();
-    expect(fetchApplicationRunDetailSpy).toHaveBeenCalledWith(
+    expect(fetchApplicationRunDebugSnapshotSpy).toHaveBeenCalledWith(
       'app-1',
       'flow-run-stream'
     );

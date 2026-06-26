@@ -42,7 +42,7 @@
 - service、repository、mapper、runtime-core、orchestration-runtime、runtime-profile、plugin-framework、storage-durable/postgres、storage-durable、storage-object 发生变化
 - 任务涉及 `HostExtension`、`RuntimeExtension`、`CapabilityPlugin`、动态建模、`Resource Action Kernel`、文件管理 / 对象存储、验证脚本
 
-执行顺序固定跟随 `backend-regression-steps.md`，不要先看局部代码再回补验证。
+执行顺序固定跟随 `backend-regression-steps.md`，但 Dev Acceptance Gate 必须按 `gate-lanes.md` 的最小证据预算裁剪；不要先看局部代码再回补验证，也不要把专项检查扩展成全量后端门禁。
 
 | 检查项 | 要回答的问题 | 常见证据 |
 | --- | --- | --- |

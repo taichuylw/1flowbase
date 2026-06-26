@@ -1,14 +1,28 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { StrictMode, type ComponentProps } from 'react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StrictMode, type ComponentProps, type ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type {
-  AgentFlowDebugMessage,
-  AgentFlowRunContext
-} from '../../api/runtime';
+import type { AgentFlowRunContext } from '../../api/runtime';
 import { AgentFlowDebugConsole } from '../../components/debug-console/AgentFlowDebugConsole';
+import { ConversationLogPanel } from '../../components/debug-console/ConversationLogPanel';
 import { appI18n } from '../../../../shared/i18n/app-i18n';
-
+import {
+  answerSnapshotAssistantMessage,
+  assistantMessage,
+  fusionHistoricalBranchDetailAssistantMessage,
+  fusionSummaryOnlyAssistantMessage,
+  llmRoundAssistantMessage,
+  multiLlmRunAssistantMessage,
+  toolCallbackDetailPayload,
+  truncatedLlmRoundsAssistantMessage
+} from './debug-conversation-log-panel.fixtures';
 const runContext: AgentFlowRunContext = {
   environmentLabel: 'draft',
   remembered: false,
@@ -24,541 +38,32 @@ const runContext: AgentFlowRunContext = {
   ]
 };
 
-const assistantMessage: AgentFlowDebugMessage = {
-  id: 'assistant-1',
-  role: 'assistant',
-  status: 'running',
-  runId: 'run-1',
-  compatibilityModeLabel: 'OpenAI Responses',
-  content: '你好，我可以帮你。',
-  rawOutput: {
-    answer: '你好，我可以帮你。'
-  },
-  statistics: {
-    total_tokens: 154,
-    unique_node_count: 2,
-    tool_callback_count: 0
-  },
-  traceSummary: [
-    {
-      nodeId: 'node-start',
-      nodeRunId: 'node-run-start',
-      nodeAlias: 'Start',
-      nodeType: 'start',
-      status: 'succeeded',
-      startedAt: '2026-04-25T10:00:00Z',
-      finishedAt: '2026-04-25T10:00:00Z',
-      durationMs: 79,
-      inputPayload: {
-        query: '你好?'
-      },
-      outputPayload: {
-        query: '你好?'
-      },
-      errorPayload: null,
-      metricsPayload: {},
-      debugPayload: {}
-    },
-    {
-      nodeId: 'node-llm',
-      nodeRunId: 'node-run-llm',
-      nodeAlias: 'LLM',
-      nodeType: 'llm',
-      status: 'succeeded',
-      startedAt: '2026-04-25T10:00:01Z',
-      finishedAt: '2026-04-25T10:00:05Z',
-      durationMs: 4257,
-      inputPayload: {
-        prompt: '你好?'
-      },
-      outputPayload: {
-        answer: '你好，我可以帮你。'
-      },
-      errorPayload: null,
-      metricsPayload: {
-        total_tokens: 154
-      },
-      debugPayload: {
-        provider: 'openai'
-      }
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false }
     }
-  ]
-};
+  });
+}
 
-const llmRoundAssistantMessage: AgentFlowDebugMessage = {
-  ...assistantMessage,
-  traceSummary: assistantMessage.traceSummary.map((item) =>
-    item.nodeId === 'node-llm'
-      ? {
-          ...item,
-          outputPayload: {
-            answer: 'weather is clear'
-          },
-          debugPayload: {
-            provider: 'openai',
-            llm_rounds: [
-              {
-                round_index: 0,
-                usage: {
-                  input_tokens: 11,
-                  input_cache_hit_tokens: 5,
-                  output_tokens: 3,
-                  total_tokens: 14
-                },
-                assistant: {
-                  role: 'assistant',
-                  content: 'need tool',
-                  tool_calls: [
-                    {
-                      id: 'call_weather',
-                      name: 'lookup_weather',
-                      call_usage: {
-                        input_tokens: 11,
-                        input_cache_hit_tokens: 5,
-                        output_tokens: 3,
-                        total_tokens: 14
-                      },
-                      arguments: {
-                        city: 'Shanghai'
-                      }
-                    }
-                  ]
-                },
-                finish_reason: 'tool_call'
-              },
-              {
-                round_index: 1,
-                assistant: {
-                  role: 'assistant',
-                  content: 'need tool'
-                },
-                tool_results: [
-                  {
-                    role: 'tool',
-                    tool_call_id: 'call_weather',
-                    token_delta: 10,
-                    duration_ms: 1234,
-                    result_context_usage: {
-                      input_tokens: 20,
-                      input_cache_hit_tokens: 8,
-                      output_tokens: 4,
-                      total_tokens: 24
-                    },
-                    content: '{"temperature":21}'
-                  }
-                ]
-              },
-              {
-                round_index: 2,
-                usage: {
-                  input_tokens: 20,
-                  input_cache_hit_tokens: 8,
-                  output_tokens: 4,
-                  total_tokens: 24
-                },
-                assistant: {
-                  role: 'assistant',
-                  content: 'weather is clear'
-                },
-                finish_reason: 'stop'
-              }
-            ]
-          }
-        }
-      : item
-  )
-};
+function renderWithQueryClient(children: ReactNode) {
+  const queryClient = createQueryClient();
 
-const truncatedLlmRoundsAssistantMessage: AgentFlowDebugMessage = {
-  ...assistantMessage,
-  traceSummary: assistantMessage.traceSummary.map((item) =>
-    item.nodeId === 'node-llm'
-      ? {
-          ...item,
-          outputPayload: {
-            answer: 'weather is clear'
-          },
-          debugPayload: {
-            provider: 'openai',
-            llm_rounds: {
-              __runtime_debug_artifact: true,
-              artifact_ref: 'artifact-llm-rounds',
-              is_truncated: true,
-              original_size_bytes: 2000,
-              preview_size_bytes: 120,
-              content_type: 'application/json',
-              preview: '["call_weather"]',
-              tool_callbacks: [
-                {
-                  id: 'call_weather',
-                  name: 'lookup_weather',
-                  callback_status: 'returned',
-                  execution_status: 'unknown',
-                  request_round_index: 0,
-                  result_round_index: 0,
-                  call_usage: {
-                    input_tokens: 11,
-                    input_cache_hit_tokens: 5,
-                    output_tokens: 3,
-                    total_tokens: 14
-                  },
-                  result_context_usage: {
-                    input_tokens: 20,
-                    input_cache_hit_tokens: 8,
-                    output_tokens: 4,
-                    total_tokens: 24
-                  },
-                  token_delta: 10,
-                  duration_ms: 1234,
-                  artifact_ref: 'artifact-tool-call-weather'
-                }
-              ]
-            }
-          }
-        }
-      : item
-  )
-};
+  return render(
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
 
-const toolCallbackDetailPayload = {
-  id: 'call_weather',
-  name: 'lookup_weather',
-  callback_status: 'returned',
-  execution_status: 'unknown',
-  call_usage: {
-    input_tokens: 11,
-    input_cache_hit_tokens: 5,
-    output_tokens: 3,
-    total_tokens: 14
-  },
-  result_context_usage: {
-    input_tokens: 20,
-    input_cache_hit_tokens: 8,
-    output_tokens: 4,
-    total_tokens: 24
-  },
-  token_delta: 10,
-  duration_ms: 1234,
-  request_payload: {
-    id: 'call_weather',
-    name: 'lookup_weather',
-    call_usage: {
-      input_tokens: 11,
-      input_cache_hit_tokens: 5,
-      output_tokens: 3,
-      total_tokens: 14
-    },
-    arguments: {
-      city: 'Shanghai'
-    }
-  },
-  callback_payload: {
-    role: 'tool',
-    tool_call_id: 'call_weather',
-    token_delta: 10,
-    duration_ms: 1234,
-    result_context_usage: {
-      input_tokens: 20,
-      input_cache_hit_tokens: 8,
-      output_tokens: 4,
-      total_tokens: 24
-    },
-    content: '{"temperature":21}',
-    adapter_trace_id: 'trace-weather-1'
-  },
-  parsed_result: {
-    tool_call_id: 'call_weather',
-    content: '{"temperature":21}'
-  },
-  request_round_index: 0,
-  result_round_index: 0
-};
+function expandToolsNode(container: HTMLElement, name: RegExp) {
+  const toolsNode = within(container).getByRole('button', { name });
 
-const multiLlmRunAssistantMessage: AgentFlowDebugMessage = {
-  ...assistantMessage,
-  traceSummary: [
-    assistantMessage.traceSummary[0],
-    {
-      ...assistantMessage.traceSummary[1],
-      nodeRunId: 'node-run-llm-1',
-      status: 'succeeded',
-      durationMs: 5400,
-      outputPayload: {
-        usage: { total_tokens: 8035 },
-        tool_calls: [{ id: 'call_weather', name: 'lookup_weather' }]
-      },
-      debugPayload: {
-        llm_rounds: [
-          {
-            round_index: 0,
-            assistant: {
-              role: 'assistant',
-              content: 'need weather',
-              tool_calls: [
-                {
-                  id: 'call_weather',
-                  name: 'lookup_weather',
-                  arguments: { city: 'Shanghai' }
-                }
-              ]
-            },
-            finish_reason: 'tool_call'
-          }
-        ]
-      }
-    },
-    {
-      ...assistantMessage.traceSummary[1],
-      nodeRunId: 'node-run-llm-2',
-      status: 'succeeded',
-      durationMs: 6900,
-      outputPayload: {
-        usage: { total_tokens: 8259 },
-        tool_calls: [{ id: 'call_policy', name: 'read_policy' }]
-      },
-      debugPayload: {
-        llm_rounds: [
-          {
-            round_index: 0,
-            assistant: { role: 'assistant', content: 'continue' },
-            tool_results: [
-              {
-                role: 'tool',
-                tool_call_id: 'call_weather',
-                content: '{"temperature":21}'
-              }
-            ]
-          },
-          {
-            round_index: 1,
-            assistant: {
-              role: 'assistant',
-              content: 'need policy',
-              tool_calls: [
-                {
-                  id: 'call_policy',
-                  name: 'read_policy',
-                  arguments: { path: '.memory/user-memory.md' }
-                }
-              ]
-            },
-            finish_reason: 'tool_call'
-          }
-        ]
-      }
-    },
-    {
-      ...assistantMessage.traceSummary[1],
-      nodeRunId: 'node-run-llm-3',
-      status: 'succeeded',
-      durationMs: 8500,
-      outputPayload: {
-        answer: 'weather is clear'
-      },
-      debugPayload: {
-        llm_rounds: [
-          {
-            round_index: 0,
-            assistant: { role: 'assistant', content: 'finish' },
-            tool_results: [
-              {
-                role: 'tool',
-                tool_call_id: 'call_policy',
-                content: 'memory loaded'
-              }
-            ]
-          },
-          {
-            round_index: 1,
-            assistant: {
-              role: 'assistant',
-              content: 'weather is clear'
-            },
-            finish_reason: 'stop'
-          }
-        ]
-      }
-    }
-  ]
-};
+  expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(toolsNode);
+  expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
 
-const fusionSummaryOnlyAssistantMessage: AgentFlowDebugMessage = {
-  ...assistantMessage,
-  traceSummary: [
-    {
-      ...assistantMessage.traceSummary[1],
-      nodeId: 'node-main-llm',
-      nodeRunId: 'node-run-main-llm',
-      nodeAlias: 'LLM',
-      debugPayload: {
-        llm_rounds: [
-          {
-            round_index: 0,
-            assistant: {
-              role: 'assistant',
-              tool_calls: [
-                {
-                  id: 'call_fusion',
-                  name: 'fusion_review'
-                }
-              ]
-            }
-          }
-        ],
-        visible_internal_llm_tool_trace: [
-          {
-            kind: 'visible_internal_llm_tool_trace',
-            preview_kind: 'visible_internal_llm_tool_trace',
-            route_kind: 'fusion',
-            tool_call_id: 'call_fusion',
-            tool_name: 'fusion_review',
-            status: 'succeeded',
-            branch_summaries: [
-              {
-                node_id: 'node-panel-a',
-                node_alias: 'LLM2',
-                node_type: 'llm',
-                status: 'succeeded',
-                output_summary: {
-                  kind: 'text',
-                  preview: 'summary only',
-                  char_count: 12,
-                  truncated: false
-                }
-              }
-            ]
-          }
-        ]
-      }
-    }
-  ]
-};
-
-const fusionHistoricalBranchDetailAssistantMessage: AgentFlowDebugMessage = {
-  ...assistantMessage,
-  traceSummary: [
-    {
-      ...assistantMessage.traceSummary[1],
-      nodeId: 'node-main-llm',
-      nodeRunId: 'node-run-main-llm',
-      nodeAlias: 'LLM',
-      debugPayload: {
-        llm_rounds: [
-          {
-            round_index: 0,
-            assistant: {
-              role: 'assistant',
-              tool_calls: [
-                {
-                  id: 'call_fusion',
-                  name: 'fusion_review'
-                }
-              ]
-            }
-          }
-        ],
-        visible_internal_llm_tool_trace: [
-          {
-            kind: 'visible_internal_llm_tool_trace',
-            preview_kind: 'visible_internal_llm_tool_trace',
-            route_kind: 'fusion',
-            tool_call_id: 'call_fusion',
-            tool_name: 'fusion_review',
-            status: 'succeeded',
-            branch_count: 1,
-            branch_traces: [
-              {
-                node_id: 'node-judge',
-                node_alias: 'LLM5',
-                node_type: 'llm',
-                status: 'succeeded',
-                route_model: 'gpt-5.4-mini',
-                input_payload: {
-                  prompt_messages: [
-                    {
-                      role: 'system',
-                      content: 'You are the fusion judge.'
-                    },
-                    {
-                      role: 'user',
-                      content: 'Merge panel answers.'
-                    }
-                  ]
-                },
-                output_payload: {
-                  text: 'judge merged answer'
-                },
-                metrics_payload: {
-                  usage: {
-                    input_tokens: 5513,
-                    output_tokens: 2455,
-                    total_tokens: 7968
-                  }
-                },
-                debug_payload: {
-                  assistant_message: {
-                    role: 'assistant',
-                    content: 'judge merged answer'
-                  }
-                },
-                output_summary: {
-                  kind: 'text',
-                  preview: 'judge merged answer',
-                  char_count: 19,
-                  truncated: false
-                }
-              }
-            ]
-          }
-        ]
-      }
-    }
-  ]
-};
-
-const answerSnapshotAssistantMessage: AgentFlowDebugMessage = {
-  ...assistantMessage,
-  status: 'waiting_callback',
-  content: '',
-  rawOutput: {
-    answer: 'LLM1 final\n----\n'
-  },
-  traceSummary: [
-    {
-      nodeId: 'node-llm-2',
-      nodeRunId: 'node-run-llm-2',
-      nodeAlias: 'LLM2',
-      nodeType: 'llm',
-      status: 'waiting_callback',
-      startedAt: '2026-04-25T10:00:01Z',
-      finishedAt: null,
-      durationMs: null,
-      inputPayload: {
-        prompt: 'continue'
-      },
-      outputPayload: {
-        tool_calls: []
-      },
-      errorPayload: null,
-      metricsPayload: {},
-      debugPayload: {},
-      answerSnapshot: {
-        kind: 'answer',
-        text: 'LLM1 final\n----\n',
-        outputPayload: {
-          answer: 'LLM1 final\n----\n'
-        },
-        complete: false,
-        materializedFrom: 'waiting_prefix',
-        answerNodeId: 'node-answer',
-        answerNodeRunId: 'node-run-answer-snapshot',
-        waitingNodeId: 'node-llm-2',
-        waitingNodeRunId: 'node-run-llm-2'
-      }
-    }
-  ]
-};
-
+  return toolsNode;
+}
 function renderConsole(
   props: Partial<ComponentProps<typeof AgentFlowDebugConsole>> = {}
 ) {
@@ -633,6 +138,1002 @@ describe('debug conversation log panel', () => {
     expect(within(panel).queryByText('provider')).not.toBeInTheDocument();
   });
 
+  test('shows intercepted tool trace nodes instead of success', () => {
+    renderConsole({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'completed',
+          runId: 'run-1',
+          content: '看这张图',
+          rawOutput: null,
+          traceSummary: []
+        },
+        {
+          ...assistantMessage,
+          traceSummary: [
+            {
+              nodeId: 'tool-image-llm',
+              nodeRunId: 'tool-image-llm-run',
+              nodeAlias: 'image_llm',
+              nodeType: 'tool',
+              status: 'intercepted',
+              startedAt: '2026-04-25T10:00:01Z',
+              finishedAt: '2026-04-25T10:00:02Z',
+              durationMs: null,
+              inputPayload: {},
+              outputPayload: {
+                error: {
+                  details: {
+                    error_code: 'visible_internal_llm_tool_media_unavailable'
+                  }
+                }
+              },
+              errorPayload: null,
+              metricsPayload: {},
+              debugPayload: {
+                route_trace: {
+                  route_kind: 'route',
+                  status: 'intercepted'
+                }
+              }
+            }
+          ]
+        }
+      ]
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '查看对话日志' }));
+    const panel = screen.getByRole('complementary', { name: '对话日志' });
+    fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
+
+    const toolNode = within(panel).getByRole('button', { name: /image_llm/ });
+    expect(toolNode).toHaveTextContent('拦截');
+    expect(toolNode).not.toHaveTextContent('执行成功');
+  });
+
+  test('loads lazy overview for application log details before trace root', async () => {
+    const loadOverview = vi.fn().mockResolvedValue({
+      run: {
+        id: 'run-application-log',
+        compatibility_mode: 'openai-responses-v1',
+        started_at: '2026-04-25T10:00:00Z',
+        finished_at: '2026-04-25T10:00:05Z'
+      },
+      statistics: {
+        total_tokens: 154,
+        unique_node_count: 2,
+        tool_callback_count: 0
+      },
+      flow_run: {
+        id: 'run-application-log',
+        status: 'succeeded',
+        input_payload: {
+          'node-start': {
+            query: '总结退款政策',
+            model: 'deepseek-chat'
+          }
+        },
+        output_payload: {
+          answer: '退款政策摘要'
+        },
+        error_payload: null,
+        started_at: '2026-04-25T10:00:00Z',
+        finished_at: '2026-04-25T10:00:05Z'
+      },
+      answer_snapshot: null
+    });
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [] }),
+      loadChildren: vi.fn(),
+      loadContent: vi.fn()
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        overviewLoader={{ loadOverview }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('输入 JSON')).toHaveTextContent('query')
+    );
+    expect(screen.getByLabelText('输入 JSON')).toHaveTextContent(
+      '总结退款政策'
+    );
+    expect(screen.getByLabelText('输出 JSON')).toHaveTextContent(
+      '退款政策摘要'
+    );
+    expect(screen.getByText('run-application-log')).toBeInTheDocument();
+    expect(screen.getByText('154')).toBeInTheDocument();
+    expect(loadOverview).toHaveBeenCalledWith('run-application-log');
+    expect(traceLoader.loadTree).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+
+    await waitFor(() =>
+      expect(traceLoader.loadTree).toHaveBeenCalledWith('run-application-log')
+    );
+  });
+
+  test('shows projection status instead of empty trace while the lazy trace index is pending', async () => {
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({
+        projection_status: {
+          projection_status: 'pending',
+          projection_version: 1,
+          source_watermark: 'run-application-log:1',
+          attempt_count: 0,
+          last_attempt_at: null,
+          last_success_at: null,
+          last_error_code: null,
+          last_error_stage: null,
+          last_error_source_kind: null,
+          last_error_source_locator: null,
+          last_error_ref: null,
+          retriable: true
+        },
+        nodes: []
+      }),
+      loadChildren: vi.fn(),
+      loadContent: vi.fn()
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+
+    expect(await screen.findByText('追踪索引等待生成')).toBeInTheDocument();
+    expect(screen.queryByText('暂无追踪记录')).not.toBeInTheDocument();
+    expect(traceLoader.loadChildren).not.toHaveBeenCalled();
+    expect(traceLoader.loadContent).not.toHaveBeenCalled();
+  });
+
+  test('loads lazy trace children and node content when a node expands', async () => {
+    const rootNode = {
+      trace_node_id: 'node_run:node-run-llm',
+      node_kind: 'node_run',
+      node_run_id: 'node-run-llm',
+      node_id: 'node-llm',
+      node_type: 'llm',
+      node_alias: 'LLM',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 4000,
+      metrics_payload: {
+        total_tokens: 154
+      },
+      has_children: true,
+      has_content: true
+    };
+    const childNode = {
+      trace_node_id: 'callback_task:callback-weather',
+      node_kind: 'callback_task',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'callback_task',
+      node_alias: 'lookup_weather',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: false,
+      has_content: false
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi.fn().mockResolvedValue({
+        items: [childNode],
+        page_info: {
+          has_more: false,
+          next_cursor: null,
+          page_size: 20
+        }
+      }),
+      loadContent: vi.fn().mockResolvedValue({
+        trace_node_id: 'node_run:node-run-llm',
+        node_kind: 'node_run',
+        content_kind: 'node_run',
+        payload: {
+          payload_index: {
+            node_run_count: 1,
+            checkpoint_count: 0,
+            event_count: 0
+          }
+        },
+        detail_refs: [
+          {
+            detail_ref_id: 'node_run',
+            detail_kind: 'node_run',
+            source_kind: 'node_run',
+            source_locator: 'node-run-llm',
+            count: 1
+          }
+        ]
+      }),
+      loadDetail: vi.fn().mockResolvedValue({
+        trace_node_id: 'node_run:node-run-llm',
+        detail_ref_id: 'node_run',
+        detail_kind: 'node_run',
+        payload: {
+          node_run: {
+            id: 'node-run-llm',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            node_alias: 'LLM',
+            status: 'succeeded',
+            input_payload: {
+              prompt: '总结退款政策'
+            },
+            output_payload: {
+              answer: '退款政策摘要'
+            },
+            error_payload: null,
+            metrics_payload: {
+              total_tokens: 154
+            },
+            debug_payload: {
+              provider: 'deepseek'
+            },
+            started_at: '2026-04-25T10:00:01Z',
+            finished_at: '2026-04-25T10:00:05Z'
+          }
+        }
+      })
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    await waitFor(() =>
+      expect(traceLoader.loadTree).toHaveBeenCalledWith('run-application-log')
+    );
+    expect(traceLoader.loadChildren).not.toHaveBeenCalled();
+    expect(traceLoader.loadContent).not.toHaveBeenCalled();
+
+    const llmTraceNode = await screen.findByRole('button', { name: /LLM/ });
+    fireEvent.click(llmTraceNode);
+
+    await waitFor(() =>
+      expect(traceLoader.loadChildren).toHaveBeenCalledWith(
+        'run-application-log',
+        'node_run:node-run-llm',
+        undefined
+      )
+    );
+    await waitFor(() =>
+      expect(traceLoader.loadContent).toHaveBeenCalledWith(
+        'run-application-log',
+        'node_run:node-run-llm'
+      )
+    );
+    await waitFor(() =>
+      expect(traceLoader.loadDetail).toHaveBeenCalledWith(
+        'run-application-log',
+        'node_run:node-run-llm',
+        'node_run'
+      )
+    );
+    const nodeDetail = await screen.findByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    expect(
+      within(nodeDetail).queryByRole('button', { name: '详情' })
+    ).not.toBeInTheDocument();
+    expect(
+      await within(nodeDetail).findByRole('button', { name: /lookup_weather/ })
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(nodeDetail).getByLabelText('输入 JSON')).toHaveTextContent(
+        '总结退款政策'
+      )
+    );
+  });
+
+  test('renders summary-only tool group trace nodes as pure collapsible groups', async () => {
+    const rootNode = {
+      trace_node_id: 'tool_group:node-run-empty',
+      node_kind: 'tool_group',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tools',
+      node_alias: 'Tools',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:02Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: false,
+      child_count: 0,
+      has_content: false
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi.fn(),
+      loadContent: vi.fn()
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-empty-trace-node',
+          role: 'assistant',
+          content: '空 trace 节点',
+          status: 'completed',
+          runId: 'run-empty-trace-node',
+          detailRunId: 'run-empty-trace-node',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    const toolsTraceNode = await screen.findByRole('button', { name: /Tools/ });
+    fireEvent.click(toolsTraceNode);
+    const toolsTraceItem = screen.getByTestId('debug-workflow-node-item');
+
+    expect(
+      screen.queryByRole('region', {
+        name: 'Tools 节点详情'
+      })
+    ).not.toBeInTheDocument();
+    expect(
+      within(toolsTraceItem).queryByLabelText('输入 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      within(toolsTraceItem).queryByLabelText('数据处理 JSON')
+    ).not.toBeInTheDocument();
+    expect(
+      within(toolsTraceItem).queryByLabelText('输出 JSON')
+    ).not.toBeInTheDocument();
+    expect(traceLoader.loadContent).not.toHaveBeenCalled();
+  });
+
+  test('renders backend-linked agent groups as subagent LLM nodes with their own tools', async () => {
+    const rootNode = {
+      trace_node_id: 'node_run:parent-llm',
+      node_kind: 'node_run',
+      flow_run_id: 'run-application-log',
+      node_run_id: 'parent-llm',
+      node_id: 'node-parent-llm',
+      node_type: 'llm',
+      node_alias: 'Parent LLM',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:10Z',
+      duration_ms: 9000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: true
+    };
+    const agentsNode = {
+      trace_node_id: 'agent_group:parent-llm',
+      parent_trace_node_id: rootNode.trace_node_id,
+      node_kind: 'agent_group',
+      flow_run_id: 'run-application-log',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'agents',
+      node_alias: 'Agents',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:09Z',
+      duration_ms: 7000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: false
+    };
+    const subagentNode = {
+      trace_node_id: 'subagent_node_run:research-agent',
+      parent_trace_node_id: agentsNode.trace_node_id,
+      node_kind: 'node_run',
+      flow_run_id: 'run-application-log',
+      node_run_id: 'research-agent-node-run',
+      node_id: 'research-agent-node',
+      node_type: 'llm',
+      node_alias: 'Research agent',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:03Z',
+      finished_at: '2026-04-25T10:00:08Z',
+      duration_ms: 5000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: true,
+      source_flow_run_id: 'run-subagent-research',
+      source_trace_node_id: 'node_run:research-agent-node-run',
+      parent_callback_task_id: 'callback-agent-task',
+      parent_tool_call_id: 'tooluse-agent',
+      trace_relation_kind: 'subagent'
+    };
+    const subagentToolsNode = {
+      trace_node_id: 'tool_group:research-agent',
+      parent_trace_node_id: subagentNode.trace_node_id,
+      node_kind: 'tool_group',
+      flow_run_id: 'run-application-log',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tools',
+      node_alias: 'Tools',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:04Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: true,
+      child_count: 1,
+      has_content: false
+    };
+    const subagentToolCallbackNode = {
+      trace_node_id: 'tool_callback:subagent-bash',
+      parent_trace_node_id: subagentToolsNode.trace_node_id,
+      node_kind: 'tool_callback',
+      flow_run_id: 'run-application-log',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tool',
+      node_mode: null,
+      node_alias: 'Bash',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:04Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 1000,
+      metrics_payload: {},
+      has_children: false,
+      child_count: 0,
+      has_content: true
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi
+        .fn()
+        .mockImplementation(
+          async (_runId: string, parentTraceNodeId: string) => ({
+            items:
+              parentTraceNodeId === rootNode.trace_node_id
+                ? [agentsNode]
+                : parentTraceNodeId === agentsNode.trace_node_id
+                  ? [subagentNode]
+                  : parentTraceNodeId === subagentNode.trace_node_id
+                    ? [subagentToolsNode]
+                    : parentTraceNodeId === subagentToolsNode.trace_node_id
+                      ? [subagentToolCallbackNode]
+                      : [],
+            page_info: {
+              has_more: false,
+              next_cursor: null,
+              page_size: 20
+            }
+          })
+        ),
+      loadContent: vi
+        .fn()
+        .mockImplementation(async (_runId: string, traceNodeId: string) => ({
+          trace_node_id: traceNodeId,
+          node_kind:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? 'tool_callback'
+              : 'node_run',
+          content_kind:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? 'tool_callback'
+              : 'node_run',
+          payload:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? {
+                  id: 'tooluse-subagent-bash',
+                  name: 'Bash',
+                  callback_status: 'returned',
+                  execution_status: 'succeeded',
+                  request_payload: {
+                    arguments: {
+                      command: 'rg agent'
+                    }
+                  },
+                  callback_payload: {
+                    content: 'agent relation found'
+                  },
+                  parsed_result: {
+                    content: 'agent relation found'
+                  },
+                  duration_ms: 1000
+                }
+              : {
+                  payload_index: {
+                    node_run_count: 1,
+                    checkpoint_count: 0,
+                    event_count: 0
+                  },
+                  debug_payload: {
+                    parent_agent_tool_call: {
+                      description: 'Research agent short brief'
+                    }
+                  }
+                },
+          detail_refs:
+            traceNodeId === subagentToolCallbackNode.trace_node_id
+              ? []
+              : [
+                  {
+                    detail_ref_id: 'node_run',
+                    detail_kind: 'node_run',
+                    source_kind: 'node_run',
+                    source_locator:
+                      traceNodeId === subagentNode.trace_node_id
+                        ? 'research-agent-node-run'
+                        : 'parent-llm',
+                    count: 1
+                  }
+                ]
+        })),
+      loadDetail: vi
+        .fn()
+        .mockImplementation(
+          async (
+            _runId: string,
+            traceNodeId: string
+          ) => ({
+            trace_node_id: traceNodeId,
+            detail_ref_id: 'node_run',
+            detail_kind: 'node_run',
+            payload: {
+              node_run:
+                traceNodeId === subagentNode.trace_node_id
+                  ? {
+                      id: 'research-agent-node-run',
+                      node_id: 'research-agent-node',
+                      node_type: 'llm',
+                      node_alias: 'Research agent',
+                      status: 'succeeded',
+                      input_payload: {
+                        prompt: 'Investigate agent projection'
+                      },
+                      output_payload: {
+                        answer: 'Use a dedicated Agents group'
+                      },
+                      error_payload: null,
+                      metrics_payload: {},
+                      debug_payload: {
+                        provider: 'anthropic'
+                      },
+                      started_at: '2026-04-25T10:00:03Z',
+                      finished_at: '2026-04-25T10:00:08Z'
+                    }
+                  : {
+                      id: 'parent-llm',
+                      node_id: 'node-parent-llm',
+                      node_type: 'llm',
+                      node_alias: 'Parent LLM',
+                      status: 'succeeded',
+                      input_payload: {
+                        prompt: 'Coordinate subagents'
+                      },
+                      output_payload: {
+                        answer: 'Subagent done'
+                      },
+                      error_payload: null,
+                      metrics_payload: {},
+                      debug_payload: {},
+                      started_at: '2026-04-25T10:00:01Z',
+                      finished_at: '2026-04-25T10:00:10Z'
+                    }
+            }
+          })
+        )
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-subagents',
+          role: 'assistant',
+          content: 'Subagent done',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Parent LLM/ }));
+
+    const parentDetail = await screen.findByRole('region', {
+      name: 'Parent LLM 节点详情'
+    });
+    const agentsButton = await within(parentDetail).findByRole('button', {
+      name: /Agents/
+    });
+    expect(agentsButton).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(parentDetail).queryByRole('region', {
+        name: 'Agents 节点详情'
+      })
+    ).not.toBeInTheDocument();
+    expect(traceLoader.loadContent).not.toHaveBeenCalledWith(
+      'run-application-log',
+      agentsNode.trace_node_id
+    );
+
+    fireEvent.click(agentsButton);
+    await waitFor(() =>
+      expect(traceLoader.loadChildren).toHaveBeenCalledWith(
+        'run-application-log',
+        agentsNode.trace_node_id,
+        undefined
+      )
+    );
+    const subagentButton = await within(parentDetail).findByRole('button', {
+      name: /Research agent/
+    });
+    fireEvent.click(subagentButton);
+
+    await waitFor(() =>
+      expect(traceLoader.loadContent).toHaveBeenCalledWith(
+        'run-application-log',
+        subagentNode.trace_node_id
+      )
+    );
+    await waitFor(() =>
+      expect(traceLoader.loadDetail).toHaveBeenCalledWith(
+        'run-application-log',
+        subagentNode.trace_node_id,
+        'node_run'
+      )
+    );
+    const subagentDetail = await within(parentDetail).findByRole('region', {
+      name: 'Research agent 节点详情'
+    });
+    expect(
+      within(subagentDetail).getByLabelText('输入 JSON')
+    ).toHaveTextContent('Investigate agent projection');
+    expect(
+      within(subagentDetail).getByLabelText('输入 JSON')
+    ).not.toHaveTextContent('Research agent short brief');
+    expect(
+      within(subagentDetail).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('anthropic');
+    expect(
+      within(subagentDetail).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('Research agent short brief');
+    expect(
+      within(subagentDetail).getByLabelText('输出 JSON')
+    ).toHaveTextContent('Use a dedicated Agents group');
+
+    fireEvent.click(
+      await within(subagentDetail).findByRole('button', { name: /Tools/ })
+    );
+    expect(
+      await within(subagentDetail).findByRole('button', { name: /Bash/ })
+    ).toBeInTheDocument();
+  }, 10_000);
+
+  test('loads lazy trace tool details only when a tool callback expands', async () => {
+    const rootNode = {
+      trace_node_id: 'node_run:node-run-llm',
+      node_kind: 'node_run',
+      node_run_id: 'node-run-llm',
+      node_id: 'node-llm',
+      node_type: 'llm',
+      node_alias: 'LLM',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:01Z',
+      finished_at: '2026-04-25T10:00:05Z',
+      duration_ms: 4000,
+      metrics_payload: {},
+      has_children: true,
+      has_content: true
+    };
+    const toolsNode = {
+      trace_node_id: 'tool_group:node-run-llm',
+      node_kind: 'tool_group',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tools',
+      node_alias: 'Tools',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1234,
+      metrics_payload: {},
+      has_children: true,
+      has_content: false
+    };
+    const toolCallbackNode = {
+      trace_node_id: 'tool_callback:call-refund-policy',
+      node_kind: 'tool_callback',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'tool',
+      node_mode: 'fusion',
+      node_alias: 'refund_policy_lookup',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1234,
+      metrics_payload: {},
+      has_children: true,
+      has_content: true
+    };
+    const fusionNode = {
+      trace_node_id: 'fusion:call-refund-policy',
+      node_kind: 'fusion',
+      node_run_id: null,
+      node_id: null,
+      node_type: 'fusion',
+      node_alias: 'refund_policy_lookup',
+      status: 'succeeded',
+      started_at: '2026-04-25T10:00:02Z',
+      finished_at: '2026-04-25T10:00:03Z',
+      duration_ms: 1234,
+      metrics_payload: {},
+      has_children: false,
+      has_content: false
+    };
+    const traceLoader = {
+      loadTree: vi.fn().mockResolvedValue({ nodes: [rootNode] }),
+      loadChildren: vi
+        .fn()
+        .mockImplementation(
+          async (_runId: string, parentTraceNodeId: string) => ({
+            items:
+              parentTraceNodeId === rootNode.trace_node_id
+                ? [toolsNode]
+                : parentTraceNodeId === toolsNode.trace_node_id
+                  ? [toolCallbackNode]
+                  : parentTraceNodeId === toolCallbackNode.trace_node_id
+                    ? [fusionNode]
+                    : [],
+            page_info: {
+              has_more: false,
+              next_cursor: null,
+              page_size: 20
+            }
+          })
+        ),
+      loadContent: vi
+        .fn()
+        .mockImplementation(async (_runId: string, traceNodeId: string) => {
+          if (traceNodeId === toolCallbackNode.trace_node_id) {
+            return {
+              trace_node_id: toolCallbackNode.trace_node_id,
+              node_kind: 'tool_callback',
+              content_kind: 'tool_callback',
+              payload: {
+                id: 'call-refund-policy',
+                name: 'refund_policy_lookup',
+                callback_status: 'returned',
+                execution_status: 'succeeded',
+                request_payload: {
+                  arguments: {
+                    topic: 'refund'
+                  }
+                },
+                callback_payload: {
+                  content: '30 days refund window'
+                },
+                parsed_result: {
+                  content: '30 days refund window'
+                },
+                duration_ms: 1234
+              }
+            };
+          }
+
+          return {
+            trace_node_id: 'node_run:node-run-llm',
+            node_kind: 'node_run',
+            content_kind: 'node_run',
+            payload: {
+              payload_index: {
+                node_run_count: 1,
+                checkpoint_count: 0,
+                event_count: 0
+              }
+            },
+            detail_refs: [
+              {
+                detail_ref_id: 'node_run',
+                detail_kind: 'node_run',
+                source_kind: 'node_run',
+                source_locator: 'node-run-llm',
+                count: 1
+              }
+            ]
+          };
+        }),
+      loadDetail: vi.fn().mockResolvedValue({
+        trace_node_id: 'node_run:node-run-llm',
+        detail_ref_id: 'node_run',
+        detail_kind: 'node_run',
+        payload: {
+          node_run: {
+            id: 'node-run-llm',
+            node_id: 'node-llm',
+            node_type: 'llm',
+            node_alias: 'LLM',
+            status: 'succeeded',
+            input_payload: {
+              prompt: '总结退款政策'
+            },
+            output_payload: {
+              answer: '退款政策摘要'
+            },
+            error_payload: null,
+            metrics_payload: {},
+            debug_payload: {
+              provider: 'deepseek'
+            },
+            started_at: '2026-04-25T10:00:01Z',
+            finished_at: '2026-04-25T10:00:05Z'
+          }
+        }
+      }),
+      loadToolCallbackDetail: vi.fn().mockResolvedValue({
+        id: 'call-refund-policy',
+        name: 'refund_policy_lookup',
+        callback_status: 'returned',
+        execution_status: 'succeeded',
+        request_payload: {
+          arguments: {
+            topic: 'refund'
+          }
+        },
+        callback_payload: {
+          content: '30 days refund window'
+        },
+        parsed_result: {
+          content: '30 days refund window'
+        },
+        request_round_index: 0,
+        result_round_index: 1,
+        duration_ms: 1234
+      })
+    };
+
+    renderWithQueryClient(
+      <ConversationLogPanel
+        message={{
+          id: 'conversation-assistant-run-application-log',
+          role: 'assistant',
+          content: '退款政策摘要',
+          status: 'completed',
+          runId: 'run-application-log',
+          detailRunId: 'run-application-log',
+          rawOutput: null,
+          traceSummary: []
+        }}
+        traceLoader={traceLoader}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: '追踪' }));
+    const llmTraceNode = await screen.findByRole('button', { name: /LLM/ });
+    fireEvent.click(llmTraceNode);
+    const nodeDetail = await screen.findByRole('region', {
+      name: 'LLM 节点详情'
+    });
+    const toolsButton = await within(nodeDetail).findByRole('button', {
+      name: /Tools/
+    });
+    expect(toolsButton).toHaveAttribute('aria-expanded', 'false');
+
+    expect(traceLoader.loadToolCallbackDetail).not.toHaveBeenCalled();
+    expect(traceLoader.loadContent).not.toHaveBeenCalledWith(
+      'run-application-log',
+      'tool_callback:call-refund-policy'
+    );
+
+    fireEvent.click(toolsButton);
+    await waitFor(() =>
+      expect(traceLoader.loadChildren).toHaveBeenCalledWith(
+        'run-application-log',
+        'tool_group:node-run-llm',
+        undefined
+      )
+    );
+    expect(
+      within(nodeDetail).queryByRole('region', {
+        name: 'Tools 节点详情'
+      })
+    ).not.toBeInTheDocument();
+    const toolCallback = await within(nodeDetail).findByRole('button', {
+      name: /refund_policy_lookup/
+    });
+    expect(toolCallback).toHaveTextContent('1.23 s');
+    expect(toolCallback).toHaveTextContent('fusion');
+    const toolMode = within(toolCallback).getByTestId(
+      'debug-workflow-node-mode'
+    );
+    expect(toolMode).toHaveTextContent('fusion');
+    expect(toolMode).not.toHaveClass('ant-tag');
+    expect(
+      within(nodeDetail).queryByRole('region', {
+        name: /refund_policy_lookup 节点详情/
+      })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(toolCallback);
+
+    await waitFor(() =>
+      expect(traceLoader.loadContent).toHaveBeenCalledWith(
+        'run-application-log',
+        'tool_callback:call-refund-policy'
+      )
+    );
+    const toolDetail = await within(nodeDetail).findByRole('region', {
+      name: /refund_policy_lookup 节点详情/
+    });
+    await waitFor(() => expect(toolCallback).toHaveTextContent('fusion'));
+    expect(
+      within(toolDetail).queryByRole('button', {
+        name: /fusion/
+      })
+    ).not.toBeInTheDocument();
+    expect(within(toolDetail).getByLabelText('输入 JSON')).toHaveTextContent(
+      'refund'
+    );
+    expect(within(toolDetail).getByLabelText('输出 JSON')).toHaveTextContent(
+      '30 days refund window'
+    );
+    expect(traceLoader.loadToolCallbackDetail).not.toHaveBeenCalled();
+  }, 10_000);
+
   test('shows clickable trace nodes and reuses node run detail sections', () => {
     renderConsole();
 
@@ -701,17 +1202,11 @@ describe('debug conversation log panel', () => {
       within(nodeDetail).queryByText('Tool Callback #1')
     ).not.toBeInTheDocument();
 
-    const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /工具.*1 次工具回调/
-    });
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'false');
+    expandToolsNode(nodeDetail, /工具.*1 次工具回调/);
     expect(
       within(nodeDetail).queryByText('temperature')
     ).not.toBeInTheDocument();
 
-    fireEvent.click(toolsNode);
-
-    expect(toolsNode).toHaveAttribute('aria-expanded', 'true');
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
     ).not.toBeInTheDocument();
@@ -756,7 +1251,7 @@ describe('debug conversation log panel', () => {
       });
   }, 10_000);
 
-  test('shows a summary-only state instead of empty JSON for route branch nodes without detail', () => {
+  test('shows empty detail sections for route branch nodes without detail', () => {
     renderConsole({
       messages: [
         {
@@ -776,26 +1271,26 @@ describe('debug conversation log panel', () => {
     const panel = screen.getByRole('complementary', { name: '对话日志' });
     fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
     fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
-    fireEvent.click(
-      within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
-    );
+    expandToolsNode(panel, /工具.*1 次工具回调/);
     fireEvent.click(
       within(panel).getByRole('button', { name: /fusion_review/ })
     );
 
     const branchNode = within(panel).getByTestId('debug-llm-route-branch-node');
+    expect(
+      within(panel).queryByTestId('debug-llm-route-node')
+    ).not.toBeInTheDocument();
     fireEvent.click(within(branchNode).getByRole('button', { name: /LLM2/ }));
 
-    expect(branchNode).toHaveTextContent('仅有摘要，节点详情未生成');
+    expect(within(branchNode).getByLabelText('输入 JSON')).toHaveTextContent(
+      '{}'
+    );
     expect(
-      within(branchNode).queryByLabelText('输入 JSON')
-    ).not.toBeInTheDocument();
-    expect(
-      within(branchNode).queryByLabelText('数据处理 JSON')
-    ).not.toBeInTheDocument();
-    expect(
-      within(branchNode).queryByLabelText('输出 JSON')
-    ).not.toBeInTheDocument();
+      within(branchNode).getByLabelText('数据处理 JSON')
+    ).toHaveTextContent('{}');
+    expect(within(branchNode).getByLabelText('输出 JSON')).toHaveTextContent(
+      '{}'
+    );
   }, 10_000);
 
   test('shows fusion branch LLM tokens from metrics payload and reuses node detail sections', () => {
@@ -818,9 +1313,7 @@ describe('debug conversation log panel', () => {
     const panel = screen.getByRole('complementary', { name: '对话日志' });
     fireEvent.click(within(panel).getByRole('tab', { name: '追踪' }));
     fireEvent.click(within(panel).getByRole('button', { name: /LLM/ }));
-    fireEvent.click(
-      within(panel).getByRole('button', { name: /工具.*1 次工具回调/ })
-    );
+    expandToolsNode(panel, /工具.*1 次工具回调/);
     fireEvent.click(
       within(panel).getByRole('button', { name: /fusion_review/ })
     );
@@ -877,10 +1370,7 @@ describe('debug conversation log panel', () => {
     const nodeDetail = within(panel).getByRole('region', {
       name: 'LLM 节点详情'
     });
-    const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /工具.*2 次工具回调/
-    });
-    fireEvent.click(toolsNode);
+    expandToolsNode(nodeDetail, /工具.*2 次工具回调/);
 
     expect(
       within(nodeDetail).queryByLabelText('工具回调索引 JSON')
@@ -980,10 +1470,7 @@ describe('debug conversation log panel', () => {
     const nodeDetail = within(panel).getByRole('region', {
       name: 'LLM 节点详情'
     });
-    const toolsNode = within(nodeDetail).getByRole('button', {
-      name: /工具.*1 次工具回调/
-    });
-    fireEvent.click(toolsNode);
+    expandToolsNode(nodeDetail, /工具.*1 次工具回调/);
 
     expect(
       within(nodeDetail).queryByRole('button', { name: '加载完整工具' })

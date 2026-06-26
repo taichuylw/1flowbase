@@ -16,12 +16,12 @@ mod settings_group;
 pub use applications_group::{
     application_api, application_orchestration, application_runtime, applications,
 };
-pub use identity_group::{api_keys, auth, me, session};
+pub use identity_group::{api_keys, auth, me, session, user_api_keys};
 pub use plugins_and_models_group::{
     data_sources, frontend_block_catalog, js_dependencies, model_definitions, model_providers,
     node_contributions, plugins, runtime_models,
 };
 pub use settings_group::{
-    docs, file_storages, file_tables, host_infrastructure, members, permissions, roles, system,
-    workspace, workspaces,
+    docs, file_storages, file_tables, host_infrastructure, mcp_management, members, permissions,
+    roles, system, workspace, workspaces,
 };

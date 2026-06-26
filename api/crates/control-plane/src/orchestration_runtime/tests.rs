@@ -1,5 +1,6 @@
 use super::*;
 use crate::{errors::ControlPlaneError, ports::ModelProviderRepository};
+use orchestration_runtime::compiled_plan::CompiledLlmRuntime;
 use orchestration_runtime::execution_state::{
     ExecutionStopReason, FlowDebugExecutionOutcome, NodeExecutionTrace,
 };
@@ -8,6 +9,23 @@ use plugin_framework::provider_contract::{
     ProviderStreamEvent, ProviderToolCall,
 };
 use serde_json::Map;
+
+fn compiled_llm_runtime(
+    provider_instance_id: impl Into<String>,
+    provider_code: &str,
+) -> CompiledLlmRuntime {
+    CompiledLlmRuntime {
+        provider_instance_id: provider_instance_id.into(),
+        provider_code: provider_code.to_string(),
+        protocol: "openai_compatible".to_string(),
+        model: "gpt-5.4-mini".to_string(),
+        routing: None,
+    }
+}
+
+fn assert_control_plane_error(error: anyhow::Error, expected: ControlPlaneError) {
+    assert_eq!(error.downcast_ref::<ControlPlaneError>(), Some(&expected));
+}
 
 #[tokio::test]
 async fn orchestration_runtime_persists_visible_internal_llm_tool_route_events() {
@@ -112,6 +130,33 @@ async fn orchestration_runtime_persists_visible_internal_llm_tool_route_events()
 }
 
 #[tokio::test]
+async fn orchestration_runtime_resolve_llm_instance_keeps_invalid_uuid_as_source_instance_id() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: test_support::InMemoryProviderRuntime::default(),
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
+        answer_presentation: None,
+    };
+
+    let error = invoker
+        .resolve_llm_instance(&compiled_llm_runtime("not-a-uuid", "fixture_provider"))
+        .await
+        .expect_err("invalid provider_instance_id should fail");
+
+    assert_control_plane_error(error, ControlPlaneError::InvalidInput("source_instance_id"));
+}
+
+#[tokio::test]
 async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selected_instance_is_missing(
 ) {
     let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
@@ -127,24 +172,23 @@ async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selec
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
     let error = invoker
-        .resolve_llm_instance(&orchestration_runtime::compiled_plan::CompiledLlmRuntime {
-            provider_instance_id: Uuid::now_v7().to_string(),
-            provider_code: "fixture_provider".to_string(),
-            protocol: "openai_compatible".to_string(),
-            model: "gpt-5.4-mini".to_string(),
-            routing: None,
-        })
+        .resolve_llm_instance(&compiled_llm_runtime(
+            Uuid::now_v7().to_string(),
+            "fixture_provider",
+        ))
         .await
         .expect_err("missing selected instance should fail");
 
-    assert!(matches!(
-        error.downcast_ref::<ControlPlaneError>(),
-        Some(ControlPlaneError::InvalidInput("source_instance_id"))
-    ));
+    assert_control_plane_error(
+        error,
+        ControlPlaneError::NotFound("model_provider_instance"),
+    );
     assert_ne!(alpha_instance_id, Uuid::nil());
 }
 
@@ -168,24 +212,225 @@ async fn orchestration_runtime_resolve_llm_instance_does_not_fallback_when_selec
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
     let error = invoker
-        .resolve_llm_instance(&orchestration_runtime::compiled_plan::CompiledLlmRuntime {
-            provider_instance_id: backup_instance_id.to_string(),
-            provider_code: "fixture_provider".to_string(),
-            protocol: "openai_compatible".to_string(),
-            model: "gpt-5.4-mini".to_string(),
-            routing: None,
-        })
+        .resolve_llm_instance(&compiled_llm_runtime(
+            backup_instance_id.to_string(),
+            "fixture_provider",
+        ))
         .await
         .expect_err("non-ready selected instance should fail");
 
-    assert!(matches!(
-        error.downcast_ref::<ControlPlaneError>(),
-        Some(ControlPlaneError::InvalidInput("source_instance_id"))
-    ));
+    assert_control_plane_error(
+        error,
+        ControlPlaneError::Conflict("provider_instance_not_ready"),
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_resolve_llm_instance_rejects_provider_code_mismatch() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let (provider_instance_id, _) = repository.seed_included_provider_instances();
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: test_support::InMemoryProviderRuntime::default(),
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
+        answer_presentation: None,
+    };
+
+    let error = invoker
+        .resolve_llm_instance(&compiled_llm_runtime(
+            provider_instance_id.to_string(),
+            "other_provider",
+        ))
+        .await
+        .expect_err("provider_code mismatch should fail");
+
+    assert_control_plane_error(error, ControlPlaneError::InvalidInput("provider_code"));
+}
+
+#[tokio::test]
+async fn orchestration_runtime_resolve_llm_instance_rejects_instance_not_in_main() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let provider_instance_id = repository.seed_provider_instance(
+        "fixture_provider",
+        "Not In Main",
+        false,
+        domain::ModelProviderInstanceStatus::Ready,
+        vec!["gpt-5.4-mini"],
+    );
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: test_support::InMemoryProviderRuntime::default(),
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
+        answer_presentation: None,
+    };
+
+    let error = invoker
+        .resolve_llm_instance(&compiled_llm_runtime(
+            provider_instance_id.to_string(),
+            "fixture_provider",
+        ))
+        .await
+        .expect_err("instance excluded from main should fail");
+
+    assert_control_plane_error(
+        error,
+        ControlPlaneError::Conflict("provider_instance_not_in_main"),
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_resolve_llm_instance_rejects_unassigned_installation() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let (provider_instance_id, _) = repository.seed_included_provider_instances();
+    let installation_id =
+        ModelProviderRepository::get_instance(&repository, Uuid::nil(), provider_instance_id)
+            .await
+            .expect("instance lookup should succeed")
+            .expect("instance should exist")
+            .installation_id;
+    repository.remove_assignment_for_installation(Uuid::nil(), installation_id);
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: test_support::InMemoryProviderRuntime::default(),
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
+        answer_presentation: None,
+    };
+
+    let error = invoker
+        .resolve_llm_instance(&compiled_llm_runtime(
+            provider_instance_id.to_string(),
+            "fixture_provider",
+        ))
+        .await
+        .expect_err("unassigned installation should fail");
+
+    assert_control_plane_error(
+        error,
+        ControlPlaneError::Conflict("plugin_assignment_required"),
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_resolve_llm_instance_rejects_disabled_installation() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let (provider_instance_id, _) = repository.seed_included_provider_instances();
+    let installation_id =
+        ModelProviderRepository::get_instance(&repository, Uuid::nil(), provider_instance_id)
+            .await
+            .expect("instance lookup should succeed")
+            .expect("instance should exist")
+            .installation_id;
+    repository.set_installation_state(
+        installation_id,
+        domain::PluginDesiredState::Disabled,
+        domain::PluginAvailabilityStatus::Available,
+    );
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: test_support::InMemoryProviderRuntime::default(),
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
+        answer_presentation: None,
+    };
+
+    let error = invoker
+        .resolve_llm_instance(&compiled_llm_runtime(
+            provider_instance_id.to_string(),
+            "fixture_provider",
+        ))
+        .await
+        .expect_err("disabled installation should fail");
+
+    assert_control_plane_error(
+        error,
+        ControlPlaneError::Conflict("plugin_installation_unavailable"),
+    );
+}
+
+#[tokio::test]
+async fn orchestration_runtime_resolve_llm_instance_rejects_unavailable_installation() {
+    let repository = test_support::InMemoryOrchestrationRuntimeRepository::with_permissions(vec![]);
+    let (provider_instance_id, _) = repository.seed_included_provider_instances();
+    let installation_id =
+        ModelProviderRepository::get_instance(&repository, Uuid::nil(), provider_instance_id)
+            .await
+            .expect("instance lookup should succeed")
+            .expect("instance should exist")
+            .installation_id;
+    repository.set_installation_state(
+        installation_id,
+        domain::PluginDesiredState::ActiveRequested,
+        domain::PluginAvailabilityStatus::ArtifactMissing,
+    );
+    let invoker = RuntimeProviderInvoker {
+        repository,
+        runtime: test_support::InMemoryProviderRuntime::default(),
+        workspace_id: Uuid::nil(),
+        provider_secret_master_key: "test-master-key".to_string(),
+        live_provider_events: None,
+        persist_events: None,
+        runtime_event_stream: None,
+        flow_run_id: None,
+        active_node_id: None,
+        active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
+        answer_presentation: None,
+    };
+
+    let error = invoker
+        .resolve_llm_instance(&compiled_llm_runtime(
+            provider_instance_id.to_string(),
+            "fixture_provider",
+        ))
+        .await
+        .expect_err("unavailable installation should fail");
+
+    assert_control_plane_error(
+        error,
+        ControlPlaneError::Conflict("plugin_installation_unavailable"),
+    );
 }
 
 #[tokio::test]
@@ -205,6 +450,8 @@ async fn orchestration_runtime_resolve_llm_instance_uses_selected_child_instance
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
@@ -251,6 +498,8 @@ async fn orchestration_runtime_resolve_llm_instance_rejects_model_only_present_i
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
 
@@ -286,6 +535,8 @@ async fn orchestration_runtime_textualizes_user_media_when_selected_model_is_not
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
     let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {
@@ -348,6 +599,8 @@ async fn orchestration_runtime_keeps_user_media_when_configured_model_supports_m
         flow_run_id: None,
         active_node_id: None,
         active_node_run_id: None,
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
     let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {
@@ -451,6 +704,8 @@ async fn orchestration_runtime_canonicalizes_live_provider_tool_call_names() {
         flow_run_id: None,
         active_node_id: Some("node-llm".to_string()),
         active_node_run_id: Some(Uuid::now_v7()),
+        api_node_id: None,
+        provider_install_root: None,
         answer_presentation: None,
     };
     let runtime = orchestration_runtime::compiled_plan::CompiledLlmRuntime {

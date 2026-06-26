@@ -34,8 +34,57 @@ const runtimeApi = vi.hoisted(() => ({
       input?.sortOrder ?? 'desc',
       input?.titleIncludes ?? ''
     ] as const,
-  applicationRunDetailQueryKey: (applicationId: string, runId: string) =>
-    ['applications', applicationId, 'runtime', 'runs', runId] as const,
+  applicationRunTraceTreeQueryKey: (applicationId: string, runId: string) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree'
+    ] as const,
+  applicationRunTraceNodeChildrenQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'children'
+    ] as const,
+  applicationRunTraceNodeContentQueryKey: (
+    applicationId: string,
+    runId: string,
+    traceNodeId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'trace-tree',
+      traceNodeId,
+      'content'
+    ] as const,
+  applicationRunResumeTimelineQueryKey: (
+    applicationId: string,
+    runId: string
+  ) =>
+    [
+      'applications',
+      applicationId,
+      'runtime',
+      'runs',
+      runId,
+      'resume-timeline'
+    ] as const,
   applicationConversationMessagesQueryKey: (
     applicationId: string,
     runId: string
@@ -63,17 +112,22 @@ const runtimeApi = vi.hoisted(() => ({
       'conversation-messages'
     ] as const,
   fetchApplicationRuns: vi.fn(),
-  fetchApplicationRunDetail: vi.fn(),
+  fetchApplicationRunTraceTree: vi.fn(),
+  fetchApplicationRunTraceNodeChildren: vi.fn(),
+  fetchApplicationRunTraceNodeContent: vi.fn(),
+  fetchApplicationRunResumeTimeline: vi.fn(),
   fetchApplicationConversationMessages: vi.fn(),
   fetchApplicationRunConversationMessages: vi.fn(),
   fetchRuntimeDebugArtifact: vi.fn(),
+  fetchRuntimeDebugArtifacts: vi.fn(),
+  exportApplicationRunTraceDump: vi.fn(),
+  exportSelectedApplicationRunsTraceDumpZip: vi.fn(),
   resumeFlowRun: vi.fn(),
   completeCallbackTask: vi.fn()
 }));
 
 vi.mock('../../api/runtime', () => runtimeApi);
 
-import type { ApplicationRunDetail } from '../../api/runtime';
 import { AppProviders } from '../../../../app/AppProviders';
 import { appI18n } from '../../../../shared/i18n/app-i18n';
 import { resetAuthStore } from '../../../../state/auth-store';
@@ -95,127 +149,6 @@ function applicationRunsPage<T>(
   };
 }
 
-function sampleRunDetail(): ApplicationRunDetail {
-  return {
-    run: {
-      id: 'run-1',
-      application_id: 'app-1',
-      application_type: 'agent_flow',
-      run_object_kind: 'flow_run',
-      run_kind: 'published_api_run',
-      status: 'succeeded',
-      title: '公开 API 退款总结',
-      source: 'api_key',
-      compatibility_mode: 'openai-responses-v1',
-      subject: {
-        kind: 'agent_flow',
-        id: 'flow-1',
-        draft_id: 'draft-1',
-        target_node_id: 'node-llm'
-      },
-      actor: {
-        kind: 'user',
-        id: 'user-1',
-        display_name: 'root'
-      },
-      correlation: {
-        compatibility_mode: 'openai-responses-v1'
-      },
-      started_at: '2026-04-17T09:00:00Z',
-      finished_at: '2026-04-17T09:00:01Z',
-      created_at: '2026-04-17T09:00:00Z',
-      updated_at: '2026-04-17T09:00:01Z'
-    },
-    flow_run: {
-      id: 'run-1',
-      application_id: 'app-1',
-      flow_id: 'flow-1',
-      draft_id: 'draft-1',
-      compiled_plan_id: 'plan-1',
-      run_mode: 'published_api_run' as const,
-      status: 'succeeded',
-      target_node_id: 'node-llm',
-      title: '公开 API 退款总结',
-      expand_id: 'customer-42',
-      authorized_account: 'root',
-      external_conversation_id: 'conversation-1',
-      query: '总结退款政策',
-      model: 'deepseek-chat',
-      input_payload: {
-        __runtime_debug_artifact: true,
-        artifact_ref: 'artifact-flow-input',
-        content_type: 'application/json',
-        is_truncated: true,
-        original_size_bytes: 54538,
-        preview_size_bytes: 2048,
-        preview:
-          '{"node-start":{"compatibility":{"tools":[{"function":{"description":"path to the file to read."}}]}}}'
-      } as Record<string, unknown>,
-      output_payload: {
-        answer: '退款政策摘要',
-        resolved_inputs: {
-          user_prompt: '总结退款政策'
-        }
-      },
-      error_payload: null,
-      created_by: 'user-1',
-      started_at: '2026-04-17T09:00:00Z',
-      finished_at: '2026-04-17T09:00:01Z',
-      created_at: '2026-04-17T09:00:00Z',
-      updated_at: '2026-04-17T09:00:01Z'
-    },
-    node_runs: [
-      {
-        id: 'node-run-1',
-        flow_run_id: 'run-1',
-        node_id: 'node-llm',
-        node_type: 'llm',
-        node_alias: 'LLM',
-        status: 'succeeded',
-        input_payload: {
-          user_prompt: '总结退款政策'
-        },
-        output_payload: {
-          answer: '退款政策摘要',
-          rendered_templates: {}
-        },
-        error_payload: null,
-        metrics_payload: {
-          output_contract_count: 1
-        },
-        started_at: '2026-04-17T09:00:00Z',
-        finished_at: '2026-04-17T09:00:01Z'
-      }
-    ],
-    checkpoints: [],
-    callback_tasks: [],
-    events: [
-      {
-        id: 'event-1',
-        flow_run_id: 'run-1',
-        node_run_id: 'node-run-1',
-        sequence: 1,
-        event_type: 'node_preview_started',
-        payload: {
-          target_node_id: 'node-llm'
-        },
-        created_at: '2026-04-17T09:00:00Z'
-      },
-      {
-        id: 'event-2',
-        flow_run_id: 'run-1',
-        node_run_id: 'node-run-1',
-        sequence: 2,
-        event_type: 'node_preview_completed',
-        payload: {
-          target_node_id: 'node-llm'
-        },
-        created_at: '2026-04-17T09:00:01Z'
-      }
-    ]
-  };
-}
-
 describe('ApplicationLogsPage - sorting filtering pagination', () => {
   let getBoundingClientRectSpy: { mockRestore: () => void } | undefined;
   let innerHeightSpy: { mockRestore: () => void } | undefined;
@@ -230,7 +163,6 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-04-18T00:00:00Z').getTime());
     runtimeApi.fetchApplicationRuns.mockReset();
-    runtimeApi.fetchApplicationRunDetail.mockReset();
     runtimeApi.fetchApplicationConversationMessages.mockReset();
     runtimeApi.fetchApplicationRunConversationMessages.mockReset();
     runtimeApi.fetchRuntimeDebugArtifact.mockReset();
@@ -253,7 +185,6 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
         }
       ])
     );
-    runtimeApi.fetchApplicationRunDetail.mockResolvedValue(sampleRunDetail());
     runtimeApi.fetchApplicationRunConversationMessages.mockResolvedValue({
       items: [
         {
@@ -637,8 +568,6 @@ describe('ApplicationLogsPage - sorting filtering pagination', () => {
       sortOrder: 'desc',
       titleIncludes: '退款'
     });
-    expect(runtimeApi.fetchApplicationRunDetail).not.toHaveBeenCalled();
-
     fireEvent.change(screen.getByPlaceholderText('搜索标题'), {
       target: { value: '' }
     });

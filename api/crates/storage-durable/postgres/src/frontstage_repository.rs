@@ -220,8 +220,10 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 icon,
                 tooltip,
                 schema_root_uid,
-                rank
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                rank,
+                created_by,
+                updated_by
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
             returning
                 id,
                 workspace_id,
@@ -247,6 +249,7 @@ impl FrontstagePageRepository for PgControlPlaneStore {
         .bind(&input.tooltip)
         .bind(&input.schema_root_uid)
         .bind(&input.rank)
+        .bind(input.actor_user_id)
         .fetch_one(&mut *tx)
         .await?;
         let page = map_frontstage_page_row(&row)?;
@@ -254,14 +257,20 @@ impl FrontstagePageRepository for PgControlPlaneStore {
             sqlx::query(
                 r#"
                 insert into frontstage_page_schemas (
+                    id,
+                    scope_id,
                     page_id,
                     workspace_id,
                     root_uid,
                     schema_payload,
-                    root_payload
-                ) values ($1, $2, $3, $4, $5)
+                    root_payload,
+                    created_by,
+                    updated_by
+                ) values ($1, $2, $3, $4, $5, $6, $7, $8, $8)
                 "#,
             )
+            .bind(Uuid::now_v7())
+            .bind(input.workspace_id)
             .bind(input.id)
             .bind(input.workspace_id)
             .bind(root_uid)
@@ -275,6 +284,7 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 "kind": "frontstage.page.root",
                 "children": []
             }))
+            .bind(input.actor_user_id)
             .execute(&mut *tx)
             .await?;
         }
@@ -416,6 +426,7 @@ impl FrontstagePageRepository for PgControlPlaneStore {
                 update frontstage_page_schemas
                 set schema_payload = $3,
                     root_payload = $4,
+                    updated_by = $5,
                     updated_at = now()
                 where workspace_id = $1 and page_id = $2
                 returning
@@ -429,7 +440,8 @@ impl FrontstagePageRepository for PgControlPlaneStore {
             ),
             updated_page as (
                 update frontstage_pages
-                set updated_at = now()
+                set updated_by = $5,
+                    updated_at = now()
                 where workspace_id = $1
                   and id = $2
                   and exists (select 1 from updated_schema)
@@ -479,6 +491,7 @@ impl FrontstagePageRepository for PgControlPlaneStore {
         .bind(input.page_id)
         .bind(&input.schema_payload)
         .bind(&input.root_payload)
+        .bind(input.actor_user_id)
         .fetch_optional(self.pool())
         .await?;
 

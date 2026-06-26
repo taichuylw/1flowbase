@@ -1,0 +1,227 @@
+.mcp-management {
+  min-height: 0;
+}
+
+.mcp-management__stack {
+  width: 100%;
+}
+
+.mcp-management__form-pane {
+  flex: 1 1 320px;
+  min-width: 280px;
+  max-width: 520px;
+}
+
+.mcp-management__instance-select {
+  min-width: 280px;
+}
+
+.mcp-management__directory-tree {
+  flex: 0 0 320px;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.mcp-management__directory-config {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+
+.mcp-management__segmented {
+  margin: 16px 0;
+}
+
+.mcp-management__schema-editor {
+  margin-top: 8px;
+}
+
+.mcp-management__input-mapping-editor {
+  margin-top: 8px;
+}
+
+.mcp-input-mapping-editor__stack {
+  width: 100%;
+}
+
+.mcp-input-mapping-editor__table {
+  min-width: 620px;
+}
+
+.mcp-input-mapping-editor__head,
+.mcp-input-mapping-editor__row,
+.mcp-input-mapping-editor__mapping-head,
+.mcp-input-mapping-editor__mapping-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-input-mapping-editor__head,
+.mcp-input-mapping-editor__row {
+  grid-template-columns:
+    minmax(160px, 1.2fr) minmax(120px, 0.8fr)
+    minmax(140px, 0.9fr) 72px 40px;
+}
+
+.mcp-input-mapping-editor__mapping-head,
+.mcp-input-mapping-editor__mapping-row {
+  grid-template-columns:
+    minmax(160px, 1fr) minmax(160px, 1fr)
+    minmax(180px, 1.2fr) 72px 40px;
+}
+
+.mcp-input-mapping-editor__head,
+.mcp-input-mapping-editor__mapping-head {
+  margin-bottom: 8px;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mcp-input-mapping-editor__row,
+.mcp-input-mapping-editor__mapping-row {
+  margin-bottom: 8px;
+}
+
+.mcp-input-mapping-editor .ant-select {
+  width: 100%;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings .ant-tabs {
+  min-height: 0;
+}
+
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings
+  .ant-tabs-content-holder,
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings
+  .ant-tabs-content,
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings
+  .ant-tabs-tabpane {
+  min-height: 0;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings__fields {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings__field-head,
+.mcp-management__schema-editor .agent-flow-json-schema-settings__field-row {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 0.9fr) minmax(160px, 1.1fr)
+    116px 64px 64px;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings__field-head {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings__field-row--readonly
+  .ant-input-disabled {
+  color: var(--ant-color-text);
+  background: var(--ant-color-fill-tertiary);
+  cursor: default;
+}
+
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings__field-row--readonly
+  .ant-typography {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings__field-rows {
+  display: flex;
+  max-height: 300px;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings__field-node {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings__field-row
+  .ant-select {
+  width: 100%;
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings__field-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings__field-children {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 1px solid var(--ant-color-border-secondary);
+}
+
+.mcp-management__schema-editor .agent-flow-json-schema-settings__editor {
+  height: 300px;
+  overflow: hidden;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 6px;
+}
+
+.mcp-management__schema-editor
+  .agent-flow-json-schema-settings__editor-loading {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+}
+
+.mcp-management__meta-form {
+  max-width: 760px;
+}
+
+@media (max-width: 768px) {
+  .mcp-management__directory-tree,
+  .mcp-management__directory-config,
+  .mcp-management__instance-select {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .mcp-management__schema-editor .agent-flow-json-schema-settings__field-head,
+  .mcp-management__schema-editor .agent-flow-json-schema-settings__field-row {
+    grid-template-columns:
+      minmax(96px, 1fr) minmax(120px, 1.2fr)
+      104px 56px 56px;
+  }
+
+  .mcp-input-mapping-editor {
+    overflow-x: auto;
+  }
+}

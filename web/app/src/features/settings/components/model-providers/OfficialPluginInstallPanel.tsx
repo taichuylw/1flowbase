@@ -1,16 +1,31 @@
 import { useMemo, useState } from 'react';
 
 import { QuestionCircleOutlined } from '@ant-design/icons';
-import { Button, Empty, Modal, Select, Tag, Tooltip, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Empty,
+  Modal,
+  Select,
+  Tag,
+  Tooltip,
+  Typography
+} from 'antd';
 
 import { ScrollableSurface } from '../../../../shared/ui/scrollable-surface/ScrollableSurface';
 import type {
+  SettingsPluginCompatibilityOverride,
   SettingsOfficialPluginCatalogEntry,
   SettingsPluginFamilyEntry
 } from '../../api/plugins';
 import { i18nText } from '../../../../shared/i18n/text';
 
 type InstallState = 'idle' | 'installing' | 'success' | 'failed';
+const BELOW_MINIMUM_HOST_VERSION = 'below_minimum_host_version';
+
+function isBelowMinimumHostVersion(entry: SettingsOfficialPluginCatalogEntry) {
+  return entry.compatibility_status === BELOW_MINIMUM_HOST_VERSION;
+}
 
 function getInstallButtonLabel(
   entry: SettingsOfficialPluginCatalogEntry,
@@ -30,6 +45,10 @@ function getInstallButtonLabel(
 
   if (activePluginId === entry.plugin_id && installState === 'failed') {
     return i18nText('settings', 'auto.retry_installation');
+  }
+
+  if (isBelowMinimumHostVersion(entry)) {
+    return i18nText('settings', 'auto.still_install');
   }
 
   return i18nText('settings', 'auto.install_workspace');
@@ -86,6 +105,11 @@ function pickPreferredOfficialEntry(
 const OFFICIAL_PLUGIN_RELEASES_URL =
   'https://github.com/taichuy/1flowbase-official-plugins/releases';
 const DEFAULT_PROVIDER_ICON_SRC = '/icon.svg';
+const INSTALL_CONFIRM_MODAL_WIDTH = 640;
+
+function openExternal(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 function getOfficialPluginIconSrc(entry: SettingsOfficialPluginCatalogEntry) {
   return entry.icon?.trim() || DEFAULT_PROVIDER_ICON_SRC;
@@ -103,6 +127,8 @@ function getTagColor(tag: string) {
       return 'processing';
     case 'failed':
       return 'red';
+    case BELOW_MINIMUM_HOST_VERSION:
+      return 'orange';
     case 'hybrid':
       return 'purple';
     case 'dynamic':
@@ -114,7 +140,7 @@ function getTagColor(tag: string) {
   }
 }
 
-function renderTagLabel(tag: string) {
+function OfficialPluginTagLabel({ tag }: { tag: string }) {
   if (tag === 'latest') {
     return (
       <span className="model-provider-panel__tag-label">
@@ -129,6 +155,10 @@ function renderTagLabel(tag: string) {
         </Tooltip>
       </span>
     );
+  }
+
+  if (tag === BELOW_MINIMUM_HOST_VERSION) {
+    return i18nText('settings', 'auto.host_version_risk');
   }
 
   if (tag === 'hybrid' || tag === 'dynamic' || tag === 'static') {
@@ -177,6 +207,9 @@ function getStatusTags(
         ? family.latest_version
         : 'latest'
     );
+    if (isBelowMinimumHostVersion(entry)) {
+      tags.push(BELOW_MINIMUM_HOST_VERSION);
+    }
     tags.push(entry.model_discovery_mode);
     return tags;
   }
@@ -195,8 +228,246 @@ function getStatusTags(
     tags.push('latest');
   }
 
+  if (isBelowMinimumHostVersion(entry)) {
+    tags.push(BELOW_MINIMUM_HOST_VERSION);
+  }
+
   tags.push(entry.model_discovery_mode);
   return tags;
+}
+
+function OfficialPluginInstallConfirmContent({
+  entry,
+  family,
+  belowMinimumHostVersion
+}: {
+  entry: SettingsOfficialPluginCatalogEntry;
+  family: SettingsPluginFamilyEntry | undefined;
+  belowMinimumHostVersion: boolean;
+}) {
+  return (
+    <div className="model-provider-panel__install-confirm">
+      <div className="model-provider-panel__install-confirm-card">
+        <Typography.Title level={5}>{entry.display_name}</Typography.Title>
+        <Typography.Paragraph type="secondary">
+          {family
+            ? i18nText(
+                'settings',
+                'auto.workspace_s_upgraded_latest_official_version_completion_all_instances_supplier',
+                {
+                  value1: entry.display_name,
+                  value2: entry.latest_version
+                }
+              )
+            : i18nText(
+                'settings',
+                'auto.latest_official_version_about_installed_completion_automatically_enabled_workspace',
+                { value1: entry.latest_version }
+              )}
+        </Typography.Paragraph>
+        <div className="model-provider-panel__catalog-item-meta">
+          <span>
+            {i18nText('settings', 'auto.agreement')}
+            {entry.protocol}
+          </span>
+          <span>
+            {i18nText('settings', 'auto.discovery_mode')}
+            {entry.model_discovery_mode}
+          </span>
+        </div>
+        {belowMinimumHostVersion ? (
+          <Alert
+            type="warning"
+            showIcon
+            message={i18nText(
+              'settings',
+              'auto.host_version_below_minimum_warning'
+            )}
+            description={
+              <div className="model-provider-panel__install-warning-detail">
+                <Typography.Text>
+                  {i18nText('settings', 'auto.current_host_version_value', {
+                    value1: entry.current_host_version
+                  })}
+                </Typography.Text>
+                <Typography.Text>
+                  {i18nText('settings', 'auto.minimum_host_version_value', {
+                    value1: entry.minimum_host_version
+                  })}
+                </Typography.Text>
+                <Typography.Text>
+                  {i18nText('settings', 'auto.plugin_version_value', {
+                    value1: entry.latest_version
+                  })}
+                </Typography.Text>
+                <Typography.Text>
+                  {i18nText('settings', 'auto.possible_risk_value', {
+                    value1: i18nText(
+                      'settings',
+                      'auto.host_version_below_minimum_risk'
+                    )
+                  })}
+                </Typography.Text>
+                <Typography.Text>
+                  {i18nText(
+                    'settings',
+                    'auto.upgrade_one_flowbase_before_continuing'
+                  )}
+                </Typography.Text>
+              </div>
+            }
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function OfficialPluginCard({
+  entry,
+  family,
+  canManage,
+  installState,
+  activePluginId,
+  upgradingProviderCode,
+  modal,
+  onInstall,
+  onUpgradeLatest
+}: {
+  entry: SettingsOfficialPluginCatalogEntry;
+  family: SettingsPluginFamilyEntry | undefined;
+  canManage: boolean;
+  installState: InstallState;
+  activePluginId: string | null;
+  upgradingProviderCode: string | null;
+  modal: ReturnType<typeof Modal.useModal>[0];
+  onInstall: (
+    entry: SettingsOfficialPluginCatalogEntry,
+    compatibilityOverride?: SettingsPluginCompatibilityOverride
+  ) => void;
+  onUpgradeLatest: (
+    entry: SettingsOfficialPluginCatalogEntry,
+    compatibilityOverride?: SettingsPluginCompatibilityOverride
+  ) => void;
+}) {
+  const installing =
+    activePluginId === entry.plugin_id && installState === 'installing';
+  const installed =
+    entry.install_status === 'assigned' ||
+    (activePluginId === entry.plugin_id && installState === 'success');
+  const upgrading = upgradingProviderCode === entry.provider_code;
+  const belowMinimumHostVersion = isBelowMinimumHostVersion(entry);
+  const buttonLabel = family
+    ? family.has_update
+      ? upgrading
+        ? i18nText('settings', 'auto.upgrading')
+        : belowMinimumHostVersion
+          ? i18nText('settings', 'auto.still_update')
+          : i18nText('settings', 'auto.upgrade_latest_version')
+      : i18nText('settings', 'auto.currently_latest_version')
+    : getInstallButtonLabel(entry, installState, activePluginId);
+  const buttonDisabled = family ? !family.has_update : installed;
+  const compatibilityOverride = belowMinimumHostVersion
+    ? ({
+        reason: BELOW_MINIMUM_HOST_VERSION,
+        acknowledged_current_host_version: entry.current_host_version,
+        acknowledged_minimum_host_version: entry.minimum_host_version
+      } satisfies SettingsPluginCompatibilityOverride)
+    : undefined;
+
+  function confirmInstall() {
+    void modal.confirm({
+      title: family
+        ? i18nText('settings', 'auto.upgrade_plugin')
+        : i18nText('settings', 'auto.install_plugin'),
+      icon: null,
+      centered: true,
+      width: INSTALL_CONFIRM_MODAL_WIDTH,
+      okText: buttonLabel,
+      cancelText: i18nText('settings', 'auto.cancel'),
+      okButtonProps: {
+        loading: installing || upgrading,
+        disabled: buttonDisabled
+      },
+      content: (
+        <OfficialPluginInstallConfirmContent
+          entry={entry}
+          family={family}
+          belowMinimumHostVersion={belowMinimumHostVersion}
+        />
+      ),
+      onOk: async () => {
+        if (family) {
+          onUpgradeLatest(entry, compatibilityOverride);
+          return;
+        }
+
+        onInstall(entry, compatibilityOverride);
+      }
+    });
+  }
+
+  return (
+    <article className="model-provider-panel__official-card">
+      <div className="model-provider-panel__catalog-item-main">
+        <div className="model-provider-panel__catalog-item-title-row">
+          <img
+            className="model-provider-panel__provider-icon"
+            src={getOfficialPluginIconSrc(entry)}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            onError={(event) => {
+              const image = event.currentTarget;
+              if (image.src.endsWith(DEFAULT_PROVIDER_ICON_SRC)) {
+                return;
+              }
+              image.src = DEFAULT_PROVIDER_ICON_SRC;
+            }}
+          />
+          <Typography.Title level={5}>{entry.display_name}</Typography.Title>
+        </div>
+        <div className="model-provider-panel__catalog-item-tag-row">
+          {getStatusTags(entry, family, installState, activePluginId).map(
+            (tag) => (
+              <Tag key={`${entry.plugin_id}-${tag}`} color={getTagColor(tag)}>
+                <OfficialPluginTagLabel tag={tag} />
+              </Tag>
+            )
+          )}
+        </div>
+        {entry.description ? (
+          <Typography.Paragraph className="model-provider-panel__official-card-description">
+            {entry.description}
+          </Typography.Paragraph>
+        ) : null}
+      </div>
+
+      {canManage ? (
+        <div className="model-provider-panel__catalog-item-actions">
+          {entry.help_url ? (
+            <Button onClick={() => openExternal(entry.help_url!)}>
+              {i18nText('settings', 'auto.documentation')}
+            </Button>
+          ) : null}
+          <Button
+            type={buttonDisabled ? 'default' : 'primary'}
+            loading={installing || upgrading}
+            disabled={buttonDisabled}
+            onClick={confirmInstall}
+          >
+            {buttonLabel}
+          </Button>
+        </div>
+      ) : entry.help_url ? (
+        <div className="model-provider-panel__catalog-item-actions">
+          <Button onClick={() => openExternal(entry.help_url!)}>
+            {i18nText('settings', 'auto.documentation')}
+          </Button>
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 export function OfficialPluginInstallPanel({
@@ -227,10 +498,16 @@ export function OfficialPluginInstallPanel({
   activePluginId: string | null;
   installState: InstallState;
   upgradingProviderCode: string | null;
-  onInstall: (entry: SettingsOfficialPluginCatalogEntry) => void;
+  onInstall: (
+    entry: SettingsOfficialPluginCatalogEntry,
+    compatibilityOverride?: SettingsPluginCompatibilityOverride
+  ) => void;
   onOpenUpload: () => void;
   onSearchQueryChange: (query: string) => void;
-  onUpgradeLatest: (entry: SettingsOfficialPluginCatalogEntry) => void;
+  onUpgradeLatest: (
+    entry: SettingsOfficialPluginCatalogEntry,
+    compatibilityOverride?: SettingsPluginCompatibilityOverride
+  ) => void;
 }) {
   const [modal, contextHolder] = Modal.useModal();
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null);
@@ -265,9 +542,6 @@ export function OfficialPluginInstallPanel({
       (entry) => entry.plugin_id === selectedPluginId
     );
   }, [normalizedEntries, selectedPluginId]);
-  const openExternal = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
 
   return (
     <ScrollableSurface className="model-provider-panel__official">
@@ -343,158 +617,20 @@ export function OfficialPluginInstallPanel({
         </div>
       ) : (
         <div className="model-provider-panel__official-grid">
-          {visibleEntries.map((entry) => {
-            const family = familiesByProviderCode[entry.provider_code];
-            const installing =
-              activePluginId === entry.plugin_id &&
-              installState === 'installing';
-            const installed =
-              entry.install_status === 'assigned' ||
-              (activePluginId === entry.plugin_id &&
-                installState === 'success');
-            const upgrading = upgradingProviderCode === entry.provider_code;
-            const buttonLabel = family
-              ? family.has_update
-                ? upgrading
-                  ? i18nText('settings', 'auto.upgrading')
-                  : i18nText('settings', 'auto.upgrade_latest_version')
-                : i18nText('settings', 'auto.currently_latest_version')
-              : getInstallButtonLabel(entry, installState, activePluginId);
-            const buttonDisabled = family ? !family.has_update : installed;
-
-            return (
-              <article
-                key={entry.plugin_id}
-                className="model-provider-panel__official-card"
-              >
-                <div className="model-provider-panel__catalog-item-main">
-                  <div className="model-provider-panel__catalog-item-title-row">
-                    <img
-                      className="model-provider-panel__provider-icon"
-                      src={getOfficialPluginIconSrc(entry)}
-                      alt=""
-                      aria-hidden="true"
-                      loading="lazy"
-                      onError={(event) => {
-                        const image = event.currentTarget;
-                        if (image.src.endsWith(DEFAULT_PROVIDER_ICON_SRC)) {
-                          return;
-                        }
-                        image.src = DEFAULT_PROVIDER_ICON_SRC;
-                      }}
-                    />
-                    <Typography.Title level={5}>
-                      {entry.display_name}
-                    </Typography.Title>
-                  </div>
-                  <div className="model-provider-panel__catalog-item-tag-row">
-                    {getStatusTags(
-                      entry,
-                      family,
-                      installState,
-                      activePluginId
-                    ).map((tag) => (
-                      <Tag
-                        key={`${entry.plugin_id}-${tag}`}
-                        color={getTagColor(tag)}
-                      >
-                        {renderTagLabel(tag)}
-                      </Tag>
-                    ))}
-                  </div>
-                  {entry.description ? (
-                    <Typography.Paragraph className="model-provider-panel__official-card-description">
-                      {entry.description}
-                    </Typography.Paragraph>
-                  ) : null}
-                </div>
-
-                {canManage ? (
-                  <div className="model-provider-panel__catalog-item-actions">
-                    {entry.help_url ? (
-                      <Button onClick={() => openExternal(entry.help_url!)}>
-                        {i18nText('settings', 'auto.documentation')}
-                      </Button>
-                    ) : null}
-                    <Button
-                      type={buttonDisabled ? 'default' : 'primary'}
-                      loading={installing || upgrading}
-                      disabled={buttonDisabled}
-                      onClick={() => {
-                        void modal.confirm({
-                          title: family
-                            ? i18nText('settings', 'auto.upgrade_plugin')
-                            : i18nText('settings', 'auto.install_plugin'),
-                          icon: null,
-                          centered: true,
-                          okText: buttonLabel,
-                          cancelText: i18nText('settings', 'auto.cancel'),
-                          okButtonProps: {
-                            loading: installing || upgrading,
-                            disabled: buttonDisabled
-                          },
-                          content: (
-                            <div className="model-provider-panel__install-confirm">
-                              <div className="model-provider-panel__install-confirm-card">
-                                <Typography.Title level={5}>
-                                  {entry.display_name}
-                                </Typography.Title>
-                                <Typography.Paragraph type="secondary">
-                                  {family
-                                    ? i18nText(
-                                        'settings',
-                                        'auto.workspace_s_upgraded_latest_official_version_completion_all_instances_supplier',
-                                        {
-                                          value1: entry.display_name,
-                                          value2: entry.latest_version
-                                        }
-                                      )
-                                    : i18nText(
-                                        'settings',
-                                        'auto.latest_official_version_about_installed_completion_automatically_enabled_workspace',
-                                        { value1: entry.latest_version }
-                                      )}
-                                </Typography.Paragraph>
-                                <div className="model-provider-panel__catalog-item-meta">
-                                  <span>
-                                    {i18nText('settings', 'auto.agreement')}
-                                    {entry.protocol}
-                                  </span>
-                                  <span>
-                                    {i18nText(
-                                      'settings',
-                                      'auto.discovery_mode'
-                                    )}
-                                    {entry.model_discovery_mode}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          ),
-                          onOk: async () => {
-                            if (family) {
-                              onUpgradeLatest(entry);
-                              return;
-                            }
-
-                            onInstall(entry);
-                          }
-                        });
-                      }}
-                    >
-                      {buttonLabel}
-                    </Button>
-                  </div>
-                ) : entry.help_url ? (
-                  <div className="model-provider-panel__catalog-item-actions">
-                    <Button onClick={() => openExternal(entry.help_url!)}>
-                      {i18nText('settings', 'auto.documentation')}
-                    </Button>
-                  </div>
-                ) : null}
-              </article>
-            );
-          })}
+          {visibleEntries.map((entry) => (
+            <OfficialPluginCard
+              key={entry.plugin_id}
+              entry={entry}
+              family={familiesByProviderCode[entry.provider_code]}
+              canManage={canManage}
+              installState={installState}
+              activePluginId={activePluginId}
+              upgradingProviderCode={upgradingProviderCode}
+              modal={modal}
+              onInstall={onInstall}
+              onUpgradeLatest={onUpgradeLatest}
+            />
+          ))}
         </div>
       )}
     </ScrollableSurface>

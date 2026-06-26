@@ -1,0 +1,654 @@
+{
+  "version": 1,
+  "tableProfiles": {},
+  "dynamicModelTablePatterns": [],
+  "registeredSystemTables": [
+    "users",
+    "roles",
+    "application_run_log_summaries",
+    "application_conversations",
+    "application_conversation_messages",
+    "node_runs",
+    "flow_run_events",
+    "flow_run_checkpoints",
+    "flow_run_callback_tasks"
+  ],
+  "registeredSystemTableTemplates": {
+    "users": {
+      "requiredColumns": ["id", "account", "email", "phone", "password_hash", "name", "nickname", "avatar_url", "introduction", "default_display_role", "email_login_enabled", "phone_login_enabled", "status", "session_version", "created_by", "created_at", "updated_by", "updated_at", "preferred_locale", "meta"]
+    },
+    "roles": {
+      "requiredColumns": ["id", "scope_id", "scope_kind", "workspace_id", "code", "name", "introduction", "is_builtin", "is_editable", "system_kind", "created_by", "created_at", "updated_by", "updated_at", "auto_grant_new_permissions", "is_default_member_role"]
+    },
+    "application_run_log_summaries": {
+      "requiredColumns": ["flow_run_id", "application_id", "run_mode", "status", "target_node_id", "title", "input_payload", "external_user", "authorized_account", "api_key_id", "publication_version_id", "external_conversation_id", "external_trace_id", "compatibility_mode", "idempotency_key", "total_tokens", "unique_node_count", "tool_callback_count", "started_at", "finished_at", "created_at", "updated_at", "log_created_at", "log_updated_at", "api_key_name_snapshot", "scope_id", "id", "input_tokens", "output_tokens", "input_cache_hit_tokens"]
+    },
+    "application_conversations": {
+      "requiredColumns": ["id", "scope_id", "application_id", "external_conversation_id", "external_user", "api_key_id", "title", "created_at", "updated_at"]
+    },
+    "application_conversation_messages": {
+      "requiredColumns": ["id", "scope_id", "conversation_id", "application_id", "flow_run_id", "node_run_id", "role", "content", "sequence", "status", "started_at", "finished_at", "created_at", "updated_at"]
+    },
+    "node_runs": {
+      "requiredColumns": ["id", "flow_run_id", "node_id", "node_type", "node_alias", "status", "input_payload", "output_payload", "error_payload", "metrics_payload", "started_at", "finished_at", "debug_payload", "scope_id", "node_run_id", "created_at"]
+    },
+    "flow_run_events": {
+      "requiredColumns": ["id", "flow_run_id", "node_run_id", "sequence", "event_type", "payload", "created_at", "scope_id"]
+    },
+    "flow_run_checkpoints": {
+      "requiredColumns": ["id", "flow_run_id", "node_run_id", "status", "reason", "locator_payload", "variable_snapshot", "external_ref_payload", "created_at", "scope_id"]
+    },
+    "flow_run_callback_tasks": {
+      "requiredColumns": ["id", "flow_run_id", "node_run_id", "callback_kind", "status", "request_payload", "response_payload", "external_ref_payload", "created_at", "completed_at", "scope_id"]
+    }
+  },
+  "appendOnlyTables": [
+    "external_agent_telemetry_events",
+    "flow_run_callback_tasks",
+    "flow_run_checkpoints",
+    "flow_run_events",
+    "model_failover_queue_snapshots",
+    "node_runs",
+    "runtime_artifacts",
+    "runtime_audit_hashes",
+    "runtime_context_projections",
+    "runtime_cost_ledger",
+    "runtime_credit_ledger",
+    "runtime_debug_artifacts",
+    "runtime_events",
+    "runtime_usage_ledger"
+  ],
+  "systemScopeTables": [],
+  "defaultTableReadiness": {
+    "idGeneration": "repository write path supplies Uuid::now_v7 ids before insert",
+    "created_byGeneration": "actor context is written when available; system paths may remain null",
+    "updated_byGeneration": "actor context is written when available; system paths may remain null",
+    "writePathSource": "durable storage repositories and migration triggers maintain platform fields"
+  },
+  "tableReadiness": {
+    "api_keys": {
+      "scopeGenerationSource": "existing API key write path stores scope_id from workspace context"
+    },
+    "api_key_data_model_permissions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "api_key_id -> api_keys.scope_id, with data_model_id required to match model_definitions.scope_id",
+      "backfillSource": "api_keys.scope_id after same-scope model_definition verification",
+      "writePathSource": "API key repository writes scope_id from api_keys.scope_id and rejects cross-scope data model grants"
+    },
+    "application_conversation_messages": {
+      "scopeGenerationSource": "existing conversation message write path copies conversation scope_id"
+    },
+    "application_conversations": {
+      "scopeGenerationSource": "existing conversation write path derives scope_id from application workspace"
+    },
+    "application_api_mappings": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id",
+      "backfillSource": "applications.scope_id",
+      "writePathSource": "application API mapping repository writes scope_id from applications.scope_id while preserving application_id primary identity"
+    },
+    "application_environment_variables": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id",
+      "backfillSource": "applications.scope_id",
+      "writePathSource": "application repository writes scope_id from applications.scope_id while preserving application_id/name primary identity"
+    },
+    "application_js_dependency_selections": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "application_public_conversations": {
+      "scopeGenerationSource": "application_id -> applications.workspace_id, maintained by migration trigger",
+      "backfillSource": "applications.workspace_id"
+    },
+    "application_publication_versions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id, written by publication repository",
+      "backfillSource": "applications.scope_id",
+      "writePathSource": "publication repository writes current publication scope_id from application owner scope"
+    },
+    "application_run_log_summaries": {
+      "scopeGenerationSource": "existing runtime summary write path stores scope_id from flow run context"
+    },
+    "application_run_trace_node_contents": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, written by trace projection repository and backfilled from application_run_trace_nodes",
+      "backfillSource": "application_run_trace_nodes.flow_run_id and application_run_trace_nodes.scope_id",
+      "writePathSource": "trace projection repository writes content flow_run_id and scope_id from flow run context"
+    },
+    "application_run_trace_nodes": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, written by trace projection repository",
+      "backfillSource": "flow_runs.scope_id",
+      "writePathSource": "trace projection repository writes node scope_id from flow run context"
+    },
+    "application_run_trace_projection_statuses": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, written by trace projection repository",
+      "backfillSource": "flow_runs.scope_id",
+      "writePathSource": "trace projection repository writes status scope_id from flow run context"
+    },
+    "application_tags": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "application_tag_bindings": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id with tag workspace validated against the application workspace",
+      "backfillSource": "applications.scope_id after application_tags workspace verification",
+      "writePathSource": "application repository writes scope_id from applications.scope_id and keeps tag_ids constrained to the same workspace"
+    },
+    "applications": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "billing_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "capability_invocations": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "data_model_side_effect_receipts": {
+      "scopeGenerationSource": "existing side-effect receipt write path stores scope_id from workspace context"
+    },
+    "data_source_instances": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "data_source_preview_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "data_source_catalog_caches": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "data_source_instance_id -> data_source_instances.scope_id",
+      "backfillSource": "data_source_instances.scope_id",
+      "writePathSource": "data source repository writes scope_id from parent data_source_instances while preserving data_source_instance_id cache identity and cascade behavior"
+    },
+    "data_source_secrets": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "data_source_instance_id -> data_source_instances.scope_id",
+      "backfillSource": "data_source_instances.scope_id",
+      "writePathSource": "data source repository writes scope_id from parent data_source_instances while preserving encrypted secret visibility, version updates, and cascade behavior"
+    },
+    "debug_variable_cache_entries": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "external_agent_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "external_agent_telemetry_events": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "external_agent_session_id -> external_agent_sessions.scope_id, maintained by migration trigger until telemetry repository writes exist",
+      "backfillSource": "external_agent_sessions.scope_id",
+      "created_byGeneration": "telemetry rows are append-only system observations; actor fields are nullable until a repository write path exists",
+      "updated_byGeneration": "telemetry rows are append-only system observations; actor fields are nullable until a repository write path exists",
+      "writePathSource": "temporary migration trigger fills scope_id; replace with telemetry repository-owned scope_id writes by 2026-09-30"
+    },
+    "file_storages": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed root/system storage catalog routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "writePathSource": "file storage repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "file_tables": {
+      "scopeGenerationSource": "existing file table write path stores scope_id from workspace storage context"
+    },
+    "flow_compiled_plans": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_id -> flows.scope_id, written by orchestration runtime repository",
+      "backfillSource": "flows.scope_id",
+      "updated_byGeneration": "orchestration runtime repository writes updater from actor context",
+      "writePathSource": "orchestration runtime repository writes scope_id and updated_by from flow and actor context"
+    },
+    "flow_drafts": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_id -> flows.scope_id, written by flow repository",
+      "backfillSource": "flows.scope_id with historical created_at/created_by from parent flows",
+      "writePathSource": "flow repository writes draft scope_id and created_by from parent flow and actor while preserving flow_id one-to-one identity"
+    },
+    "flow_run_callback_resume_attempts": {
+      "scopeGenerationSource": "existing resume attempt write path stores scope_id from flow run context"
+    },
+    "flow_run_callback_tasks": {
+      "scopeGenerationSource": "existing callback task write path stores scope_id from flow run context"
+    },
+    "flow_run_checkpoints": {
+      "scopeGenerationSource": "existing checkpoint write path stores scope_id from flow run context"
+    },
+    "flow_run_events": {
+      "scopeGenerationSource": "existing event write path stores scope_id from flow run context"
+    },
+    "flow_runs": {
+      "scopeGenerationSource": "application_id -> applications.workspace_id, maintained by migration trigger",
+      "backfillSource": "applications.workspace_id"
+    },
+    "flows": {
+      "scopeGenerationSource": "application_id -> applications.scope_id, written by flow repository",
+      "backfillSource": "applications.scope_id",
+      "writePathSource": "flow repository writes scope_id from application workspace context"
+    },
+    "flow_versions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "flow_id -> flows.scope_id, written by flow repository",
+      "backfillSource": "flows.scope_id",
+      "writePathSource": "flow repository writes version scope_id from flow owner scope"
+    },
+    "frontstage_block_codes": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "frontstage_pages": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "frontstage_page_schemas": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "page_id -> frontstage_pages.scope_id with schema workspace validated against page workspace",
+      "backfillSource": "frontstage_pages.scope_id",
+      "writePathSource": "frontstage repository writes scope_id from page workspace context while preserving page_id primary identity"
+    },
+    "frontend_block_catalog": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed root/system frontend block catalog routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "catalog rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "updated_byGeneration": "catalog rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "writePathSource": "frontend block catalog repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "host_extension_migrations": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed host extension migration ledger routing",
+      "backfillSource": "SYSTEM_SCOPE_ID with created_at backfilled from applied_at",
+      "created_byGeneration": "host extension migration ledger rows are system bootstrap observations; actor fields remain nullable",
+      "updated_byGeneration": "host extension migration ledger rows are system bootstrap observations; actor fields remain nullable",
+      "writePathSource": "host extension migration repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "host_infrastructure_provider_configs": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed host infrastructure provider config routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "writePathSource": "host infrastructure config repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "js_dependency_registry": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed JavaScript dependency registry routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "updated_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "writePathSource": "JavaScript dependency repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "mcp_instances": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "mcp_groups": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "instance_record_id -> mcp_instances.scope_id, written by MCP management repository",
+      "backfillSource": "mcp_instances.scope_id",
+      "writePathSource": "MCP management repository writes scope_id from instance context"
+    },
+    "mcp_meta_tool_configs": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "mcp_tool_bindings": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "instance_record_id -> mcp_instances.scope_id, written by MCP management repository",
+      "backfillSource": "mcp_instances.scope_id",
+      "writePathSource": "MCP management repository writes scope_id from instance context"
+    },
+    "main_source_defaults": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id",
+      "writePathSource": "data source repository writes scope_id from workspace_id while preserving workspace singleton primary identity"
+    },
+    "mcp_tools": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_definitions": {
+      "scopeGenerationSource": "existing model definition write path stores scope_id from model owner context"
+    },
+    "model_fields": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "data_model_id -> model_definitions.scope_id, written by model definition repository",
+      "backfillSource": "model_definitions.scope_id",
+      "writePathSource": "model definition repository writes scope_id from data model owner context"
+    },
+    "model_failover_attempt_ledger": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "model_failover_queue_templates": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_catalog_sync_runs": {
+      "category": "low_volume_operational_history",
+      "scopeGenerationSource": "catalog_source_id -> model_provider_catalog_sources.scope_id when operational history needs scoped interpretation",
+      "writePathSource": "model provider catalog sync writes remain bounded operational history; future high-frequency history must revisit retention and scope indexes"
+    },
+    "model_change_logs": {
+      "category": "low_volume_audit_history",
+      "scopeGenerationSource": "data_model_id -> model_definitions.scope_id when present; data_model_id = null is limited to create failure, delete success/failure, historical, or failed-before-parent audit rows",
+      "writePathSource": "model definition audit write paths keep data_model_id for normal model and field changes; nullable parent rows are bounded audit exceptions"
+    },
+    "model_failover_queue_items": {
+      "category": "bounded_child_list",
+      "scopeGenerationSource": "queue_template_id -> model_failover_queue_templates.scope_id",
+      "writePathSource": "model provider failover queue writes keep queue-template-local ordering and bounded child list identity"
+    },
+    "model_failover_queue_snapshots": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "queue_template_id -> model_failover_queue_templates.scope_id, written by model provider repository",
+      "backfillSource": "model_failover_queue_templates.scope_id",
+      "writePathSource": "model provider repository writes queue snapshot scope_id from template owner scope"
+    },
+    "model_provider_catalog_entries": {
+      "category": "bounded_catalog_projection",
+      "scopeGenerationSource": "catalog_source_id -> model_provider_catalog_sources.scope_id",
+      "writePathSource": "model provider catalog entries remain a bounded projection keyed by catalog_source_id, upstream_model_id, and protocol"
+    },
+    "model_provider_catalog_sources": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_provider_instances": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "model_provider_instance_secrets": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "provider_instance_id -> model_provider_instances.scope_id",
+      "backfillSource": "model_provider_instances.scope_id",
+      "writePathSource": "model provider repository writes scope_id from parent model_provider_instances while preserving provider_instance_id secret identity and cascade behavior"
+    },
+    "model_provider_main_instances": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id",
+      "writePathSource": "model provider repository writes scope_id from workspace_id while preserving workspace/provider_code singleton identity"
+    },
+    "model_provider_preview_sessions": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "node_contribution_registry": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed node contribution registry routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "updated_byGeneration": "registry rows are installed by system/plugin bootstrap paths; actor fields are nullable until installer context is available",
+      "writePathSource": "node contribution repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "node_runs": {
+      "scopeGenerationSource": "existing node run write path stores scope_id from flow run context"
+    },
+    "permission_definitions": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed permission catalog routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "writePathSource": "permission catalog repository writes SYSTEM_SCOPE_ID; database default and check constraint guard bootstrap paths"
+    },
+    "plugin_assignments": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "plugin_installations": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed host plugin package lifecycle routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "plugin installation rows are created by an actor when available; bootstrap/system paths may remain nullable only if the schema permits it",
+      "updated_byGeneration": "plugin installation updater follows actor context when available; historical rows backfill from created_by",
+      "writePathSource": "plugin repository writes SYSTEM_SCOPE_ID for host package lifecycle records; workspace assignment remains in plugin_assignments"
+    },
+    "plugin_tasks": {
+      "category": "mixed_plugin_task",
+      "scopeGenerationSource": "task_kind discriminator: install/upgrade/uninstall/enable/disable/switch_version use SYSTEM_SCOPE_ID; assign/unassign use workspace_id",
+      "backfillSource": "task_kind and workspace_id discriminator with system tasks mapped to SYSTEM_SCOPE_ID",
+      "writePathSource": "plugin repository writes scope_kind and scope_id from task_kind instead of treating nullable workspace_id as the owner"
+    },
+    "plugin_worker_leases": {
+      "category": "system_runtime",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed host plugin worker lease routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "worker lease rows are runtime observations and actor fields remain nullable",
+      "updated_byGeneration": "worker lease updates are runtime observations and actor fields remain nullable",
+      "writePathSource": "plugin worker repository writes SYSTEM_SCOPE_ID for host runtime leases associated with plugin installations"
+    },
+    "provider_account_pools": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "provider_instance_model_catalog_cache": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "provider_instance_id -> model_provider_instances.scope_id",
+      "backfillSource": "model_provider_instances.scope_id",
+      "writePathSource": "model provider repository writes scope_id from parent model_provider_instances while preserving provider_instance_id cache identity and cascade behavior"
+    },
+    "runtime_artifacts": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_audit_hashes": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_context_projections": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_cost_ledger": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "runtime_credit_ledger": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "runtime_debug_artifacts": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "runtime_events": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_items": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_spans": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "runtime_usage_ledger": {
+      "scopeGenerationSource": "flow_run_id -> flow_runs.scope_id, maintained by migration trigger",
+      "backfillSource": "flow_runs.scope_id"
+    },
+    "roles": {
+      "category": "mixed_role_owner_chain",
+      "scopeGenerationSource": "scope_kind discriminator: system roles use SYSTEM_SCOPE_ID; workspace roles use workspace_id",
+      "backfillSource": "scope_kind and workspace_id discriminator with system roles mapped to SYSTEM_SCOPE_ID",
+      "writePathSource": "role repositories and auth bootstrap write scope_id from role scope_kind while preserving system/workspace role code uniqueness"
+    },
+    "role_permissions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "role_id -> roles.scope_id",
+      "backfillSource": "roles.scope_id",
+      "writePathSource": "role repositories and auth bootstrap copy role_permissions.scope_id from roles.scope_id"
+    },
+    "scope_data_model_grants": {
+      "scopeGenerationSource": "existing data model grant write path stores scope_id from grant owner context"
+    },
+    "system_default_upgrade_items": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed system default upgrade item routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "system default upgrade items inherit nullable requester context from their run when available",
+      "updated_byGeneration": "system default upgrade items inherit nullable requester context from their run when available",
+      "writePathSource": "system default upgrade ledger uses database default and check constraint to guard SYSTEM_SCOPE_ID bootstrap writes"
+    },
+    "system_default_upgrade_runs": {
+      "category": "system_global",
+      "scopeGenerationSource": "SYSTEM_SCOPE_ID fixed system default upgrade run routing",
+      "backfillSource": "SYSTEM_SCOPE_ID",
+      "created_byGeneration": "system default upgrade runs use nullable requested_by context when available",
+      "updated_byGeneration": "system default upgrade runs use nullable requested_by context when available",
+      "writePathSource": "system default upgrade ledger uses database default and check constraint to guard SYSTEM_SCOPE_ID bootstrap writes"
+    },
+    "workspace_memberships": {
+      "scopeGenerationSource": "generated stored scope_id mirrors non-null workspace_id",
+      "backfillSource": "workspace_id"
+    },
+    "user_role_bindings": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "role_id -> roles.scope_id; binding scope follows the role, not user_id",
+      "backfillSource": "roles.scope_id",
+      "writePathSource": "member and auth bootstrap repositories copy user_role_bindings.scope_id from roles.scope_id"
+    },
+    "audit_logs": {
+      "category": "mixed_audit_history",
+      "scopeGenerationSource": "workspace audit uses workspace_id; system, historical, and workspace-deleted audit rows use SYSTEM_SCOPE_ID",
+      "backfillSource": "coalesce(workspace_id, SYSTEM_SCOPE_ID)",
+      "created_byGeneration": "audit created_by mirrors actor_user_id when present; system and deleted-actor audit rows remain nullable",
+      "updated_byGeneration": "audit updated_by mirrors actor_user_id when present; system and deleted-actor audit rows remain nullable",
+      "writePathSource": "auth repository appends audit logs with explicit scope_id derived from workspace_id or SYSTEM_SCOPE_ID"
+    },
+    "run_archive_upload_sessions": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id; upload session writes the application workspace scope",
+      "backfillSource": "existing run_archive_upload_sessions.scope_id",
+      "created_byGeneration": "upload session writes actor_user_id into created_by",
+      "updated_byGeneration": "upload session writes actor_user_id into updated_by",
+      "writePathSource": "archive upload session route writes id, scope_id, actor ownership, and status in one insert"
+    },
+    "run_archive_upload_chunks": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "session_id -> run_archive_upload_sessions.scope_id",
+      "backfillSource": "run_archive_upload_sessions.scope_id",
+      "created_byGeneration": "chunk upload writes the current actor user id into created_by",
+      "updated_byGeneration": "chunk upload writes the current actor user id into updated_by",
+      "writePathSource": "archive chunk upload route writes id and session-derived scope while preserving the session/chunk unique key"
+    },
+    "run_archive_import_jobs": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "application_id -> applications.scope_id; import job writes the application workspace scope",
+      "backfillSource": "existing run_archive_import_jobs.scope_id",
+      "created_byGeneration": "import job writes actor_user_id into created_by",
+      "updated_byGeneration": "import job writes actor_user_id into updated_by",
+      "writePathSource": "archive import route writes id, scope_id, actor ownership, upload session, and import status"
+    },
+    "run_archive_import_mappings": {
+      "category": "join_or_child",
+      "scopeGenerationSource": "job_id -> run_archive_import_jobs.scope_id",
+      "backfillSource": "run_archive_import_jobs.scope_id",
+      "created_byGeneration": "mapping insert copies actor_user_id from the import job into created_by",
+      "updated_byGeneration": "mapping insert copies actor_user_id from the import job into updated_by",
+      "writePathSource": "archive restore mapping helper writes id and job-derived scope while preserving the job/entity/source unique key"
+    }
+  },
+  "needsOwnerReviewTables": {},
+  "reasonPolicy": {
+    "minLength": 12,
+    "minWords": 3,
+    "forbidden": ["misc", "legacy", "todo", "n/a", "none"]
+  },
+  "exemptions": {
+    "authenticators": {
+      "kind": "system_reference_table",
+      "reason": "system authenticator reference table is configured globally and is not routed by workspace scope",
+      "skip": ["managed-table-scope-column", "managed-table-scope-time-index"]
+    },
+    "model_catalog_sync_runs": {
+      "kind": "low_volume_operational_history",
+      "reason": "catalog sync runs are bounded operational history owned through catalog_source_id and reviewed before high-frequency retention work",
+      "skip": [
+        "managed-table-created-at",
+        "managed-table-updated-at-or-append-only",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
+    "model_change_logs": {
+      "kind": "low_volume_audit_history",
+      "reason": "model change logs are bounded audit history; data_model_id = null is limited to create failure, delete result, historical, or failed-before-parent rows",
+      "skip": [
+        "managed-table-updated-at-or-append-only",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
+    "model_failover_queue_items": {
+      "kind": "bounded_child_list",
+      "reason": "failover queue items are a bounded queue-template child list with template-local ordering",
+      "skip": [
+        "managed-table-created-at",
+        "managed-table-updated-at-or-append-only",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
+    "model_provider_catalog_entries": {
+      "kind": "bounded_catalog_projection",
+      "reason": "model provider catalog entries are a bounded catalog projection keyed by catalog source and upstream model",
+      "skip": [
+        "managed-table-created-at",
+        "managed-table-updated-at-or-append-only",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
+    "plugin_artifact_instances": {
+      "kind": "bounded_projection",
+      "reason": "bounded plugin artifact projection is keyed by plugin installation and node without unbounded history",
+      "skip": [
+        "managed-table-id",
+        "managed-table-created-at",
+        "managed-table-updated-at-or-append-only",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
+    "plugin_package_catalog_projection": {
+      "kind": "bounded_projection",
+      "reason": "bounded plugin package catalog projection is one row per plugin installation and does not introduce unbounded expansion history",
+      "skip": [
+        "managed-table-id",
+        "managed-table-created-at",
+        "managed-table-scope-column",
+        "managed-table-scope-time-index"
+      ]
+    },
+    "tenants": {
+      "kind": "routing_root_reference",
+      "reason": "tenant routing root reference uses tenant id as the root route key and must not invent workspace scope",
+      "skip": ["managed-table-scope-column", "managed-table-scope-time-index"]
+    },
+    "users": {
+      "kind": "global_identity_reference",
+      "reason": "global user identity reference is shared by login and membership flows and is not routed by workspace scope",
+      "skip": ["managed-table-scope-column", "managed-table-scope-time-index"]
+    },
+    "user_auth_identities": {
+      "kind": "global_identity_reference",
+      "reason": "global auth identity reference follows the login user identity and is not owned by workspace routing scope",
+      "skip": ["managed-table-scope-column", "managed-table-scope-time-index"]
+    },
+    "workspaces": {
+      "kind": "workspace_routing_root",
+      "reason": "workspace routing root uses workspaces.id as the workspace routing scope and should not duplicate scope_id",
+      "skip": ["managed-table-scope-column", "managed-table-scope-time-index"]
+    },
+    "schema_migrations": {
+      "reason": "sqlx internal migration ledger, not application-managed user data",
+      "skip": ["id", "created_at", "updated_at", "managed-table-scope-column", "managed-table-scope-time-index"]
+    }
+  }
+}

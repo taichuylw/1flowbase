@@ -314,6 +314,140 @@ pub struct ApplicationRunLogSummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationConversationRunSummary {
+    pub id: Uuid,
+    pub status: FlowRunStatus,
+    pub query: Option<String>,
+    pub model: Option<String>,
+    pub answer: Option<String>,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunConversationMessageItem {
+    pub id: Uuid,
+    pub scope_id: Uuid,
+    pub application_id: Uuid,
+    pub flow_run_id: Uuid,
+    pub display_sequence: i64,
+    pub source_kind: String,
+    pub role: Option<String>,
+    pub content: Option<String>,
+    pub query: Option<String>,
+    pub model: Option<String>,
+    pub answer: Option<String>,
+    pub detail_run_id: Option<Uuid>,
+    pub can_open_detail: bool,
+    pub is_current: bool,
+    pub status: String,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+    pub projection_version: i32,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApplicationRunTraceProjectionStatus {
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+    Stale,
+    Partial,
+}
+
+impl ApplicationRunTraceProjectionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+            Self::Stale => "stale",
+            Self::Partial => "partial",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunTraceProjectionDiagnostic {
+    pub last_error_code: Option<String>,
+    pub last_error_stage: Option<String>,
+    pub last_error_source_kind: Option<String>,
+    pub last_error_source_locator: Option<String>,
+    pub last_error_message: Option<String>,
+    pub last_error_ref: Option<String>,
+    pub retriable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunTraceProjectionStatusRecord {
+    pub flow_run_id: Uuid,
+    pub projection_version: i32,
+    pub status: ApplicationRunTraceProjectionStatus,
+    pub source_watermark: String,
+    pub attempt_count: i32,
+    pub last_attempt_at: Option<OffsetDateTime>,
+    pub last_success_at: Option<OffsetDateTime>,
+    pub last_error_code: Option<String>,
+    pub last_error_stage: Option<String>,
+    pub last_error_source_kind: Option<String>,
+    pub last_error_source_locator: Option<String>,
+    pub last_error_message: Option<String>,
+    pub last_error_ref: Option<String>,
+    pub retriable: bool,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunTraceNodeRecord {
+    pub trace_node_id: Uuid,
+    pub flow_run_id: Uuid,
+    pub parent_trace_node_id: Option<Uuid>,
+    pub stable_locator: String,
+    pub node_kind: String,
+    pub owner_kind: Option<String>,
+    pub owner_id: Option<String>,
+    pub order_key: String,
+    pub node_id: Option<String>,
+    pub node_type: Option<String>,
+    pub node_mode: Option<String>,
+    pub node_alias: String,
+    pub status: String,
+    pub started_at: OffsetDateTime,
+    pub finished_at: Option<OffsetDateTime>,
+    pub duration_ms: Option<i64>,
+    pub metrics_payload: serde_json::Value,
+    pub has_children: bool,
+    pub child_count: i64,
+    pub has_content: bool,
+    pub content_ref: Option<String>,
+    pub source_flow_run_id: Option<Uuid>,
+    pub source_trace_node_id: Option<Uuid>,
+    pub parent_callback_task_id: Option<Uuid>,
+    pub parent_tool_call_id: Option<String>,
+    pub trace_relation_kind: Option<String>,
+    pub projection_version: i32,
+    pub source_watermark: String,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunTraceNodeContentRecord {
+    pub trace_node_id: Uuid,
+    pub content_kind: String,
+    pub payload: serde_json::Value,
+    pub source_refs: serde_json::Value,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationRunDetail {
     pub flow_run: FlowRunRecord,
     pub node_runs: Vec<NodeRunRecord>,
@@ -321,10 +455,22 @@ pub struct ApplicationRunDetail {
     pub callback_tasks: Vec<CallbackTaskRecord>,
     pub events: Vec<RunEventRecord>,
     pub stitched_trace: Vec<ApplicationRunStitchedTrace>,
+    pub subagent_traces: Vec<ApplicationRunSubagentTrace>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationRunStitchedTrace {
+    pub source_flow_run: FlowRunRecord,
+    pub node_runs: Vec<NodeRunRecord>,
+    pub callback_tasks: Vec<CallbackTaskRecord>,
+    pub events: Vec<RunEventRecord>,
+    pub runtime_events: Vec<RuntimeEventRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationRunSubagentTrace {
+    pub parent_tool_call_id: String,
+    pub parent_callback_task_id: Uuid,
     pub source_flow_run: FlowRunRecord,
     pub node_runs: Vec<NodeRunRecord>,
     pub callback_tasks: Vec<CallbackTaskRecord>,

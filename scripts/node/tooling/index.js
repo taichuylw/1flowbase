@@ -2,16 +2,22 @@
 
 const path = require('node:path');
 
+const { main: runCapacityReport } = require('../capacity-report/core.js');
 const { main: runCheckStyleBoundary } = require('../check-style-boundary/core.js');
 const { main: runCheckRustBackend } = require('../check-rust-backend/core.js');
 const { main: runGateRouter } = require('../gate-router/core.js');
+const { main: runGrowthTableReport } = require('../growth-table-report/core.js');
 const { main: runHotspotReview } = require('../hotspot-review/core.js');
 const { main: runI18nHygiene } = require('../i18n-hygiene/core.js');
+const { main: runLogQueryContractReport } = require('../log-query-contract-report/core.js');
 const { main: runRepoHygiene } = require('../repo-hygiene/core.js');
+const { main: runSchemaHygiene } = require('../schema-hygiene/core.js');
 const { main: runSecurityRisk } = require('../security-risk/core.js');
+const { main: runViteLazyDepsGate } = require('../vite-lazy-deps-gate/core.js');
 const { main: runPageDebug } = require('../page-debug/core.js');
 const { main: runApiDebug } = require('../api-debug/core.js');
 const { main: runMockUiSync } = require('../mock-ui-sync/core.js');
+const { main: runRawJsonbReport } = require('../raw-jsonb-report/core.js');
 const { main: runClaudeSkillSync } = require('../claude-skill-sync/core.js');
 const {
   getRepoRoot,
@@ -22,16 +28,22 @@ const { resolveNodeBinaryFromPath } = require('../testing/node-runtime.js');
 const TOOLING_COMMANDS = new Set([
   'check-style-boundary',
   'api-debug',
+  'capacity-report',
   'check-rust-backend',
   'claude-skill-sync',
   'gate-router',
+  'growth-table-report',
   'hotspot-review',
   'i18n-hygiene',
+  'log-query-contract-report',
   'mock-ui-sync',
   'page-debug',
+  'raw-jsonb-report',
   'repo-hygiene',
   'runtime-gate',
+  'schema-hygiene',
   'security-risk',
+  'vite-lazy-deps-gate',
 ]);
 
 function resolveScriptsNodeEntry(repoRoot, entryName) {
@@ -93,7 +105,7 @@ function parseToolingCliArgs(argv) {
 
 function usage(writeStdout = (text) => process.stdout.write(text)) {
   writeStdout(
-    'Usage: node scripts/node/tooling <api-debug|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|hotspot-review|i18n-hygiene|mock-ui-sync|page-debug|repo-hygiene|runtime-gate|security-risk> [args]\n'
+    'Usage: node scripts/node/tooling <api-debug|capacity-report|check-rust-backend|check-style-boundary|claude-skill-sync|gate-router|growth-table-report|hotspot-review|i18n-hygiene|log-query-contract-report|mock-ui-sync|page-debug|raw-jsonb-report|repo-hygiene|runtime-gate|schema-hygiene|security-risk|vite-lazy-deps-gate> [args]\n'
   );
 }
 
@@ -117,6 +129,10 @@ async function main(argv = [], deps = {}) {
     return (deps.runApiDebugImpl || runApiDebug)(options.rest);
   }
 
+  if (options.command === 'capacity-report') {
+    return (deps.runCapacityReportImpl || runCapacityReport)(options.rest, deps);
+  }
+
   if (options.command === 'check-rust-backend') {
     return (deps.runCheckRustBackendImpl || runCheckRustBackend)(options.rest, deps);
   }
@@ -129,12 +145,20 @@ async function main(argv = [], deps = {}) {
     return (deps.runGateRouterImpl || runGateRouter)(options.rest, deps);
   }
 
+  if (options.command === 'growth-table-report') {
+    return (deps.runGrowthTableReportImpl || runGrowthTableReport)(options.rest, deps);
+  }
+
   if (options.command === 'hotspot-review') {
     return (deps.runHotspotReviewImpl || runHotspotReview)(options.rest, deps);
   }
 
   if (options.command === 'i18n-hygiene') {
     return (deps.runI18nHygieneImpl || runI18nHygiene)(options.rest, deps);
+  }
+
+  if (options.command === 'log-query-contract-report') {
+    return (deps.runLogQueryContractReportImpl || runLogQueryContractReport)(options.rest, deps);
   }
 
   if (options.command === 'mock-ui-sync') {
@@ -145,12 +169,24 @@ async function main(argv = [], deps = {}) {
     return (deps.runPageDebugImpl || runPageDebug)(options.rest);
   }
 
+  if (options.command === 'raw-jsonb-report') {
+    return (deps.runRawJsonbReportImpl || runRawJsonbReport)(options.rest, deps);
+  }
+
   if (options.command === 'repo-hygiene') {
     return (deps.runRepoHygieneImpl || runRepoHygiene)(options.rest, deps);
   }
 
+  if (options.command === 'schema-hygiene') {
+    return (deps.runSchemaHygieneImpl || runSchemaHygiene)(options.rest, deps);
+  }
+
   if (options.command === 'security-risk') {
     return (deps.runSecurityRiskImpl || runSecurityRisk)(options.rest, deps);
+  }
+
+  if (options.command === 'vite-lazy-deps-gate') {
+    return (deps.runViteLazyDepsGateImpl || runViteLazyDepsGate)(options.rest, deps);
   }
 
   return (deps.runRuntimeGateImpl || runRuntimeGate)(options.rest, deps);

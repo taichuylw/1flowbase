@@ -42,17 +42,31 @@ impl ApplicationApiMappingRepository for PgControlPlaneStore {
         let row = sqlx::query_scalar::<_, serde_json::Value>(
             r#"
             insert into application_api_mappings (
+                id,
                 application_id,
+                scope_id,
                 mapping_config,
+                created_by,
                 updated_by
-            ) values ($1, $2, $3)
+            )
+            select
+                $1,
+                applications.id,
+                applications.scope_id,
+                $3,
+                $4,
+                $4
+            from applications
+            where applications.id = $2
             on conflict (application_id) do update
-            set mapping_config = excluded.mapping_config,
+            set scope_id = excluded.scope_id,
+                mapping_config = excluded.mapping_config,
                 updated_by = excluded.updated_by,
                 updated_at = now()
             returning mapping_config
             "#,
         )
+        .bind(Uuid::now_v7())
         .bind(input.application_id)
         .bind(mapping)
         .bind(input.actor_user_id)
@@ -88,6 +102,7 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
             insert into application_publication_versions (
                 id,
                 application_id,
+                scope_id,
                 flow_id,
                 flow_version_id,
                 compiled_plan_id,
@@ -101,12 +116,14 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
                 runtime_profile_snapshot,
                 output_selector,
                 dependency_snapshot,
-                created_by
+                created_by,
+                updated_by
             ) values (
-                $1, $2, $3, $4, $5, 1, true, $6, $7, $8, $9, $10, $11, $12, $13, $14
+                $1, $2, (select scope_id from applications where id = $2), $3, $4, $5, 1, true, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14
             )
             on conflict (application_id) do update
-            set flow_id = excluded.flow_id,
+            set scope_id = excluded.scope_id,
+                flow_id = excluded.flow_id,
                 flow_version_id = excluded.flow_version_id,
                 compiled_plan_id = excluded.compiled_plan_id,
                 version_sequence = 1,
@@ -120,7 +137,9 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
                 output_selector = excluded.output_selector,
                 dependency_snapshot = excluded.dependency_snapshot,
                 created_by = excluded.created_by,
-                created_at = now()
+                created_at = now(),
+                updated_by = excluded.updated_by,
+                updated_at = now()
             returning
                 id,
                 application_id,
@@ -221,9 +240,18 @@ impl ApplicationPublicationRepository for PgControlPlaneStore {
             return Err(ControlPlaneError::NotFound("application").into());
         }
 
-        sqlx::query("update application_publication_versions set api_enabled = $2 where application_id = $1")
+        sqlx::query(
+            r#"
+            update application_publication_versions
+            set api_enabled = $2,
+                updated_by = $3,
+                updated_at = now()
+            where application_id = $1
+            "#,
+        )
         .bind(input.application_id)
         .bind(input.api_enabled)
+        .bind(input.actor_user_id)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
