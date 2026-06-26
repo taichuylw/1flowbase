@@ -260,7 +260,7 @@ describe('ApplicationLogsPage - table field settings', () => {
     expect(screen.getByText('100')).toBeInTheDocument();
     expect(screen.getByText('28')).toBeInTheDocument();
     expect(screen.getByText('64')).toBeInTheDocument();
-    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.getByText('50.00%')).toBeInTheDocument();
   });
 
   test('persists table column visibility in user preferences meta', async () => {

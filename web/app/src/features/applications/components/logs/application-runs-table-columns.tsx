@@ -32,6 +32,7 @@ function formatRunStatisticRate(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value)
     ? formatNumber(value, {
         style: 'percent',
+        minimumFractionDigits: 2,
         maximumFractionDigits: 2
       })
     : '-';
